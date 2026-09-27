@@ -9,6 +9,6 @@ class MyApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(title: 'BlueWay', theme: appTheme, home: home);
+    return MaterialApp(title: 'NoWave', theme: appTheme, home: home);
   }
 }
