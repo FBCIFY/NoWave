@@ -1,0 +1,6 @@
+services:
+  web:
+    build: .
+    ports:
+      - "127.0.0.1:${NOWAVE_WEB_PORT:-8080}:80"
+    restart: unless-stopped
