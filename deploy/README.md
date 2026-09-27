@@ -31,7 +31,19 @@ Le script `hostinger/bootstrap.py` crée une seule fois les répertoires privés
 
 Ne pas utiliser le projet erroné `blueway-deve`, les identifiants utilisateur ADC ou les secrets de Labelscan. Ne jamais placer une clé dans une variable `VITE_*`, l’image Docker, un journal ou un commit. La landing page présente uniquement des exemples fictifs : elle n’envoie pas de signalement réel.
 
-## Installation / mise à jour
+## Déploiement automatique depuis `dev`
+
+Le workflow `Production validation` valide les pull requests sans les publier. Après chaque push sur `dev`, le job `deploy` attend la réussite de tous les tests et audits. Il transfère uniquement les fichiers Git de la révision validée, reconstruit et audite les quatre images sur le VPS, puis exécute la sauvegarde, les migrations, la vérification privée, le tunnel NoWave et les contrôles publics. Un échec arrête le workflow ; deux déploiements de `dev` ne s'exécutent pas simultanément. Le lancement manuel de `Production validation` exécute les contrôles sans déployer.
+
+Configurer l'environnement GitHub `production` en limitant ses branches de déploiement à `dev`, sans approbation manuelle si le déploiement doit rester automatique. Ajouter à cet environnement :
+
+- Variable `NOWAVE_DEPLOY_HOST` : nom DNS ou IP du VPS NoWave.
+- Secret `NOWAVE_DEPLOY_SSH_KEY` : clé privée SSH dédiée au déploiement, dont la clé publique est autorisée pour `root` sur ce VPS.
+- Secret `NOWAVE_DEPLOY_KNOWN_HOSTS` : ligne `known_hosts` de ce VPS, après vérification indépendante de son empreinte SSH. Ne pas désactiver la vérification de l'hôte.
+
+Le VPS doit déjà posséder les secrets privés Firebase et Cloudflare décrits ci-dessus. Les clés SSH, jetons et mots de passe ne doivent jamais être ajoutés à Git. Le workflow ne touche pas au proxy, aux réseaux ni aux secrets de Labelscan. Le client mobile se construit et se distribue séparément.
+
+## Installation / mise à jour manuelle
 
 1. Exécuter les contrôles du workflow `Production validation` sur la révision exacte.
 2. Transférer l’archive de cette révision vers `/opt/nowave/releases/<SHA>`. Seuls les fichiers suivis par Git sont inclus.

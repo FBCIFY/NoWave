@@ -3,15 +3,14 @@ on:
   workflow_dispatch:
   push:
     branches: [dev]
-    paths: [backend/**, web/**, deploy/**, .github/workflows/production.yml]
   pull_request:
     branches: [dev]
     paths: [backend/**, web/**, deploy/**, .github/workflows/production.yml]
 permissions:
   contents: read
 concurrency:
-  group: production-validation-${{ github.ref }}
-  cancel-in-progress: true
+  group: production-${{ github.ref }}
+  cancel-in-progress: false
 jobs:
   validate:
     runs-on: ubuntu-24.04
@@ -68,6 +67,52 @@ jobs:
       - name: Remove disposable database
         if: always()
         run: docker compose -p nowave-ci -f compose.test.yaml down --volumes
-# Deployment remains explicit: deploy/hostinger/deploy.sh checks the exact SHA,
-# validated images, audit evidence, secrets, backups, migrations and readiness.
-# This workflow cannot modify the VPS or use Labelscan's runner or credentials.
+
+  deploy:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/dev'
+    needs: validate
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    environment:
+      name: production
+      url: https://no-wave.fr
+    env:
+      DEPLOY_HOST: ${{ vars.NOWAVE_DEPLOY_HOST }}
+      DEPLOY_SSH_KEY: ${{ secrets.NOWAVE_DEPLOY_SSH_KEY }}
+      DEPLOY_KNOWN_HOSTS: ${{ secrets.NOWAVE_DEPLOY_KNOWN_HOSTS }}
+      REVISION: ${{ github.sha }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Configure pinned SSH access
+        run: |
+          set -euo pipefail
+          [[ "$REVISION" =~ ^[a-f0-9]{40}$ ]]
+          [[ "$DEPLOY_HOST" =~ ^[a-zA-Z0-9.-]+$ ]] || { echo 'Missing or invalid NOWAVE_DEPLOY_HOST.' >&2; exit 1; }
+          [[ -n "$DEPLOY_SSH_KEY" && -n "$DEPLOY_KNOWN_HOSTS" ]] || { echo 'NoWave deployment SSH secrets are missing.' >&2; exit 1; }
+          install -d -m 0700 "$HOME/.ssh"
+          printf '%s\n' "$DEPLOY_SSH_KEY" > "$HOME/.ssh/id_nowave_deploy"
+          printf '%s\n' "$DEPLOY_KNOWN_HOSTS" > "$HOME/.ssh/known_hosts"
+          chmod 0600 "$HOME/.ssh/id_nowave_deploy" "$HOME/.ssh/known_hosts"
+          ssh-keygen -F "$DEPLOY_HOST" -f "$HOME/.ssh/known_hosts" > /dev/null || { echo 'Deployment host key is not pinned.' >&2; exit 1; }
+          cat > "$HOME/.ssh/config" <<EOF
+          Host nowave-production
+            HostName $DEPLOY_HOST
+            User root
+            IdentityFile $HOME/.ssh/id_nowave_deploy
+            IdentitiesOnly yes
+            BatchMode yes
+            StrictHostKeyChecking yes
+            UserKnownHostsFile $HOME/.ssh/known_hosts
+          EOF
+          chmod 0600 "$HOME/.ssh/config"
+      - name: Transfer only tracked files from the validated revision
+        run: |
+          set -euo pipefail
+          git archive --format=tar "$REVISION" | gzip -1 | \
+            ssh nowave-production "set -e; umask 077; install -d -m 0700 /opt/nowave/releases/$REVISION; tar -xz -C /opt/nowave/releases/$REVISION"
+      - name: Build, audit, back up and deploy on the NoWave VPS
+        run: |
+          set -euo pipefail
+          ssh nowave-production "bash /opt/nowave/releases/$REVISION/deploy/hostinger/ci-deploy.sh $REVISION"
