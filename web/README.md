@@ -1,6 +1,6 @@
 # NoWave · Web
 
-Landing page et carte pédagogique interactive, indépendantes du mobile et de l’API.
+Landing page et parcours maritime illustré, indépendantes du mobile et de l’API.
 L’expérience explique la mission de l’application : partager une observation
 géolocalisée dans les catégories **Obstacle**, **Animal marin** et **Pollution**.
 
@@ -74,17 +74,15 @@ Aucune dépendance envers l’API ni PostgreSQL pour cette landing page.
 - Le premier repère montre le vrai phare et son village dans l’archipel. Un masque
   SVG adoucit le contour de la zone nette sans substituer une autre île.
 - L’iceberg est placé en pleine eau. Sa partie immergée se révèle progressivement
-  à l’approche pendant le parcours ou lorsque l’on zoome en exploration libre.
-- Mode exploration activé uniquement au clic : 11 repères, déplacement à la souris ou au toucher, pincement et molette
-  pour zoomer, boutons de zoom et recentrage.
-- Clavier dans la carte : flèches, `+`, `−`, `0` ; `Échap` pour quitter l’exploration.
-- Fiches sur les conteneurs perdus, les collisions avec les cétacés, les interactions
-  avec certaines orques, les icebergs, les déchets et la qualité des observations.
-- Exemple de signalement : catégorie, coordonnées fictives, commentaire limité à
-  250 caractères, aperçu. **Aucune requête à l’API, aucun signalement réel créé.**
+  à l’approche pendant le parcours.
+- Exemples de signalement consultables directement : catégorie, observation,
+  heure et coordonnées fictives. Aucun formulaire ni étape de prévisualisation.
+  **Aucune requête à l’API, aucun signalement réel créé.**
+- Footer avec navigation vers le parcours, l’essentiel et le projet.
+  Aucun mode d’exploration libre, crédit affiché ou caractère de flèche dans l’interface.
 - Pas de stockage local ni d’ambiance sonore. La caméra s’arrête au repos,
   lorsqu’un dialogue est ouvert et quand l’onglet est masqué.
-- Pause des animations et prise en compte de `prefers-reduced-motion` : changements
+- Prise en compte automatique de `prefers-reduced-motion` : changements
   de plans sans déplacement interpolé pour la visite guidée.
 - Polices hébergées dans le build ; aucun CDN, tracker ni cookie tiers.
 
@@ -105,7 +103,7 @@ Ce site n’est ni une carte de navigation ni un service d’alerte maritime.
 L’application mobile est présentée comme un projet en développement, sans faux
 bouton de téléchargement ni promesse de détection automatique.
 
-Les sources primaires sont regroupées dans `src/data.js` et liées dans les fiches :
+Les sources primaires sont regroupées dans `src/data.js` pour la documentation du contenu :
 
 - [OMI — conteneurs et objets perdus](https://www.imo.org/en/mediacentre/hottopics/pages/container-default.aspx)
 - [OMI — déchets marins](https://www.imo.org/en/mediacentre/hottopics/pages/marinelitter-default.aspx)
@@ -132,7 +130,7 @@ Le build vérifie d’abord la présence des assets utilisés. Les tests couvren
 deux sens, les limites, l’amortissement indépendant de la fréquence d’affichage
 et le mode à mouvements réduits. Vérifier aussi dans le navigateur la vue
 d’ensemble, les 11 cadrages, le récapitulatif, les dialogues, la révélation de
-l’iceberg, l’exploration, le clavier et l’affichage mobile.
+l’iceberg, les exemples, le footer, le clavier et l’affichage mobile.
 Les tests de gestes couvrent l’inertie longue, les petits mouvements cumulés,
 les inversions et un nouveau geste interrompant l’inertie du précédent.
 Le contrôle Docker de configuration ne nécessite pas de daemon. Pour vérifier

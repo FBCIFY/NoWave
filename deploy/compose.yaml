@@ -55,7 +55,11 @@ services:
       GOOGLE_CLOUD_PROJECT: blueway-dev
       GOOGLE_APPLICATION_CREDENTIALS: /run/secrets/firebase_service_account
     secrets: [database_url, firebase_service_account]
-    networks: [backend, frontend, egress]
+    networks:
+      backend:
+      frontend:
+        ipv4_address: 172.30.72.4
+      egress:
     tmpfs: ['/tmp:rw,noexec,nosuid,size=32m']
     mem_limit: 384m
     cpus: 0.75

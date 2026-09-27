@@ -53,11 +53,9 @@
       >
       <nav class="main-nav" aria-label="Navigation principale">
         <button data-story-step="1">Le parcours</button
-        ><a href="#recap">L’essentiel</a><button data-explore>La carte</button>
+        ><a href="#recap">L’essentiel</a>
       </nav>
-      <button class="header-cta" data-project>
-        Le projet <span aria-hidden="true">↗</span>
-      </button>
+      <button class="header-cta" data-project>Le projet</button>
     </header>
     <main id="main">
       <div class="ocean-story" id="ocean-story">
@@ -72,7 +70,7 @@
             tabindex="-1"
             inert
             role="region"
-            aria-label="Archipel illustré. En exploration : flèches pour déplacer, plus et moins pour zoomer, zéro pour recentrer."
+            aria-label="Archipel illustré du parcours NoWave."
           >
             <div class="world" id="world">
               <img
@@ -106,43 +104,7 @@
               datée et partagée.
             </p>
             <button class="button-acid" data-story-step="1">
-              Découvrir NoWave <span aria-hidden="true">↓</span>
-            </button>
-            <button class="hero-explore-link" data-explore>
-              Explorer librement la carte <span aria-hidden="true">↗</span>
-            </button>
-          </div>
-          <button class="exit-explore" id="exit-explore" hidden>
-            ← Reprendre la visite
-          </button>
-          <div class="explore-heading" id="explore-heading" hidden>
-            <span class="eyebrow">CLIQUEZ DIRECTEMENT SUR UN OBJET</span>
-            <h2>À vous d’explorer.</h2>
-          </div>
-          <div class="map-tools" aria-label="Commandes de la carte" inert>
-            <button id="zoom-out" aria-label="Dézoomer" title="Dézoomer">
-              <svg viewBox="0 0 24 24" aria-hidden="true">
-                <circle cx="10" cy="10" r="6" />
-                <path d="m15 15 5 5M7 10h6" />
-              </svg>
-            </button>
-            <output id="zoom-level" aria-label="Niveau de zoom">100%</output>
-            <button id="zoom-in" aria-label="Zoomer" title="Zoomer">
-              <svg viewBox="0 0 24 24" aria-hidden="true">
-                <circle cx="10" cy="10" r="6" />
-                <path d="m15 15 5 5M7 10h6M10 7v6" />
-              </svg>
-            </button>
-            <span class="tool-divider"></span>
-            <button
-              id="reset-map"
-              aria-label="Recentrer la carte"
-              title="Recentrer"
-            >
-              <svg viewBox="0 0 24 24" aria-hidden="true">
-                <path d="M9 3H3v6M15 3h6v6M3 15v6h6M21 15v6h-6" />
-                <circle cx="12" cy="12" r="3" />
-              </svg>
+              Découvrir NoWave
             </button>
           </div>
           <div
@@ -154,39 +116,26 @@
             <div class="story-navigation">
               <button
                 id="previous-scene"
-                class="scene-arrow"
+                class="scene-control"
                 aria-label="Repère précédent"
                 disabled
               >
-                ←
+                Précédent
               </button>
               <span class="story-position" id="story-position"
                 >L’archipel NoWave</span
               >
               <button
                 id="next-scene"
-                class="scene-arrow"
+                class="scene-control"
                 aria-label="Repère suivant"
               >
-                →
+                Suivant
               </button>
             </div>
             <nav class="story-steps" aria-label="Étapes de la visite"></nav>
-            <a class="story-continue" href="#recap"
-              >L’essentiel <span aria-hidden="true">↓</span></a
-            >
+            <a class="story-continue" href="#recap">L’essentiel</a>
           </div>
-          <button
-            id="toggle-motion"
-            class="motion-control"
-            aria-label="Réduire les animations"
-            aria-pressed="false"
-            title="Réduire les animations"
-          >
-            <svg viewBox="0 0 24 24" aria-hidden="true">
-              <path d="M8 5v14M16 5v14" />
-            </svg>
-          </button>
         </section>
       </div>
       <section
@@ -221,7 +170,7 @@
               ><span
                 >Objet à la dérive, épave ou débris : localiser ce qui peut
                 gêner la navigation.</span
-              ><small>Voir un exemple ↗</small></span
+              ><small>Voir un exemple</small></span
             >
           </button>
           <button data-report-demo="whale">
@@ -236,7 +185,7 @@
               ><span
                 >Partager une présence, avec des faits observés et le respect de
                 la faune.</span
-              ><small>Voir un exemple ↗</small></span
+              ><small>Voir un exemple</small></span
             >
           </button>
           <button data-report-demo="duck">
@@ -251,7 +200,7 @@
               ><span
                 >Signaler des déchets ou des traces visibles, en précisant le
                 lieu.</span
-              ><small>Voir un exemple ↗</small></span
+              ><small>Voir un exemple</small></span
             >
           </button>
         </div>
@@ -277,7 +226,7 @@
         </div>
         <div class="recap-actions">
           <button class="button-dark" data-report-demo="container">
-            Essayer un signalement <span aria-hidden="true">↗</span>
+            Voir un exemple de signalement
           </button>
           <p>
             Une démonstration pour comprendre.<br />Aucun signalement réel n’est
@@ -295,8 +244,8 @@
         </p>
       </section>
       <footer class="footer">
-        <div>
-          <a href="#" class="footer-logo"
+        <div class="footer-brand">
+          <a href="#" class="footer-logo" aria-label="NoWave, accueil"
             ><img
               class="brand-icon"
               src="/brand/nowave-icon.svg?v=vector-3"
@@ -306,53 +255,20 @@
             />NoWave</a
           >
           <p>La vigilance aussi, ça se partage.</p>
+          <span class="footer-caption">Observer. Situer. Partager.</span>
         </div>
-        <button class="footer-cta" data-story-step="0">
-          Reprendre le large <span aria-hidden="true">↗</span>
-        </button>
+        <nav class="footer-nav" aria-label="Navigation de bas de page">
+          <span class="footer-nav-title">PRENDRE LE LARGE</span>
+          <button data-story-step="1">Découvrir le parcours</button>
+          <a href="#recap">L’essentiel de NoWave</a>
+          <button data-project>À propos du projet</button>
+        </nav>
         <div class="footer-bottom">
-          <span>OBSTACLES · ANIMAUX MARINS · POLLUTION</span
-          ><button id="credits-button">Sources & illustrations</button>
+          <span>NoWave · La carte maritime collaborative</span>
+          <button data-story-step="0">Retour au début</button>
         </div>
       </footer>
     </main>
-    <dialog
-      id="discovery-dialog"
-      class="discovery-dialog"
-      aria-labelledby="discovery-title"
-    >
-      <button class="dialog-close" data-close aria-label="Fermer">×</button>
-      <div class="discovery-art" id="discovery-art">
-        <span class="dialog-coordinates" id="discovery-coordinates"></span
-        ><img
-          id="discovery-image"
-          src="/assets/lighthouse.webp"
-          alt=""
-          width="640"
-          height="640"
-        />
-      </div>
-      <div class="discovery-content">
-        <p class="eyebrow" id="discovery-category"></p>
-        <h2 id="discovery-title"></h2>
-        <p id="discovery-description"></p>
-        <div class="takeaway" id="discovery-takeaway"></div>
-        <div id="discovery-sources" class="discovery-sources"></div>
-        <div class="reference-note">
-          <span aria-hidden="true">✳</span
-          ><span id="discovery-reference"></span>
-        </div>
-        <button class="report-demo-link" id="open-report-demo">
-          Comprendre le signalement <span aria-hidden="true">↗</span>
-        </button>
-        <div class="discovery-actions">
-          <span id="discovery-progress"></span
-          ><button class="button-dark" id="next-discovery">
-            Autre repère <span aria-hidden="true">↗</span>
-          </button>
-        </div>
-      </div>
-    </dialog>
     <dialog
       id="project-dialog"
       class="project-dialog"
@@ -374,38 +290,9 @@
         : elles expliquent les risques et le fonctionnement des signalements. Il
         ne s’agit pas d’une carte de navigation.
       </p>
-      <button class="button-dark" id="project-explore">
-        Explorer l’univers <span aria-hidden="true">↗</span>
+      <button class="button-dark" id="project-journey">
+        Découvrir le parcours
       </button>
-    </dialog>
-    <dialog
-      id="credits-dialog"
-      class="project-dialog"
-      aria-labelledby="credits-title"
-    >
-      <button class="dialog-close" data-close aria-label="Fermer">×</button>
-      <p class="eyebrow">LES COULISSES DU LARGE</p>
-      <h2 id="credits-title">Un océan de clins d’œil.</h2>
-      <p>
-        Un monde original où chaque clin d’œil sert la mission de NoWave :
-        observer, comprendre et signaler. Le Nautilus parle des dangers immergés
-        ; le canard, des déchets ; le kraken, des gestes d’un signalement utile.
-      </p>
-      <p>
-        L’envie de se perdre dans une scène pleine de détails rend hommage à
-        <a
-          href="https://floor796.com/"
-          target="_blank"
-          rel="noopener noreferrer"
-          >Floor796 ↗</a
-        >. Les visuels de cet archipel ont été créés pour NoWave par génération
-        d’images.
-      </p>
-      <p class="project-detail">
-        Les illustrations, les coordonnées et les récits de cette expérience
-        sont imaginaires. Aucun suivi publicitaire ni stockage de votre
-        parcours.
-      </p>
     </dialog>
     <dialog
       id="report-dialog"
@@ -416,41 +303,30 @@
       <p class="eyebrow">DÉMONSTRATION · AUCUN ENVOI</p>
       <h2 id="report-title">Vu. Situé.<br />Prêt à partager.</h2>
       <p>
-        Voici les informations d’un signalement manuel NoWave. Essayez avec
-        cette scène fictive.
+        Un exemple fictif pour comprendre les informations partagées avec
+        NoWave.
       </p>
-      <form id="report-form">
-        <label for="report-category">Ce que vous observez</label
-        ><select id="report-category" required>
-          <option value="obstruction">Obstacle</option>
-          <option value="marine_animal">Animal marin</option>
-          <option value="pollution">Pollution</option></select
-        ><label for="report-comment"
-          >Votre observation <span>(250 caractères maximum)</span></label
-        ><textarea
-          id="report-comment"
-          maxlength="250"
-          rows="3"
-          placeholder="Décrivez les faits, simplement."
-        ></textarea>
-        <div class="report-location">
-          <span>POSITION FICTIVE</span><strong id="report-coordinates"></strong>
+      <dl class="report-example">
+        <div>
+          <dt>Catégorie</dt>
+          <dd id="report-category"></dd>
         </div>
-        <button type="submit" class="button-dark">
-          Prévisualiser <span aria-hidden="true">↗</span>
-        </button>
-      </form>
-      <div id="report-result" hidden role="status">
-        <span class="eyebrow">APERÇU DU SIGNALEMENT</span>
-        <h3 id="report-result-category"></h3>
-        <p id="report-result-comment"></p>
-        <p id="report-result-coordinates"></p>
-        <p class="project-detail">
-          Démonstration terminée. Rien n’a été envoyé ni enregistré comme
-          signalement réel.
-        </p>
-        <button class="text-link" id="report-edit">Modifier l’exemple ↗</button>
-      </div>
+        <div>
+          <dt>Observation</dt>
+          <dd id="report-comment"></dd>
+        </div>
+        <div>
+          <dt>Heure de l’exemple</dt>
+          <dd>14 h 30</dd>
+        </div>
+        <div>
+          <dt>Position fictive</dt>
+          <dd id="report-coordinates"></dd>
+        </div>
+      </dl>
+      <p class="project-detail">
+        Cet exemple est illustratif. Aucun signalement n’est envoyé.
+      </p>
     </dialog>
     <script type="module" src="/src/main.js"></script>
   </body>

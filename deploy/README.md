@@ -18,7 +18,7 @@ Le domaine prévu est `no-wave.fr`, avec `www.no-wave.fr` redirigé vers celui-c
 
 Labelscan conserve son Caddy, ses ports 80/443, ses réseaux, son pare-feu et ses déploiements. NoWave utilise un **tunnel Cloudflare dédié** qui établit uniquement des connexions sortantes chiffrées. Cette différence évite de redémarrer ou modifier le proxy Labelscan. Le serveur web NoWave est accessible pour les vérifications locales sur `127.0.0.1:18080`, jamais sur une interface publique.
 
-Les réseaux `frontend` et `backend` sont internes. Seuls l’API (Firebase), le connecteur et le réseau de contrôle local disposent d’une sortie. L’adresse `172.30.72.2` est réservée au connecteur ; lui seul peut fournir `CF-Connecting-IP` au proxy. Vérifier que le sous-réseau `172.30.72.0/29` n’est pas utilisé avant la première installation.
+Les réseaux `frontend` et `backend` sont internes. Seuls l’API (Firebase), le connecteur et le réseau de contrôle local disposent d’une sortie. Les adresses sont fixes : `172.30.72.2` pour le connecteur, `.3` pour le web et `.4` pour l’API. Ainsi, l’API ne prend pas l’adresse du tunnel lorsqu’elle démarre avant lui. Seul le connecteur peut fournir `CF-Connecting-IP` au proxy. Vérifier que le sous-réseau `172.30.72.0/29` n’est pas utilisé avant la première installation.
 
 ## Secrets, hors Git
 
@@ -29,7 +29,7 @@ Le script `hostinger/bootstrap.py` crée une seule fois les répertoires privés
 - `firebase_service_account.json` : compte de service existant du projet **blueway-dev**, mode `0440`, groupe `10001`.
 - `tunnel_token` : jeton du seul tunnel NoWave, mode `0440`, groupe `65532`.
 
-Ne pas utiliser le projet erroné `blueway-deve`, les identifiants utilisateur ADC ou les secrets de Labelscan. Ne jamais placer une clé dans une variable `VITE_*`, l’image Docker, un journal ou un commit. La landing page garde son formulaire de démonstration explicite : elle n’envoie pas de signalement réel.
+Ne pas utiliser le projet erroné `blueway-deve`, les identifiants utilisateur ADC ou les secrets de Labelscan. Ne jamais placer une clé dans une variable `VITE_*`, l’image Docker, un journal ou un commit. La landing page présente uniquement des exemples fictifs : elle n’envoie pas de signalement réel.
 
 ## Installation / mise à jour
 

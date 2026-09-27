@@ -441,29 +441,9 @@ export function createStory({ world, isMotionPaused }) {
   );
   document.fonts.ready.then(measure);
   viewport.inert = true;
-  $(".map-tools").inert = true;
   measure();
   return {
     refresh: requestUpdate,
     scrollToStep,
-    suspend(value) {
-      suspended = value;
-      viewport.inert = !value;
-      viewport.tabIndex = value ? 0 : -1;
-      $(".map-tools").inert = !value;
-      $("#story-narration").inert = value;
-      if (value) {
-        travelingTo = null;
-        scrollTravel = null;
-        pendingDirection = 0;
-        cancelAnimationFrame(frame);
-        frame = 0;
-        lastTime = 0;
-      } else {
-        settling = { pose: world.pose(), at: performance.now() };
-        activeStep = -1;
-        measure();
-      }
-    },
   };
 }
