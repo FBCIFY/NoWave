@@ -1,0 +1,22 @@
+{
+  "@context": "https://openvex.dev/ns/v0.2.0",
+  "@id": "https://no-wave.fr/security/vex/GO-2026-5932/cloudflared-nowave.1",
+  "author": "NoWave",
+  "timestamp": "2026-09-27T00:00:00Z",
+  "version": 1,
+  "statements": [
+    {
+      "vulnerability": {
+        "name": "GO-2026-5932"
+      },
+      "products": [
+        {
+          "@id": "pkg:golang/golang.org/x/crypto@v0.56.0"
+        }
+      ],
+      "status": "not_affected",
+      "justification": "vulnerable_code_not_present",
+      "impact_statement": "The production build enumerates all linked packages for Linux amd64 and fails if golang.org/x/crypto/openpgp or any subpackage is present. The vulnerable OpenPGP implementation is not linked into the tunnel binary."
+    }
+  ]
+}
