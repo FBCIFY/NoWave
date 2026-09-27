@@ -1,0 +1,23 @@
+{
+  "name": "nowave-web",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite --host 127.0.0.1",
+    "build": "node scripts/check-assets.mjs && vite build",
+    "preview": "vite preview --host 127.0.0.1",
+    "test": "node --test src/*.test.js",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "start": "npm run build && node scripts/start.mjs"
+  },
+  "devDependencies": {
+    "prettier": "^3.9.9",
+    "vite": "^7.3.0"
+  },
+  "dependencies": {
+    "@fontsource-variable/manrope": "^5.3.0",
+    "@fontsource/dm-mono": "^5.3.0"
+  }
+}
