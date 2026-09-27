@@ -1,5 +1,5 @@
 -r requirements.txt
-pytest==8.4.2
+pytest==9.0.3
 ruff==0.16.8
 # Keep SQLAlchemy's platform-dependent dependency pinned on both macOS and Linux.
 greenlet
