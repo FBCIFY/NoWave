@@ -2,10 +2,10 @@ name: Production validation
 on:
   workflow_dispatch:
   push:
-    branches: [main]
+    branches: [dev]
     paths: [backend/**, web/**, deploy/**, .github/workflows/production.yml]
   pull_request:
-    branches: [main]
+    branches: [dev]
     paths: [backend/**, web/**, deploy/**, .github/workflows/production.yml]
 permissions:
   contents: read
