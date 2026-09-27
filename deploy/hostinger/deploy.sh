@@ -53,5 +53,10 @@ trap rollback ERR
 "${compose[@]}" up -d --wait --wait-timeout 90 api web
 bash "$source_root/deploy/hostinger/verify.sh" http://127.0.0.1:18080 "$revision"
 printf '%s\n' "$revision" > "$root/current-revision"
+install -m 0700 "$source_root/deploy/hostinger/backup.sh" "$root/config/backup.sh"
+install -m 0644 "$source_root/deploy/hostinger/nowave-backup.service" /etc/systemd/system/nowave-backup.service
+install -m 0644 "$source_root/deploy/hostinger/nowave-backup.timer" /etc/systemd/system/nowave-backup.timer
+systemctl daemon-reload
+systemctl enable --now nowave-backup.timer
 trap - ERR
 printf 'NoWave is healthy on the private origin. Enable the validated tunnel to publish.\n'

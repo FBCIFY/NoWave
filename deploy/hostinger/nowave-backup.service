@@ -1,0 +1,24 @@
+[Unit]
+Description=Private NoWave database and configuration backup
+Requires=docker.service
+After=docker.service
+ConditionPathExists=/opt/nowave/config/release.env
+
+[Service]
+Type=oneshot
+User=root
+UMask=0077
+ExecStart=/usr/bin/flock --wait 60 /opt/nowave/backup.lock /bin/bash /opt/nowave/config/backup.sh
+TimeoutStartSec=15min
+Nice=10
+IOSchedulingClass=idle
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectHome=true
+ProtectSystem=strict
+ReadWritePaths=/opt/nowave
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+

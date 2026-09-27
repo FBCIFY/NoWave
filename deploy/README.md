@@ -63,7 +63,11 @@ Les vérifications de refus d’authentification ne remplacent pas un test avec 
 
 ## Sauvegardes et retour arrière
 
-`hostinger/backup.sh` écrit un dump PostgreSQL et les configurations/journaux privés dans un répertoire daté. Il vérifie la lisibilité du dump. Avant usage réel, planifier ce script quotidiennement et copier les sauvegardes vers un stockage **hors VPS** avec un compte dédié ; cette destination doit être fournie et une restauration testée. Une sauvegarde uniquement locale n’est pas une sauvegarde hors site.
+`hostinger/backup.sh` écrit un dump PostgreSQL et les configurations/journaux privés dans un répertoire daté. Il vérifie la lisibilité du dump. Le déploiement installe `nowave-backup.timer` : exécution quotidienne à 03:30 UTC, décalée d’au plus 15 minutes, avec rattrapage après arrêt du serveur. `systemctl list-timers nowave-backup.timer` et `journalctl -u nowave-backup.service` permettent de contrôler son fonctionnement. Aucune sauvegarde existante n’est supprimée automatiquement.
+
+Avant usage réel, copier aussi les sauvegardes vers un stockage **hors VPS** avec un compte dédié ; cette destination doit être fournie et une restauration testée. Une copie privée ponctuelle sur l’ordinateur du propriétaire constitue un point de récupération hors serveur, mais ne remplace pas une exportation quotidienne automatisée. Une sauvegarde uniquement locale au VPS n’est pas une sauvegarde hors site.
+
+Tester les restaurations dans une base temporaire isolée, jamais dans la base active. L’image PostGIS initialise déjà les schémas `tiger` et `topology` : pour une restauration complète, `pg_restore --clean --if-exists --exit-on-error` s’utilise uniquement sur cette cible jetable. Le rôle `nowave_runtime` doit y être créé avant restauration des droits. Vérifier ensuite la version Alembic et le schéma applicatif.
 
 Le script de déploiement remet l’ancienne configuration API/web en cas d’échec, mais ne descend pas automatiquement les migrations et n’écrase pas la base. Toute migration incompatible nécessite une procédure de restauration examinée avant livraison. Pour une première installation sans ancienne version, un échec laisse les services privés et les journaux accessibles au diagnostic.
 
