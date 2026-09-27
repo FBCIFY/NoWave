@@ -2,6 +2,7 @@
 
 import os
 from dataclasses import dataclass, field
+from pathlib import Path
 
 
 class ConfigurationError(RuntimeError):
@@ -19,4 +20,13 @@ class Settings:
 
 
 def get_settings() -> Settings:
-    return Settings(database_url=os.getenv("DATABASE_URL"))
+    url = os.getenv("DATABASE_URL")
+    filename = os.getenv("DATABASE_URL_FILE")
+    if url and filename:
+        raise ConfigurationError("Set DATABASE_URL or DATABASE_URL_FILE, not both")
+    if filename:
+        try:
+            url = Path(filename).read_text().strip()
+        except OSError:
+            raise ConfigurationError("DATABASE_URL_FILE cannot be read") from None
+    return Settings(database_url=url)

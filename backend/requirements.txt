@@ -1,6 +1,7 @@
 -r app/infrastructure/database/requirements.txt
 fastapi
 uvicorn[standard]
-pytest
 httpx
 firebase-admin
+# Required by SQLAlchemy on the Linux x86_64 production host.
+greenlet

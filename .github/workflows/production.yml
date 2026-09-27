@@ -1,0 +1,118 @@
+name: Production validation
+on:
+  workflow_dispatch:
+  push:
+    branches: [dev]
+  pull_request:
+    branches: [dev]
+    paths: [backend/**, web/**, deploy/**, .github/workflows/production.yml]
+permissions:
+  contents: read
+concurrency:
+  group: production-${{ github.ref }}
+  cancel-in-progress: false
+jobs:
+  validate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    env:
+      BLUEWAY_TEST_ADMIN_URL: postgresql://blueway_ci:ci-test-only@127.0.0.1:55433/blueway_ci
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+          cache-dependency-path: backend/requirements-test.txt
+      - name: Install locked dependencies
+        run: |
+          npm ci --prefix web
+          python -m pip install -r backend/requirements-test.txt pip-audit==2.10.1
+      - name: Web tests and dependency audit
+        working-directory: web
+        run: |
+          npm run format:check
+          npm test
+          npm run build
+          npm audit --audit-level=low
+      - name: API tests and dependency audit
+        run: |
+          ruff check backend deploy/hostinger
+          python -m pytest backend/tests/api backend/tests/unit -q --junitxml=test-results/api.xml
+          pip-audit --require-hashes --disable-pip -r backend/requirements.lock
+          pip-audit --disable-pip --no-deps -r backend/requirements-test.txt
+      - name: Migration and database tests in a disposable instance
+        run: |
+          docker compose -p nowave-ci -f compose.test.yaml up -d --build --wait database
+          python -m pytest backend/tests/database -q --junitxml=test-results/database.xml
+      - name: Build exact revision and reject all active image vulnerabilities
+        env:
+          REVISION: ${{ github.sha }}
+        run: bash deploy/hostinger/build-and-audit.sh "$REVISION"
+      - name: Publish validation evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: nowave-production-validation-${{ github.sha }}
+          path: |
+            test-results/*.xml
+            test-results/containers/*.json
+            test-results/production-audit-ok
+          retention-days: 14
+      - name: Remove disposable database
+        if: always()
+        run: docker compose -p nowave-ci -f compose.test.yaml down --volumes
+
+  deploy:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/dev'
+    needs: validate
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    environment:
+      name: production
+      url: https://no-wave.fr
+    env:
+      DEPLOY_HOST: ${{ vars.NOWAVE_DEPLOY_HOST }}
+      DEPLOY_SSH_KEY: ${{ secrets.NOWAVE_DEPLOY_SSH_KEY }}
+      DEPLOY_KNOWN_HOSTS: ${{ secrets.NOWAVE_DEPLOY_KNOWN_HOSTS }}
+      REVISION: ${{ github.sha }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Configure pinned SSH access
+        run: |
+          set -euo pipefail
+          [[ "$REVISION" =~ ^[a-f0-9]{40}$ ]]
+          [[ "$DEPLOY_HOST" =~ ^[a-zA-Z0-9.-]+$ ]] || { echo 'Missing or invalid NOWAVE_DEPLOY_HOST.' >&2; exit 1; }
+          [[ -n "$DEPLOY_SSH_KEY" && -n "$DEPLOY_KNOWN_HOSTS" ]] || { echo 'NoWave deployment SSH secrets are missing.' >&2; exit 1; }
+          install -d -m 0700 "$HOME/.ssh"
+          printf '%s\n' "$DEPLOY_SSH_KEY" > "$HOME/.ssh/id_nowave_deploy"
+          printf '%s\n' "$DEPLOY_KNOWN_HOSTS" > "$HOME/.ssh/known_hosts"
+          chmod 0600 "$HOME/.ssh/id_nowave_deploy" "$HOME/.ssh/known_hosts"
+          ssh-keygen -F "$DEPLOY_HOST" -f "$HOME/.ssh/known_hosts" > /dev/null || { echo 'Deployment host key is not pinned.' >&2; exit 1; }
+          cat > "$HOME/.ssh/config" <<EOF
+          Host nowave-production
+            HostName $DEPLOY_HOST
+            User root
+            IdentityFile $HOME/.ssh/id_nowave_deploy
+            IdentitiesOnly yes
+            BatchMode yes
+            StrictHostKeyChecking yes
+            UserKnownHostsFile $HOME/.ssh/known_hosts
+          EOF
+          chmod 0600 "$HOME/.ssh/config"
+      - name: Transfer only tracked files from the validated revision
+        run: |
+          set -euo pipefail
+          git archive --format=tar "$REVISION" | gzip -1 | \
+            ssh nowave-production "set -e; umask 077; install -d -m 0700 /opt/nowave/releases/$REVISION; tar -xz -C /opt/nowave/releases/$REVISION"
+      - name: Build, audit, back up and deploy on the NoWave VPS
+        run: |
+          set -euo pipefail
+          ssh nowave-production "bash /opt/nowave/releases/$REVISION/deploy/hostinger/ci-deploy.sh $REVISION"

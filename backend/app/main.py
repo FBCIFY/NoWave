@@ -1,4 +1,5 @@
 from fastapi import FastAPI
+from app.config.production import configure_production, is_production
 
 from app.api.errors.handlers import (
     email_not_verified_handler,
@@ -27,7 +28,12 @@ from app.domain.errors import (
 )
 
 
-app = FastAPI()
+app = FastAPI(
+    docs_url=None if is_production() else "/docs",
+    redoc_url=None if is_production() else "/redoc",
+    openapi_url=None if is_production() else "/openapi.json",
+)
+configure_production(app)
 
 app.include_router(health_router)
 app.include_router(api_router)

@@ -1,0 +1,103 @@
+name: nowave
+x-runtime: &runtime
+  restart: unless-stopped
+  read_only: true
+  cap_drop: [ALL]
+  security_opt: [no-new-privileges:true]
+  logging:
+    driver: json-file
+    options: {max-size: 20m, max-file: '10'}
+services:
+  database:
+    <<: *runtime
+    image: nowave-postgres:${NOWAVE_VERSION:?Specify the tested Git revision}
+    user: '70:70'
+    environment:
+      POSTGRES_DB: nowave
+      POSTGRES_USER: nowave_owner
+      POSTGRES_PASSWORD_FILE: /run/secrets/db_admin_password
+      POSTGRES_INITDB_ARGS: --encoding=UTF8 --locale=C
+    secrets: [db_admin_password]
+    volumes: [database:/var/lib/postgresql/data]
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=64m
+      - /var/run/postgresql:rw,noexec,nosuid,uid=70,gid=70,size=16m
+    networks: [backend]
+    mem_limit: 768m
+    cpus: 0.75
+    pids_limit: 150
+    shm_size: 128m
+  migrate:
+    <<: *runtime
+    image: nowave-api:${NOWAVE_VERSION:?}
+    restart: 'no'
+    profiles: [operations]
+    command: [python, migrate.py]
+    environment:
+      DATABASE_URL_FILE: /run/secrets/database_admin_url
+    secrets: [database_admin_url, db_runtime_password]
+    networks: [backend]
+    tmpfs: ['/tmp:rw,noexec,nosuid,size=32m']
+    mem_limit: 256m
+    cpus: 0.5
+    pids_limit: 80
+    depends_on:
+      database: {condition: service_healthy}
+    healthcheck: {disable: true}
+  api:
+    <<: *runtime
+    image: nowave-api:${NOWAVE_VERSION:?}
+    profiles: [api]
+    environment:
+      NOWAVE_ENV: production
+      NOWAVE_VERSION: ${NOWAVE_VERSION:?}
+      DATABASE_URL_FILE: /run/secrets/database_url
+      GOOGLE_CLOUD_PROJECT: blueway-dev
+      GOOGLE_APPLICATION_CREDENTIALS: /run/secrets/firebase_service_account
+    secrets: [database_url, firebase_service_account]
+    networks:
+      backend:
+      frontend:
+        ipv4_address: 172.30.72.4
+      egress:
+    tmpfs: ['/tmp:rw,noexec,nosuid,size=32m']
+    mem_limit: 384m
+    cpus: 0.75
+    pids_limit: 120
+    depends_on:
+      database: {condition: service_healthy}
+  web:
+    <<: *runtime
+    image: nowave-web:${NOWAVE_VERSION:?}
+    networks:
+      frontend:
+        ipv4_address: 172.30.72.3
+      operations:
+    # Local operations only. Public traffic enters through Cloudflare Tunnel.
+    ports: ['127.0.0.1:18080:8080']
+    tmpfs: ['/tmp:rw,noexec,nosuid,uid=101,gid=101,size=32m']
+    mem_limit: 128m
+    cpus: 0.5
+    pids_limit: 50
+volumes:
+  database:
+networks:
+  backend:
+    internal: true
+  frontend:
+    internal: true
+    ipam:
+      config: [{subnet: 172.30.72.0/29}]
+  egress:
+  operations:
+secrets:
+  db_admin_password:
+    file: ${NOWAVE_SECRETS_DIR:-/opt/nowave/secrets}/db_admin_password
+  db_runtime_password:
+    file: ${NOWAVE_SECRETS_DIR:-/opt/nowave/secrets}/db_runtime_password
+  database_admin_url:
+    file: ${NOWAVE_SECRETS_DIR:-/opt/nowave/secrets}/database_admin_url
+  database_url:
+    file: ${NOWAVE_SECRETS_DIR:-/opt/nowave/secrets}/database_url
+  firebase_service_account:
+    file: ${NOWAVE_SECRETS_DIR:-/opt/nowave/secrets}/firebase_service_account.json

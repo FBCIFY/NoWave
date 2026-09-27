@@ -67,7 +67,7 @@ class _ReportComposerSheetState extends State<ReportComposerSheet> {
       try {
         final body = jsonDecode(error.body);
         if (body is Map && body['error']?['code'] == 'USER_NOT_FOUND') {
-          return 'Votre profil BlueWay est introuvable.';
+          return 'Votre profil NoWave est introuvable.';
         }
       } catch (_) {
         // A missing route can return a different response format.

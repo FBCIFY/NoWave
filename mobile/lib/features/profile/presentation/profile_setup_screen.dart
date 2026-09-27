@@ -136,7 +136,7 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
             if (!useCompactLayout) ...[
               const SizedBox(height: 8),
               Text(
-                'Ce nom sera associé à votre profil Blue Way.',
+                'Ce nom sera associé à votre profil NoWave.',
                 textAlign: TextAlign.center,
                 style: TextStyle(
                   color: Colors.white.withValues(alpha: 0.45),

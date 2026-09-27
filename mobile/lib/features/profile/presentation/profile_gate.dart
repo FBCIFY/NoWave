@@ -67,7 +67,7 @@ class _ProfileGateState extends State<ProfileGate> {
           step = 0;
           screen = Scaffold(
             appBar: AppBar(
-              title: const Text('BlueWay'),
+              title: const Text('NoWave'),
               actions: [
                 TextButton(
                   onPressed: widget.authService.signOut,

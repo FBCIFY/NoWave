@@ -1,10 +1,10 @@
 """Alembic runtime configuration for the Blueway PostgreSQL database."""
 
 from logging.config import fileConfig
-import os
 
 from alembic import context
 from sqlalchemy import engine_from_config, pool
+from app.config.settings import get_settings
 
 
 config = context.config
@@ -16,7 +16,7 @@ LOCK_ID = 6212091601
 
 
 def database_url() -> str:
-    url = os.getenv("DATABASE_URL") or config.get_main_option("sqlalchemy.url")
+    url = get_settings().database_url or config.get_main_option("sqlalchemy.url")
     if not url:
         raise RuntimeError("DATABASE_URL must be set before running Alembic")
     if url.startswith("postgresql://"):

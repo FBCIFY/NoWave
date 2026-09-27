@@ -7,7 +7,7 @@
 	<key>CFBundleDevelopmentRegion</key>
 	<string>$(DEVELOPMENT_LANGUAGE)</string>
 	<key>CFBundleDisplayName</key>
-	<string>Blueway</string>
+	<string>NoWave</string>
 	<key>CFBundleExecutable</key>
 	<string>$(EXECUTABLE_NAME)</string>
 	<key>CFBundleIdentifier</key>
@@ -15,7 +15,7 @@
 	<key>CFBundleInfoDictionaryVersion</key>
 	<string>6.0</string>
 	<key>CFBundleName</key>
-	<string>blueway</string>
+	<string>NoWave</string>
 	<key>CFBundlePackageType</key>
 	<string>APPL</string>
 	<key>CFBundleShortVersionString</key>
@@ -27,9 +27,9 @@
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
 	<key>NSCameraUsageDescription</key>
-	<string>BlueWay utilise la caméra pour photographier un objet ou un événement signalé en mer.</string>
+	<string>NoWave utilise la caméra pour photographier un objet ou un événement signalé en mer.</string>
 	<key>NSLocationWhenInUseUsageDescription</key>
-	<string>BlueWay utilise votre position pour vous situer sur la carte maritime et afficher vos coordonnées.</string>
+	<string>NoWave utilise votre position pour vous situer sur la carte maritime et afficher vos coordonnées.</string>
 	<key>UIApplicationSceneManifest</key>
 	<dict>
 		<key>UIApplicationSupportsMultipleScenes</key>

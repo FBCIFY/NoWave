@@ -1,0 +1,24 @@
+services:
+  tunnel:
+    image: nowave-tunnel:${NOWAVE_VERSION:?}
+    command: [tunnel, --no-autoupdate, --metrics, '0.0.0.0:2000', run, --token-file, /run/secrets/tunnel_token]
+    restart: unless-stopped
+    user: '65532:65532'
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    secrets: [tunnel_token]
+    networks:
+      frontend: {ipv4_address: 172.30.72.2}
+      egress:
+    mem_limit: 128m
+    cpus: 0.25
+    pids_limit: 80
+    logging:
+      driver: json-file
+      options: {max-size: 20m, max-file: '10'}
+    depends_on:
+      web: {condition: service_healthy}
+secrets:
+  tunnel_token:
+    file: ${NOWAVE_SECRETS_DIR:-/opt/nowave/secrets}/tunnel_token

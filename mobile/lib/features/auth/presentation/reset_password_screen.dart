@@ -86,7 +86,7 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
   Widget build(BuildContext context) {
     return AuthLayout(
       title: 'Mot de passe oublié',
-      subtitle: 'Réinitialiser votre accès Blue Way',
+      subtitle: 'Réinitialiser votre accès NoWave',
       showBackButton: true,
       child: _isSent
           ? Column(

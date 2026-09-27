@@ -1,4 +1,5 @@
 from typing import Annotated
+import os
 
 from fastapi import APIRouter, Depends
 from fastapi.responses import JSONResponse
@@ -7,6 +8,11 @@ from app.dependencies.container import get_database_ready
 
 
 router = APIRouter()
+
+
+@router.get("/version")
+def version():
+    return {"service": "nowave-api", "version": os.getenv("NOWAVE_VERSION", "development")}
 
 
 @router.get("/health")
