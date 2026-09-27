@@ -93,8 +93,8 @@ Les visuels originaux générés par l’outil intégré OpenAI `image_gen` sont
 conservés pour les assets actifs. Le fond remasterisé est livré en 1536 × 1024 ;
 les objets isolés disposent de 1254 à 1536 pixels de large. Le phare du parcours
 reprend directement l’îlot central de ce fond. Le premier asset de phare séparé
-reste archivé, sans être utilisé à l’écran. Les prompts sont dans
-`assets-manifest.json` et `prompts/archipelago-remaster.txt`.
+reste archivé, sans être utilisé à l’écran. Le prompt du fond remasterisé est dans
+`prompts/archipelago-remaster.txt`.
 
 La composition riche en détails s’inspire du principe d’exploration de
 [Floor796](https://floor796.com/) ; aucun asset du site de référence n’est repris.
