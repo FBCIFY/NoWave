@@ -1,90 +1,20 @@
-# NoWave sur le VPS Hostinger
+# Déploiement de NoWave
 
-Cette configuration déploie le site `web`, l’API FastAPI et PostgreSQL 17/PostGIS. Le client mobile se construit séparément ; il n’est pas un service à lancer sur le VPS.
+Le VPS héberge le site web, l’API FastAPI et PostgreSQL/PostGIS dans des conteneurs Docker. Un tunnel Cloudflare dédié publie `no-wave.fr` et `api.no-wave.fr`. L’application mobile est construite séparément.
 
-## Principes repris de Labelscan
+## Livraison
 
-- Révision Git exacte, images identifiées par cette révision, bases Docker épinglées par digest et dépendances Python avec empreintes.
-- Tests web/API/base, migrations dans une base temporaire, audit npm et pip, audit Trivy de **toutes** les sévérités. Une vulnérabilité active bloque la livraison.
-- Utilisateurs non root, systèmes de fichiers en lecture seule, capacités supprimées, `no-new-privileges`, limites CPU/mémoire/processus, contrôles de santé et rotation des journaux.
-- Aucun port public pour l’API ou PostgreSQL. Données et mots de passe entièrement séparés de Labelscan.
-- Rôle propriétaire réservé aux migrations ; l’API dispose d’un rôle PostgreSQL limité aux tables nécessaires. Firebase est vérifié au démarrage.
-- Sauvegarde privée avant mise à jour ; conservation des journaux avant remplacement. Retour à l’image précédente en cas d’échec, sans restauration automatique destructive de données.
-- Journalisation JSON sans corps, cookies, autorisations ni query strings ; en-têtes de sécurité, taille de requête limitée, limites de débit, vérification du domaine et de l’origine.
+Le workflow `.github/workflows/production.yml` exécute les tests web, API et base de données, puis les audits des dépendances et des quatre images Docker. Après un push sur `dev`, un résultat valide déclenche le déploiement de cette révision exacte sur le VPS. Les pull requests et les lancements manuels exécutent seulement la validation.
 
-Le domaine prévu est `no-wave.fr`, avec `www.no-wave.fr` redirigé vers celui-ci et `api.no-wave.fr` pour le client mobile. L’API est également disponible sous `/api/v1` sur le domaine principal.
+Le script `hostinger/ci-deploy.sh` reconstruit et audite les images sur le VPS, puis appelle `hostinger/deploy.sh`. Celui-ci effectue une sauvegarde, applique les migrations, démarre les services et vérifie la version sur l’adresse privée. Le tunnel est ensuite mis à jour et les routes publiques sont vérifiées.
 
-## Coexistence avec Labelscan
+## Protection et sauvegardes
 
-Labelscan conserve son Caddy, ses ports 80/443, ses réseaux, son pare-feu et ses déploiements. NoWave utilise un **tunnel Cloudflare dédié** qui établit uniquement des connexions sortantes chiffrées. Cette différence évite de redémarrer ou modifier le proxy Labelscan. Le serveur web NoWave est accessible pour les vérifications locales sur `127.0.0.1:18080`, jamais sur une interface publique.
+- L’API et PostgreSQL ne publient pas de port directement sur Internet.
+- Les identifiants Firebase et le jeton Cloudflare restent dans `/opt/nowave/secrets`, hors du dépôt.
+- `hostinger/backup.sh` sauvegarde la base et la configuration avant les mises à jour ; un timer système lance également une sauvegarde quotidienne sur le VPS.
+- En cas d’échec pendant le déploiement des services, `hostinger/deploy.sh` remet la précédente configuration applicative. Il ne restaure pas automatiquement la base de données.
 
-Les réseaux `frontend` et `backend` sont internes. Seuls l’API (Firebase), le connecteur et le réseau de contrôle local disposent d’une sortie. Les adresses sont fixes : `172.30.72.2` pour le connecteur, `.3` pour le web et `.4` pour l’API. Ainsi, l’API ne prend pas l’adresse du tunnel lorsqu’elle démarre avant lui. Seul le connecteur peut fournir `CF-Connecting-IP` au proxy. Vérifier que le sous-réseau `172.30.72.0/29` n’est pas utilisé avant la première installation.
+## Accès GitHub nécessaire
 
-## Secrets, hors Git
-
-Le script `hostinger/bootstrap.py` crée une seule fois les répertoires privés et les mots de passe aléatoires sous `/opt/nowave/secrets`. Il ne remplace pas de valeur existante.
-
-À installer séparément :
-
-- `firebase_service_account.json` : compte de service existant du projet **blueway-dev**, mode `0440`, groupe `10001`.
-- `tunnel_token` : jeton du seul tunnel NoWave, mode `0440`, groupe `65532`.
-
-Ne pas utiliser le projet erroné `blueway-deve`, les identifiants utilisateur ADC ou les secrets de Labelscan. Ne jamais placer une clé dans une variable `VITE_*`, l’image Docker, un journal ou un commit. La landing page présente uniquement des exemples fictifs : elle n’envoie pas de signalement réel.
-
-## Déploiement automatique depuis `dev`
-
-Le workflow `Production validation` valide les pull requests sans les publier. Après chaque push sur `dev`, le job `deploy` attend la réussite de tous les tests et audits. Il transfère uniquement les fichiers Git de la révision validée, reconstruit et audite les quatre images sur le VPS, puis exécute la sauvegarde, les migrations, la vérification privée, le tunnel NoWave et les contrôles publics. Un échec arrête le workflow ; deux déploiements de `dev` ne s'exécutent pas simultanément. Le lancement manuel de `Production validation` exécute les contrôles sans déployer.
-
-Configurer l'environnement GitHub `production` en limitant ses branches de déploiement à `dev`, sans approbation manuelle si le déploiement doit rester automatique. Ajouter à cet environnement :
-
-- Variable `NOWAVE_DEPLOY_HOST` : nom DNS ou IP du VPS NoWave.
-- Secret `NOWAVE_DEPLOY_SSH_KEY` : clé privée SSH dédiée au déploiement, dont la clé publique est autorisée pour `root` sur ce VPS.
-- Secret `NOWAVE_DEPLOY_KNOWN_HOSTS` : ligne `known_hosts` de ce VPS, après vérification indépendante de son empreinte SSH. Ne pas désactiver la vérification de l'hôte.
-
-Le VPS doit déjà posséder les secrets privés Firebase et Cloudflare décrits ci-dessus. Les clés SSH, jetons et mots de passe ne doivent jamais être ajoutés à Git. Le workflow ne touche pas au proxy, aux réseaux ni aux secrets de Labelscan. Le client mobile se construit et se distribue séparément.
-
-## Installation / mise à jour manuelle
-
-1. Exécuter les contrôles du workflow `Production validation` sur la révision exacte.
-2. Transférer l’archive de cette révision vers `/opt/nowave/releases/<SHA>`. Seuls les fichiers suivis par Git sont inclus.
-3. Depuis cette archive, lancer `bash deploy/hostinger/build-and-audit.sh <SHA>`. Le marqueur de réussite contient la révision ; conserver les rapports JSON d’audit.
-4. Installer le compte de service privé, puis lancer `bash deploy/hostinger/deploy.sh <SHA>`. Le script sauvegarde, applique les migrations, démarre les conteneurs et vérifie les routes privées.
-5. Configurer les noms publics du tunnel vers `http://web:8080` : `no-wave.fr`, `www.no-wave.fr`, `api.no-wave.fr`, puis une règle finale `http_status:404`. Ne pas exposer l’interface de mesures `2000` ni PostgreSQL.
-6. Copier `deploy/tunnel.yaml` dans `/opt/nowave/config/`, puis activer le connecteur avec la même révision :
-
-```sh
-cd /opt/nowave/config
-docker compose --env-file release.env -f compose.yaml -f tunnel.yaml --profile api up -d --wait tunnel
-```
-
-7. Dans Cloudflare : conserver les enregistrements mail existants lors de l’import DNS, activer HTTPS forcé et TLS minimum 1.2, conserver les protections WAF du plan et éviter les challenges navigateur sur les routes API mobiles. Vérifier le domaine depuis Internet avant d’annoncer la publication.
-
-Aucun abonnement ni transfert de domaine n’est requis. Le changement des serveurs DNS doit intervenir seulement après copie complète des enregistrements actuels, notamment MX, SPF, DKIM et DMARC.
-
-## Vérifications
-
-```sh
-bash deploy/hostinger/verify.sh http://127.0.0.1:18080 <SHA>
-curl --fail https://no-wave.fr/version.json
-curl --fail https://api.no-wave.fr/health/ready
-```
-
-Vérifier aussi : HTTPS valide, une seule occurrence des en-têtes de sécurité, refus des domaines inconnus, jetons absents/faux refusés, DB/API sans port publié, ressources et version de Labelscan inchangées, images et parcours lisibles sur mobile.
-
-Les vérifications de refus d’authentification ne remplacent pas un test avec un utilisateur Firebase de test et son jeton valide. Ne jamais utiliser un compte réel pour des écritures/suppressions de recette non demandées.
-
-## Sauvegardes et retour arrière
-
-`hostinger/backup.sh` écrit un dump PostgreSQL et les configurations/journaux privés dans un répertoire daté. Il vérifie la lisibilité du dump. Le déploiement installe `nowave-backup.timer` : exécution quotidienne à 03:30 UTC, décalée d’au plus 15 minutes, avec rattrapage après arrêt du serveur. `systemctl list-timers nowave-backup.timer` et `journalctl -u nowave-backup.service` permettent de contrôler son fonctionnement. Aucune sauvegarde existante n’est supprimée automatiquement.
-
-Avant usage réel, copier aussi les sauvegardes vers un stockage **hors VPS** avec un compte dédié ; cette destination doit être fournie et une restauration testée. Une copie privée ponctuelle sur l’ordinateur du propriétaire constitue un point de récupération hors serveur, mais ne remplace pas une exportation quotidienne automatisée. Une sauvegarde uniquement locale au VPS n’est pas une sauvegarde hors site.
-
-Tester les restaurations dans une base temporaire isolée, jamais dans la base active. L’image PostGIS initialise déjà les schémas `tiger` et `topology` : pour une restauration complète, `pg_restore --clean --if-exists --exit-on-error` s’utilise uniquement sur cette cible jetable. Le rôle `nowave_runtime` doit y être créé avant restauration des droits. Vérifier ensuite la version Alembic et le schéma applicatif.
-
-Le script de déploiement remet l’ancienne configuration API/web en cas d’échec, mais ne descend pas automatiquement les migrations et n’écrase pas la base. Toute migration incompatible nécessite une procédure de restauration examinée avant livraison. Pour une première installation sans ancienne version, un échec laisse les services privés et les journaux accessibles au diagnostic.
-
-## Exceptions d’audit documentées
-
-L’image standard Cloudflare contenait des bibliothèques système vulnérables. `tunnel/Dockerfile` reconstruit la version officielle 2026.9.3 à partir de son SHA, met à jour `golang.org/x/crypto` et utilise une base Alpine mise à jour. Le build échoue si le package OpenPGP concerné par `GO-2026-5932` est lié. Le fichier VEX ne couvre que ce code absent, selon la même méthode que Labelscan ; il ne masque pas les autres vulnérabilités.
-
-Références : [Cloudflare Tunnel](https://developers.cloudflare.com/tunnel/get-started/), [paramètres du connecteur](https://developers.cloudflare.com/tunnel/reference/run-parameters/), [Firebase Admin](https://firebase.google.com/docs/admin/setup).
+Pour que le déploiement automatique fonctionne, l’environnement GitHub `production` doit contenir la variable `NOWAVE_DEPLOY_HOST` et les secrets `NOWAVE_DEPLOY_SSH_KEY` et `NOWAVE_DEPLOY_KNOWN_HOSTS`. Ces accès ne sont pas fournis par le dépôt.
