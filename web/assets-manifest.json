@@ -1,0 +1,90 @@
+{
+  "generator": "OpenAI built-in image_gen",
+  "created": "2026-09-26",
+  "note": "Original CGI generated for NoWave. Active assets retain native source resolution and are encoded in WebP quality 94 with alpha preserved. The lighthouse tour uses the central island from the archipelago itself; the separate lighthouse is retained as an unused earlier illustration.",
+  "assets": [
+    {
+      "id": "archipelago",
+      "file": "public/assets/archipelago.webp",
+      "revisionPrompt": "prompts/archipelago-remaster.txt",
+      "prompt": "Use case: stylized-concept. Original premium CGI for the NoWave playful maritime explorer. Highly detailed charming 3D miniature diorama, sophisticated tactile clay and painted resin, rich deep teal, bright turquoise, sun yellow, coral orange, tiny cream highlights. Isometric 35 degree overhead camera. Crisp cinematic soft daylight, ambient occlusion, physically based materials. Joyful sea adventure, clever maritime cultural references. No typography, no logos, no watermark, no interface. Asset type: expansive landing page world map, landscape 1536x1024 or larger. An astonishing intricately detailed interconnected toy ocean archipelago, ocean fills every edge, flat deep blue-teal water #087786 at edges with subtle rippling glints, NO horizon, NO sky. All action in middle 80 percent with clean teal water border. Center: a large lush round island with an orange-red striped lighthouse on a high limestone cliff, winding stone stairs, Mediterranean fishing village of pastel houses, little marina wooden jetty and two sailboats. Surroundings: smaller tropical cove upper left with shipwreck and pirate treasure, satellite observatory on right rocky island, a tiny coffee shack on a floating raft, coral reef, a yellow retro submarine, whale tail, tiny sailing boats, a sea serpent peeking out, buoy paths, schools of fish, comical little sailors. Islands feel separated by plenty of water. Super rich miniature world with fifty tiny delightful things to discover, whimsical witty adventure. Place central main island toward right center. Readable silhouettes at small scale, beautiful sunlit cyan shallows around islands, central mass dominant, masterful 3D art, not a flat drawing.",
+      "encoding": "WebP quality 94, native source dimensions, alpha preserved",
+      "sourceImage": "exec-b41ed333-b9c2-473a-bd7c-b6cf20da481c.png"
+    },
+    {
+      "id": "lighthouse",
+      "file": "public/assets/lighthouse.webp",
+      "prompt": "Use case: stylized-concept. Original premium CGI for the NoWave playful maritime explorer. Highly detailed charming 3D miniature diorama, sophisticated tactile clay and painted resin, rich deep teal, bright turquoise, sun yellow, coral orange, tiny cream highlights. Isometric 35 degree overhead camera. Crisp cinematic soft daylight, ambient occlusion, physically based materials. Joyful sea adventure, clever maritime cultural references. No typography, no logos, no watermark, no interface. Asset type: isolated CGI object with genuinely transparent background. A complete charming miniature island with tall coral-and-cream striped lighthouse, green grass, weathered white limestone cliffs, a tiny teal-roof keeper house, stone stairs, small orange life ring, dock and a tiny fishing boat. Entire island fits frame with generous transparent margin, isometric orthographic view, no text."
+    },
+    {
+      "id": "nautilus",
+      "file": "public/assets/nautilus.webp",
+      "prompt": "Use case: stylized-concept. Original premium CGI for the NoWave playful maritime explorer. Highly detailed charming 3D miniature diorama, sophisticated tactile clay and painted resin, rich deep teal, bright turquoise, sun yellow, coral orange, tiny cream highlights. Isometric 35 degree overhead camera. Crisp cinematic soft daylight, ambient occlusion, physically based materials. Joyful sea adventure, clever maritime cultural references. No typography, no logos, no watermark, no interface. Asset type: isolated CGI object with genuinely transparent background. A wonderfully quirky bright golden yellow retro-futuristic submarine inspired by Jules Verne, copper pipes, three round bright blue portholes, tiny periscope, orange propeller, a tiny sailor standing on hatch with binoculars, a small foamy wake immediately touching hull. Viewed from above at 35 degrees, pointing left, whole silhouette fits frame, no rectangle of sea, no text.",
+      "encoding": "WebP quality 94, native source dimensions, alpha preserved",
+      "sourceImage": "exec-2e97eae3-eb58-4cbf-bdc6-36546fca2db6.png"
+    },
+    {
+      "id": "kraken",
+      "file": "public/assets/kraken.webp",
+      "prompt": "Use case: stylized-concept. Original premium CGI for the NoWave playful maritime explorer. Highly detailed charming 3D miniature diorama, sophisticated tactile clay and painted resin, rich deep teal, bright turquoise, sun yellow, coral orange, tiny cream highlights. Isometric 35 degree overhead camera. Crisp cinematic soft daylight, ambient occlusion, physically based materials. Joyful sea adventure, clever maritime cultural references. No typography, no logos, no watermark, no interface. Asset type: isolated CGI object with genuinely transparent background. An adorable enormous coral-orange octopus with eight curling suction cup tentacles, wearing a tiny navy captain cap, happily clutching a little old wooden pirate ship like a toy, one tentacle holds a mug. Complex gorgeous toy sculpture, funny expression, entire silhouette fits in square, no text.",
+      "encoding": "WebP quality 94, native source dimensions, alpha preserved",
+      "sourceImage": "exec-a415ebfe-c589-4acd-a38a-b2ae284c5a61.png"
+    },
+    {
+      "id": "pirate",
+      "file": "public/assets/pirate.webp",
+      "prompt": "Use case: stylized-concept. Original premium CGI for the NoWave playful maritime explorer. Highly detailed charming 3D miniature diorama, sophisticated tactile clay and painted resin, rich deep teal, bright turquoise, sun yellow, coral orange, tiny cream highlights. Isometric 35 degree overhead camera. Crisp cinematic soft daylight, ambient occlusion, physically based materials. Joyful sea adventure, clever maritime cultural references. No typography, no logos, no watermark, no interface. Asset type: isolated CGI object with genuinely transparent background. An exquisitely detailed miniature wooden pirate sailing ship with three cream billowing sails, one small black flag with simple fish bones emblem, coral details, coiled ropes, a mischievous tiny seagull on lookout, tiny treasure chest on deck, floating with narrow turquoise foam wake attached to hull. Isometric view, ship points right, complete silhouette generous margin, no text.",
+      "encoding": "WebP quality 94, native source dimensions, alpha preserved",
+      "sourceImage": "exec-b545d5ce-2a39-408f-bba6-7e5c11105986.png"
+    },
+    {
+      "id": "duck",
+      "file": "public/assets/duck.webp",
+      "prompt": "Use case: stylized-concept. Original premium CGI for the NoWave playful maritime explorer. Highly detailed charming 3D miniature diorama, sophisticated tactile clay and painted resin, rich deep teal, bright turquoise, sun yellow, coral orange, tiny cream highlights. Isometric 35 degree overhead camera. Crisp cinematic soft daylight, ambient occlusion, physically based materials. Joyful sea adventure, clever maritime cultural references. No typography, no logos, no watermark, no interface. Asset type: isolated CGI object with genuinely transparent background. A giant perfectly yellow rubber duck that has become a tiny tropical island, miniature palms growing on its back, a tiny orange deck chair and parasol, a brave miniature sailor fishing from its side, orange beak, incredibly charming surprising absurd maritime toy. Isometric view, entire silhouette fits square, no text.",
+      "encoding": "WebP quality 94, native source dimensions, alpha preserved",
+      "sourceImage": "exec-65e3a255-ec64-48ff-90b7-64712dbdf286.png"
+    },
+    {
+      "id": "whale",
+      "file": "public/assets/whale.webp",
+      "prompt": "Use case: stylized-concept. Original premium CGI for the NoWave playful maritime explorer. Highly detailed charming 3D miniature diorama, sophisticated tactile clay and painted resin, rich deep teal, bright turquoise, sun yellow, coral orange, tiny cream highlights. Isometric 35 degree overhead camera. Crisp cinematic soft daylight, ambient occlusion, physically based materials. Joyful sea adventure, clever maritime cultural references. No typography, no logos, no watermark, no interface. Asset type: isolated CGI object with genuinely transparent background. A beautiful friendly cobalt-blue humpback whale emerging from water with miniature barnacles and glistening painted resin, elegant curved body, thin white water spout above head, one tiny orange sailboat next to it showing scale. Isometric overhead view, entire silhouette visible in square, no rectangle of ocean, no text.",
+      "encoding": "WebP quality 94, native source dimensions, alpha preserved",
+      "sourceImage": "exec-6dfe66bb-815e-4c8c-bbe2-20f13d89fb0c.png"
+    },
+    {
+      "id": "bottle",
+      "file": "public/assets/bottle.webp",
+      "prompt": "Use case: stylized-concept. Original premium CGI for the NoWave playful maritime explorer. Highly detailed charming 3D miniature diorama, sophisticated tactile clay and painted resin, rich deep teal, bright turquoise, sun yellow, coral orange, tiny cream highlights. Isometric 35 degree overhead camera. Crisp cinematic soft daylight, ambient occlusion, physically based materials. Joyful sea adventure, clever maritime cultural references. No typography, no logos, no watermark, no interface. Asset type: isolated CGI object with genuinely transparent background. A luminous translucent sea-green glass bottle with oversized cork, inside is a rolled antique nautical treasure map tied with red string and a tiny golden compass. Bottle tilted diagonally floating, small orange life ring looped around its neck, a few bubbles, beautiful refractions, charming premium 3D collectible, whole silhouette fits frame, no text.",
+      "encoding": "WebP quality 94, native source dimensions, alpha preserved",
+      "sourceImage": "exec-308be0b0-f9ed-4a6f-a9ad-ea1a247f9bc4.png"
+    },
+    {
+      "id": "container",
+      "file": "public/assets/container.webp",
+      "prompt": "Use case: stylized-concept. Asset type: isolated 3D miniature maritime diorama for professional NoWave marine safety awareness website. Premium very detailed CGI, tactile painted resin, physically based materials, sophisticated turquoise, deep teal, coral-orange and sun-yellow accents. Isometric overhead 35 degree camera, crisp cinematic daylight, delightful crafted miniature but subject depicted respectfully and clearly, no text, no logos, no watermark. Entire silhouette fits in square with generous margin. Genuinely transparent background. A weathered coral-orange corrugated steel shipping container lost at sea, tilted and half submerged, one corner and metal door still above the water, salt stains and scratches, a narrow attached crescent of turquoise sea and foam along waterline. A tiny yellow warning buoy stands nearby, an inquisitive little seagull perches on the raised corner. Visually obvious navigation obstacle, beautiful editorial object, no huge rectangular water base.",
+      "encoding": "WebP quality 94, native source dimensions, alpha preserved",
+      "sourceImage": "exec-eac39f75-2443-4d98-bd76-dc5c8437169d.png"
+    },
+    {
+      "id": "iceberg",
+      "file": "public/assets/iceberg.webp",
+      "prompt": "Use case: stylized-concept. Asset type: isolated 3D miniature maritime diorama for professional NoWave marine safety awareness website. Premium very detailed CGI, tactile painted resin, physically based materials, sophisticated turquoise, deep teal, coral-orange and sun-yellow accents. Isometric overhead 35 degree camera, crisp cinematic daylight, delightful crafted miniature but subject depicted respectfully and clearly, no text, no logos, no watermark. Entire silhouette fits in square with generous margin. Genuinely transparent background. An exquisite sculptural white and translucent arctic-blue iceberg, tall angular tip above water and huge beautiful luminous blue submerged base visible below a narrow turquoise waterline as a cutaway visualization. Tiny orange expedition sailboat far to one side for scale, no people on iceberg. Museum-quality CGI educational diorama with polished glass-like blue ice and subtle frosted textures, entire silhouette fits, no rectangular water block, no text or numbers.",
+      "encoding": "WebP quality 94, native source dimensions, alpha preserved",
+      "sourceImage": "exec-2d47b616-7730-4d57-bdab-27673f294ace.png"
+    },
+    {
+      "id": "orca",
+      "file": "public/assets/orca.webp",
+      "prompt": "Use case: stylized-concept. Asset type: isolated 3D miniature maritime diorama for professional NoWave marine safety awareness website. Premium very detailed CGI, tactile painted resin, physically based materials, sophisticated turquoise, deep teal, coral-orange and sun-yellow accents. Isometric overhead 35 degree camera, crisp cinematic daylight, delightful crafted miniature but subject depicted respectfully and clearly, no text, no logos, no watermark. Entire silhouette fits in square with generous margin. Genuinely transparent background. A majestic lifelike but miniature black-and-white orca calmly swimming near a much smaller cream-hulled sailing yacht with orange sail, the two separated by a visible water gap. High dorsal fin, correct distinctive white eye patch, beautiful glossy wet surface, narrow attached turquoise wake following its body. No smile, no anthropomorphic clothes, no aggression, no collision, respectful marine wildlife. Isometric entire silhouette.",
+      "encoding": "WebP quality 94, native source dimensions, alpha preserved",
+      "sourceImage": "exec-a53f5d57-2428-426b-89f7-75274d369f68.png"
+    },
+    {
+      "id": "observatory",
+      "file": "public/assets/observatory.webp",
+      "prompt": "Use case: stylized-concept. Asset type: isolated CGI miniature observatory for NoWave's maritime map. Primary request: a small charming ocean observation station, a cream limestone island with an elegant copper and teal observatory dome, a brass telescope emerging from its open shutter, a little weather vane, a few tiny shrubs, short stone stairs and a tiny wooden dock. Original premium 3D miniature diorama, sophisticated tactile clay and painted resin, physically based materials, crisp cinematic soft daylight and ambient occlusion. Match a Mediterranean lighthouse miniature: weathered white limestone, rich deep teal sea, copper orange metal, tiny warm cream highlights, no sci-fi antennas. Isometric orthographic 35 degree overhead camera; entire island and a compact turquoise water rim fit the square frame with generous margin. Genuine transparent background and alpha around the isolated object, no horizon, no background plane, no sky, no frame. No typography, logos, watermark, interface or plus icon. Production-ready cutout asset, playful yet refined, readable silhouette.",
+      "encoding": "WebP quality 94, native source dimensions, alpha preserved",
+      "sourceImage": "exec-e8460f38-17db-4d80-a1dc-7235c8516a02.png"
+    }
+  ]
+}
