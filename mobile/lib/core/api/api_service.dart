@@ -36,6 +36,18 @@ class ApiService {
     return _readResponse(response);
   }
 
+  Future<String> patch(
+    String path, {
+    Map<String, String>? headers,
+    Object? body,
+  }) async {
+    final response = await _client
+        .patch(_resolveUri(path), headers: headers, body: body)
+        .timeout(const Duration(seconds: 10));
+
+    return _readResponse(response);
+  }
+
   Uri _resolveUri(String path) {
     final baseUri = Uri.tryParse(_baseUrl);
 
