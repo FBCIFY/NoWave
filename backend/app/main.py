@@ -3,7 +3,9 @@ from app.config.production import configure_production, is_production
 
 from app.api.errors.handlers import (
     email_not_verified_handler,
+    gps_precision_insufficient_handler,
     inactive_user_handler,
+    invalid_positioning_input_handler,
     report_client_id_conflict_handler,
     report_not_found_handler,
     report_validation_handler,
@@ -15,8 +17,10 @@ from app.api.router import router as api_router
 from app.api.routes.health import router as health_router
 from app.domain.errors import (
     EmailNotVerifiedError,
+    GpsPrecisionInsufficientError,
     InactiveUserError,
     InvalidObservedAtError,
+    InvalidPositioningInputError,
     InvalidReportCategoryError,
     InvalidReportDescriptionError,
     InvalidReportPositionError,
@@ -91,4 +95,16 @@ app.add_exception_handler(
 app.add_exception_handler(
     UserNotFoundError,
     user_not_found_handler,
+)
+
+
+app.add_exception_handler(
+    GpsPrecisionInsufficientError,
+    gps_precision_insufficient_handler,
+)
+
+
+app.add_exception_handler(
+    InvalidPositioningInputError,
+    invalid_positioning_input_handler,
 )

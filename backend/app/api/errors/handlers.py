@@ -2,8 +2,10 @@ from fastapi.responses import JSONResponse
 
 from app.domain.errors import (
     EmailNotVerifiedError,
+    GpsPrecisionInsufficientError,
     InactiveUserError,
     InvalidObservedAtError,
+    InvalidPositioningInputError,
     InvalidReportCategoryError,
     InvalidReportDescriptionError,
     InvalidReportPositionError,
@@ -125,6 +127,41 @@ def user_not_found_handler(request, exc: UserNotFoundError):
         content={
             "error": {
                 "code": "USER_NOT_FOUND",
+                "message": str(exc),
+                "details": None,
+            }
+        },
+    )
+
+
+def gps_precision_insufficient_handler(
+    request,
+    exc: GpsPrecisionInsufficientError,
+):
+    return JSONResponse(
+        status_code=422,
+        content={
+            "error": {
+                "code": "gps_precision_insufficient",
+                "message": str(exc),
+                "details": {
+                    "accuracy_m": exc.accuracy_m,
+                    "maximum_accuracy_m": 50,
+                },
+            }
+        },
+    )
+
+
+def invalid_positioning_input_handler(
+    request,
+    exc: InvalidPositioningInputError,
+):
+    return JSONResponse(
+        status_code=422,
+        content={
+            "error": {
+                "code": "INVALID_POSITIONING_INPUT",
                 "message": str(exc),
                 "details": None,
             }
