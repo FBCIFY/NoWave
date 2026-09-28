@@ -24,3 +24,6 @@ test-results/
 
 # OS files
 .DS_Store
+
+# Local IDE settings
+.idea/
