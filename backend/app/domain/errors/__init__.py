@@ -1,11 +1,13 @@
 from app.domain.errors.exceptions import (
     DomainError,
     EmailNotVerifiedError,
+    GpsPrecisionInsufficientError,
     InactiveUserError,
     InvalidEmailError,
     InvalidFirebaseUidError,
     InvalidNationalityError,
     InvalidObservedAtError,
+    InvalidPositioningInputError,
     InvalidReportCategoryError,
     InvalidReportDescriptionError,
     InvalidReportPositionError,
