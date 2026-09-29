@@ -60,3 +60,19 @@ class InactiveUserError(DomainError):
 
 class ReportClientIdConflictError(DomainError):
     pass
+
+
+class GpsPrecisionInsufficientError(DomainError):
+    def __init__(
+        self,
+        accuracy_m: float,
+    ):
+        self.accuracy_m = accuracy_m
+
+        super().__init__(
+            "La précision GPS doit être de 50 mètres ou meilleure."
+        )
+
+
+class InvalidPositioningInputError(DomainError):
+    pass
