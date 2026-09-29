@@ -78,6 +78,14 @@ class PositioningMeasurements:
                 "azimuth_deg must be between 0 inclusive and 360 exclusive"
             )
 
+        if (
+            self.camera_height_m <= 0
+            or self.camera_height_m > 9999.99
+        ):
+            raise InvalidPositioningInputError(
+                "camera_height_m must be between 0.01 and 9999.99"
+            )
+
         camera_height = Decimal(
             str(self.camera_height_m)
         ).quantize(
@@ -85,10 +93,7 @@ class PositioningMeasurements:
             rounding=ROUND_HALF_UP,
         )
 
-        if (
-            camera_height <= 0
-            or camera_height > Decimal("9999.99")
-        ):
+        if camera_height <= 0:
             raise InvalidPositioningInputError(
                 "camera_height_m must be between 0.01 and 9999.99"
             )
