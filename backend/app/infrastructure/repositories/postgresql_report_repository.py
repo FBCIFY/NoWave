@@ -247,6 +247,7 @@ class PostgreSQLReportRepository(ReportRepository):
                 %s,
                 %s,
                 %s,
+                %s,
                 %s
             )
             {conflict_clause}
@@ -330,14 +331,13 @@ class PostgreSQLReportRepository(ReportRepository):
                 %s,
                 %s,
                 %s,
-                CASE
-                    WHEN %s IS NULL OR %s IS NULL
-                    THEN NULL
-                    ELSE ST_SetSRID(
-                        ST_MakePoint(%s, %s),
-                        4326
-                    )::geography
-                END,
+                ST_SetSRID(
+                    ST_MakePoint(
+                        %s::double precision,
+                        %s::double precision
+                    ),
+                    4326
+                )::geography,
                 %s,
                 %s,
                 %s
@@ -356,8 +356,6 @@ class PostgreSQLReportRepository(ReportRepository):
             measurements.camera_height_uncertainty_m,
             measurements.focal_length_mm,
             measurements.zoom_ratio,
-            estimate.longitude,
-            estimate.latitude,
             estimate.longitude,
             estimate.latitude,
             estimate.distance_m,
