@@ -42,4 +42,24 @@ class UserProfile {
       updatedAt: DateTime.parse(json['updated_at'] as String),
     );
   }
+
+  UserProfile copyWith({
+    bool? showUserName,
+    bool? showBoatInfo,
+    bool? notificationsEnabled,
+  }) {
+    return UserProfile(
+      id: id,
+      username: username,
+      dateOfBirth: dateOfBirth,
+      nationality: nationality,
+      role: role,
+      status: status,
+      showUserName: showUserName ?? this.showUserName,
+      showBoatInfo: showBoatInfo ?? this.showBoatInfo,
+      notificationsEnabled: notificationsEnabled ?? this.notificationsEnabled,
+      createdAt: createdAt,
+      updatedAt: updatedAt,
+    );
+  }
 }

@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:blueway/features/profile/domain/user_profile.dart';
 import 'package:blueway/features/profile/presentation/profile_screen.dart';
 import 'package:flutter/material.dart';
@@ -18,6 +20,18 @@ void main() {
     updatedAt: DateTime.utc(2026, 9, 22),
   );
 
+  Future<UserProfile> unusedUpdate({
+    bool? showUserName,
+    bool? showBoatInfo,
+    bool? notificationsEnabled,
+  }) async {
+    return profile;
+  }
+
+  Switch switchFor(WidgetTester tester, String key) {
+    return tester.widget<Switch>(find.byKey(Key(key)));
+  }
+
   testWidgets('affiche le profil et les préférences par défaut', (
     tester,
   ) async {
@@ -28,14 +42,21 @@ void main() {
     });
     await tester.pumpWidget(
       MaterialApp(
-        home: ProfileScreen(profile: profile, onSignOut: () async {}),
+        home: ProfileScreen(
+          profile: profile,
+          onSignOut: () async {},
+          onUpdatePreferences: unusedUpdate,
+        ),
       ),
     );
 
     expect(find.text('John'), findsOneWidget);
     expect(find.text('Utilisateur'), findsOneWidget);
     expect(find.text('Actif'), findsOneWidget);
-    expect(find.text('Non'), findsNWidgets(3));
+
+    final switches = tester.widgetList<Switch>(find.byType(Switch));
+    expect(switches, hasLength(3));
+    expect(switches.every((preference) => !preference.value), isTrue);
   });
 
   testWidgets('reste lisible et défilable sur un petit écran', (tester) async {
@@ -44,7 +65,11 @@ void main() {
 
     await tester.pumpWidget(
       MaterialApp(
-        home: ProfileScreen(profile: profile, onSignOut: () async {}),
+        home: ProfileScreen(
+          profile: profile,
+          onSignOut: () async {},
+          onUpdatePreferences: unusedUpdate,
+        ),
       ),
     );
 
@@ -64,11 +89,6 @@ void main() {
     addTearDown(() {
       return tester.binding.setSurfaceSize(null);
     });
-    await tester.pumpWidget(
-      MaterialApp(
-        home: ProfileScreen(profile: profile, onSignOut: () async {}),
-      ),
-    );
 
     await tester.pumpWidget(
       MaterialApp(
@@ -77,6 +97,7 @@ void main() {
           onSignOut: () async {
             signedOut = true;
           },
+          onUpdatePreferences: unusedUpdate,
         ),
       ),
     );
@@ -92,5 +113,85 @@ void main() {
     await tester.pump();
 
     expect(signedOut, isTrue);
+  });
+
+  testWidgets('active les alertes en envoyant uniquement ce champ', (
+    tester,
+  ) async {
+    await tester.binding.setSurfaceSize(const Size(430, 1200));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+
+    final calls = <Map<String, bool?>>[];
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: ProfileScreen(
+          profile: profile,
+          onSignOut: () async {},
+          onUpdatePreferences:
+              ({showUserName, showBoatInfo, notificationsEnabled}) async {
+                calls.add({
+                  'showUserName': showUserName,
+                  'showBoatInfo': showBoatInfo,
+                  'notificationsEnabled': notificationsEnabled,
+                });
+                return profile.copyWith(
+                  notificationsEnabled: notificationsEnabled,
+                );
+              },
+        ),
+      ),
+    );
+
+    await tester.tap(find.byKey(const Key('notificationsEnabledSwitch')));
+    await tester.pumpAndSettle();
+
+    expect(calls, [
+      {
+        'showUserName': null,
+        'showBoatInfo': null,
+        'notificationsEnabled': true,
+      },
+    ]);
+    expect(switchFor(tester, 'notificationsEnabledSwitch').value, isTrue);
+    expect(switchFor(tester, 'showUserNameSwitch').onChanged, isNotNull);
+  });
+
+  testWidgets('annule le changement et prévient si l’enregistrement échoue', (
+    tester,
+  ) async {
+    await tester.binding.setSurfaceSize(const Size(430, 1200));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+
+    final response = Completer<UserProfile>();
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: ProfileScreen(
+          profile: profile,
+          onSignOut: () async {},
+          onUpdatePreferences:
+              ({showUserName, showBoatInfo, notificationsEnabled}) {
+                return response.future;
+              },
+        ),
+      ),
+    );
+
+    await tester.tap(find.byKey(const Key('notificationsEnabledSwitch')));
+    await tester.pump();
+
+    expect(switchFor(tester, 'notificationsEnabledSwitch').value, isTrue);
+    expect(switchFor(tester, 'showUserNameSwitch').onChanged, isNull);
+
+    response.completeError(Exception('Réseau indisponible'));
+    await tester.pumpAndSettle();
+
+    expect(switchFor(tester, 'notificationsEnabledSwitch').value, isFalse);
+    expect(switchFor(tester, 'showUserNameSwitch').onChanged, isNotNull);
+    expect(
+      find.text('Impossible d’enregistrer la préférence. Réessayez.'),
+      findsOneWidget,
+    );
   });
 }

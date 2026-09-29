@@ -27,6 +27,7 @@ class ProfileGate extends StatefulWidget {
 class _ProfileGateState extends State<ProfileGate> {
   late Future<UserProfile?> _profileFuture;
   bool _profileWasJustCreated = false;
+  UserProfile? _latestProfile;
 
   @override
   void initState() {
@@ -37,8 +38,27 @@ class _ProfileGateState extends State<ProfileGate> {
   void _reloadProfile() {
     setState(() {
       _profileWasJustCreated = true;
+      _latestProfile = null;
       _profileFuture = widget.profileService.getCurrentProfile();
     });
+  }
+
+  Future<UserProfile> _updatePreferences({
+    bool? showUserName,
+    bool? showBoatInfo,
+    bool? notificationsEnabled,
+  }) async {
+    final profile = await widget.profileService.updatePreferences(
+      showUserName: showUserName,
+      showBoatInfo: showBoatInfo,
+      notificationsEnabled: notificationsEnabled,
+    );
+
+    if (mounted) {
+      setState(() => _latestProfile = profile);
+    }
+
+    return profile;
   }
 
   @override
@@ -98,8 +118,9 @@ class _ProfileGateState extends State<ProfileGate> {
         } else if (snapshot.data case final profile?) {
           step = 2;
           screen = HomeScreen(
-            profile: profile,
+            profile: _latestProfile ?? profile,
             onSignOut: widget.authService.signOut,
+            onUpdatePreferences: _updatePreferences,
             reportService: widget.reportService,
           );
         } else {
