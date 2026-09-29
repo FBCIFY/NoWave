@@ -4,6 +4,7 @@ import '../../map/presentation/map_screen.dart';
 import '../../profile/domain/user_profile.dart';
 import '../../profile/presentation/profile_screen.dart';
 import '../../reports/data/manual_report_service.dart';
+import '../../../core/notifications/notification_permission.dart';
 
 class HomeScreen extends StatelessWidget {
   final UserProfile? profile;
@@ -33,6 +34,8 @@ class HomeScreen extends StatelessWidget {
                     profile: profile!,
                     onSignOut: onSignOut!,
                     onUpdatePreferences: onUpdatePreferences!,
+                    notificationPermissions:
+                        const NotificationPermissionService(),
                   ),
                 ),
               );

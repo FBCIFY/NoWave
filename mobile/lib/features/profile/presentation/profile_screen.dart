@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../../app/theme.dart';
 import '../../auth/presentation/widgets/auth_layout.dart';
 import '../domain/user_profile.dart';
+import '../../../core/notifications/notification_permission.dart';
 
 typedef UpdatePreferences = Future<UserProfile> Function({
   bool? showUserName,
@@ -14,12 +15,14 @@ class ProfileScreen extends StatefulWidget {
   final UserProfile profile;
   final Future<void> Function() onSignOut;
   final UpdatePreferences onUpdatePreferences;
+  final NotificationPermissionService notificationPermissions;
 
   const ProfileScreen({
     super.key,
     required this.profile,
     required this.onSignOut,
     required this.onUpdatePreferences,
+    required this.notificationPermissions,
   });
 
   @override

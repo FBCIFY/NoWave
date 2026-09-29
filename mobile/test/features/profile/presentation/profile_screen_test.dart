@@ -4,6 +4,7 @@ import 'package:blueway/features/profile/domain/user_profile.dart';
 import 'package:blueway/features/profile/presentation/profile_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:blueway/core/notifications/notification_permission.dart';
 
 void main() {
   final profile = UserProfile(
@@ -46,6 +47,7 @@ void main() {
           profile: profile,
           onSignOut: () async {},
           onUpdatePreferences: unusedUpdate,
+          notificationPermissions: FakeNotificationPermissionService(),
         ),
       ),
     );
@@ -69,6 +71,7 @@ void main() {
           profile: profile,
           onSignOut: () async {},
           onUpdatePreferences: unusedUpdate,
+          notificationPermissions: FakeNotificationPermissionService(),
         ),
       ),
     );
@@ -98,6 +101,7 @@ void main() {
             signedOut = true;
           },
           onUpdatePreferences: unusedUpdate,
+          notificationPermissions: FakeNotificationPermissionService(),
         ),
       ),
     );
@@ -139,6 +143,7 @@ void main() {
                   notificationsEnabled: notificationsEnabled,
                 );
               },
+          notificationPermissions: FakeNotificationPermissionService(),
         ),
       ),
     );
@@ -174,6 +179,7 @@ void main() {
               ({showUserName, showBoatInfo, notificationsEnabled}) {
                 return response.future;
               },
+          notificationPermissions: FakeNotificationPermissionService(),
         ),
       ),
     );
@@ -194,4 +200,19 @@ void main() {
       findsOneWidget,
     );
   });
+}
+
+class FakeNotificationPermissionService
+    implements NotificationPermissionService {
+  NotificationPermission status;
+
+  FakeNotificationPermissionService([
+    this.status = NotificationPermission.notDetermined,
+  ]);
+
+  @override
+  Future<NotificationPermission> getStatus() async => status;
+
+  @override
+  Future<NotificationPermission> request() async => status;
 }
