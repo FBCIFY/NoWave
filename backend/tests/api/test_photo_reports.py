@@ -185,6 +185,11 @@ def test_create_photo_report_returns_201(
 
     assert data["positioning_mode"] == "photo"
 
+    assert data["photo"] == {
+        "status": "pending",
+        "url": None,
+    }
+
     assert data["final_position"] == {
         "type": "Point",
         "coordinates": [

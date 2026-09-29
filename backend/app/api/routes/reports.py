@@ -12,6 +12,7 @@ from app.api.schemas.position_estimate import (
 from app.api.schemas.report import (
     GeoJSONPoint,
     ReportCreateRequest,
+    ReportPhotoResponse,
     ReportResponse,
 )
 from app.application.services.create_report import CreateReport
@@ -112,6 +113,19 @@ def create_report(
 
     report = result.report
 
+    photo = None
+
+    if report.positioning_mode.value == "photo":
+        photo_status = report_repository.get_photo_status(
+            report.id
+        )
+
+        if photo_status is not None:
+            photo = ReportPhotoResponse(
+                status=photo_status.value,
+                url=None,
+            )
+
     return ReportResponse(
         id=report.id,
         author_id=report.author_id,
@@ -132,4 +146,5 @@ def create_report(
         version=report.version,
         created_at=report.created_at,
         updated_at=report.updated_at,
+        photo=photo,
     )

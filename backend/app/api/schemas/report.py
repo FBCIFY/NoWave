@@ -80,6 +80,11 @@ class ReportCreateRequest(BaseModel):
         return self
 
 
+class ReportPhotoResponse(BaseModel):
+    status: str
+    url: str | None = None
+
+
 class ReportResponse(BaseModel):
     id: UUID
     author_id: UUID | None
@@ -94,3 +99,4 @@ class ReportResponse(BaseModel):
     version: int
     created_at: datetime
     updated_at: datetime
+    photo: ReportPhotoResponse | None = None
