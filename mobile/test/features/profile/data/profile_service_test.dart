@@ -1,197 +1,132 @@
-import 'dart:async';
+import 'dart:convert';
 
-import 'package:blueway/features/profile/domain/user_profile.dart';
-import 'package:blueway/features/profile/presentation/profile_screen.dart';
-import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:http/http.dart' as http;
+import 'package:http/testing.dart';
+import 'package:blueway/core/api/api_service.dart';
+import 'package:blueway/features/profile/data/profile_service.dart';
+import 'package:blueway/core/api/api_exception.dart';
 
 void main() {
-  final profile = UserProfile(
-    id: 'user-123',
-    username: 'John',
-    dateOfBirth: null,
-    nationality: null,
-    role: 'user',
-    status: 'active',
-    showUserName: false,
-    showBoatInfo: false,
-    notificationsEnabled: false,
-    createdAt: DateTime.utc(2026, 9, 22),
-    updatedAt: DateTime.utc(2026, 9, 22),
-  );
+  const profileJson = {
+    'id': 'user-123',
+    'username': 'vadim',
+    'date_of_birth': null,
+    'nationality': null,
+    'role': 'user',
+    'status': 'active',
+    'show_user_name': false,
+    'show_boat_info': false,
+    'notifications_enabled': false,
+    'created_at': '2026-09-22T00:00:00Z',
+    'updated_at': '2026-09-22T00:00:00Z',
+  };
 
-  Future<UserProfile> unusedUpdate({
-    bool? showUserName,
-    bool? showBoatInfo,
-    bool? notificationsEnabled,
-  }) async {
-    return profile;
+  ProfileService createService(http.Client client) {
+    return ProfileService(
+      apiService: ApiService(
+        client: client,
+        baseUrl: 'https://api.blueway.test/',
+      ),
+      getIdToken: () async => 'firebase-token-de-test',
+    );
   }
 
-  Switch switchFor(WidgetTester tester, String key) {
-    return tester.widget<Switch>(find.byKey(Key(key)));
-  }
+  test('récupère le profil courant avec le token Firebase', () async {
+    final client = MockClient((request) async {
+      expect(request.method, 'GET');
+      expect(
+        request.url,
+        Uri.parse('https://api.blueway.test/api/v1/users/me'),
+      );
+      expect(request.headers['authorization'], 'Bearer firebase-token-de-test');
 
-  testWidgets('affiche le profil et les préférences par défaut', (
-    tester,
-  ) async {
-    await tester.binding.setSurfaceSize(const Size(430, 1200));
-
-    addTearDown(() {
-      return tester.binding.setSurfaceSize(null);
-    });
-    await tester.pumpWidget(
-      MaterialApp(
-        home: ProfileScreen(
-          profile: profile,
-          onSignOut: () async {},
-          onUpdatePreferences: unusedUpdate,
-        ),
-      ),
-    );
-
-    expect(find.text('John'), findsOneWidget);
-    expect(find.text('Utilisateur'), findsOneWidget);
-    expect(find.text('Actif'), findsOneWidget);
-
-    final switches = tester.widgetList<Switch>(find.byType(Switch));
-    expect(switches, hasLength(3));
-    expect(switches.every((preference) => !preference.value), isTrue);
-  });
-
-  testWidgets('reste lisible et défilable sur un petit écran', (tester) async {
-    await tester.binding.setSurfaceSize(const Size(320, 568));
-    addTearDown(() => tester.binding.setSurfaceSize(null));
-
-    await tester.pumpWidget(
-      MaterialApp(
-        home: ProfileScreen(
-          profile: profile,
-          onSignOut: () async {},
-          onUpdatePreferences: unusedUpdate,
-        ),
-      ),
-    );
-
-    expect(tester.takeException(), isNull);
-    await tester.scrollUntilVisible(
-      find.text('Se déconnecter'),
-      250,
-      scrollable: find.byType(Scrollable),
-    );
-    expect(tester.takeException(), isNull);
-    expect(find.text('Se déconnecter'), findsOneWidget);
-  });
-
-  testWidgets('permet de se déconnecter', (tester) async {
-    var signedOut = false;
-
-    addTearDown(() {
-      return tester.binding.setSurfaceSize(null);
+      return http.Response(jsonEncode(profileJson), 200);
     });
 
-    await tester.pumpWidget(
-      MaterialApp(
-        home: ProfileScreen(
-          profile: profile,
-          onSignOut: () async {
-            signedOut = true;
-          },
-          onUpdatePreferences: unusedUpdate,
-        ),
-      ),
-    );
+    final profile = await createService(client).getCurrentProfile();
 
-    final signOutButton = find.text('Se déconnecter');
-
-    await tester.scrollUntilVisible(
-      signOutButton,
-      300,
-      scrollable: find.byType(Scrollable),
-    );
-    await tester.tap(signOutButton);
-    await tester.pump();
-
-    expect(signedOut, isTrue);
+    expect(profile, isNotNull);
+    expect(profile!.username, 'vadim');
+    expect(profile.role, 'user');
+    expect(profile.showUserName, isFalse);
   });
 
-  testWidgets('active les alertes en envoyant uniquement ce champ', (
-    tester,
-  ) async {
-    await tester.binding.setSurfaceSize(const Size(430, 1200));
-    addTearDown(() => tester.binding.setSurfaceSize(null));
+  test('retourne null lorsque le profil n’existe pas', () async {
+    final client = MockClient((request) async {
+      return http.Response(jsonEncode({'code': 'USER_NOT_FOUND'}), 404);
+    });
 
-    final calls = <Map<String, bool?>>[];
+    final profile = await createService(client).getCurrentProfile();
 
-    await tester.pumpWidget(
-      MaterialApp(
-        home: ProfileScreen(
-          profile: profile,
-          onSignOut: () async {},
-          onUpdatePreferences:
-              ({showUserName, showBoatInfo, notificationsEnabled}) async {
-                calls.add({
-                  'showUserName': showUserName,
-                  'showBoatInfo': showBoatInfo,
-                  'notificationsEnabled': notificationsEnabled,
-                });
-                return profile.copyWith(
-                  notificationsEnabled: notificationsEnabled,
-                );
-              },
-        ),
-      ),
-    );
-
-    await tester.tap(find.byKey(const Key('notificationsEnabledSwitch')));
-    await tester.pumpAndSettle();
-
-    expect(calls, [
-      {
-        'showUserName': null,
-        'showBoatInfo': null,
-        'notificationsEnabled': true,
-      },
-    ]);
-    expect(switchFor(tester, 'notificationsEnabledSwitch').value, isTrue);
-    expect(switchFor(tester, 'showUserNameSwitch').onChanged, isNotNull);
+    expect(profile, isNull);
   });
 
-  testWidgets('annule le changement et prévient si l’enregistrement échoue', (
-    tester,
-  ) async {
-    await tester.binding.setSurfaceSize(const Size(430, 1200));
-    addTearDown(() => tester.binding.setSurfaceSize(null));
+  test('crée le profil avec le nom utilisateur', () async {
+    final client = MockClient((request) async {
+      expect(request.method, 'POST');
+      expect(request.headers['authorization'], 'Bearer firebase-token-de-test');
+      expect(request.headers['content-type'], 'application/json');
+      expect(jsonDecode(request.body), {'username': 'vadim'});
 
-    final response = Completer<UserProfile>();
+      return http.Response(jsonEncode(profileJson), 201);
+    });
 
-    await tester.pumpWidget(
-      MaterialApp(
-        home: ProfileScreen(
-          profile: profile,
-          onSignOut: () async {},
-          onUpdatePreferences:
-              ({showUserName, showBoatInfo, notificationsEnabled}) {
-                return response.future;
-              },
-        ),
-      ),
-    );
+    final profile = await createService(client)
+        .createProfile(username: '  vadim  ');
 
-    await tester.tap(find.byKey(const Key('notificationsEnabledSwitch')));
-    await tester.pump();
+    expect(profile.username, 'vadim');
+  });
 
-    expect(switchFor(tester, 'notificationsEnabledSwitch').value, isTrue);
-    expect(switchFor(tester, 'showUserNameSwitch').onChanged, isNull);
+  test('met à jour uniquement la préférence modifiée', () async {
+    final client = MockClient((request) async {
+      expect(request.method, 'PATCH');
+      expect(
+        request.url,
+        Uri.parse('https://api.blueway.test/api/v1/users/me'),
+      );
+      expect(request.headers['authorization'], 'Bearer firebase-token-de-test');
+      expect(request.headers['content-type'], 'application/json');
+      expect(jsonDecode(request.body), {'notifications_enabled': true});
 
-    response.completeError(Exception('Réseau indisponible'));
-    await tester.pumpAndSettle();
+      return http.Response(
+        jsonEncode({...profileJson, 'notifications_enabled': true}),
+        200,
+      );
+    });
 
-    expect(switchFor(tester, 'notificationsEnabledSwitch').value, isFalse);
-    expect(switchFor(tester, 'showUserNameSwitch').onChanged, isNotNull);
+    final profile = await createService(client)
+        .updatePreferences(notificationsEnabled: true);
+
+    expect(profile.notificationsEnabled, isTrue);
+    expect(profile.showUserName, isFalse);
+  });
+
+  test('refuse une mise à jour sans préférence', () async {
+    final client = MockClient((request) async {
+      fail('Aucune requête ne doit être envoyée.');
+    });
+
     expect(
-      find.text('Impossible d’enregistrer la préférence. Réessayez.'),
-      findsOneWidget,
+      () => createService(client).updatePreferences(),
+      throwsArgumentError,
+    );
+  });
+
+  test('propage l’erreur du serveur lors de la mise à jour', () async {
+    final client = MockClient((request) async {
+      return http.Response(jsonEncode({'code': 'VALIDATION_ERROR'}), 422);
+    });
+
+    await expectLater(
+      createService(client).updatePreferences(showBoatInfo: true),
+      throwsA(
+        isA<ApiException>().having(
+          (error) => error.statusCode,
+          'statusCode',
+          422,
+        ),
+      ),
     );
   });
 }
