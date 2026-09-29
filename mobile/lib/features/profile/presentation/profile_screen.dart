@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 import '../../../app/theme.dart';
@@ -32,11 +34,23 @@ class ProfileScreen extends StatefulWidget {
 class _ProfileScreenState extends State<ProfileScreen> {
   late UserProfile _profile;
   bool _isSaving = false;
+  NotificationPermission? _permission;
 
   @override
   void initState() {
     super.initState();
     _profile = widget.profile;
+    unawaited(_loadPermission());
+  }
+
+  Future<void> _loadPermission() async {
+    try {
+      final permission = await widget.notificationPermissions.getStatus();
+      if (!mounted) return;
+      setState(() => _permission = permission);
+    } catch (_) {
+      // Sans réponse du téléphone, on n'affiche simplement pas l'état.
+    }
   }
 
   String _formatDate(DateTime? date) {
@@ -244,6 +258,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       : (value) =>
                             _updatePreferences(notificationsEnabled: value),
                 ),
+                if (_permission case final permission?) ...[
+                  const SizedBox(height: 8),
+                  _PermissionStatus(permission),
+                ],
               ],
             ),
           ),
@@ -373,4 +391,31 @@ class _PreferenceSwitch extends StatelessWidget {
       ],
     ),
   );
+}
+
+class _PermissionStatus extends StatelessWidget {
+  final NotificationPermission permission;
+  const _PermissionStatus(this.permission);
+
+  @override
+  Widget build(BuildContext context) {
+    final label = switch (permission) {
+      NotificationPermission.granted => 'Autorisées sur ce téléphone',
+      NotificationPermission.denied =>
+        'Bloquées dans les réglages du téléphone',
+      NotificationPermission.notDetermined =>
+        'Pas encore autorisées sur ce téléphone',
+    };
+
+    return Align(
+      alignment: Alignment.centerLeft,
+      child: Text(
+        label,
+        style: TextStyle(
+          color: Colors.white.withValues(alpha: 0.55),
+          fontSize: 12,
+        ),
+      ),
+    );
+  }
 }

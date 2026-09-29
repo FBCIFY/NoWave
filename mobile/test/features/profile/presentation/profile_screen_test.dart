@@ -200,6 +200,35 @@ void main() {
       findsOneWidget,
     );
   });
+
+  testWidgets('affiche que les notifications sont bloquées sur le téléphone', (
+    tester,
+  ) async {
+    await tester.binding.setSurfaceSize(const Size(430, 1200));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: ProfileScreen(
+          profile: profile,
+          onSignOut: () async {},
+          onUpdatePreferences: unusedUpdate,
+          notificationPermissions: FakeNotificationPermissionService(
+            NotificationPermission.denied,
+          ),
+        ),
+      ),
+    );
+
+    expect(find.text('Bloquées dans les réglages du téléphone'), findsNothing);
+
+    await tester.pump();
+
+    expect(
+      find.text('Bloquées dans les réglages du téléphone'),
+      findsOneWidget,
+    );
+  });
 }
 
 class FakeNotificationPermissionService
