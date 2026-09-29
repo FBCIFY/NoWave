@@ -12,6 +12,23 @@ class BoatType(str, Enum):
     OTHER = "autre"
 
 
+def _normalize_flag_country(
+    flag_country: str,
+) -> str:
+    flag_country = flag_country.strip()
+
+    if (
+        len(flag_country) != 2
+        or not flag_country.isascii()
+        or not flag_country.isalpha()
+    ):
+        raise ValueError(
+            "flag_country must contain exactly 2 letters"
+        )
+
+    return flag_country.upper()
+
+
 class Boat:
     def __init__(
         self,
@@ -43,14 +60,9 @@ class Boat:
                 name = None
 
         if flag_country is not None:
-            flag_country = flag_country.strip()
-
-            if len(flag_country) != 2:
-                raise ValueError(
-                    "flag_country must contain exactly 2 characters"
-                )
-
-            flag_country = flag_country.upper()
+            flag_country = _normalize_flag_country(
+                flag_country
+            )
 
         self.id = id if id is not None else uuid4()
         self.user_id = user_id
@@ -100,13 +112,10 @@ class Boat:
             if flag_country is None:
                 self.flag_country = None
             else:
-                flag_country = flag_country.strip()
-
-                if len(flag_country) != 2:
-                    raise ValueError(
-                        "flag_country must contain exactly 2 characters"
+                self.flag_country = (
+                    _normalize_flag_country(
+                        flag_country
                     )
-
-                self.flag_country = flag_country.upper()
+                )
 
         self.updated_at = datetime.now(UTC)

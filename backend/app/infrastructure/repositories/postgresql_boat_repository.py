@@ -2,6 +2,7 @@ from uuid import UUID
 
 from app.application.ports.boat_repository import BoatRepository
 from app.domain.boat import Boat, BoatType
+from app.domain.errors import BoatAlreadyExistsError
 from app.infrastructure.database.connection import database_connection
 
 
@@ -42,6 +43,8 @@ class PostgreSQLBoatRepository(BoatRepository):
                 updated_at
             )
             VALUES (%s, %s, %s, %s, %s, %s, %s)
+            ON CONFLICT (user_id) DO NOTHING
+            RETURNING id
         """
 
         values = (
@@ -57,6 +60,12 @@ class PostgreSQLBoatRepository(BoatRepository):
         with database_connection() as connection:
             with connection.cursor() as cursor:
                 cursor.execute(query, values)
+                row = cursor.fetchone()
+
+                if row is None:
+                    raise BoatAlreadyExistsError(
+                        "boat already exists"
+                    )
 
         return boat
 

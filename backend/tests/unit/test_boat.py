@@ -84,7 +84,7 @@ def test_create_boat_rejects_name_over_100_characters():
 def test_create_boat_rejects_invalid_flag_country():
     with pytest.raises(
         ValueError,
-        match="flag_country must contain exactly 2 characters",
+        match="flag_country must contain exactly 2 letters",
     ):
         Boat(
             user_id=uuid4(),
@@ -174,4 +174,27 @@ def test_update_rejects_invalid_boat_type():
             {
                 "boat_type": "yacht",
             }
+        )
+
+
+@pytest.mark.parametrize(
+    "flag_country",
+    [
+        "12",
+        "@@",
+        "__",
+        "éé",
+    ],
+)
+def test_create_boat_rejects_non_letter_flag_country(
+    flag_country,
+):
+    with pytest.raises(
+        ValueError,
+        match="flag_country must contain exactly 2 letters",
+    ):
+        Boat(
+            user_id=uuid4(),
+            boat_type=BoatType.SAILBOAT,
+            flag_country=flag_country,
         )

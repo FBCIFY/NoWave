@@ -405,3 +405,73 @@ def test_create_boat_rejects_invalid_type(monkeypatch):
     app.dependency_overrides.clear()
 
     assert response.status_code == 422
+
+
+def test_create_boat_rejects_invalid_flag_country(
+    monkeypatch,
+):
+    user = make_user()
+
+    setup_repositories(
+        monkeypatch,
+        FakeUserRepository(user),
+        FakeBoatRepository(),
+    )
+
+    app.dependency_overrides[
+        get_current_identity
+    ] = verified_identity
+
+    client = TestClient(app)
+
+    response = client.post(
+        "/api/v1/users/me/boat",
+        json={
+            "boat_type": "voilier",
+            "flag_country": "12",
+        },
+    )
+
+    app.dependency_overrides.clear()
+
+    assert response.status_code == 422
+
+
+def test_boat_route_requires_authentication():
+    app.dependency_overrides.clear()
+
+    client = TestClient(app)
+
+    response = client.get(
+        "/api/v1/users/me/boat",
+    )
+
+    assert response.status_code == 401
+
+
+def test_get_boat_without_user_profile_returns_404(
+    monkeypatch,
+):
+    setup_repositories(
+        monkeypatch,
+        FakeUserRepository(),
+        FakeBoatRepository(),
+    )
+
+    app.dependency_overrides[
+        get_current_identity
+    ] = verified_identity
+
+    client = TestClient(app)
+
+    response = client.get(
+        "/api/v1/users/me/boat",
+    )
+
+    app.dependency_overrides.clear()
+
+    assert response.status_code == 404
+    assert (
+        response.json()["error"]["code"]
+        == "USER_NOT_FOUND"
+    )
