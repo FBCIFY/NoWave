@@ -12,3 +12,9 @@ class StoredReportPositioning:
     estimated_latitude: float | None
     estimated_distance_m: float | None
     algorithm_version: str | None
+
+    def matches_measurements(
+        self,
+        measurements: PositioningMeasurements,
+    ) -> bool:
+        return self.measurements == measurements

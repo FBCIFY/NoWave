@@ -201,6 +201,38 @@ class Report:
             updated_at=now,
         )
 
+    def matches_photo_creation(
+        self,
+        category: ReportCategory,
+        longitude: float,
+        latitude: float,
+        observed_at: datetime,
+        description: str | None,
+    ) -> bool:
+        if observed_at.tzinfo is None or observed_at.utcoffset() is None:
+            return False
+
+        try:
+            category = ReportCategory(
+                category
+            )
+        except ValueError:
+            return False
+
+        observed_at = observed_at.astimezone(
+            UTC
+        )
+
+        return (
+            self.positioning_mode
+            == ReportPositioningMode.PHOTO
+            and self.category == category
+            and self.longitude == longitude
+            and self.latitude == latitude
+            and self.observed_at == observed_at
+            and self.description == description
+        )
+
     def matches_manual_creation(
         self,
         category: ReportCategory,

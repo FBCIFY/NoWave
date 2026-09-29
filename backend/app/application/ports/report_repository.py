@@ -23,7 +23,7 @@ class ReportRepository(ABC):
     def save(
         self,
         report: Report,
-    ) -> Report:
+    ) -> Report | None:
         pass
 
     @abstractmethod

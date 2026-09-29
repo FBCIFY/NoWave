@@ -1,4 +1,5 @@
 from dataclasses import dataclass
+from decimal import Decimal, ROUND_HALF_UP
 from datetime import UTC, datetime
 from math import (
     asin,
@@ -77,10 +78,26 @@ class PositioningMeasurements:
                 "azimuth_deg must be between 0 inclusive and 360 exclusive"
             )
 
-        if self.camera_height_m <= 0:
+        camera_height = Decimal(
+            str(self.camera_height_m)
+        ).quantize(
+            Decimal("0.01"),
+            rounding=ROUND_HALF_UP,
+        )
+
+        if (
+            camera_height <= 0
+            or camera_height > Decimal("9999.99")
+        ):
             raise InvalidPositioningInputError(
-                "camera_height_m must be greater than 0"
+                "camera_height_m must be between 0.01 and 9999.99"
             )
+
+        object.__setattr__(
+            self,
+            "camera_height_m",
+            float(camera_height),
+        )
 
         if (
             self.camera_height_source is not None

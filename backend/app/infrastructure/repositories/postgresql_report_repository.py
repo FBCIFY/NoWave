@@ -64,14 +64,17 @@ class PostgreSQLReportRepository(ReportRepository):
     def save(
         self,
         report: Report,
-    ) -> Report:
+    ) -> Report | None:
         with database_connection() as connection:
             with connection.cursor() as cursor:
                 row = self._insert_report(
                     cursor=cursor,
                     report=report,
-                    ignore_client_conflict=False,
+                    ignore_client_conflict=True,
                 )
+
+        if row is None:
+            return None
 
         return self._row_to_report(row)
 
