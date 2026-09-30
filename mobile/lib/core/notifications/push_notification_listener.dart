@@ -4,7 +4,10 @@ import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
-/// Active les notifications après la vérification du compte.
+/// Écoute les notifications après la vérification du compte.
+///
+/// L'autorisation n'est pas demandée ici : elle l'est depuis l'écran
+/// « Alertes à proximité » ou le profil, quand l'utilisateur active les alertes.
 class PushNotificationListener extends StatefulWidget {
   final Widget child;
 
@@ -26,13 +29,13 @@ class _PushNotificationListenerState extends State<PushNotificationListener> {
     _tokenSubscription = FirebaseMessaging.instance.onTokenRefresh.listen(
       _logToken,
     );
-    unawaited(_requestPermissionAndToken());
+    unawaited(_loadTokenIfAllowed());
   }
 
-  Future<void> _requestPermissionAndToken() async {
+  Future<void> _loadTokenIfAllowed() async {
     try {
       final messaging = FirebaseMessaging.instance;
-      final settings = await messaging.requestPermission();
+      final settings = await messaging.getNotificationSettings();
       if (settings.authorizationStatus != AuthorizationStatus.authorized &&
           settings.authorizationStatus != AuthorizationStatus.provisional) {
         return;
