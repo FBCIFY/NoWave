@@ -58,13 +58,7 @@ En développement local, installer Google Cloud CLI puis exécuter :
 
 ```bash
 gcloud auth application-default login
-gcloud auth application-default set-quota-project nowave-dev
-```
-
-Le fichier `.env` doit également contenir :
-
-```dotenv
-GOOGLE_CLOUD_PROJECT=nowave-dev
+gcloud auth application-default set-quota-project blueway-dev
 ```
 
 Les identifiants Google locaux et les clés privées de compte de service ne
