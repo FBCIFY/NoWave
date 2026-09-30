@@ -3,6 +3,11 @@ import 'package:http/http.dart' as http;
 import 'api_config.dart';
 import 'api_exception.dart';
 
+/// Client HTTP commun à tous les appels au backend.
+///
+/// Il ajoute l'adresse de base, abandonne après 10 secondes et lève une
+/// [ApiException] si la réponse n'est pas un succès. Le token Firebase est
+/// ajouté par les services de chaque fonctionnalité (profil, signalements).
 class ApiService {
   final http.Client _client;
   final String _baseUrl;

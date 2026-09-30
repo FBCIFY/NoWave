@@ -3,6 +3,8 @@ import 'package:flutter/material.dart';
 import '../data/demo_reports_service.dart';
 import '../data/reports_service.dart';
 
+/// Liste de démonstration, non accessible depuis l'app (utilisée seulement
+/// dans les tests).
 class ReportsScreen extends StatefulWidget {
   const ReportsScreen({super.key, this.service});
 

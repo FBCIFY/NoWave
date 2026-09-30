@@ -1,3 +1,4 @@
+/// Catégories proposées ; [apiValue] est la valeur attendue par le backend.
 enum ReportCategory {
   marineAnimal('marine_animal'),
   obstruction('obstruction'),
@@ -8,6 +9,8 @@ enum ReportCategory {
   final String apiValue;
 }
 
+/// Signalement à envoyer. `clientReportId` est généré par l'app et réutilisé
+/// si l'envoi est retenté avec le même contenu.
 class ManualReportRequest {
   const ManualReportRequest({
     required this.clientReportId,

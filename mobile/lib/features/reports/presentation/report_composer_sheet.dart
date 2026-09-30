@@ -7,6 +7,8 @@ import 'package:flutter/material.dart';
 import '../../../core/api/api_exception.dart';
 import '../domain/manual_report.dart';
 
+/// Panneau du bas en mode signalement : catégorie, commentaire facultatif
+/// (250 caractères max) et bouton Publier. L'envoi est fait par `MapScreen`.
 class ReportComposerSheet extends StatefulWidget {
   const ReportComposerSheet({super.key, required this.onClose, this.onPublish});
 
@@ -14,6 +16,7 @@ class ReportComposerSheet extends StatefulWidget {
   final Future<void> Function(ReportCategory category, String? description)?
   onPublish;
 
+  /// Hauteur du panneau, utilisée par la carte pour placer le marqueur.
   static double heightFor(MediaQueryData mediaQuery) {
     final availableHeight =
         mediaQuery.size.height -

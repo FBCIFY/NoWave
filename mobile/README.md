@@ -41,6 +41,65 @@ Le téléphone physique et le poste doivent être sur le même réseau. Une
 modification de `.env.json` nécessite un redémarrage complet de `flutter run`.
 Le fichier `.env.json` ne doit jamais être ajouté à Git.
 
+`MAPTILER_STYLE_URL` n’est plus lu par l’application : la carte utilise le
+style Mapbox Standard.
+
+## Organisation du code
+
+```text
+lib/
+├── main.dart          démarrage : Firebase, Mapbox, services partagés
+├── app/               racine de l’app et thème
+├── core/              outils partagés par toutes les fonctionnalités
+│   ├── api/           client HTTP vers le backend
+│   ├── location/      position GPS et format degrés/minutes/secondes
+│   ├── map/           réglages Mapbox communs
+│   ├── notifications/ autorisation du téléphone et messages push
+│   └── sensors/       cap et inclinaison du téléphone
+└── features/          une fonctionnalité par dossier
+    ├── auth/          connexion, inscription, vérification de l’e-mail
+    ├── profile/       création du profil, préférences, écran d’alertes
+    ├── home/          accueil (la carte + accès au profil)
+    ├── map/           carte, boussole, mode signalement
+    ├── reports/       formulaire et envoi des signalements
+    └── camera/        prototype caméra et capteurs (BLU-55)
+```
+
+Chaque dossier de `features/` suit le même découpage :
+
+- `data/` : appels au backend ou à Firebase ;
+- `domain/` : modèles et règles sans interface ;
+- `presentation/` : écrans et widgets.
+
+Les services sont créés une seule fois dans `main.dart`, puis transmis aux
+écrans. Les services qui appellent le backend reçoivent `getIdToken` pour
+ajouter le token Firebase.
+
+Enchaînement des écrans :
+
+```text
+AuthGate          (session Firebase)
+├── LoginScreen / RegisterScreen
+├── VerifyEmailScreen
+└── ProfileGate   (profil du backend)
+    ├── ProfileSetupScreen
+    ├── AlertsOnboardingScreen   une seule fois, après la création du profil
+    └── HomeScreen → MapScreen
+                     └── ProfileScreen (bouton profil)
+```
+
+`AuthGate` et `ProfileGate` choisissent l’écran à afficher. Les écrans eux-mêmes
+ne naviguent presque pas : ils déclenchent une action et l’aiguillage suit.
+
+Fichiers présents mais non utilisés par l’application :
+
+- `features/demo/` : compteur du modèle Flutter ;
+- `features/reports/presentation/reports_screen.dart` et
+  `data/demo_reports_service.dart` : liste de démonstration, utilisée
+  seulement dans les tests ;
+- `features/camera/` : prototype BLU-55, aucun bouton n’y mène ;
+- `app/router.dart` : fichier vide.
+
 ## Authentification et profil — BLU-51
 
 L’application utilise Firebase Authentication avec le fournisseur
@@ -122,7 +181,8 @@ La carte utilise :
 - Geolocator pour récupérer la position de l’appareil.
 
 L’écran permet de demander la permission de localisation, d’afficher la
-position en degrés décimaux, et de recentrer la carte. Déplacer la carte ne
+position en degrés, minutes et secondes (par exemple `48° 23′ 12″ N`), et de
+recentrer la carte. Déplacer la carte ne
 modifie pas la dernière position GPS affichée.
 
 ## Signalement manuel — BLU-54
@@ -136,6 +196,42 @@ réutilise le même identifiant pour éviter les doublons.
 
 L’API locale doit inclure l’endpoint backend de BLU-104 pour tester la
 publication sur téléphone ; une ancienne version du backend répondra 404.
+
+## Consentements et alertes — BLU-117
+
+L’écran profil propose trois préférences indépendantes, désactivées par
+défaut :
+
+- afficher le nom d’utilisateur ;
+- afficher les informations du bateau ;
+- recevoir les alertes.
+
+Chaque changement envoie `PATCH /api/v1/users/me` avec seulement le champ
+modifié. L’interrupteur change tout de suite ; en cas d’erreur, il revient à
+sa valeur précédente et un message s’affiche.
+
+La préférence « alertes » est distincte de l’autorisation de notifications du
+téléphone. L’écran profil affiche l’état de cette autorisation et le relit au
+retour dans l’application. En activant les alertes :
+
+- si le téléphone n’a encore jamais demandé, la demande système s’affiche ;
+- si l’autorisation a été refusée, les réglages du téléphone s’ouvrent ;
+- si elle est déjà accordée, rien de plus.
+
+Juste après la création du profil, un écran explique les alertes avec deux
+choix : « Activer les alertes » (préférence + demande système) ou « Plus tard ».
+L’application ne demande plus l’autorisation au lancement. Le token FCM est lu
+au lancement suivant et seulement affiché dans les logs.
+
+### Limites connues
+
+- iOS n’affiche la demande système qu’une fois ; après un refus, seul le
+  passage par les réglages fonctionne ;
+- la ligne « Notifications » des réglages iOS n’apparaît qu’après une première
+  demande ;
+- les comptes créés avant BLU-117 ne voient pas l’écran d’alertes ;
+- `ProfileGate` n’a pas de test automatisé : le parcours a été vérifié à la
+  main sur iPhone.
 
 ## Prototype caméra et capteurs — BLU-55
 

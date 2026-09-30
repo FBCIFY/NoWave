@@ -1,5 +1,6 @@
 import 'reports_service.dart';
 
+/// Données fictives pour `ReportsScreen`.
 class DemoReportsService implements ReportsService {
   @override
   Future<List<String>> fetchReports() async {

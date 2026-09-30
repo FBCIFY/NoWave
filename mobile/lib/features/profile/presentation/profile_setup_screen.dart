@@ -7,6 +7,10 @@ import '../../auth/presentation/widgets/auth_layout.dart';
 import '../../auth/presentation/widgets/auth_primary_button.dart';
 import '../../auth/presentation/widgets/auth_text_field.dart';
 
+/// Création du profil NoWave (nom d'utilisateur) au premier passage.
+///
+/// Le backend répond 409 si le nom est pris et 403 si l'e-mail n'est pas
+/// vérifié.
 class ProfileSetupScreen extends StatefulWidget {
   final ProfileService profileService;
   final VoidCallback onProfileCreated;

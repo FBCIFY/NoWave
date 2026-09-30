@@ -1,5 +1,7 @@
 import 'package:firebase_auth/firebase_auth.dart';
 
+/// Seul point d'accès à Firebase Authentication : inscription, connexion,
+/// vérification de l'e-mail, mot de passe oublié et token pour le backend.
 class AuthService {
   final FirebaseAuth _firebaseAuth;
 
@@ -50,6 +52,9 @@ class AuthService {
     }
   }
 
+  /// Recharge l'utilisateur depuis Firebase. Si l'e-mail vient d'être vérifié,
+  /// le token est renouvelé : `userChanges` émet alors et `AuthGate` passe à
+  /// la suite.
   Future<bool> reloadAndCheckEmailVerification() async {
     final user = currentUser;
 
@@ -74,6 +79,7 @@ class AuthService {
     return _firebaseAuth.signOut();
   }
 
+  /// Token Firebase à envoyer au backend dans l'en-tête `Authorization`.
   Future<String> getIdToken() async {
     final user = currentUser;
 

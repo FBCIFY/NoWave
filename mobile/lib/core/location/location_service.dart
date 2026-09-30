@@ -1,5 +1,9 @@
 import 'package:geolocator/geolocator.dart';
 
+/// Récupère la position GPS une fois, en demandant l'autorisation si besoin.
+///
+/// Lève une [StateError] avec un message prêt à afficher si la localisation
+/// est désactivée ou refusée.
 class LocationService {
   Future<Position> getCurrentPosition() async {
     final serviceEnabled = await Geolocator.isLocationServiceEnabled();

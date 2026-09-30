@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 
 import '../../../../app/theme.dart';
 
+/// Mise en page sombre commune aux écrans d'authentification et de profil :
+/// fond dégradé, titre, bouton retour facultatif et contenu défilant.
 class AuthLayout extends StatelessWidget {
   final String title;
   final String? subtitle;
