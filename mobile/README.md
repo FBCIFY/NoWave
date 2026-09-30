@@ -62,7 +62,7 @@ lib/
     ├── home/          accueil (la carte + accès au profil)
     ├── map/           carte, boussole, mode signalement
     ├── reports/       formulaire et envoi des signalements
-    └── camera/        prototype caméra et capteurs (BLU-55)
+    └── camera/        prototype caméra et capteurs (NW-55)
 ```
 
 Chaque dossier de `features/` suit le même découpage :
@@ -97,10 +97,10 @@ Fichiers présents mais non utilisés par l’application :
 - `features/reports/presentation/reports_screen.dart` et
   `data/demo_reports_service.dart` : liste de démonstration, utilisée
   seulement dans les tests ;
-- `features/camera/` : prototype BLU-55, aucun bouton n’y mène ;
+- `features/camera/` : prototype NW-55, aucun bouton n’y mène ;
 - `app/router.dart` : fichier vide.
 
-## Authentification et profil — BLU-51
+## Authentification et profil — NW-51
 
 L’application utilise Firebase Authentication avec le fournisseur
 e-mail/mot de passe.
@@ -151,9 +151,9 @@ est `fr.blueway.app`. Les fichiers `.env`, les clés privées Firebase Admin et
 les mots de passe ne doivent jamais être ajoutés à Git.
 
 La connexion Google, la connexion Apple et la récupération du mot de passe ne
-font pas partie de BLU-51.
+font pas partie de NW-51.
 
-## Récupération du mot de passe — BLU-52
+## Récupération du mot de passe — NW-52
 
 Depuis la connexion, « Mot de passe oublié ? » permet de demander un lien de
 réinitialisation. L’adresse déjà saisie est préremplie. Firebase envoie le
@@ -185,7 +185,7 @@ position en degrés, minutes et secondes (par exemple `48° 23′ 12″ N`), et 
 recentrer la carte. Déplacer la carte ne
 modifie pas la dernière position GPS affichée.
 
-## Signalement manuel — BLU-54
+## Signalement manuel — NW-54
 
 Depuis la carte, le bouton `+` ouvre un formulaire avec trois catégories et un
 commentaire facultatif de 250 caractères maximum. Déplacer la carte sous le
@@ -194,10 +194,10 @@ repère choisit la position. La publication envoie le token Firebase à
 du signalement et un `client_report_id` UUID. Un nouvel essai sans modification
 réutilise le même identifiant pour éviter les doublons.
 
-L’API locale doit inclure l’endpoint backend de BLU-104 pour tester la
+L’API locale doit inclure l’endpoint backend de NW-104 pour tester la
 publication sur téléphone ; une ancienne version du backend répondra 404.
 
-## Consentements et alertes — BLU-117
+## Consentements et alertes — NW-117
 
 L’écran profil propose trois préférences indépendantes, désactivées par
 défaut :
@@ -229,11 +229,11 @@ au lancement suivant et seulement affiché dans les logs.
   passage par les réglages fonctionne ;
 - la ligne « Notifications » des réglages iOS n’apparaît qu’après une première
   demande ;
-- les comptes créés avant BLU-117 ne voient pas l’écran d’alertes ;
+- les comptes créés avant NW-117 ne voient pas l’écran d’alertes ;
 - `ProfileGate` n’a pas de test automatisé : le parcours a été vérifié à la
   main sur iPhone.
 
-## Prototype caméra et capteurs — BLU-55
+## Prototype caméra et capteurs — NW-55
 
 Le prototype permet de :
 

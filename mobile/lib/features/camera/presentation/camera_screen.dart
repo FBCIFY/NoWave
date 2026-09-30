@@ -11,7 +11,7 @@ import '../../../core/sensors/device_orientation_service.dart';
 import '../../../core/sensors/camera_orientation.dart';
 import '../domain/capture_requirements.dart';
 
-/// Prototype BLU-55, pas encore accessible depuis l'app : aperçu caméra,
+/// Prototype NW-55, pas encore accessible depuis l'app : aperçu caméra,
 /// position GPS et orientation du téléphone.
 ///
 /// La photo n'est autorisée qu'avec une précision GPS d'au plus 50 m et une
