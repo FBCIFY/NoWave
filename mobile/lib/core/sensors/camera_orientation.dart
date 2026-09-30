@@ -1,5 +1,7 @@
 import 'dart:math' as math;
 
+/// Inclinaison de la caméra arrière, calculée à partir du tangage et du roulis
+/// du téléphone : -90° vers le sol, 0° vers l'horizon, 90° vers le ciel.
 double calculateCameraInclinationDegrees({
   required double pitchDegrees,
   required double rollDegrees,

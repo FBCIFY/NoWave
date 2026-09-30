@@ -1,5 +1,7 @@
 import 'package:mapbox_maps_flutter/mapbox_maps_flutter.dart';
 
+/// Réglages Mapbox partagés : jeton (lu dans `.env.json`), style de la carte
+/// et masquage des éléments affichés par défaut.
 class MapConfig {
   static const String accessToken = String.fromEnvironment(
     'MAPBOX_ACCESS_TOKEN',

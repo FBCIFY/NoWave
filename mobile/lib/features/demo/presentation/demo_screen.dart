@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+/// Compteur du modèle Flutter par défaut, inutilisé par l'app.
 class MyHomePage extends StatefulWidget {
   const MyHomePage({super.key, required this.title});
 

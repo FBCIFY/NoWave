@@ -6,6 +6,7 @@ import '../../profile/presentation/profile_screen.dart';
 import '../../reports/data/manual_report_service.dart';
 import '../../../core/notifications/notification_permission.dart';
 
+/// Accueil après connexion : la carte, avec un bouton qui ouvre le profil.
 class HomeScreen extends StatelessWidget {
   final UserProfile? profile;
   final Future<void> Function()? onSignOut;

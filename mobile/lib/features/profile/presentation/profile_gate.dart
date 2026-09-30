@@ -10,6 +10,11 @@ import '../../reports/data/manual_report_service.dart';
 import 'alerts_onboarding_screen.dart';
 import 'profile_setup_screen.dart';
 
+/// Second aiguillage, une fois l'e-mail vérifié : charge le profil puis
+/// affiche la création du profil, l'écran d'alertes (une seule fois, juste
+/// après la création) ou l'accueil.
+///
+/// Garde aussi le dernier profil modifié pour que l'accueil reste à jour.
 class ProfileGate extends StatefulWidget {
   final AuthService authService;
   final ProfileService profileService;
@@ -46,6 +51,8 @@ class _ProfileGateState extends State<ProfileGate> {
     });
   }
 
+  // Seul chemin qui affiche l'écran d'alertes : les comptes existants ne le
+  // voient pas.
   void _onProfileCreated() {
     _showAlertsOnboarding = true;
     _reloadProfile();

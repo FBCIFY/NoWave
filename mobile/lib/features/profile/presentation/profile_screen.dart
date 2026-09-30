@@ -7,12 +7,18 @@ import '../../auth/presentation/widgets/auth_layout.dart';
 import '../domain/user_profile.dart';
 import '../../../core/notifications/notification_permission.dart';
 
+/// Enregistre une ou plusieurs préférences et renvoie le profil à jour.
 typedef UpdatePreferences = Future<UserProfile> Function({
   bool? showUserName,
   bool? showBoatInfo,
   bool? notificationsEnabled,
 });
 
+/// Profil de l'utilisateur, ses préférences et la déconnexion.
+///
+/// Un interrupteur change tout de suite à l'écran, puis revient en arrière si
+/// le backend refuse. Le statut de l'autorisation du téléphone est relu à
+/// chaque retour dans l'app.
 class ProfileScreen extends StatefulWidget {
   final UserProfile profile;
   final Future<void> Function() onSignOut;
@@ -135,6 +141,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
     await _askPhonePermission();
   }
 
+  // Préférence activée : on demande l'autorisation si iOS/Android peut encore
+  // l'afficher, sinon on ouvre les réglages du téléphone.
   Future<void> _askPhonePermission() async {
     final permissions = widget.notificationPermissions;
     try {
@@ -424,6 +432,7 @@ class _PreferenceSwitch extends StatelessWidget {
   );
 }
 
+/// Indique si le téléphone autorise vraiment les notifications.
 class _PermissionStatus extends StatelessWidget {
   final NotificationPermission permission;
   const _PermissionStatus(this.permission);

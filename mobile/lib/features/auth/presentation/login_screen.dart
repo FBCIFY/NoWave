@@ -8,6 +8,10 @@ import 'widgets/auth_layout.dart';
 import 'widgets/auth_primary_button.dart';
 import 'widgets/auth_text_field.dart';
 
+/// Connexion par e-mail et mot de passe.
+///
+/// En cas de succès, rien à faire ici : `AuthGate` détecte la session et
+/// change d'écran. Donne aussi accès à l'inscription et au mot de passe oublié.
 class LoginScreen extends StatefulWidget {
   final AuthService authService;
   final VoidCallback? onRegister;
