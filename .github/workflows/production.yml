@@ -16,7 +16,7 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 35
     env:
-      BLUEWAY_TEST_ADMIN_URL: postgresql://blueway_ci:ci-test-only@127.0.0.1:55433/blueway_ci
+      NOWAVE_TEST_ADMIN_URL: postgresql://nowave_ci:ci-test-only@127.0.0.1:55433/nowave_ci
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4

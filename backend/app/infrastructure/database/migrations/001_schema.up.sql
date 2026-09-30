@@ -1,14 +1,14 @@
 CREATE EXTENSION IF NOT EXISTS postgis;
 
-CREATE SCHEMA blueway;
+CREATE SCHEMA nowave;
 
-SET LOCAL search_path = blueway, public;
+SET LOCAL search_path = nowave, public;
 
 CREATE TABLE users (
     id uuid PRIMARY KEY NOT NULL,
     firebase_uid text NOT NULL UNIQUE,
     username varchar(100) NOT NULL UNIQUE,
-    email varchar(254) UNIQUE,
+    email varchar(254) NOT NULL UNIQUE,
     date_of_birth date,
     nationality char(2),
     role varchar(10) NOT NULL CHECK (role IN ('user', 'admin')),
@@ -162,8 +162,8 @@ CREATE INDEX devices_user_idx ON devices (user_id);
 CREATE INDEX notifications_schedule_idx ON notifications (status, next_attempt_at);
 
 -- Valide les enfants d'un rapport selon son mode de positionnement.
-CREATE FUNCTION blueway.assert_photo_children(p_report_id uuid) RETURNS void
-LANGUAGE plpgsql SET search_path = blueway, public AS $$
+CREATE FUNCTION nowave.assert_photo_children(p_report_id uuid) RETURNS void
+LANGUAGE plpgsql SET search_path = nowave, public AS $$
 DECLARE
     report_mode text;
     has_photo boolean;
@@ -186,8 +186,8 @@ BEGIN
 END $$;
 
 -- Identifie les rapports affectés et déclenche leur validation différée.
-CREATE FUNCTION blueway.check_photo_children() RETURNS trigger
-LANGUAGE plpgsql SET search_path = blueway, public AS $$
+CREATE FUNCTION nowave.check_photo_children() RETURNS trigger
+LANGUAGE plpgsql SET search_path = nowave, public AS $$
 DECLARE
     old_report_id uuid;
     new_report_id uuid;
@@ -207,21 +207,21 @@ BEGIN
         WHERE report_id IS NOT NULL
         ORDER BY report_id
     LOOP
-        PERFORM blueway.assert_photo_children(affected_report_id);
+        PERFORM nowave.assert_photo_children(affected_report_id);
     END LOOP;
     RETURN NULL;
 END $$;
 -- Vérifient l'état final des rapports et de leurs enfants au COMMIT.
-CREATE CONSTRAINT TRIGGER report_photo_children AFTER INSERT OR UPDATE OR DELETE ON blueway.reports
-DEFERRABLE INITIALLY DEFERRED FOR EACH ROW EXECUTE FUNCTION blueway.check_photo_children();
-CREATE CONSTRAINT TRIGGER report_photo_children AFTER INSERT OR UPDATE OR DELETE ON blueway.report_photos
-DEFERRABLE INITIALLY DEFERRED FOR EACH ROW EXECUTE FUNCTION blueway.check_photo_children();
-CREATE CONSTRAINT TRIGGER report_photo_children AFTER INSERT OR UPDATE OR DELETE ON blueway.report_positioning
-DEFERRABLE INITIALLY DEFERRED FOR EACH ROW EXECUTE FUNCTION blueway.check_photo_children();
+CREATE CONSTRAINT TRIGGER report_photo_children AFTER INSERT OR UPDATE OR DELETE ON nowave.reports
+DEFERRABLE INITIALLY DEFERRED FOR EACH ROW EXECUTE FUNCTION nowave.check_photo_children();
+CREATE CONSTRAINT TRIGGER report_photo_children AFTER INSERT OR UPDATE OR DELETE ON nowave.report_photos
+DEFERRABLE INITIALLY DEFERRED FOR EACH ROW EXECUTE FUNCTION nowave.check_photo_children();
+CREATE CONSTRAINT TRIGGER report_photo_children AFTER INSERT OR UPDATE OR DELETE ON nowave.report_positioning
+DEFERRABLE INITIALLY DEFERRED FOR EACH ROW EXECUTE FUNCTION nowave.check_photo_children();
 
 -- Empêche les changements interdits sur l'auteur, la durée et la restauration d'un rapport.
-CREATE FUNCTION blueway.guard_report() RETURNS trigger
-LANGUAGE plpgsql SET search_path = blueway, public AS $$
+CREATE FUNCTION nowave.guard_report() RETURNS trigger
+LANGUAGE plpgsql SET search_path = nowave, public AS $$
 BEGIN
     IF TG_OP = 'INSERT' AND NEW.author_id IS NULL THEN
         RAISE EXCEPTION 'An author is required at creation' USING ERRCODE = '23514';
@@ -242,11 +242,11 @@ BEGIN
     RETURN NEW;
 END $$;
 -- Bloque une ligne de rapport invalide avant son écriture.
-CREATE TRIGGER reports_guard BEFORE INSERT OR UPDATE ON blueway.reports
-FOR EACH ROW EXECUTE FUNCTION blueway.guard_report();
+CREATE TRIGGER reports_guard BEFORE INSERT OR UPDATE ON nowave.reports
+FOR EACH ROW EXECUTE FUNCTION nowave.guard_report();
 
 -- Empêche la réattribution d'une installation à un autre utilisateur
-CREATE FUNCTION blueway.guard_device_owner() RETURNS trigger LANGUAGE plpgsql AS $$
+CREATE FUNCTION nowave.guard_device_owner() RETURNS trigger LANGUAGE plpgsql AS $$
 BEGIN
     IF NEW.user_id IS DISTINCT FROM OLD.user_id OR NEW.installation_id IS DISTINCT FROM OLD.installation_id THEN
         RAISE EXCEPTION 'Register a new installation on account change' USING ERRCODE = '23514';
@@ -254,12 +254,12 @@ BEGIN
     RETURN NEW;
 END $$;
 -- Bloque une mise à jour qui change le propriétaire ou l'identifiant d'installation.
-CREATE TRIGGER device_owner_guard BEFORE UPDATE ON blueway.devices
-FOR EACH ROW EXECUTE FUNCTION blueway.guard_device_owner();
+CREATE TRIGGER device_owner_guard BEFORE UPDATE ON nowave.devices
+FOR EACH ROW EXECUTE FUNCTION nowave.guard_device_owner();
 
 -- Garantit un audit créé par un administrateur actif et conservé sans modification.
-CREATE FUNCTION blueway.guard_audit() RETURNS trigger
-LANGUAGE plpgsql SET search_path = blueway, public AS $$
+CREATE FUNCTION nowave.guard_audit() RETURNS trigger
+LANGUAGE plpgsql SET search_path = nowave, public AS $$
 BEGIN
     IF TG_OP = 'DELETE' THEN
         RAISE EXCEPTION 'Audit entries cannot be deleted' USING ERRCODE = '23514';
@@ -298,5 +298,5 @@ BEGIN
     RETURN NEW;
 END $$;
 -- Bloque les créations, modifications et suppressions d'audit invalides.
-CREATE TRIGGER audit_guard BEFORE INSERT OR UPDATE OR DELETE ON blueway.moderation_actions
-FOR EACH ROW EXECUTE FUNCTION blueway.guard_audit();
+CREATE TRIGGER audit_guard BEFORE INSERT OR UPDATE OR DELETE ON nowave.moderation_actions
+FOR EACH ROW EXECUTE FUNCTION nowave.guard_audit();

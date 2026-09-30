@@ -13,7 +13,7 @@ def test_verify_token_calls_firebase(monkeypatch):
 
     expected_identity = {
         "uid": "firebase-user-123",
-        "email": "user@blueway.test",
+        "email": "user@nowave.test",
         "email_verified": True,
     }
 

@@ -15,7 +15,7 @@ def test_exact_dictionary_and_foreign_keys(dsn):
     with psycopg.connect(dsn) as conn:
         rows = conn.execute('''SELECT c.relname, a.attname, format_type(a.atttypid, a.atttypmod), NOT a.attnotnull
             FROM pg_attribute a JOIN pg_class c ON c.oid=a.attrelid JOIN pg_namespace n ON n.oid=c.relnamespace
-            WHERE n.nspname='blueway' AND c.relkind='r' AND a.attnum>0 AND NOT a.attisdropped
+            WHERE n.nspname='nowave' AND c.relkind='r' AND a.attnum>0 AND NOT a.attisdropped
             ORDER BY c.relname,a.attnum''').fetchall()
         expected=[]
         for table, fields in sorted(CONTRACT.items()):
@@ -24,20 +24,20 @@ def test_exact_dictionary_and_foreign_keys(dsn):
                 expected.append((table,field['name'],ty,field['nullable']))
         assert rows == expected
         assert len(rows) == 99
-        fk=conn.execute("SELECT confdeltype,count(*) FROM pg_constraint WHERE contype='f' AND connamespace='blueway'::regnamespace GROUP BY 1").fetchall()
+        fk=conn.execute("SELECT confdeltype,count(*) FROM pg_constraint WHERE contype='f' AND connamespace='nowave'::regnamespace GROUP BY 1").fetchall()
         assert dict(fk)=={'c':9,'n':5}
-        assert conn.execute("SELECT count(*) FROM pg_constraint WHERE contype='p' AND connamespace='blueway'::regnamespace").fetchone()[0]==10
+        assert conn.execute("SELECT count(*) FROM pg_constraint WHERE contype='p' AND connamespace='nowave'::regnamespace").fetchone()[0]==10
 
 
 def test_spatial_indexes_and_distance(db):
     conn, ids=db
-    indexes=dict(conn.execute("SELECT indexname,indexdef FROM pg_indexes WHERE schemaname='blueway'"))
+    indexes=dict(conn.execute("SELECT indexname,indexdef FROM pg_indexes WHERE schemaname='nowave'"))
     for name in ['reports_final_position_gist','device_positions_position_gist']:
         assert 'USING gist' in indexes[name]
     for name in ['reports_author_idx','reports_status_expiry_idx','devices_user_idx','notifications_schedule_idx']:
         assert name in indexes
     conn.execute('SET LOCAL enable_seqscan=off')
-    plan=conn.execute("EXPLAIN SELECT * FROM blueway.device_positions WHERE ST_DWithin(position,'SRID=4326;POINT(5 43)'::geography,18520)").fetchall()
+    plan=conn.execute("EXPLAIN SELECT * FROM nowave.device_positions WHERE ST_DWithin(position,'SRID=4326;POINT(5 43)'::geography,18520)").fetchall()
     assert 'device_positions_position_gist' in str(plan)
     assert conn.execute("SELECT ST_DWithin('POINT(0 0)'::geography, ST_Project('POINT(0 0)'::geography,18519,0),18520), ST_DWithin('POINT(0 0)'::geography, ST_Project('POINT(0 0)'::geography,18521,0),18520)").fetchone()==(True,False)
 
@@ -62,7 +62,7 @@ for table, fields in CONTRACT.items():
 def test_invalid_values_rejected(db,table,field,value):
     conn,_=db
     with pytest.raises(psycopg.errors.CheckViolation):
-        conn.execute(sql.SQL('UPDATE blueway.{} SET {}=%s').format(sql.Identifier(table),sql.Identifier(field)),(value,))
+        conn.execute(sql.SQL('UPDATE nowave.{} SET {}=%s').format(sql.Identifier(table),sql.Identifier(field)),(value,))
 
 
 @pytest.mark.parametrize('table,field',[('users','firebase_uid'),('users','username'),('users','email'),('boats','user_id'),('devices','installation_id'),('devices','fcm_token'),('reports','client_report_id'),('report_photos','object_key'),('notifications','device_id'),('alert_history','user_id')])
@@ -70,9 +70,9 @@ def test_unique_keys(db,table,field):
     conn,ids=db
     # Clone a valid row, preserving the unique key while replacing its PK.
     if field in ['email','fcm_token','object_key']:
-        conn.execute(sql.SQL('UPDATE blueway.{} SET {}=%s WHERE {}=%s').format(sql.Identifier(table),sql.Identifier(field),sql.Identifier('report_id' if table=='report_photos' else 'id')),(str(uuid.uuid4()),ids[{'users':'user','devices':'device','report_photos':'report'}[table]]))
+        conn.execute(sql.SQL('UPDATE nowave.{} SET {}=%s WHERE {}=%s').format(sql.Identifier(table),sql.Identifier(field),sql.Identifier('report_id' if table=='report_photos' else 'id')),(str(uuid.uuid4()),ids[{'users':'user','devices':'device','report_photos':'report'}[table]]))
     row_id=ids[{'users':'user','boats':'boat','devices':'device','reports':'report','report_photos':'report','notifications':'notification','alert_history':'history'}[table]]
-    row=conn.execute(sql.SQL('SELECT * FROM blueway.{} WHERE {}=%s').format(sql.Identifier(table),sql.Identifier('report_id' if table=='report_photos' else 'id')),(row_id,))
+    row=conn.execute(sql.SQL('SELECT * FROM nowave.{} WHERE {}=%s').format(sql.Identifier(table),sql.Identifier('report_id' if table=='report_photos' else 'id')),(row_id,))
     values=dict(zip([x.name for x in row.description],row.fetchone()))
     pk='report_id' if table=='report_photos' else 'id'
     values[pk]=ids['manual'] if table=='report_photos' else uuid.uuid4()
@@ -87,56 +87,56 @@ def test_unique_keys(db,table,field):
 @pytest.mark.parametrize('child',['report_photos','report_positioning'])
 def test_missing_child_fails_at_commit(db,child):
     conn,ids=db
-    conn.execute(sql.SQL('DELETE FROM blueway.{} WHERE report_id=%s').format(sql.Identifier(child)),(ids['report'],))
+    conn.execute(sql.SQL('DELETE FROM nowave.{} WHERE report_id=%s').format(sql.Identifier(child)),(ids['report'],))
     with pytest.raises(psycopg.errors.CheckViolation): conn.commit()
-    assert conn.execute(sql.SQL('SELECT count(*) FROM blueway.{} WHERE report_id=%s').format(sql.Identifier(child)),(ids['report'],)).fetchone()[0]==1
+    assert conn.execute(sql.SQL('SELECT count(*) FROM nowave.{} WHERE report_id=%s').format(sql.Identifier(child)),(ids['report'],)).fetchone()[0]==1
 
 
 def test_photo_creation_without_children_fails(db):
     conn,ids=db
-    conn.execute("UPDATE blueway.reports SET positioning_mode='photo' WHERE id=%s",(ids['manual'],))
+    conn.execute("UPDATE nowave.reports SET positioning_mode='photo' WHERE id=%s",(ids['manual'],))
     with pytest.raises(psycopg.errors.CheckViolation): conn.commit()
 
 
 def test_manual_cannot_keep_children(db):
     conn,ids=db
-    conn.execute("UPDATE blueway.reports SET positioning_mode='manual' WHERE id=%s",(ids['report'],))
+    conn.execute("UPDATE nowave.reports SET positioning_mode='manual' WHERE id=%s",(ids['report'],))
     with pytest.raises(psycopg.errors.CheckViolation): conn.commit()
 
 
 @pytest.mark.parametrize('child',['report_photos','report_positioning'])
 def test_reparent_checks_old_and_new_report(db,child):
     conn,ids=db
-    conn.execute(sql.SQL('UPDATE blueway.{} SET report_id=%s WHERE report_id=%s').format(sql.Identifier(child)),(ids['manual'],ids['report']))
+    conn.execute(sql.SQL('UPDATE nowave.{} SET report_id=%s WHERE report_id=%s').format(sql.Identifier(child)),(ids['manual'],ids['report']))
     with pytest.raises(psycopg.errors.CheckViolation): conn.commit()
 
 
 def test_valid_mode_conversion_is_atomic(db):
     conn,ids=db
-    conn.execute("UPDATE blueway.reports SET positioning_mode='manual' WHERE id=%s",(ids['report'],))
-    conn.execute('DELETE FROM blueway.report_photos WHERE report_id=%s',(ids['report'],))
-    conn.execute('DELETE FROM blueway.report_positioning WHERE report_id=%s',(ids['report'],))
+    conn.execute("UPDATE nowave.reports SET positioning_mode='manual' WHERE id=%s",(ids['report'],))
+    conn.execute('DELETE FROM nowave.report_photos WHERE report_id=%s',(ids['report'],))
+    conn.execute('DELETE FROM nowave.report_positioning WHERE report_id=%s',(ids['report'],))
     conn.commit()
 
 
 def test_failed_upload_and_retry_same_row(db):
     conn,ids=db
-    conn.execute("UPDATE blueway.report_photos SET upload_status='failed' WHERE report_id=%s",(ids['report'],));conn.commit()
-    conn.execute("UPDATE blueway.report_photos SET upload_status='uploaded',object_key=%s,size_bytes=500000,mime_type='image/jpeg',uploaded_at=now() WHERE report_id=%s",(str(uuid.uuid4()),ids['report']));conn.commit()
-    assert conn.execute('SELECT count(*) FROM blueway.report_photos WHERE report_id=%s',(ids['report'],)).fetchone()[0]==1
+    conn.execute("UPDATE nowave.report_photos SET upload_status='failed' WHERE report_id=%s",(ids['report'],));conn.commit()
+    conn.execute("UPDATE nowave.report_photos SET upload_status='uploaded',object_key=%s,size_bytes=500000,mime_type='image/jpeg',uploaded_at=now() WHERE report_id=%s",(str(uuid.uuid4()),ids['report']));conn.commit()
+    assert conn.execute('SELECT count(*) FROM nowave.report_photos WHERE report_id=%s',(ids['report'],)).fetchone()[0]==1
 
 
 @pytest.mark.parametrize('statement',[
- "UPDATE blueway.report_photos SET upload_status='uploaded'",
- "UPDATE blueway.notifications SET next_attempt_at=NULL",
- "UPDATE blueway.notifications SET status='sent'",
- "UPDATE blueway.reports SET expires_at=expires_at+interval '1 second'",
- "UPDATE blueway.reports SET observed_at=observed_at+interval '1 second',expires_at=expires_at+interval '1 second'",
- "UPDATE blueway.reports SET author_id=NULL",
- "UPDATE blueway.devices SET installation_id=gen_random_uuid()",
- "UPDATE blueway.moderation_actions SET reason='changed'",
- "UPDATE blueway.moderation_actions SET admin_user_id=NULL",
- "DELETE FROM blueway.moderation_actions"])
+ "UPDATE nowave.report_photos SET upload_status='uploaded'",
+ "UPDATE nowave.notifications SET next_attempt_at=NULL",
+ "UPDATE nowave.notifications SET status='sent'",
+ "UPDATE nowave.reports SET expires_at=expires_at+interval '1 second'",
+ "UPDATE nowave.reports SET observed_at=observed_at+interval '1 second',expires_at=expires_at+interval '1 second'",
+ "UPDATE nowave.reports SET author_id=NULL",
+ "UPDATE nowave.devices SET installation_id=gen_random_uuid()",
+ "UPDATE nowave.moderation_actions SET reason='changed'",
+ "UPDATE nowave.moderation_actions SET admin_user_id=NULL",
+ "DELETE FROM nowave.moderation_actions"])
 def test_state_and_immutability_guards(db,statement):
     conn,_=db
     with pytest.raises(psycopg.errors.CheckViolation): conn.execute(statement)
@@ -144,20 +144,20 @@ def test_state_and_immutability_guards(db,statement):
 
 def test_user_deletion_cascades_and_keeps_report_and_audit(db):
     conn,ids=db
-    conn.execute('DELETE FROM blueway.users WHERE id=%s',(ids['user'],));conn.commit()
-    assert conn.execute('SELECT author_id FROM blueway.reports WHERE id=%s',(ids['report'],)).fetchone()==(None,)
+    conn.execute('DELETE FROM nowave.users WHERE id=%s',(ids['user'],));conn.commit()
+    assert conn.execute('SELECT author_id FROM nowave.reports WHERE id=%s',(ids['report'],)).fetchone()==(None,)
     for table,key,value in [('boats','id',ids['boat']),('devices','id',ids['device']),('device_positions','device_id',ids['device']),('notifications','id',ids['notification']),('alert_history','id',ids['history'])]:
-        assert conn.execute(sql.SQL('SELECT count(*) FROM blueway.{} WHERE {}=%s').format(sql.Identifier(table),sql.Identifier(key)),(value,)).fetchone()[0]==0
-    conn.execute('DELETE FROM blueway.users WHERE id=%s',(ids['admin'],));conn.commit()
-    assert conn.execute('SELECT admin_user_id FROM blueway.moderation_actions WHERE id=%s',(ids['audit'],)).fetchone()==(None,)
+        assert conn.execute(sql.SQL('SELECT count(*) FROM nowave.{} WHERE {}=%s').format(sql.Identifier(table),sql.Identifier(key)),(value,)).fetchone()[0]==0
+    conn.execute('DELETE FROM nowave.users WHERE id=%s',(ids['admin'],));conn.commit()
+    assert conn.execute('SELECT admin_user_id FROM nowave.moderation_actions WHERE id=%s',(ids['audit'],)).fetchone()==(None,)
 
 
 def test_report_deletion_cascades_and_nulls_audit(db):
     conn,ids=db
-    conn.execute('DELETE FROM blueway.reports WHERE id=%s',(ids['report'],));conn.commit()
+    conn.execute('DELETE FROM nowave.reports WHERE id=%s',(ids['report'],));conn.commit()
     for table in ['report_photos','report_positioning','notifications','alert_history']:
-        assert conn.execute(sql.SQL('SELECT count(*) FROM blueway.{} WHERE report_id=%s').format(sql.Identifier(table)),(ids['report'],)).fetchone()[0]==0
-    assert conn.execute('SELECT target_report_id FROM blueway.moderation_actions WHERE id=%s',(ids['audit'],)).fetchone()==(None,)
+        assert conn.execute(sql.SQL('SELECT count(*) FROM nowave.{} WHERE report_id=%s').format(sql.Identifier(table)),(ids['report'],)).fetchone()[0]==0
+    assert conn.execute('SELECT target_report_id FROM nowave.moderation_actions WHERE id=%s',(ids['audit'],)).fetchone()==(None,)
 
 
 @pytest.mark.parametrize('change',[{'admin_user_id':None},{'action':'invalid'},{'reason':' \t\n'}, {'target_user_id':'user'}, {'action':'hide_photo'}])
@@ -170,25 +170,23 @@ def test_audit_creation_contract(db,change):
 
 def test_historical_versions_are_not_foreign_keys(db):
     conn,ids=db
-    conn.execute('UPDATE blueway.reports SET version=2 WHERE id=%s',(ids['report'],));conn.commit()
-    assert conn.execute('SELECT report_version FROM blueway.alert_history WHERE id=%s',(ids['history'],)).fetchone()==(1,)
+    conn.execute('UPDATE nowave.reports SET version=2 WHERE id=%s',(ids['report'],));conn.commit()
+    assert conn.execute('SELECT report_version FROM nowave.alert_history WHERE id=%s',(ids['history'],)).fetchone()==(1,)
 
 
 def test_migration_replay(dsn):
     upgrade_database(dsn)
     with psycopg.connect(dsn) as conn:
-        assert conn.execute('SELECT version_num FROM alembic_version').fetchone()==('20260920_0002',)
+        assert conn.execute('SELECT version_num FROM alembic_version').fetchone()==('20260917_0001',)
 
 
 def test_migrations_roundtrip(dsn):
     with psycopg.connect(dsn) as conn:
-        before=conn.execute("SELECT tablename,indexdef FROM pg_indexes WHERE schemaname='blueway' ORDER BY tablename,indexname").fetchall()
+        before=conn.execute("SELECT tablename,indexdef FROM pg_indexes WHERE schemaname='nowave' ORDER BY tablename,indexname").fetchall()
     downgrade_database(dsn)
-    downgrade_database(dsn)
-    upgrade_database(dsn)
     upgrade_database(dsn)
     with psycopg.connect(dsn) as conn:
-        after=conn.execute("SELECT tablename,indexdef FROM pg_indexes WHERE schemaname='blueway' ORDER BY tablename,indexname").fetchall()
+        after=conn.execute("SELECT tablename,indexdef FROM pg_indexes WHERE schemaname='nowave' ORDER BY tablename,indexname").fetchall()
         assert conn.execute('SELECT count(*) FROM alembic_version').fetchone()==(1,)
     assert before==after
 
@@ -196,18 +194,18 @@ def test_migrations_roundtrip(dsn):
 def test_foreign_keys_reject_missing_parents(db):
     conn,ids=db
     with pytest.raises(psycopg.errors.ForeignKeyViolation):
-        conn.execute('UPDATE blueway.notifications SET device_id=%s WHERE id=%s',(uuid.uuid4(),ids['notification']))
+        conn.execute('UPDATE nowave.notifications SET device_id=%s WHERE id=%s',(uuid.uuid4(),ids['notification']))
 
 
 def test_nullable_unique_values_and_defaults(db):
     conn,ids=db
-    assert conn.execute('SELECT show_user_name,show_boat_info,notifications_enabled FROM blueway.users WHERE id=%s',(ids['user'],)).fetchone()==(False,False,False)
-    assert conn.execute('SELECT version FROM blueway.reports WHERE id=%s',(ids['report'],)).fetchone()==(1,)
-    assert conn.execute('SELECT attempt_count FROM blueway.notifications WHERE id=%s',(ids['notification'],)).fetchone()==(0,)
+    assert conn.execute('SELECT show_user_name,show_boat_info,notifications_enabled FROM nowave.users WHERE id=%s',(ids['user'],)).fetchone()==(False,False,False)
+    assert conn.execute('SELECT version FROM nowave.reports WHERE id=%s',(ids['report'],)).fetchone()==(1,)
+    assert conn.execute('SELECT attempt_count FROM nowave.notifications WHERE id=%s',(ids['notification'],)).fetchone()==(0,)
 
     with pytest.raises(psycopg.errors.NotNullViolation):
         conn.execute(
-            'UPDATE blueway.users SET email=NULL WHERE id=%s',
+            'UPDATE nowave.users SET email=NULL WHERE id=%s',
             (ids['user'],),
         )
 
@@ -216,12 +214,12 @@ def test_nullable_unique_values_and_defaults(db):
 def test_geography_rejects_non_points(db,table,field):
     conn,_=db
     with pytest.raises(psycopg.errors.InvalidParameterValue):
-        conn.execute(sql.SQL('UPDATE blueway.{} SET {}=%s').format(sql.Identifier(table),sql.Identifier(field)),('SRID=4326;LINESTRING(0 0,1 1)',))
+        conn.execute(sql.SQL('UPDATE nowave.{} SET {}=%s').format(sql.Identifier(table),sql.Identifier(field)),('SRID=4326;LINESTRING(0 0,1 1)',))
 
 
 def test_missing_author_on_insert(db):
     conn,ids=db
-    row=conn.execute('SELECT * FROM blueway.reports WHERE id=%s',(ids['manual'],))
+    row=conn.execute('SELECT * FROM nowave.reports WHERE id=%s',(ids['manual'],))
     values=dict(zip([x.name for x in row.description],row.fetchone()))
     values.update(id=uuid.uuid4(),author_id=None)
     with pytest.raises(psycopg.errors.CheckViolation):insert(conn,'reports',**values)
@@ -234,10 +232,10 @@ def test_both_audit_target_kinds_survive_deletion(db):
         uid=uuid.uuid4();actions.append((uid,key))
         insert(conn,'moderation_actions',id=uid,admin_user_id=ids['admin'],action=action,reason='Valid reason',created_at='2026-09-16T00:00:00Z',**{key:ids[target]})
     conn.commit()
-    conn.execute('DELETE FROM blueway.reports WHERE id=%s',(ids['report'],))
-    conn.execute('DELETE FROM blueway.users WHERE id=%s',(ids['user'],));conn.commit()
+    conn.execute('DELETE FROM nowave.reports WHERE id=%s',(ids['report'],))
+    conn.execute('DELETE FROM nowave.users WHERE id=%s',(ids['user'],));conn.commit()
     for uid,key in actions:
-        assert conn.execute(sql.SQL('SELECT {} FROM blueway.moderation_actions WHERE id=%s').format(sql.Identifier(key)),(uid,)).fetchone()==(None,)
+        assert conn.execute(sql.SQL('SELECT {} FROM nowave.moderation_actions WHERE id=%s').format(sql.Identifier(key)),(uid,)).fetchone()==(None,)
 
 
 def test_concurrent_migrations_apply_once(dsn):
@@ -246,4 +244,4 @@ def test_concurrent_migrations_apply_once(dsn):
         list(pool.map(upgrade_database_cli,[dsn,dsn]))
     with psycopg.connect(dsn) as conn:
         assert conn.execute('SELECT count(*) FROM alembic_version').fetchone()==(1,)
-        assert conn.execute("SELECT to_regclass('blueway.users') IS NOT NULL").fetchone()==(True,)
+        assert conn.execute("SELECT to_regclass('nowave.users') IS NOT NULL").fetchone()==(True,)

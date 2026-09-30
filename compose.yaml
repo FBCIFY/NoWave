@@ -11,22 +11,22 @@ services:
     build:
       context: .
       dockerfile: Dockerfile.postgres
-    image: blueway-postgis:17-local
+    image: nowave-postgis:17-local
 
     environment:
-      POSTGRES_DB: blueway
-      POSTGRES_USER: blueway
-      POSTGRES_PASSWORD: ${BLUEWAY_DB_PASSWORD:?Set BLUEWAY_DB_PASSWORD in your environment}
+      POSTGRES_DB: nowave
+      POSTGRES_USER: nowave
+      POSTGRES_PASSWORD: ${NOWAVE_DB_PASSWORD:?Set NOWAVE_DB_PASSWORD in your environment}
       POSTGRES_INITDB_ARGS: "--encoding=UTF8 --locale=C.UTF-8"
 
     ports:
-      - "127.0.0.1:${BLUEWAY_DB_PORT:-55432}:5432"
+      - "127.0.0.1:${NOWAVE_DB_PORT:-55432}:5432"
 
     volumes:
-      - blueway_database:/var/lib/postgresql/data
+      - nowave_database:/var/lib/postgresql/data
 
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U blueway -d blueway"]
+      test: ["CMD-SHELL", "pg_isready -U nowave -d nowave"]
       interval: 2s
       timeout: 3s
       retries: 30
@@ -40,7 +40,7 @@ services:
       - "8000:8000"
 
     environment:
-      DATABASE_URL: "postgresql://blueway:${BLUEWAY_DB_PASSWORD}@database:5432/blueway"
+      DATABASE_URL: "postgresql://nowave:${NOWAVE_DB_PASSWORD}@database:5432/nowave"
 
     command: ["sh", "-c", "alembic -c alembic.ini upgrade head && exec uvicorn app.main:app --host 0.0.0.0 --port 8000"]
 
@@ -49,5 +49,5 @@ services:
         condition: service_healthy
 
 volumes:
-  blueway_database:
-    name: blueway-database
+  nowave_database:
+    name: nowave-database

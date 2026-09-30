@@ -60,15 +60,15 @@ class PostgreSQLReportDetailRepository(
                 rp.object_key,
                 rp.hidden_at
 
-            FROM blueway.reports AS r
+            FROM nowave.reports AS r
 
-            LEFT JOIN blueway.users AS u
+            LEFT JOIN nowave.users AS u
                 ON u.id = r.author_id
 
-            LEFT JOIN blueway.boats AS b
+            LEFT JOIN nowave.boats AS b
                 ON b.user_id = r.author_id
 
-            LEFT JOIN blueway.report_photos AS rp
+            LEFT JOIN nowave.report_photos AS rp
                 ON rp.report_id = r.id
 
             WHERE r.id = %s

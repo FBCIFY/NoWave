@@ -144,7 +144,7 @@ def test_unknown_report_returns_404(monkeypatch):
     assert response.status_code == 404
     assert (
         response.json()["error"]["code"]
-        == "REPORT_NOT_FOUND"
+        == "report_not_found"
     )
 
 

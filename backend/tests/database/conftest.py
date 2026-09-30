@@ -65,8 +65,8 @@ def upgrade_database_cli(dsn):
 @pytest.fixture(scope='session')
 def dsn():
     """Never reset an existing database. Create and drop our own random database."""
-    admin_dsn = os.environ['BLUEWAY_TEST_ADMIN_URL']
-    name = 'blueway_test_' + uuid.uuid4().hex
+    admin_dsn = os.environ['NOWAVE_TEST_ADMIN_URL']
+    name = 'nowave_test_' + uuid.uuid4().hex
     params = conninfo_to_dict(admin_dsn)
     params['dbname'] = name
     test_dsn = make_conninfo(**params)
@@ -81,7 +81,7 @@ def dsn():
 
 
 def insert(conn, table, **values):
-    query = sql.SQL('INSERT INTO blueway.{} ({}) VALUES ({}) RETURNING *').format(
+    query = sql.SQL('INSERT INTO nowave.{} ({}) VALUES ({}) RETURNING *').format(
         sql.Identifier(table), sql.SQL(',').join(map(sql.Identifier, values)),
         sql.SQL(',').join(sql.Placeholder() for _ in values))
     return conn.execute(query, list(values.values())).fetchone()
@@ -98,7 +98,7 @@ def seed(conn):
             id=ids[user],
             firebase_uid=str(ids[user]),
             username=str(ids[user]),
-            email=f'{ids[user]}@blueway.test',
+            email=f'{ids[user]}@nowave.test',
             role=role,
             status='active',
             created_at=now,

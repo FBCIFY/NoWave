@@ -37,7 +37,7 @@ class FakeUserRepository:
 def verified_identity():
     return {
         "uid": "firebase-user-123",
-        "email": "user@blueway.test",
+        "email": "user@nowave.test",
         "email_verified": True,
     }
 
@@ -45,7 +45,7 @@ def verified_identity():
 def unverified_identity():
     return {
         "uid": "firebase-user-123",
-        "email": "user@blueway.test",
+        "email": "user@nowave.test",
         "email_verified": False,
     }
 
@@ -108,14 +108,14 @@ def test_create_profile_with_unverified_email_returns_403(monkeypatch):
     app.dependency_overrides.clear()
 
     assert response.status_code == 403
-    assert response.json()["error"]["code"] == "EMAIL_NOT_VERIFIED"
+    assert response.json()["error"]["code"] == "email_not_verified"
 
 
 def test_create_existing_profile_returns_409(monkeypatch):
     existing_user = User(
         firebase_uid="firebase-user-123",
         username="ExistingUser",
-        email="existing@blueway.test",
+        email="existing@nowave.test",
     )
 
     repository = FakeUserRepository(
@@ -141,14 +141,14 @@ def test_create_existing_profile_returns_409(monkeypatch):
     app.dependency_overrides.clear()
 
     assert response.status_code == 409
-    assert response.json()["error"]["code"] == "USER_ALREADY_EXISTS"
+    assert response.json()["error"]["code"] == "user_already_exists"
 
 
 def test_create_profile_with_existing_username_returns_409(monkeypatch):
     existing_user = User(
         firebase_uid="another-firebase-user",
         username="Jonathan",
-        email="another@blueway.test",
+        email="another@nowave.test",
     )
 
     repository = FakeUserRepository(
@@ -174,7 +174,7 @@ def test_create_profile_with_existing_username_returns_409(monkeypatch):
     app.dependency_overrides.clear()
 
     assert response.status_code == 409
-    assert response.json()["error"]["code"] == "USERNAME_ALREADY_EXISTS"
+    assert response.json()["error"]["code"] == "username_already_exists"
 
 
 def test_create_profile_with_invalid_payload_returns_422(monkeypatch):
@@ -205,7 +205,7 @@ def test_get_my_profile(monkeypatch):
     existing_user = User(
         firebase_uid="firebase-user-123",
         username="Jonathan",
-        email="user@blueway.test",
+        email="user@nowave.test",
     )
 
     repository = FakeUserRepository(
@@ -258,7 +258,7 @@ def test_get_missing_profile_returns_404(monkeypatch):
     app.dependency_overrides.clear()
 
     assert response.status_code == 404
-    assert response.json()["error"]["code"] == "USER_NOT_FOUND"
+    assert response.json()["error"]["code"] == "user_not_found"
 
     assert repository.users == []
 
@@ -267,7 +267,7 @@ def test_update_my_profile(monkeypatch):
     existing_user = User(
         firebase_uid="firebase-user-123",
         username="Jonathan",
-        email="user@blueway.test",
+        email="user@nowave.test",
     )
 
     repository = FakeUserRepository(
@@ -328,20 +328,20 @@ def test_update_missing_profile_returns_404(monkeypatch):
     app.dependency_overrides.clear()
 
     assert response.status_code == 404
-    assert response.json()["error"]["code"] == "USER_NOT_FOUND"
+    assert response.json()["error"]["code"] == "user_not_found"
 
 
 def test_update_with_existing_username_returns_409(monkeypatch):
     current_user = User(
         firebase_uid="firebase-user-123",
         username="Jonathan",
-        email="user@blueway.test",
+        email="user@nowave.test",
     )
 
     other_user = User(
         firebase_uid="another-firebase-user",
         username="Brice",
-        email="brice@blueway.test",
+        email="brice@nowave.test",
     )
 
     repository = FakeUserRepository(
@@ -370,14 +370,14 @@ def test_update_with_existing_username_returns_409(monkeypatch):
     app.dependency_overrides.clear()
 
     assert response.status_code == 409
-    assert response.json()["error"]["code"] == "USERNAME_ALREADY_EXISTS"
+    assert response.json()["error"]["code"] == "username_already_exists"
 
 
 def test_update_with_invalid_payload_returns_422(monkeypatch):
     existing_user = User(
         firebase_uid="firebase-user-123",
         username="Jonathan",
-        email="user@blueway.test",
+        email="user@nowave.test",
     )
 
     repository = FakeUserRepository(
@@ -417,7 +417,7 @@ def test_delete_my_profile(monkeypatch):
     existing_user = User(
         firebase_uid="firebase-user-123",
         username="Jonathan",
-        email="user@blueway.test",
+        email="user@nowave.test",
     )
 
     repository = FakeUserRepository(
@@ -480,7 +480,7 @@ def test_delete_missing_profile_returns_404(monkeypatch):
     app.dependency_overrides.clear()
 
     assert response.status_code == 404
-    assert response.json()["error"]["code"] == "USER_NOT_FOUND"
+    assert response.json()["error"]["code"] == "user_not_found"
 
     assert repository.users == []
     assert auth_provider.deleted_uids == []

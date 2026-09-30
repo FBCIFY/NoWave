@@ -154,7 +154,7 @@ def test_save_photo_creates_three_rows(
         report_count = connection.execute(
             """
             SELECT COUNT(*)
-            FROM blueway.reports
+            FROM nowave.reports
             WHERE id = %s
             """,
             (report.id,),
@@ -163,7 +163,7 @@ def test_save_photo_creates_three_rows(
         positioning_count = connection.execute(
             """
             SELECT COUNT(*)
-            FROM blueway.report_positioning
+            FROM nowave.report_positioning
             WHERE report_id = %s
             """,
             (report.id,),
@@ -172,7 +172,7 @@ def test_save_photo_creates_three_rows(
         photo_count = connection.execute(
             """
             SELECT COUNT(*)
-            FROM blueway.report_photos
+            FROM nowave.report_photos
             WHERE report_id = %s
             """,
             (report.id,),
@@ -248,7 +248,7 @@ def test_save_photo_rolls_back_everything_on_failure(
         report_count = connection.execute(
             """
             SELECT COUNT(*)
-            FROM blueway.reports
+            FROM nowave.reports
             WHERE id = %s
             """,
             (report.id,),
@@ -257,7 +257,7 @@ def test_save_photo_rolls_back_everything_on_failure(
         positioning_count = connection.execute(
             """
             SELECT COUNT(*)
-            FROM blueway.report_positioning
+            FROM nowave.report_positioning
             WHERE report_id = %s
             """,
             (report.id,),
@@ -266,7 +266,7 @@ def test_save_photo_rolls_back_everything_on_failure(
         photo_count = connection.execute(
             """
             SELECT COUNT(*)
-            FROM blueway.report_photos
+            FROM nowave.report_photos
             WHERE report_id = %s
             """,
             (report.id,),

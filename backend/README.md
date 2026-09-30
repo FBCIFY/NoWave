@@ -42,7 +42,7 @@ PYTHONPATH=backend python -m uvicorn app.main:app \
 Pour un backend lancé directement sur le poste :
 
 ```dotenv
-DATABASE_URL=postgresql://blueway:mot-de-passe@localhost:55432/blueway
+DATABASE_URL=postgresql://nowave:mot-de-passe@localhost:55432/nowave
 ```
 
 Psycopg utilise directement `postgresql://`. Alembic convertit automatiquement
@@ -59,12 +59,6 @@ En développement local, installer Google Cloud CLI puis exécuter :
 ```bash
 gcloud auth application-default login
 gcloud auth application-default set-quota-project blueway-dev
-```
-
-Le fichier `.env` doit également contenir :
-
-```dotenv
-GOOGLE_CLOUD_PROJECT=blueway-dev
 ```
 
 Les identifiants Google locaux et les clés privées de compte de service ne
@@ -87,7 +81,7 @@ Depuis la racine, avec l’environnement virtuel activé :
 PYTHONPATH=backend python -m pytest backend/tests/api backend/tests/unit
 ```
 
-Les tests de base de données nécessitent `BLUEWAY_TEST_ADMIN_URL` et le droit de
+Les tests de base de données nécessitent `NOWAVE_TEST_ADMIN_URL` et le droit de
 créer une base temporaire :
 
 ```bash

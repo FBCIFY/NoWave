@@ -1,5 +1,4 @@
 import 'dart:math' as math;
-import 'dart:convert';
 import 'dart:typed_data';
 import 'dart:ui' as ui;
 
@@ -77,14 +76,10 @@ class _ReportComposerSheetState extends State<ReportComposerSheet> {
 
   String _messageForApiError(ApiException error) {
     if (error.statusCode == 404) {
-      try {
-        final body = jsonDecode(error.body);
-        if (body is Map && body['error']?['code'] == 'USER_NOT_FOUND') {
-          return 'Votre profil NoWave est introuvable.';
-        }
-      } catch (_) {
-        // A missing route can return a different response format.
+      if (error.code == 'user_not_found') {
+        return 'Votre profil NoWave est introuvable.';
       }
+
       return 'Publication indisponible sur ce serveur.';
     }
     return switch (error.statusCode) {

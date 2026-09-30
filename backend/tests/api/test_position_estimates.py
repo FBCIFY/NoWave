@@ -318,7 +318,7 @@ def test_unknown_user_returns_404(
 
     assert (
         response.json()["error"]["code"]
-        == "USER_NOT_FOUND"
+        == "user_not_found"
     )
 
 
@@ -352,7 +352,7 @@ def test_suspended_user_returns_403(
 
     assert (
         response.json()["error"]["code"]
-        == "USER_INACTIVE"
+        == "user_inactive"
     )
 
 
@@ -382,3 +382,48 @@ def test_extremely_large_camera_height_returns_422(
         app.dependency_overrides.clear()
 
     assert response.status_code == 422
+
+
+def test_missing_camera_height_returns_normalized_422(
+    monkeypatch,
+):
+    setup_user_repository(
+        monkeypatch,
+        user=active_user(),
+    )
+
+    app.dependency_overrides[
+        get_current_identity
+    ] = verified_identity
+
+    payload = build_payload()
+    del payload["camera_height_m"]
+
+    try:
+        client = TestClient(app)
+
+        response = client.post(
+            "/api/v1/position-estimates",
+            json=payload,
+        )
+
+    finally:
+        app.dependency_overrides.clear()
+
+    assert response.status_code == 422
+
+    data = response.json()
+
+    assert data["error"]["code"] == (
+        "request_validation_error"
+    )
+
+    assert isinstance(
+        data["error"]["details"],
+        list,
+    )
+
+    assert any(
+        error["loc"][-1] == "camera_height_m"
+        for error in data["error"]["details"]
+    )

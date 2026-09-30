@@ -131,4 +131,23 @@ void main() {
     await tester.pump(const Duration(seconds: 10));
     await verification;
   });
+
+  test('ApiException lit le contrat d’erreur NoWave', () {
+    const error = ApiException(
+      statusCode: 404,
+      body: '''
+{
+  "error": {
+    "code": "user_not_found",
+    "message": "User not found",
+    "details": null
+  }
+}
+''',
+    );
+
+    expect(error.code, 'user_not_found');
+    expect(error.message, 'User not found');
+    expect(error.details, isNull);
+  });
 }

@@ -1,4 +1,4 @@
-"""Alembic runtime configuration for the Blueway PostgreSQL database."""
+"""Alembic runtime configuration for the NoWave PostgreSQL database."""
 
 from logging.config import fileConfig
 
