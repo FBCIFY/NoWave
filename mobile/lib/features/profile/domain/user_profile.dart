@@ -1,3 +1,5 @@
+/// Profil renvoyé par le backend. [UserProfile.fromJson] lit les clés en
+/// snake_case ; [copyWith] ne modifie que les trois préférences.
 class UserProfile {
   final String id;
   final String username;

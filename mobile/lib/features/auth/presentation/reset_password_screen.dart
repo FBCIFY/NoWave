@@ -6,6 +6,10 @@ import 'widgets/auth_layout.dart';
 import 'widgets/auth_primary_button.dart';
 import 'widgets/auth_text_field.dart';
 
+/// Demande d'un lien de réinitialisation du mot de passe (envoyé par Firebase).
+///
+/// Le message de confirmation est le même que le compte existe ou non, pour
+/// ne pas révéler quelles adresses sont inscrites.
 class ResetPasswordScreen extends StatefulWidget {
   final AuthService authService;
   final String initialEmail;
