@@ -1,4 +1,5 @@
 import 'package:firebase_messaging/firebase_messaging.dart';
+import 'package:app_settings/app_settings.dart';
 
 enum NotificationPermission { granted, denied, notDetermined }
 
@@ -24,4 +25,7 @@ class NotificationPermissionService {
     final settings = await FirebaseMessaging.instance.requestPermission();
     return notificationPermissionFrom(settings.authorizationStatus);
   }
+
+  Future<void> openSettings() =>
+      AppSettings.openAppSettings(type: AppSettingsType.notification);
 }

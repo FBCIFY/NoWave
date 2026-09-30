@@ -229,6 +229,41 @@ void main() {
       findsOneWidget,
     );
   });
+
+  testWidgets('relit l’autorisation quand l’app revient au premier plan', (
+    tester,
+  ) async {
+    await tester.binding.setSurfaceSize(const Size(430, 1200));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+
+    final permissions = FakeNotificationPermissionService(
+      NotificationPermission.denied,
+    );
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: ProfileScreen(
+          profile: profile,
+          onSignOut: () async {},
+          onUpdatePreferences: unusedUpdate,
+          notificationPermissions: permissions,
+        ),
+      ),
+    );
+    await tester.pump();
+
+    expect(
+      find.text('Bloquées dans les réglages du téléphone'),
+      findsOneWidget,
+    );
+
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.inactive);
+    permissions.status = NotificationPermission.granted;
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+    await tester.pumpAndSettle();
+
+    expect(find.text('Autorisées sur ce téléphone'), findsOneWidget);
+  });
 }
 
 class FakeNotificationPermissionService
@@ -244,4 +279,11 @@ class FakeNotificationPermissionService
 
   @override
   Future<NotificationPermission> request() async => status;
+
+  int openSettingsCalls = 0;
+
+  @override
+  Future<void> openSettings() async {
+    openSettingsCalls++;
+  }
 }

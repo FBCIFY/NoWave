@@ -35,12 +35,22 @@ class _ProfileScreenState extends State<ProfileScreen> {
   late UserProfile _profile;
   bool _isSaving = false;
   NotificationPermission? _permission;
+  late final AppLifecycleListener _lifecycleListener;
 
   @override
   void initState() {
     super.initState();
     _profile = widget.profile;
     unawaited(_loadPermission());
+    _lifecycleListener = AppLifecycleListener(
+      onResume: () => unawaited(_loadPermission()),
+    );
+  }
+
+  @override
+  void dispose() {
+    _lifecycleListener.dispose();
+    super.dispose();
   }
 
   Future<void> _loadPermission() async {
