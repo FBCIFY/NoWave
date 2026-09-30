@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:app_settings/app_settings.dart';
 import 'package:camera/camera.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -32,6 +33,8 @@ class _CameraScreenState extends State<CameraScreen> {
   geo.Position? _position;
   bool _isLocating = false;
   String? _locationError;
+  bool _locationNeedsSettings = false;
+  StreamSubscription<geo.Position>? _positionSubscription;
   CameraController? _controller;
   String? _cameraError;
   bool _isCapturing = false;
@@ -40,6 +43,7 @@ class _CameraScreenState extends State<CameraScreen> {
   StreamSubscription<CompassReading>? _orientationSubscription;
   CompassReading? _orientation;
   String? _orientationError;
+  late final AppLifecycleListener _lifecycleListener;
 
   @override
   void initState() {
@@ -47,14 +51,30 @@ class _CameraScreenState extends State<CameraScreen> {
     // L'aperçu plein écran et le calcul de l'inclinaison supposent le portrait.
     SystemChrome.setPreferredOrientations([DeviceOrientation.portraitUp]);
     _initializeCamera();
-    _loadPosition();
+    _listenToPosition();
     _listenToOrientation();
+    _lifecycleListener = AppLifecycleListener(
+      onResume: _retryLocationIfBlocked,
+    );
   }
 
-  Future<void> _loadPosition() async {
+  /// Au retour des réglages (ou si le GPS a décroché), relance la position
+  /// sans que l'utilisateur ait à rouvrir la caméra.
+  void _retryLocationIfBlocked() {
+    if (_isLocating || _locationError == null) return;
+
+    _positionSubscription?.cancel();
+    _positionSubscription = null;
+    _listenToPosition();
+  }
+
+  /// Première position (avec demande d'autorisation), puis suivi continu :
+  /// la position figée à la photo est toujours récente, même en route.
+  Future<void> _listenToPosition() async {
     setState(() {
       _isLocating = true;
       _locationError = null;
+      _locationNeedsSettings = false;
     });
 
     try {
@@ -65,11 +85,35 @@ class _CameraScreenState extends State<CameraScreen> {
       setState(() {
         _position = position;
       });
+
+      _positionSubscription =
+          geo.Geolocator.getPositionStream(
+            locationSettings: const geo.LocationSettings(
+              accuracy: geo.LocationAccuracy.high,
+            ),
+          ).listen(
+            (position) {
+              if (!mounted) return;
+
+              setState(() {
+                _position = position;
+                _locationError = null;
+              });
+            },
+            onError: (Object _) {
+              if (!mounted) return;
+
+              setState(() {
+                _locationError = 'Position GPS indisponible pour le moment.';
+              });
+            },
+          );
     } on StateError catch (error) {
       if (!mounted) return;
 
       setState(() {
         _locationError = error.message;
+        _locationNeedsSettings = true;
       });
     } on TimeoutException {
       if (!mounted) return;
@@ -346,6 +390,8 @@ class _CameraScreenState extends State<CameraScreen> {
   @override
   void dispose() {
     SystemChrome.setPreferredOrientations(const []);
+    _lifecycleListener.dispose();
+    _positionSubscription?.cancel();
     _orientationSubscription?.cancel();
     _controller?.dispose();
     super.dispose();
@@ -396,22 +442,14 @@ class _CameraScreenState extends State<CameraScreen> {
                 bottom: false,
                 child: Padding(
                   padding: const EdgeInsets.all(8),
-                  child: Row(
-                    children: [
-                      IconButton(
-                        tooltip: 'Fermer',
-                        onPressed: () => Navigator.of(context).pop(),
-                        style: overlayButtonStyle,
-                        icon: const Icon(Icons.close),
-                      ),
-                      const Spacer(),
-                      IconButton(
-                        tooltip: 'Actualiser la position',
-                        onPressed: _isLocating ? null : _loadPosition,
-                        style: overlayButtonStyle,
-                        icon: const Icon(Icons.my_location),
-                      ),
-                    ],
+                  child: Align(
+                    alignment: Alignment.centerLeft,
+                    child: IconButton(
+                      tooltip: 'Fermer',
+                      onPressed: () => Navigator.of(context).pop(),
+                      style: overlayButtonStyle,
+                      icon: const Icon(Icons.close),
+                    ),
                   ),
                 ),
               ),
@@ -446,6 +484,16 @@ class _CameraScreenState extends State<CameraScreen> {
                           ),
                         ),
                       ),
+                      if (_locationNeedsSettings) ...[
+                        const SizedBox(height: 8),
+                        TextButton(
+                          onPressed: AppSettings.openAppSettings,
+                          style: TextButton.styleFrom(
+                            foregroundColor: Colors.white,
+                          ),
+                          child: const Text('Ouvrir les réglages'),
+                        ),
+                      ],
                       const SizedBox(height: 16),
                       _ShutterButton(
                         onPressed: _canCapture ? _capturePhoto : null,
