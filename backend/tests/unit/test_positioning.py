@@ -216,3 +216,12 @@ def test_naive_capture_time_is_rejected():
                 0,
             ),
         )
+
+
+def test_extremely_large_height_is_rejected():
+    with pytest.raises(
+        InvalidPositioningInputError
+    ):
+        measurements(
+            camera_height_m=1e100,
+        )

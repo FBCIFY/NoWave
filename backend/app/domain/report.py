@@ -152,6 +152,87 @@ class Report:
             updated_at=now,
         )
 
+    @classmethod
+    def create_photo(
+        cls,
+        author_id: UUID,
+        client_report_id: UUID,
+        category: ReportCategory,
+        longitude: float,
+        latitude: float,
+        observed_at: datetime,
+        description: str | None = None,
+    ) -> "Report":
+        if observed_at.tzinfo is None or observed_at.utcoffset() is None:
+            raise InvalidObservedAtError(
+                "observed_at must include a timezone"
+            )
+
+        observed_at = observed_at.astimezone(UTC)
+        now = datetime.now(UTC)
+
+        if author_id is None:
+            raise ValueError(
+                "author_id is required"
+            )
+
+        if observed_at > now:
+            raise InvalidObservedAtError(
+                "observed_at cannot be in the future"
+            )
+
+        if observed_at < now - timedelta(hours=24):
+            raise InvalidObservedAtError(
+                "observed_at cannot be older than 24 hours"
+            )
+
+        return cls(
+            author_id=author_id,
+            client_report_id=client_report_id,
+            category=category,
+            longitude=longitude,
+            latitude=latitude,
+            observed_at=observed_at,
+            description=description,
+            positioning_mode=ReportPositioningMode.PHOTO,
+            status=ReportStatus.ACTIVE,
+            version=1,
+            created_at=now,
+            updated_at=now,
+        )
+
+    def matches_photo_creation(
+        self,
+        category: ReportCategory,
+        longitude: float,
+        latitude: float,
+        observed_at: datetime,
+        description: str | None,
+    ) -> bool:
+        if observed_at.tzinfo is None or observed_at.utcoffset() is None:
+            return False
+
+        try:
+            category = ReportCategory(
+                category
+            )
+        except ValueError:
+            return False
+
+        observed_at = observed_at.astimezone(
+            UTC
+        )
+
+        return (
+            self.positioning_mode
+            == ReportPositioningMode.PHOTO
+            and self.category == category
+            and self.longitude == longitude
+            and self.latitude == latitude
+            and self.observed_at == observed_at
+            and self.description == description
+        )
+
     def matches_manual_creation(
         self,
         category: ReportCategory,

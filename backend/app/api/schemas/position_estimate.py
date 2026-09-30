@@ -63,6 +63,7 @@ class PositionEstimateRequest(BaseModel):
 
     camera_height_m: FiniteFloat = Field(
         gt=0,
+        le=9999.99,
     )
 
     camera_height_source: str | None = Field(

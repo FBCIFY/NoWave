@@ -354,3 +354,31 @@ def test_suspended_user_returns_403(
         response.json()["error"]["code"]
         == "USER_INACTIVE"
     )
+
+
+def test_extremely_large_camera_height_returns_422(
+    monkeypatch,
+):
+    setup_user_repository(
+        monkeypatch,
+        user=active_user(),
+    )
+
+    app.dependency_overrides[
+        get_current_identity
+    ] = verified_identity
+
+    try:
+        client = TestClient(app)
+
+        response = client.post(
+            "/api/v1/position-estimates",
+            json=build_payload(
+                camera_height_m=1e100,
+            ),
+        )
+
+    finally:
+        app.dependency_overrides.clear()
+
+    assert response.status_code == 422
