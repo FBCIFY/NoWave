@@ -1,3 +1,5 @@
+import 'dart:typed_data';
+
 /// Mesures figées au moment de la photo. [toJson] donne l'objet `positioning`
 /// attendu par `POST /api/v1/position-estimates` et `POST /api/v1/reports`.
 class PhotoCaptureMeasurements {
@@ -43,11 +45,12 @@ class PhotoCaptureMeasurements {
   };
 }
 
-/// Photo prise et ses mesures. Gardée en mémoire tant que le parcours est
-/// ouvert : pas de brouillon ni de reprise automatique.
+/// Photo prête à l'envoi et ses mesures. Gardée en mémoire tant que le
+/// parcours est ouvert : pas de brouillon ni de reprise automatique.
 class PhotoCapture {
-  const PhotoCapture({required this.imagePath, required this.measurements});
+  const PhotoCapture({required this.jpegBytes, required this.measurements});
 
-  final String imagePath;
+  /// JPEG redressé, sans EXIF, d'au plus 500 000 octets.
+  final Uint8List jpegBytes;
   final PhotoCaptureMeasurements measurements;
 }

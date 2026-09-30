@@ -1,7 +1,9 @@
 import 'dart:async';
+import 'dart:io';
 
 import 'package:app_settings/app_settings.dart';
 import 'package:camera/camera.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:geolocator/geolocator.dart' as geo;
@@ -12,6 +14,7 @@ import '../../../core/sensors/device_orientation_service.dart';
 import '../../../core/sensors/camera_orientation.dart';
 import '../domain/capture_requirements.dart';
 import '../domain/photo_capture.dart';
+import '../domain/report_jpeg.dart';
 
 /// Photo d'un signalement (NW-115), ouverte depuis la carte : aperçu caméra
 /// plein écran, réticule central, position GPS et orientation du téléphone.
@@ -182,7 +185,8 @@ class _CameraScreenState extends State<CameraScreen> {
 
       final controller = CameraController(
         backCamera,
-        ResolutionPreset.medium,
+        // 1920 × 1080 : assez net pour reconnaître l'objet une fois réduit.
+        ResolutionPreset.veryHigh,
         enableAudio: false,
       );
 
@@ -296,12 +300,17 @@ class _CameraScreenState extends State<CameraScreen> {
 
     try {
       final photo = await controller.takePicture();
+      final originalBytes = await photo.readAsBytes();
+      await _deleteOriginalPhoto(photo.path);
+      // compute avec une fonction de haut niveau : une closure créée ici
+      // emporterait l'écran (this) vers l'autre isolate, ce qui est interdit.
+      final jpegBytes = await compute(prepareReportJpeg, originalBytes);
 
       if (!mounted) return;
 
       setState(() {
         _capture = PhotoCapture(
-          imagePath: photo.path,
+          jpegBytes: jpegBytes,
           measurements: measurements,
         );
       });
@@ -311,12 +320,28 @@ class _CameraScreenState extends State<CameraScreen> {
       setState(() {
         _captureError = 'Impossible de prendre la photo.';
       });
+    } on FormatException {
+      if (!mounted) return;
+
+      setState(() {
+        _captureError = 'Photo inutilisable. Reprenez-la.';
+      });
     } finally {
       if (mounted) {
         setState(() {
           _isCapturing = false;
         });
       }
+    }
+  }
+
+  /// L'original garde la position GPS dans ses EXIF : seule la version
+  /// nettoyée reste, en mémoire.
+  Future<void> _deleteOriginalPhoto(String path) async {
+    try {
+      await File(path).delete();
+    } on FileSystemException {
+      // Fichier temporaire de l'app : le système finira par le supprimer.
     }
   }
 
@@ -372,11 +397,14 @@ class _CameraScreenState extends State<CameraScreen> {
       return _captureError;
     }
 
-    final measurements = _capture?.measurements;
+    final capture = _capture;
 
-    if (measurements == null) {
+    if (capture == null) {
       return null;
     }
+
+    final measurements = capture.measurements;
+    final sizeKilobytes = (capture.jpegBytes.length / 1000).round();
 
     final measures = _measuresText(
       accuracyMeters: measurements.gpsAccuracyMeters,
@@ -384,7 +412,7 @@ class _CameraScreenState extends State<CameraScreen> {
       inclinationDegrees: measurements.inclinationDegrees,
     );
 
-    return 'Photo prise : $measures';
+    return 'Photo prise ($sizeKilobytes Ko) : $measures';
   }
 
   @override
@@ -400,6 +428,7 @@ class _CameraScreenState extends State<CameraScreen> {
   @override
   Widget build(BuildContext context) {
     final controller = _controller;
+    final capture = _capture;
     final lastCaptureStatus = _lastCaptureStatus();
     final overlayButtonStyle = IconButton.styleFrom(
       backgroundColor: Colors.black45,
@@ -495,9 +524,31 @@ class _CameraScreenState extends State<CameraScreen> {
                         ),
                       ],
                       const SizedBox(height: 16),
-                      _ShutterButton(
-                        onPressed: _canCapture ? _capturePhoto : null,
-                        isBusy: _isCapturing,
+                      SizedBox(
+                        height: 76,
+                        child: Stack(
+                          alignment: Alignment.center,
+                          children: [
+                            _ShutterButton(
+                              onPressed: _canCapture ? _capturePhoto : null,
+                              isBusy: _isCapturing,
+                            ),
+                            if (capture != null)
+                              Align(
+                                alignment: Alignment.centerLeft,
+                                child: ClipRRect(
+                                  borderRadius: BorderRadius.circular(8),
+                                  child: Image.memory(
+                                    capture.jpegBytes,
+                                    width: 56,
+                                    height: 56,
+                                    fit: BoxFit.cover,
+                                    gaplessPlayback: true,
+                                  ),
+                                ),
+                              ),
+                          ],
+                        ),
                       ),
                     ],
                   ),
