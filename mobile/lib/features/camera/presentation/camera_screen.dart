@@ -11,7 +11,7 @@ import '../../../core/sensors/device_orientation_service.dart';
 import '../../../core/sensors/camera_orientation.dart';
 import '../domain/capture_requirements.dart';
 
-/// Prototype NW-55, pas encore accessible depuis l'app : aperçu caméra,
+/// Photo d'un signalement (NW-115), ouverte depuis la carte : aperçu caméra,
 /// position GPS et orientation du téléphone.
 ///
 /// La photo n'est autorisée qu'avec une précision GPS d'au plus 50 m et une
@@ -362,7 +362,7 @@ class _CameraScreenState extends State<CameraScreen> {
     final controller = _controller;
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Prototype caméra')),
+      appBar: AppBar(title: const Text('Signalement photo')),
       body: Center(
         child: _cameraError != null
             ? Padding(

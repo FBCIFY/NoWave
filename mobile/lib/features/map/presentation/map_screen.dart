@@ -27,9 +27,15 @@ enum _MapOrientationMode { north, heading, manual }
 /// qu'on déplace dessous ; le point visé est recalculé à chaque mouvement.
 class MapScreen extends StatefulWidget {
   final VoidCallback? onOpenProfile;
+  final VoidCallback? onOpenCamera;
   final ManualReportService? reportService;
 
-  const MapScreen({super.key, this.onOpenProfile, this.reportService});
+  const MapScreen({
+    super.key,
+    this.onOpenProfile,
+    this.onOpenCamera,
+    this.reportService,
+  });
 
   @override
   State<MapScreen> createState() => _MapScreenState();
@@ -711,10 +717,28 @@ class _MapScreenState extends State<MapScreen> {
                 child: SafeArea(
                   top: false,
                   child: Center(
-                    child: _PoppingMapButton(
-                      tooltip: 'Créer un signalement',
-                      onPressed: _mapError == null ? _openReportComposer : null,
-                      icon: const Icon(Icons.add, size: 30),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        _PoppingMapButton(
+                          tooltip: 'Créer un signalement',
+                          onPressed: _mapError == null
+                              ? _openReportComposer
+                              : null,
+                          icon: const Icon(Icons.add, size: 30),
+                        ),
+                        if (widget.onOpenCamera != null) ...[
+                          const SizedBox(width: 16),
+                          _PoppingMapButton(
+                            tooltip: 'Signaler avec une photo',
+                            onPressed: widget.onOpenCamera,
+                            icon: const Icon(
+                              Icons.photo_camera_outlined,
+                              color: Color(0xFF243243),
+                            ),
+                          ),
+                        ],
+                      ],
                     ),
                   ),
                 ),

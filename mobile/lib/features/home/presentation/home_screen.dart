@@ -4,6 +4,7 @@ import '../../map/presentation/map_screen.dart';
 import '../../profile/domain/user_profile.dart';
 import '../../profile/presentation/profile_screen.dart';
 import '../../reports/data/manual_report_service.dart';
+import '../../camera/presentation/camera_screen.dart';
 import '../../../core/notifications/notification_permission.dart';
 
 /// Accueil après connexion : la carte, avec un bouton qui ouvre le profil.
@@ -25,6 +26,14 @@ class HomeScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     return MapScreen(
       reportService: reportService,
+      onOpenCamera: () {
+        Navigator.of(context).push(
+          MaterialPageRoute<void>(
+            fullscreenDialog: true,
+            builder: (_) => const CameraScreen(),
+          ),
+        );
+      },
       onOpenProfile:
           profile == null || onSignOut == null || onUpdatePreferences == null
           ? null
