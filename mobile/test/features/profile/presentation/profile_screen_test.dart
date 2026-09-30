@@ -6,6 +6,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:blueway/core/notifications/notification_permission.dart';
 
+import '../../../core/notifications/fake_notification_permission_service.dart';
+
 void main() {
   final profile = UserProfile(
     id: 'user-123',
@@ -326,32 +328,4 @@ void main() {
     expect(permissions.requestCalls, 0);
     expect(permissions.openSettingsCalls, 0);
   });
-}
-
-class FakeNotificationPermissionService
-    implements NotificationPermissionService {
-  NotificationPermission status;
-
-  FakeNotificationPermissionService([
-    this.status = NotificationPermission.notDetermined,
-  ]);
-
-  @override
-  Future<NotificationPermission> getStatus() async => status;
-
-  int requestCalls = 0;
-
-  @override
-  Future<NotificationPermission> request() async {
-    requestCalls++;
-    status = NotificationPermission.granted;
-    return status;
-  }
-
-  int openSettingsCalls = 0;
-
-  @override
-  Future<void> openSettings() async {
-    openSettingsCalls++;
-  }
 }
