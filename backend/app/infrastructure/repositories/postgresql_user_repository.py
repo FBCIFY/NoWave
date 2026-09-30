@@ -20,7 +20,7 @@ class PostgreSQLUserRepository(UserRepository):
                 notifications_enabled,
                 created_at,
                 updated_at
-            FROM blueway.users
+            FROM nowave.users
             WHERE firebase_uid = %s
         """
 
@@ -50,7 +50,7 @@ class PostgreSQLUserRepository(UserRepository):
                 notifications_enabled,
                 created_at,
                 updated_at
-            FROM blueway.users
+            FROM nowave.users
             WHERE username = %s
         """
 
@@ -66,7 +66,7 @@ class PostgreSQLUserRepository(UserRepository):
 
     def save(self, user: User) -> User:
         query = """
-            INSERT INTO blueway.users (
+            INSERT INTO nowave.users (
                 id,
                 firebase_uid,
                 username,
@@ -111,7 +111,7 @@ class PostgreSQLUserRepository(UserRepository):
 
     def update(self, user: User) -> User:
         query = """
-            UPDATE blueway.users
+            UPDATE nowave.users
             SET
                 username = %s,
                 date_of_birth = %s,
@@ -142,7 +142,7 @@ class PostgreSQLUserRepository(UserRepository):
 
     def delete(self, user: User) -> None:
         query = """
-            DELETE FROM blueway.users
+            DELETE FROM nowave.users
             WHERE id = %s
         """
 

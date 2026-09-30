@@ -54,7 +54,7 @@ def create_active_user():
     return User(
         firebase_uid="firebase-user",
         username="jonathan",
-        email="jonathan@blueway.test",
+        email="jonathan@nowave.test",
     )
 
 

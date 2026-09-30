@@ -46,7 +46,7 @@ class FakeReportRepository:
 def verified_identity():
     return {
         "uid": "firebase-user-123",
-        "email": "user@blueway.test",
+        "email": "user@nowave.test",
         "email_verified": True,
     }
 
@@ -75,7 +75,7 @@ def setup_repositories(monkeypatch):
     user = User(
         firebase_uid="firebase-user-123",
         username="Jonathan",
-        email="user@blueway.test",
+        email="user@nowave.test",
     )
 
     user_repository = FakeUserRepository(

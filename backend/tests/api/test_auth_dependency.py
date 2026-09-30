@@ -24,7 +24,7 @@ def test_valid_token_returns_identity(monkeypatch):
 
             return {
                 "uid": "firebase-user-123",
-                "email": "user@blueway.test",
+                "email": "user@nowave.test",
                 "email_verified": True,
             }
 

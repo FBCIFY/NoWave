@@ -68,7 +68,7 @@ def test_update_user_request_rejects_null_username():
 def test_update_user_request_rejects_unknown_field():
     with pytest.raises(ValidationError):
         UserUpdateRequest(
-            email="user@blueway.test",
+            email="user@nowave.test",
         )
 
 
@@ -76,7 +76,7 @@ def test_user_profile_response_from_user():
     user = User(
         firebase_uid="firebase-user-123",
         username="Jonathan",
-        email="jonathan@blueway.test",
+        email="jonathan@nowave.test",
         nationality="fr",
     )
 
@@ -93,7 +93,7 @@ def test_user_profile_response_does_not_expose_private_identity():
     user = User(
         firebase_uid="firebase-user-123",
         username="Jonathan",
-        email="jonathan@blueway.test",
+        email="jonathan@nowave.test",
     )
 
     response = UserProfileResponse.model_validate(user)

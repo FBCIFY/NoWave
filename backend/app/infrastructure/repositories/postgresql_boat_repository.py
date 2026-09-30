@@ -17,7 +17,7 @@ class PostgreSQLBoatRepository(BoatRepository):
                 flag_country,
                 created_at,
                 updated_at
-            FROM blueway.boats
+            FROM nowave.boats
             WHERE user_id = %s
         """
 
@@ -33,7 +33,7 @@ class PostgreSQLBoatRepository(BoatRepository):
 
     def save(self, boat: Boat) -> Boat:
         query = """
-            INSERT INTO blueway.boats (
+            INSERT INTO nowave.boats (
                 id,
                 user_id,
                 name,
@@ -71,7 +71,7 @@ class PostgreSQLBoatRepository(BoatRepository):
 
     def update(self, boat: Boat) -> Boat:
         query = """
-            UPDATE blueway.boats
+            UPDATE nowave.boats
             SET
                 name = %s,
                 boat_type = %s,
@@ -96,7 +96,7 @@ class PostgreSQLBoatRepository(BoatRepository):
 
     def delete(self, boat: Boat) -> None:
         query = """
-            DELETE FROM blueway.boats
+            DELETE FROM nowave.boats
             WHERE id = %s
         """
 
