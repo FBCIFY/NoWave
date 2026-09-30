@@ -32,7 +32,7 @@ class PostgreSQLReportRepository(ReportRepository):
                 created_at,
                 updated_at,
                 removed_at
-            FROM blueway.reports
+            FROM nowave.reports
             WHERE author_id = %s
               AND client_report_id = %s
         """
@@ -54,7 +54,7 @@ class PostgreSQLReportRepository(ReportRepository):
 
     def save(self, report: Report) -> Report:
         query = """
-            INSERT INTO blueway.reports (
+            INSERT INTO nowave.reports (
                 id,
                 author_id,
                 client_report_id,
