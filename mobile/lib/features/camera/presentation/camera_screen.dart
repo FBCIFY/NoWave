@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:convert';
 import 'dart:io';
 
 import 'package:app_settings/app_settings.dart';
@@ -397,15 +396,10 @@ class _CameraScreenState extends State<CameraScreen> {
 
   String _estimateErrorMessage(ApiException error) {
     if (error.statusCode == 422) {
-      try {
-        final body = jsonDecode(error.body);
-        if (body is Map &&
-            body['error']?['code'] == 'gps_precision_insufficient') {
-          return 'Précision GPS insuffisante. Reprenez la photo.';
-        }
-      } catch (_) {
-        // Réponse sans code d'erreur lisible : message générique ci-dessous.
+      if (error.code == 'gps_precision_insufficient') {
+        return 'Précision GPS insuffisante. Reprenez la photo.';
       }
+
       return 'Mesures refusées. Reprenez la photo.';
     }
 
