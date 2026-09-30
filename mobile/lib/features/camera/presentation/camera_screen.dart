@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:app_settings/app_settings.dart';
@@ -9,11 +10,14 @@ import 'package:flutter/services.dart';
 import 'package:geolocator/geolocator.dart' as geo;
 import 'package:precise_compass/precise_compass.dart';
 
+import '../../../core/api/api_exception.dart';
 import '../../../core/location/location_service.dart';
 import '../../../core/sensors/device_orientation_service.dart';
 import '../../../core/sensors/camera_orientation.dart';
+import '../data/position_estimate_service.dart';
 import '../domain/capture_requirements.dart';
 import '../domain/photo_capture.dart';
+import '../domain/photo_report_draft.dart';
 import '../domain/report_jpeg.dart';
 
 /// Photo d'un signalement (NW-115), ouverte depuis la carte : aperçu caméra
@@ -22,8 +26,13 @@ import '../domain/report_jpeg.dart';
 /// La photo n'est autorisée qu'avec une précision GPS d'au plus 50 m et une
 /// orientation complète (cap, tangage, roulis). Les mesures sont figées au
 /// moment de l'appui ; la photo reste en mémoire tant que l'écran est ouvert.
+///
+/// « Continuer » demande l'estimation au backend puis ferme l'écran en
+/// renvoyant un [PhotoReportDraft] à la carte.
 class CameraScreen extends StatefulWidget {
-  const CameraScreen({super.key});
+  const CameraScreen({super.key, required this.positionEstimateService});
+
+  final PositionEstimateService positionEstimateService;
 
   @override
   State<CameraScreen> createState() => _CameraScreenState();
@@ -43,6 +52,7 @@ class _CameraScreenState extends State<CameraScreen> {
   bool _isCapturing = false;
   String? _captureError;
   PhotoCapture? _capture;
+  bool _isEstimating = false;
   StreamSubscription<CompassReading>? _orientationSubscription;
   CompassReading? _orientation;
   String? _orientationError;
@@ -258,6 +268,7 @@ class _CameraScreenState extends State<CameraScreen> {
     return controller != null &&
         controller.value.isInitialized &&
         !_isCapturing &&
+        !_isEstimating &&
         _blockingReason() == null;
   }
 
@@ -333,6 +344,77 @@ class _CameraScreenState extends State<CameraScreen> {
         });
       }
     }
+  }
+
+  void _retakePhoto() {
+    if (_isEstimating) return;
+
+    setState(() {
+      _capture = null;
+      _captureError = null;
+    });
+  }
+
+  Future<void> _continueWithCapture() async {
+    final capture = _capture;
+
+    if (capture == null || _isCapturing || _isEstimating) return;
+
+    setState(() {
+      _isEstimating = true;
+      _captureError = null;
+    });
+
+    try {
+      final estimate = await widget.positionEstimateService.estimate(
+        capture.measurements,
+      );
+
+      if (!mounted) return;
+
+      Navigator.of(context)
+          .pop(PhotoReportDraft(capture: capture, estimate: estimate));
+    } on ApiException catch (error) {
+      if (!mounted) return;
+
+      setState(() {
+        _captureError = _estimateErrorMessage(error);
+      });
+    } catch (_) {
+      if (!mounted) return;
+
+      setState(() {
+        _captureError = 'Estimation impossible. Vérifiez votre connexion.';
+      });
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isEstimating = false;
+        });
+      }
+    }
+  }
+
+  String _estimateErrorMessage(ApiException error) {
+    if (error.statusCode == 422) {
+      try {
+        final body = jsonDecode(error.body);
+        if (body is Map &&
+            body['error']?['code'] == 'gps_precision_insufficient') {
+          return 'Précision GPS insuffisante. Reprenez la photo.';
+        }
+      } catch (_) {
+        // Réponse sans code d'erreur lisible : message générique ci-dessous.
+      }
+      return 'Mesures refusées. Reprenez la photo.';
+    }
+
+    return switch (error.statusCode) {
+      401 => 'Votre session a expiré. Reconnectez-vous.',
+      403 => 'Votre compte ne peut pas publier de signalement.',
+      404 => 'Estimation indisponible sur ce serveur.',
+      _ => 'Estimation impossible. Réessayez.',
+    };
   }
 
   /// L'original garde la position GPS dans ses EXIF : seule la version
@@ -460,7 +542,16 @@ class _CameraScreenState extends State<CameraScreen> {
                 child: CircularProgressIndicator(color: Colors.white),
               )
             else ...[
-              _FullScreenPreview(controller: controller),
+              // Photo prise : on la montre figée à la place de l'aperçu, pour
+              // vérifier ce qui a été visé avant de continuer.
+              if (capture != null)
+                Image.memory(
+                  capture.jpegBytes,
+                  fit: BoxFit.cover,
+                  gaplessPlayback: true,
+                )
+              else
+                _FullScreenPreview(controller: controller),
               const _Reticle(),
             ],
             Positioned(
@@ -505,7 +596,9 @@ class _CameraScreenState extends State<CameraScreen> {
                             vertical: 8,
                           ),
                           child: Text(
-                            lastCaptureStatus == null
+                            capture != null
+                                ? lastCaptureStatus!
+                                : lastCaptureStatus == null
                                 ? _liveStatus()
                                 : '${_liveStatus()}\n$lastCaptureStatus',
                             textAlign: TextAlign.center,
@@ -526,29 +619,18 @@ class _CameraScreenState extends State<CameraScreen> {
                       const SizedBox(height: 16),
                       SizedBox(
                         height: 76,
-                        child: Stack(
-                          alignment: Alignment.center,
-                          children: [
-                            _ShutterButton(
-                              onPressed: _canCapture ? _capturePhoto : null,
-                              isBusy: _isCapturing,
-                            ),
-                            if (capture != null)
-                              Align(
-                                alignment: Alignment.centerLeft,
-                                child: ClipRRect(
-                                  borderRadius: BorderRadius.circular(8),
-                                  child: Image.memory(
-                                    capture.jpegBytes,
-                                    width: 56,
-                                    height: 56,
-                                    fit: BoxFit.cover,
-                                    gaplessPlayback: true,
-                                  ),
+                        child: capture == null
+                            ? Center(
+                                child: _ShutterButton(
+                                  onPressed: _canCapture ? _capturePhoto : null,
+                                  isBusy: _isCapturing,
                                 ),
+                              )
+                            : _CaptureActions(
+                                isEstimating: _isEstimating,
+                                onRetake: _retakePhoto,
+                                onContinue: _continueWithCapture,
                               ),
-                          ],
-                        ),
                       ),
                     ],
                   ),
@@ -617,6 +699,66 @@ class _Reticle extends StatelessWidget {
           ),
         ),
       ),
+    );
+  }
+}
+
+/// Après la prise : reprendre la photo ou l'envoyer pour estimation. Le
+/// déclencheur est masqué pour qu'aucun bouton ne se superpose.
+class _CaptureActions extends StatelessWidget {
+  const _CaptureActions({
+    required this.isEstimating,
+    required this.onRetake,
+    required this.onContinue,
+  });
+
+  final bool isEstimating;
+  final VoidCallback onRetake;
+  final VoidCallback onContinue;
+
+  @override
+  Widget build(BuildContext context) {
+    const buttonSize = Size.fromHeight(52);
+
+    return Row(
+      children: [
+        Expanded(
+          child: OutlinedButton.icon(
+            onPressed: isEstimating ? null : onRetake,
+            style: OutlinedButton.styleFrom(
+              minimumSize: buttonSize,
+              foregroundColor: Colors.white,
+              backgroundColor: Colors.black45,
+              disabledForegroundColor: Colors.white38,
+              side: const BorderSide(color: Colors.white70),
+            ),
+            icon: const Icon(Icons.refresh),
+            label: const Text('Reprendre'),
+          ),
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: FilledButton(
+            onPressed: isEstimating ? null : onContinue,
+            style: FilledButton.styleFrom(
+              minimumSize: buttonSize,
+              backgroundColor: Colors.white,
+              foregroundColor: Colors.black,
+              disabledBackgroundColor: Colors.white70,
+              disabledForegroundColor: Colors.black54,
+            ),
+            child: isEstimating
+                ? const SizedBox.square(
+                    dimension: 20,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      color: Colors.black54,
+                    ),
+                  )
+                : const Text('Continuer'),
+          ),
+        ),
+      ],
     );
   }
 }

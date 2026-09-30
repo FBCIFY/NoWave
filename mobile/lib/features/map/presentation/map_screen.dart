@@ -12,6 +12,7 @@ import '../../../core/map/map_config.dart';
 import '../../../core/location/coordinate_formatter.dart';
 import '../../../core/location/location_service.dart';
 import '../../../core/sensors/device_orientation_service.dart';
+import '../../camera/domain/photo_report_draft.dart';
 import '../../reports/presentation/report_composer_sheet.dart';
 import '../../reports/data/manual_report_service.dart';
 import '../../reports/domain/manual_report.dart';
@@ -25,9 +26,13 @@ enum _MapOrientationMode { north, heading, manual }
 ///
 /// En mode signalement, le marqueur reste fixe à l'écran et c'est la carte
 /// qu'on déplace dessous ; le point visé est recalculé à chaque mouvement.
+/// Après une photo, le formulaire s'ouvre sur le point estimé, que
+/// l'utilisateur confirme ou corrige de la même façon.
 class MapScreen extends StatefulWidget {
   final VoidCallback? onOpenProfile;
-  final VoidCallback? onOpenCamera;
+
+  /// Ouvre la caméra ; renvoie null si l'utilisateur la ferme sans photo.
+  final Future<PhotoReportDraft?> Function()? onOpenCamera;
   final ManualReportService? reportService;
 
   const MapScreen({
@@ -65,6 +70,7 @@ class _MapScreenState extends State<MapScreen> {
   final ValueNotifier<Point?> _reportPoint = ValueNotifier(null);
   final Uuid _uuid = const Uuid();
   ManualReportRequest? _pendingReport;
+  PhotoReportDraft? _photoDraft;
   Timer? _reportPointTimer;
   int _reportPointRequest = 0;
   final _mapAreaKey = GlobalKey();
@@ -349,12 +355,42 @@ class _MapScreenState extends State<MapScreen> {
     }
   }
 
+  Future<void> _openCamera() async {
+    final draft = await widget.onOpenCamera?.call();
+    if (draft == null || !mounted) return;
+    await _waitForCoveringRouteToClose();
+    if (!mounted) return;
+    await _openReportComposer(photoDraft: draft);
+  }
+
+  // Le résultat de la caméra arrive dès le début de sa fermeture : on attend
+  // que la carte soit de nouveau visible pour que l'animation se voie.
+  Future<void> _waitForCoveringRouteToClose() async {
+    final animation = ModalRoute.of(context)?.secondaryAnimation;
+    if (animation == null || animation.isDismissed) return;
+    final closed = Completer<void>();
+    void listener(AnimationStatus status) {
+      if (status != AnimationStatus.dismissed) return;
+      animation.removeStatusListener(listener);
+      closed.complete();
+    }
+
+    animation.addStatusListener(listener);
+    await closed.future;
+  }
+
   // Ouvre le formulaire et mémorise la caméra pour la rétablir à la fermeture.
-  Future<void> _openReportComposer() async {
+  // Avec une photo, le point part de l'estimation plutôt que du GPS actuel.
+  Future<void> _openReportComposer({PhotoReportDraft? photoDraft}) async {
     if (_reportComposerOpen) return;
     final position = _position;
     final map = _mapboxMap;
-    if (position == null || map == null) {
+    final start = photoDraft != null
+        ? Position(photoDraft.initialLongitude, photoDraft.initialLatitude)
+        : position == null
+        ? null
+        : Position(position.longitude, position.latitude);
+    if (start == null || map == null) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text('Attendez que votre position GPS soit disponible.'),
@@ -376,37 +412,36 @@ class _MapScreenState extends State<MapScreen> {
       _restoreFollowAfterReport = _isFollowing;
       _reportComposerOpen = true;
       _pendingReport = null;
+      _photoDraft = photoDraft;
       _isFollowing = false;
-      _reportPoint.value = Point(
-        coordinates: Position(position.longitude, position.latitude),
-      );
-      _viewport = CameraViewportState(
-        center: camera.center,
-        zoom: camera.zoom,
-        pitch: camera.pitch,
-        bearing: camera.bearing,
-      );
+      _reportPoint.value = Point(coordinates: start);
     });
     unawaited(_positionMapOrnaments(map, editing: true));
+    unawaited(_setMapTiltEnabled(map, false));
     await WidgetsBinding.instance.endOfFrame;
     if (!mounted || !_reportComposerOpen) return;
     final reportPadding = _reportCameraPadding();
-    try {
-      await map.easeTo(
-        CameraOptions(
-          center: Point(
-            coordinates: Position(position.longitude, position.latitude),
-          ),
-          zoom: 14,
+    // Caméra déclarée plutôt qu'un easeTo : Mapbox la garde (carte à plat,
+    // point sur l'estimation) jusqu'à ce que l'utilisateur touche la carte,
+    // sans qu'une fin de suivi GPS puisse l'annuler en cours de route.
+    // Mapbox marks this animated viewport helper as experimental.
+    // ignore: experimental_member_use
+    setStateWithViewportAnimation(
+      () {
+        _viewport = CameraViewportState(
+          center: Point(coordinates: start),
+          // Plus près en mode photo : l'objet est souvent à quelques
+          // dizaines de mètres, et le point doit être ajusté finement.
+          zoom: photoDraft == null ? 14 : 16,
           pitch: 0,
           bearing: 0,
           padding: reportPadding,
-        ),
-        MapAnimationOptions(duration: 350),
-      );
-    } catch (_) {
-      // The report can still be placed by moving the existing map.
-    }
+        );
+      },
+      transition: const EasingViewportTransition(
+        duration: Duration(milliseconds: 350),
+      ),
+    );
     _scheduleReportPointUpdate();
   }
 
@@ -422,9 +457,17 @@ class _MapScreenState extends State<MapScreen> {
       _reportComposerOpen = false;
       _reportPoint.value = null;
       _pendingReport = null;
+      _photoDraft = null;
       _restoreFollowAfterReport = false;
+      // Rend la main à easeTo : la caméra du signalement ne doit plus
+      // s'imposer pendant la restauration.
+      _viewport = const IdleViewportState();
     });
-    if (map != null) unawaited(_positionMapOrnaments(map, editing: false));
+    if (map != null) {
+      unawaited(_positionMapOrnaments(map, editing: false));
+      unawaited(_setMapTiltEnabled(map, true));
+    }
+    await WidgetsBinding.instance.endOfFrame;
 
     if (map != null && camera != null) {
       try {
@@ -472,6 +515,7 @@ class _MapScreenState extends State<MapScreen> {
     final latitude = double.parse(
       point.coordinates.lat.toDouble().toStringAsFixed(6),
     );
+    final positioning = _photoDraft?.capture.measurements;
     // Même contenu qu'un envoi raté : on garde le même `client_report_id` pour
     // que le backend ne crée pas de doublon.
     final previous = _pendingReport;
@@ -482,6 +526,7 @@ class _MapScreenState extends State<MapScreen> {
               longitude: longitude,
               latitude: latitude,
               description: description,
+              positioning: positioning,
             )
         ? previous
         : ManualReportRequest(
@@ -489,8 +534,10 @@ class _MapScreenState extends State<MapScreen> {
             category: category,
             longitude: longitude,
             latitude: latitude,
-            observedAt: DateTime.now().toUtc(),
+            // En mode photo, l'observation date de la prise de vue.
+            observedAt: (positioning?.capturedAt ?? DateTime.now()).toUtc(),
             description: description,
+            positioning: positioning,
           );
     _pendingReport = request;
 
@@ -501,6 +548,18 @@ class _MapScreenState extends State<MapScreen> {
         .showSnackBar(const SnackBar(content: Text('Signalement publié.')));
   }
 
+  String? _photoHint() {
+    final draft = _photoDraft;
+    if (draft == null) return null;
+    final estimate = draft.estimate;
+    if (estimate == null) return 'Placez le point sur l’objet photographié';
+    final distance = estimate.distanceMeters;
+    final distanceText = distance < 1000
+        ? '${distance.round()} m'
+        : '${(distance / 1000).toStringAsFixed(1).replaceAll('.', ',')} km';
+    return 'Estimé à $distanceText · ajustez si besoin';
+  }
+
   void _scheduleReportPointUpdate() {
     if (!_reportComposerOpen || _reportPointTimer?.isActive == true) return;
     _reportPointTimer = Timer(
@@ -509,20 +568,32 @@ class _MapScreenState extends State<MapScreen> {
     );
   }
 
-  MbxEdgeInsets _reportCameraPadding() {
+  // En signalement, la carte reste à plat : inclinée, elle déformerait les
+  // distances autour du point à placer.
+  Future<void> _setMapTiltEnabled(MapboxMap map, bool enabled) async {
+    try {
+      await map.gestures.updateSettings(
+        GesturesSettings(pitchEnabled: enabled),
+      );
+    } catch (_) {
+      // Tilt stays available if gesture settings are unavailable.
+    }
+  }
+
+  EdgeInsets _reportCameraPadding() {
     final mapBox = _mapAreaKey.currentContext?.findRenderObject() as RenderBox?;
     final markerBox =
         _reportMarkerKey.currentContext?.findRenderObject() as RenderBox?;
     if (mapBox == null || markerBox == null) {
-      return MbxEdgeInsets(top: 0, left: 0, bottom: 0, right: 0);
+      return EdgeInsets.zero;
     }
     final localCenter = mapBox.globalToLocal(_markerTipGlobal(markerBox));
     final delta = localCenter - mapBox.size.center(Offset.zero);
-    return MbxEdgeInsets(
-      top: math.max(0, delta.dy * 2),
-      left: math.max(0, delta.dx * 2),
-      bottom: math.max(0, -delta.dy * 2),
-      right: math.max(0, -delta.dx * 2),
+    return EdgeInsets.fromLTRB(
+      math.max(0, delta.dx * 2),
+      math.max(0, delta.dy * 2),
+      math.max(0, -delta.dx * 2),
+      math.max(0, -delta.dy * 2),
     );
   }
 
@@ -731,7 +802,9 @@ class _MapScreenState extends State<MapScreen> {
                           const SizedBox(width: 16),
                           _PoppingMapButton(
                             tooltip: 'Signaler avec une photo',
-                            onPressed: widget.onOpenCamera,
+                            onPressed: _mapError == null
+                                ? () => unawaited(_openCamera())
+                                : null,
                             icon: const Icon(
                               Icons.photo_camera_outlined,
                               color: Color(0xFF243243),
@@ -870,6 +943,8 @@ class _MapScreenState extends State<MapScreen> {
                 right: 0,
                 bottom: 0,
                 child: ReportComposerSheet(
+                  photo: _photoDraft?.capture.jpegBytes,
+                  subtitle: _photoHint(),
                   onClose: () => unawaited(_closeReportComposer()),
                   onPublish: widget.reportService == null
                       ? null

@@ -3,6 +3,7 @@ import 'package:blueway/features/reports/domain/manual_report.dart';
 import 'package:blueway/core/api/api_exception.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:image/image.dart' as img;
 
 void main() {
   testWidgets('garde le texte et le focus quand le clavier masque le repère', (
@@ -131,6 +132,34 @@ void main() {
       find.text('Ce signalement a changé depuis le premier envoi.'),
       findsNothing,
     );
+  });
+
+  testWidgets('affiche la photo et l’estimation dans l’en-tête', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(390, 844);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: Align(
+            alignment: Alignment.bottomCenter,
+            child: ReportComposerSheet(
+              onClose: _noop,
+              photo: img.encodeJpg(img.Image(width: 4, height: 4)),
+              subtitle: 'Estimé à 120 m · ajustez si besoin',
+            ),
+          ),
+        ),
+      ),
+    );
+
+    expect(find.byType(Image), findsOneWidget);
+    expect(find.text('Nouveau signalement'), findsOneWidget);
+    expect(find.text('Estimé à 120 m · ajustez si besoin'), findsOneWidget);
   });
 }
 

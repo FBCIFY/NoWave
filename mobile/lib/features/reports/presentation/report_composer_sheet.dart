@@ -1,5 +1,6 @@
 import 'dart:math' as math;
 import 'dart:convert';
+import 'dart:typed_data';
 import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
@@ -9,12 +10,21 @@ import '../domain/manual_report.dart';
 
 /// Panneau du bas en mode signalement : catégorie, commentaire facultatif
 /// (250 caractères max) et bouton Publier. L'envoi est fait par `MapScreen`.
+/// En mode photo, la miniature et [subtitle] s'affichent dans l'en-tête.
 class ReportComposerSheet extends StatefulWidget {
-  const ReportComposerSheet({super.key, required this.onClose, this.onPublish});
+  const ReportComposerSheet({
+    super.key,
+    required this.onClose,
+    this.onPublish,
+    this.photo,
+    this.subtitle,
+  });
 
   final VoidCallback onClose;
   final Future<void> Function(ReportCategory category, String? description)?
   onPublish;
+  final Uint8List? photo;
+  final String? subtitle;
 
   /// Hauteur du panneau, utilisée par la carte pour placer le marqueur.
   static double heightFor(MediaQueryData mediaQuery) {
@@ -95,6 +105,8 @@ class _ReportComposerSheetState extends State<ReportComposerSheet> {
   @override
   Widget build(BuildContext context) {
     final mediaQuery = MediaQuery.of(context);
+    final photo = widget.photo;
+    final subtitle = widget.subtitle;
 
     return Padding(
       padding: EdgeInsets.fromLTRB(
@@ -126,16 +138,45 @@ class _ReportComposerSheetState extends State<ReportComposerSheet> {
                   padding: const EdgeInsets.fromLTRB(16, 6, 12, 6),
                   child: Row(
                     children: [
-                      const Expanded(
-                        child: Text(
-                          'Nouveau signalement',
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: TextStyle(
-                            color: Color(0xFF243243),
-                            fontSize: 18,
-                            fontWeight: FontWeight.w600,
+                      if (photo != null) ...[
+                        ClipRRect(
+                          borderRadius: BorderRadius.circular(8),
+                          child: Image.memory(
+                            photo,
+                            width: 44,
+                            height: 44,
+                            fit: BoxFit.cover,
+                            gaplessPlayback: true,
                           ),
+                        ),
+                        const SizedBox(width: 12),
+                      ],
+                      Expanded(
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Text(
+                              'Nouveau signalement',
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(
+                                color: Color(0xFF243243),
+                                fontSize: 18,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                            if (subtitle != null)
+                              Text(
+                                subtitle,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: const TextStyle(
+                                  color: Color(0xFF687789),
+                                  fontSize: 12,
+                                ),
+                              ),
+                          ],
                         ),
                       ),
                       IconButton(
