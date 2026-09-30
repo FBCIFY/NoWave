@@ -2,21 +2,22 @@ import 'dart:async';
 
 import 'package:camera/camera.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:geolocator/geolocator.dart' as geo;
 import 'package:precise_compass/precise_compass.dart';
 
 import '../../../core/location/location_service.dart';
-import '../../../core/location/coordinate_formatter.dart';
 import '../../../core/sensors/device_orientation_service.dart';
 import '../../../core/sensors/camera_orientation.dart';
 import '../domain/capture_requirements.dart';
+import '../domain/photo_capture.dart';
 
-/// Photo d'un signalement (NW-115), ouverte depuis la carte : aperçu caméra,
-/// position GPS et orientation du téléphone.
+/// Photo d'un signalement (NW-115), ouverte depuis la carte : aperçu caméra
+/// plein écran, réticule central, position GPS et orientation du téléphone.
 ///
 /// La photo n'est autorisée qu'avec une précision GPS d'au plus 50 m et une
-/// orientation complète (cap, tangage, roulis). Elle n'est ni enregistrée ni
-/// envoyée pour l'instant.
+/// orientation complète (cap, tangage, roulis). Les mesures sont figées au
+/// moment de l'appui ; la photo reste en mémoire tant que l'écran est ouvert.
 class CameraScreen extends StatefulWidget {
   const CameraScreen({super.key});
 
@@ -34,7 +35,8 @@ class _CameraScreenState extends State<CameraScreen> {
   CameraController? _controller;
   String? _cameraError;
   bool _isCapturing = false;
-  String? _captureStatus;
+  String? _captureError;
+  PhotoCapture? _capture;
   StreamSubscription<CompassReading>? _orientationSubscription;
   CompassReading? _orientation;
   String? _orientationError;
@@ -42,6 +44,8 @@ class _CameraScreenState extends State<CameraScreen> {
   @override
   void initState() {
     super.initState();
+    // L'aperçu plein écran et le calcul de l'inclinaison supposent le portrait.
+    SystemChrome.setPreferredOrientations([DeviceOrientation.portraitUp]);
     _initializeCamera();
     _loadPosition();
     _listenToOrientation();
@@ -146,6 +150,12 @@ class _CameraScreenState extends State<CameraScreen> {
         return;
       }
 
+      // L'interface reste en portrait : sans ce verrou, le plugin tourne
+      // l'aperçu quand on met le téléphone à l'horizontale.
+      await controller.lockCaptureOrientation(DeviceOrientation.portraitUp);
+
+      if (!mounted) return;
+
       setState(() {});
     } on CameraException catch (error) {
       if (!mounted) return;
@@ -156,105 +166,106 @@ class _CameraScreenState extends State<CameraScreen> {
     }
   }
 
-  bool get _canCapture {
-    final controller = _controller;
-    final position = _position;
-    final orientation = _orientation;
-
-    final orientationAvailable =
-        orientation != null &&
-        orientation.headingTrue != null &&
-        orientation.pitch != null &&
-        orientation.roll != null;
-
-    return controller != null &&
-        controller.value.isInitialized &&
-        !_isLocating &&
-        _locationError == null &&
-        position != null &&
-        isCaptureGpsAccuracySufficient(position.accuracy) &&
-        orientationAvailable &&
-        !_isCapturing;
-  }
-
-  String _captureRequirementStatus() {
-    final position = _position;
-    final orientation = _orientation;
-
+  /// Ce qui empêche encore la photo, ou `null` si tout est prêt.
+  String? _blockingReason() {
     if (_isLocating) {
-      return 'Capture bloquée : recherche GPS en cours.';
+      return 'Recherche de la position GPS…';
     }
 
     if (_locationError != null) {
-      return 'Capture bloquée : ${_locationError!}';
+      return _locationError;
     }
 
+    final position = _position;
+
     if (position == null) {
-      return 'Capture bloquée : position GPS indisponible.';
+      return 'Position GPS indisponible.';
     }
 
     if (!isCaptureGpsAccuracySufficient(position.accuracy)) {
-      return 'Capture bloquée : précision GPS supérieure à '
-          '${maxCaptureGpsAccuracyMeters.toStringAsFixed(0)} m.';
+      return 'Précision GPS insuffisante : '
+          '±${position.accuracy.toStringAsFixed(0)} m '
+          '(${maxCaptureGpsAccuracyMeters.toStringAsFixed(0)} m max).';
     }
+
+    if (_orientationError != null) {
+      return _orientationError;
+    }
+
+    final orientation = _orientation;
 
     if (orientation == null ||
         orientation.headingTrue == null ||
         orientation.pitch == null ||
         orientation.roll == null) {
-      return 'Capture bloquée : orientation du téléphone indisponible.';
+      return 'Recherche de l’orientation…';
     }
 
-    return 'Capture autorisée : GPS et orientation disponibles.';
+    return null;
+  }
+
+  bool get _canCapture {
+    final controller = _controller;
+
+    return controller != null &&
+        controller.value.isInitialized &&
+        !_isCapturing &&
+        _blockingReason() == null;
   }
 
   Future<void> _capturePhoto() async {
     final controller = _controller;
     final position = _position;
-    final orientation = _orientation;
+    final heading = _orientation?.headingTrue;
+    final pitch = _orientation?.pitch;
+    final roll = _orientation?.roll;
 
-    if (controller == null || position == null || orientation == null) {
+    if (!_canCapture ||
+        controller == null ||
+        position == null ||
+        heading == null ||
+        pitch == null ||
+        roll == null) {
       return;
     }
 
-    final heading = orientation.headingTrue;
-    final pitch = orientation.pitch;
-    final roll = orientation.roll;
-
-    if (!_canCapture || heading == null || pitch == null || roll == null) {
-      return;
-    }
-
-    final inclination = calculateCameraInclinationDegrees(
-      pitchDegrees: pitch,
-      rollDegrees: roll,
+    // Figées avant takePicture : c'est ce que l'utilisateur vise à l'appui.
+    final measurements = PhotoCaptureMeasurements(
+      observerLongitude: position.longitude,
+      observerLatitude: position.latitude,
+      gpsAccuracyMeters: position.accuracy,
+      azimuthDegrees: heading,
+      inclinationDegrees: calculateCameraInclinationDegrees(
+        pitchDegrees: pitch,
+        rollDegrees: roll,
+      ),
+      cameraHeightMeters: defaultCameraHeightMeters,
+      cameraHeightSource: defaultCameraHeightSource,
+      cameraHeightUncertaintyMeters: defaultCameraHeightUncertaintyMeters,
+      capturedAt: DateTime.now(),
     );
 
     setState(() {
       _isCapturing = true;
-      _captureStatus = null;
+      _captureError = null;
     });
 
     try {
-      await controller.takePicture();
+      final photo = await controller.takePicture();
 
       if (!mounted) return;
 
       setState(() {
-        _captureStatus =
-            'Photo capturée.\n'
-            'GPS : ${formatDms(position.latitude, isLatitude: true)}, '
-            '${formatDms(position.longitude, isLatitude: false)} '
-            '(±${position.accuracy.toStringAsFixed(1)} m)\n'
-            '${_altitudeStatus(position)}\n'
-            'Azimut nord vrai : ${heading.toStringAsFixed(1)}°\n'
-            'Inclinaison : ${inclination.toStringAsFixed(1)}°';
+        _capture = PhotoCapture(
+          imagePath: photo.path,
+          measurements: measurements,
+        );
       });
     } on CameraException {
       if (!mounted) return;
 
       setState(() {
-        _captureStatus = 'Impossible de prendre la photo.';
+        _captureError = 'Impossible de prendre la photo.';
       });
     } finally {
       if (mounted) {
@@ -276,82 +287,65 @@ class _CameraScreenState extends State<CameraScreen> {
     return 'Impossible d’ouvrir la caméra.';
   }
 
-  String _orientationStatus() {
-    if (_orientationError != null) {
-      return _orientationError!;
-    }
-
-    final orientation = _orientation;
-
-    if (orientation == null) {
-      return 'Recherche de l’orientation…';
-    }
-
-    final trueHeading = orientation.headingTrue;
-    final pitch = orientation.pitch;
-    final roll = orientation.roll;
-
-    final headingText = trueHeading == null
-        ? 'Azimut nord vrai : indisponible'
-        : 'Azimut nord vrai : ${trueHeading.toStringAsFixed(1)}°';
-
-    final inclination = pitch == null || roll == null
-        ? null
-        : calculateCameraInclinationDegrees(
-            pitchDegrees: pitch,
-            rollDegrees: roll,
-          );
-
-    final inclinationText = inclination == null
-        ? 'Inclinaison de visée : indisponible'
-        : 'Inclinaison de visée : ${inclination.toStringAsFixed(1)}°';
-
-    final calibrationText = orientation.shouldCalibrate
-        ? '\nCalibration de la boussole recommandée.'
-        : '';
-
-    return '$headingText\n$inclinationText$calibrationText';
+  String _measuresText({
+    required double accuracyMeters,
+    required double headingDegrees,
+    required double inclinationDegrees,
+  }) {
+    return '±${accuracyMeters.toStringAsFixed(0)} m · '
+        'cap ${headingDegrees.toStringAsFixed(0)}° · '
+        'inclinaison ${inclinationDegrees.toStringAsFixed(0)}°';
   }
 
-  String _altitudeStatus(geo.Position position) {
-    if (!position.hasAltitude) {
-      return 'Altitude système : indisponible';
+  String _liveStatus() {
+    final blockingReason = _blockingReason();
+
+    if (blockingReason != null) {
+      return blockingReason;
     }
 
-    final altitude = position.altitude.toStringAsFixed(1);
+    final position = _position!;
+    final orientation = _orientation!;
+    final measures = _measuresText(
+      accuracyMeters: position.accuracy,
+      headingDegrees: orientation.headingTrue!,
+      inclinationDegrees: calculateCameraInclinationDegrees(
+        pitchDegrees: orientation.pitch!,
+        rollDegrees: orientation.roll!,
+      ),
+    );
 
-    if (!position.hasAltitudeAccuracy || position.altitudeAccuracy <= 0) {
-      return 'Altitude système : $altitude m '
-          '(précision inconnue)';
+    if (orientation.shouldCalibrate) {
+      return '$measures\n'
+          'Calibrez la boussole : dessinez un 8 avec le téléphone.';
     }
 
-    return 'Altitude système : $altitude m '
-        '(±${position.altitudeAccuracy.toStringAsFixed(1)} m)';
+    return measures;
   }
 
-  String _locationStatus() {
-    if (_isLocating) {
-      return 'Recherche de la position GPS…';
+  String? _lastCaptureStatus() {
+    if (_captureError != null) {
+      return _captureError;
     }
 
-    if (_locationError != null) {
-      return _locationError!;
+    final measurements = _capture?.measurements;
+
+    if (measurements == null) {
+      return null;
     }
 
-    final position = _position;
+    final measures = _measuresText(
+      accuracyMeters: measurements.gpsAccuracyMeters,
+      headingDegrees: measurements.azimuthDegrees,
+      inclinationDegrees: measurements.inclinationDegrees,
+    );
 
-    if (position == null) {
-      return 'Position GPS indisponible.';
-    }
-
-    return 'Latitude : ${formatDms(position.latitude, isLatitude: true)}\n'
-        'Longitude : ${formatDms(position.longitude, isLatitude: false)}\n'
-        'Précision : ±${position.accuracy.toStringAsFixed(1)} m\n'
-        '${_altitudeStatus(position)}';
+    return 'Photo prise : $measures';
   }
 
   @override
   void dispose() {
+    SystemChrome.setPreferredOrientations(const []);
     _orientationSubscription?.cancel();
     _controller?.dispose();
     super.dispose();
@@ -360,75 +354,211 @@ class _CameraScreenState extends State<CameraScreen> {
   @override
   Widget build(BuildContext context) {
     final controller = _controller;
+    final lastCaptureStatus = _lastCaptureStatus();
+    final overlayButtonStyle = IconButton.styleFrom(
+      backgroundColor: Colors.black45,
+      foregroundColor: Colors.white,
+      disabledBackgroundColor: Colors.black26,
+      disabledForegroundColor: Colors.white38,
+    );
 
-    return Scaffold(
-      appBar: AppBar(title: const Text('Signalement photo')),
-      body: Center(
-        child: _cameraError != null
-            ? Padding(
-                padding: const EdgeInsets.all(24),
-                child: Text(_cameraError!, textAlign: TextAlign.center),
+    return AnnotatedRegion<SystemUiOverlayStyle>(
+      value: SystemUiOverlayStyle.light,
+      child: Scaffold(
+        backgroundColor: Colors.black,
+        body: Stack(
+          fit: StackFit.expand,
+          children: [
+            if (_cameraError != null)
+              Center(
+                child: Padding(
+                  padding: const EdgeInsets.all(24),
+                  child: Text(
+                    _cameraError!,
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(color: Colors.white),
+                  ),
+                ),
               )
-            : controller == null || !controller.value.isInitialized
-            ? const CircularProgressIndicator()
-            : Stack(
-                fit: StackFit.expand,
-                children: [
-                  CameraPreview(controller),
-                  Positioned(
-                    left: 16,
-                    right: 16,
-                    bottom: 16,
-                    child: SafeArea(
-                      child: Card(
+            else if (controller == null || !controller.value.isInitialized)
+              const Center(
+                child: CircularProgressIndicator(color: Colors.white),
+              )
+            else ...[
+              _FullScreenPreview(controller: controller),
+              const _Reticle(),
+            ],
+            Positioned(
+              top: 0,
+              left: 0,
+              right: 0,
+              child: SafeArea(
+                bottom: false,
+                child: Padding(
+                  padding: const EdgeInsets.all(8),
+                  child: Row(
+                    children: [
+                      IconButton(
+                        tooltip: 'Fermer',
+                        onPressed: () => Navigator.of(context).pop(),
+                        style: overlayButtonStyle,
+                        icon: const Icon(Icons.close),
+                      ),
+                      const Spacer(),
+                      IconButton(
+                        tooltip: 'Actualiser la position',
+                        onPressed: _isLocating ? null : _loadPosition,
+                        style: overlayButtonStyle,
+                        icon: const Icon(Icons.my_location),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+            Positioned(
+              left: 0,
+              right: 0,
+              bottom: 0,
+              child: SafeArea(
+                top: false,
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      DecoratedBox(
+                        decoration: BoxDecoration(
+                          color: Colors.black54,
+                          borderRadius: BorderRadius.circular(12),
+                        ),
                         child: Padding(
-                          padding: const EdgeInsets.all(12),
-                          child: Column(
-                            mainAxisSize: MainAxisSize.min,
-                            crossAxisAlignment: CrossAxisAlignment.stretch,
-                            children: [
-                              Row(
-                                children: [
-                                  Expanded(child: Text(_locationStatus())),
-                                  IconButton(
-                                    onPressed: _isLocating
-                                        ? null
-                                        : _loadPosition,
-                                    tooltip: 'Actualiser la position',
-                                    icon: const Icon(Icons.refresh),
-                                  ),
-                                ],
-                              ),
-                              const Divider(),
-                              Text(_orientationStatus()),
-                              const SizedBox(height: 8),
-                              Text(_captureRequirementStatus()),
-                              if (_captureStatus != null) ...[
-                                const SizedBox(height: 8),
-                                Text(_captureStatus!),
-                              ],
-                              const SizedBox(height: 12),
-                              FilledButton.icon(
-                                onPressed: _canCapture ? _capturePhoto : null,
-                                icon: _isCapturing
-                                    ? const SizedBox(
-                                        width: 18,
-                                        height: 18,
-                                        child: CircularProgressIndicator(
-                                          strokeWidth: 2,
-                                        ),
-                                      )
-                                    : const Icon(Icons.camera_alt),
-                                label: const Text('Capturer'),
-                              ),
-                            ],
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 12,
+                            vertical: 8,
+                          ),
+                          child: Text(
+                            lastCaptureStatus == null
+                                ? _liveStatus()
+                                : '${_liveStatus()}\n$lastCaptureStatus',
+                            textAlign: TextAlign.center,
+                            style: const TextStyle(color: Colors.white),
                           ),
                         ),
                       ),
-                    ),
+                      const SizedBox(height: 16),
+                      _ShutterButton(
+                        onPressed: _canCapture ? _capturePhoto : null,
+                        isBusy: _isCapturing,
+                      ),
+                    ],
                   ),
-                ],
+                ),
               ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// Aperçu recadré pour remplir l'écran. Le recadrage est centré : le réticule
+/// vise le centre de la photo, qui montre un peu plus que l'aperçu.
+class _FullScreenPreview extends StatelessWidget {
+  const _FullScreenPreview({required this.controller});
+
+  final CameraController controller;
+
+  @override
+  Widget build(BuildContext context) {
+    final previewSize = controller.value.previewSize;
+
+    if (previewSize == null) {
+      return CameraPreview(controller);
+    }
+
+    // previewSize est donné en paysage : largeur et hauteur sont inversées.
+    return ClipRect(
+      child: FittedBox(
+        fit: BoxFit.cover,
+        child: SizedBox(
+          width: previewSize.height,
+          height: previewSize.width,
+          child: CameraPreview(controller),
+        ),
+      ),
+    );
+  }
+}
+
+/// Réticule central : l'objet signalé doit être visé au centre de l'image.
+class _Reticle extends StatelessWidget {
+  const _Reticle();
+
+  @override
+  Widget build(BuildContext context) {
+    return IgnorePointer(
+      child: Center(
+        child: Container(
+          width: 64,
+          height: 64,
+          alignment: Alignment.center,
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            border: Border.all(color: Colors.white, width: 2),
+          ),
+          child: Container(
+            width: 6,
+            height: 6,
+            decoration: const BoxDecoration(
+              color: Colors.white,
+              shape: BoxShape.circle,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _ShutterButton extends StatelessWidget {
+  const _ShutterButton({required this.onPressed, required this.isBusy});
+
+  final VoidCallback? onPressed;
+  final bool isBusy;
+
+  @override
+  Widget build(BuildContext context) {
+    final enabled = onPressed != null;
+
+    return Semantics(
+      button: true,
+      enabled: enabled,
+      label: 'Prendre la photo',
+      child: GestureDetector(
+        onTap: onPressed,
+        child: Container(
+          width: 76,
+          height: 76,
+          padding: const EdgeInsets.all(5),
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            border: Border.all(color: Colors.white, width: 4),
+          ),
+          child: DecoratedBox(
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              color: enabled ? Colors.white : Colors.white38,
+            ),
+            child: isBusy
+                ? const Padding(
+                    padding: EdgeInsets.all(18),
+                    child: CircularProgressIndicator(strokeWidth: 3),
+                  )
+                : null,
+          ),
+        ),
       ),
     );
   }
