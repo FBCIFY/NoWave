@@ -71,6 +71,9 @@ class _MapScreenState extends State<MapScreen> {
   final Uuid _uuid = const Uuid();
   ManualReportRequest? _pendingReport;
   PhotoReportDraft? _photoDraft;
+  // Signalement photo publié dont le JPEG n'est pas encore envoyé.
+  String? _publishedReportId;
+  bool _isUploadingPhoto = false;
   Timer? _reportPointTimer;
   int _reportPointRequest = 0;
   final _mapAreaKey = GlobalKey();
@@ -458,6 +461,7 @@ class _MapScreenState extends State<MapScreen> {
       _reportPoint.value = null;
       _pendingReport = null;
       _photoDraft = null;
+      _publishedReportId = null;
       _restoreFollowAfterReport = false;
       // Rend la main à easeTo : la caméra du signalement ne doit plus
       // s'imposer pendant la restauration.
@@ -541,11 +545,52 @@ class _MapScreenState extends State<MapScreen> {
           );
     _pendingReport = request;
 
-    await service.createReport(request);
+    final reportId = await service.createReport(request);
     if (!mounted || !_reportComposerOpen) return;
+    if (_photoDraft != null) {
+      // Le formulaire reste ouvert : il enchaîne avec l'envoi de la photo.
+      _publishedReportId = reportId;
+      return;
+    }
     unawaited(_closeReportComposer());
     ScaffoldMessenger.of(context)
         .showSnackBar(const SnackBar(content: Text('Signalement publié.')));
+  }
+
+  Future<void> _uploadReportPhoto() async {
+    final service = widget.reportService;
+    final reportId = _publishedReportId;
+    final draft = _photoDraft;
+    if (service == null || reportId == null || draft == null) {
+      throw StateError('Signalement photo introuvable.');
+    }
+
+    _isUploadingPhoto = true;
+    try {
+      await service.uploadPhoto(
+        reportId: reportId,
+        jpegBytes: draft.capture.jpegBytes,
+      );
+    } finally {
+      _isUploadingPhoto = false;
+    }
+    if (!mounted || !_reportComposerOpen) return;
+    unawaited(_closeReportComposer());
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Signalement publié avec sa photo.')),
+    );
+  }
+
+  // Le JPEG n'est gardé que pendant ce parcours : fermer après la publication
+  // abandonne la photo, le signalement reste publié.
+  void _leaveReportComposer() {
+    if (_isUploadingPhoto) return;
+    final publishedWithoutPhoto = _publishedReportId != null;
+    unawaited(_closeReportComposer());
+    if (!publishedWithoutPhoto) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Signalement publié sans photo.')),
+    );
   }
 
   String? _photoHint() {
@@ -670,9 +715,7 @@ class _MapScreenState extends State<MapScreen> {
     return PopScope(
       canPop: !_reportComposerOpen,
       onPopInvokedWithResult: (didPop, _) {
-        if (!didPop && _reportComposerOpen) {
-          unawaited(_closeReportComposer());
-        }
+        if (!didPop && _reportComposerOpen) _leaveReportComposer();
       },
       child: Scaffold(
         resizeToAvoidBottomInset: false,
@@ -945,10 +988,14 @@ class _MapScreenState extends State<MapScreen> {
                 child: ReportComposerSheet(
                   photo: _photoDraft?.capture.jpegBytes,
                   subtitle: _photoHint(),
-                  onClose: () => unawaited(_closeReportComposer()),
+                  onClose: _leaveReportComposer,
                   onPublish: widget.reportService == null
                       ? null
                       : _publishReport,
+                  onUploadPhoto:
+                      widget.reportService == null || _photoDraft == null
+                      ? null
+                      : _uploadReportPhoto,
                 ),
               ),
             ],

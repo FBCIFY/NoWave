@@ -9,12 +9,15 @@ import '../domain/manual_report.dart';
 
 /// Panneau du bas en mode signalement : catégorie, commentaire facultatif
 /// (250 caractères max) et bouton Publier. L'envoi est fait par `MapScreen`.
-/// En mode photo, la miniature et [subtitle] s'affichent dans l'en-tête.
+/// En mode photo, la miniature et [subtitle] s'affichent dans l'en-tête, et
+/// [onUploadPhoto] envoie le JPEG une fois le signalement publié. En cas
+/// d'échec, l'utilisateur peut réessayer ou terminer sans photo.
 class ReportComposerSheet extends StatefulWidget {
   const ReportComposerSheet({
     super.key,
     required this.onClose,
     this.onPublish,
+    this.onUploadPhoto,
     this.photo,
     this.subtitle,
   });
@@ -22,6 +25,7 @@ class ReportComposerSheet extends StatefulWidget {
   final VoidCallback onClose;
   final Future<void> Function(ReportCategory category, String? description)?
   onPublish;
+  final Future<void> Function()? onUploadPhoto;
   final Uint8List? photo;
   final String? subtitle;
 
@@ -44,7 +48,11 @@ class _ReportComposerSheetState extends State<ReportComposerSheet> {
   final _commentController = TextEditingController();
   ReportCategory? _category;
   bool _isSubmitting = false;
+  bool _isPublished = false;
+  bool _isUploadingPhoto = false;
   String? _errorMessage;
+
+  bool get _isBusy => _isSubmitting || _isUploadingPhoto;
 
   Future<void> _publish() async {
     final category = _category;
@@ -64,13 +72,44 @@ class _ReportComposerSheetState extends State<ReportComposerSheet> {
       setState(() {
         _errorMessage = _messageForApiError(error);
       });
+      return;
     } catch (_) {
       if (!mounted) return;
       setState(() {
         _errorMessage = 'Impossible de publier. Vérifiez votre connexion.';
       });
+      return;
     } finally {
       if (mounted) setState(() => _isSubmitting = false);
+    }
+
+    if (!mounted || widget.onUploadPhoto == null) return;
+    setState(() => _isPublished = true);
+    await _uploadPhoto();
+  }
+
+  Future<void> _uploadPhoto() async {
+    final onUploadPhoto = widget.onUploadPhoto;
+    if (_isUploadingPhoto || onUploadPhoto == null) return;
+
+    setState(() {
+      _isUploadingPhoto = true;
+      _errorMessage = null;
+    });
+    try {
+      await onUploadPhoto();
+    } on ApiException catch (error) {
+      if (!mounted) return;
+      setState(() {
+        _errorMessage = _messageForPhotoError(error);
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _errorMessage = 'Photo non envoyée. Vérifiez votre connexion.';
+      });
+    } finally {
+      if (mounted) setState(() => _isUploadingPhoto = false);
     }
   }
 
@@ -91,6 +130,17 @@ class _ReportComposerSheetState extends State<ReportComposerSheet> {
     };
   }
 
+  // Le signalement est déjà publié : seul l'envoi de la photo a échoué.
+  String _messageForPhotoError(ApiException error) {
+    return switch (error.statusCode) {
+      401 => 'Session expirée : photo non envoyée. Reconnectez-vous.',
+      403 => 'Votre compte ne peut pas envoyer de photo.',
+      404 => 'Envoi de photo indisponible sur ce serveur.',
+      413 || 415 || 422 => 'Photo refusée par le serveur.',
+      _ => 'Photo non envoyée. Réessayez.',
+    };
+  }
+
   @override
   void dispose() {
     _commentController.dispose();
@@ -102,6 +152,10 @@ class _ReportComposerSheetState extends State<ReportComposerSheet> {
     final mediaQuery = MediaQuery.of(context);
     final photo = widget.photo;
     final subtitle = widget.subtitle;
+    final isLocked = _isBusy || _isPublished;
+    final statusMessage =
+        _errorMessage ??
+        (_isPublished ? 'Signalement publié · envoi de la photo…' : null);
 
     return Padding(
       padding: EdgeInsets.fromLTRB(
@@ -176,7 +230,7 @@ class _ReportComposerSheetState extends State<ReportComposerSheet> {
                       ),
                       IconButton(
                         tooltip: 'Fermer',
-                        onPressed: _isSubmitting ? null : widget.onClose,
+                        onPressed: _isBusy ? null : widget.onClose,
                         color: const Color(0xFF243243),
                         style: IconButton.styleFrom(
                           backgroundColor: Colors.white,
@@ -216,7 +270,7 @@ class _ReportComposerSheetState extends State<ReportComposerSheet> {
                       const SizedBox(height: 8),
                       TextField(
                         controller: _commentController,
-                        enabled: !_isSubmitting,
+                        enabled: !isLocked,
                         maxLength: 250,
                         maxLines: 2,
                         minLines: 1,
@@ -250,48 +304,78 @@ class _ReportComposerSheetState extends State<ReportComposerSheet> {
                   ),
                 ),
               ),
-              if (_errorMessage != null)
+              if (statusMessage != null)
                 Padding(
                   padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
                   child: Text(
-                    _errorMessage!,
+                    statusMessage,
                     textAlign: TextAlign.center,
-                    style: const TextStyle(color: Color(0xFFAF3942)),
+                    style: TextStyle(
+                      color: _errorMessage != null
+                          ? const Color(0xFFAF3942)
+                          : const Color(0xFF687789),
+                    ),
                   ),
                 ),
               Padding(
                 padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-                child: SizedBox(
-                  width: double.infinity,
-                  child: FilledButton(
-                    onPressed:
-                        _category == null ||
-                            _isSubmitting ||
-                            widget.onPublish == null
-                        ? null
-                        : _publish,
-                    style: FilledButton.styleFrom(
-                      minimumSize: const ui.Size.fromHeight(48),
-                      backgroundColor: const Color(0xFF0DB8D5),
-                      disabledBackgroundColor: const Color(0xFFD5E4EC),
-                      disabledForegroundColor: const Color(0xFF637888),
-                    ),
-                    child: _isSubmitting
-                        ? const SizedBox.square(
-                            dimension: 20,
-                            child: CircularProgressIndicator(
-                              strokeWidth: 2,
-                              color: Colors.white,
-                            ),
-                          )
-                        : const Text('Publier le signalement'),
-                  ),
-                ),
+                child: _isPublished && _errorMessage != null
+                    ? _photoRetryActions()
+                    : SizedBox(
+                        width: double.infinity,
+                        child: FilledButton(
+                          onPressed:
+                              _category == null ||
+                                  isLocked ||
+                                  widget.onPublish == null
+                              ? null
+                              : _publish,
+                          style: _primaryButtonStyle,
+                          child: _isBusy
+                              ? const _ButtonSpinner()
+                              : const Text('Publier le signalement'),
+                        ),
+                      ),
               ),
             ],
           ),
         ),
       ),
+    );
+  }
+
+  static final _primaryButtonStyle = FilledButton.styleFrom(
+    minimumSize: const ui.Size.fromHeight(48),
+    backgroundColor: const Color(0xFF0DB8D5),
+    disabledBackgroundColor: const Color(0xFFD5E4EC),
+    disabledForegroundColor: const Color(0xFF637888),
+  );
+
+  // Signalement publié mais photo non envoyée : réessayer, ou terminer en
+  // abandonnant la photo.
+  Widget _photoRetryActions() {
+    return Row(
+      children: [
+        Expanded(
+          child: OutlinedButton(
+            onPressed: widget.onClose,
+            style: OutlinedButton.styleFrom(
+              minimumSize: const ui.Size.fromHeight(48),
+              foregroundColor: const Color(0xFF243243),
+              side: const BorderSide(color: Color(0xFFDDE3EA)),
+            ),
+            child: const Text('Terminer sans photo'),
+          ),
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: FilledButton(
+            onPressed: _uploadPhoto,
+            style: _primaryButtonStyle,
+            child: const Text('Réessayer l’envoi'),
+          ),
+        ),
+      ],
     );
   }
 
@@ -304,7 +388,7 @@ class _ReportComposerSheetState extends State<ReportComposerSheet> {
       child: Tooltip(
         message: label,
         child: IconButton.filledTonal(
-          onPressed: _isSubmitting
+          onPressed: _isBusy || _isPublished
               ? null
               : () => setState(() {
                   _category = category;
@@ -323,6 +407,18 @@ class _ReportComposerSheetState extends State<ReportComposerSheet> {
           icon: Icon(icon),
         ),
       ),
+    );
+  }
+}
+
+class _ButtonSpinner extends StatelessWidget {
+  const _ButtonSpinner();
+
+  @override
+  Widget build(BuildContext context) {
+    return const SizedBox.square(
+      dimension: 20,
+      child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
     );
   }
 }

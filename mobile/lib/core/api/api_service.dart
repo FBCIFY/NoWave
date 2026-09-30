@@ -41,6 +41,25 @@ class ApiService {
     return _readResponse(response);
   }
 
+  /// Envoi `multipart/form-data` d'un fichier (photo). Délai plus long que
+  /// les autres appels : jusqu'à 500 Ko sur un réseau mobile parfois lent.
+  Future<String> postMultipart(
+    String path, {
+    Map<String, String>? headers,
+    required http.MultipartFile file,
+  }) async {
+    final request = http.MultipartRequest('POST', _resolveUri(path))
+      ..files.add(file);
+    if (headers != null) request.headers.addAll(headers);
+
+    final response = await _client
+        .send(request)
+        .then(http.Response.fromStream)
+        .timeout(const Duration(seconds: 30));
+
+    return _readResponse(response);
+  }
+
   Future<String> patch(
     String path, {
     Map<String, String>? headers,

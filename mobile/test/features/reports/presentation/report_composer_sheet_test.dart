@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:blueway/features/reports/presentation/report_composer_sheet.dart';
 import 'package:blueway/features/reports/domain/manual_report.dart';
 import 'package:blueway/core/api/api_exception.dart';
@@ -160,6 +162,91 @@ void main() {
     expect(find.byType(Image), findsOneWidget);
     expect(find.text('Nouveau signalement'), findsOneWidget);
     expect(find.text('Estimé à 120 m · ajustez si besoin'), findsOneWidget);
+  });
+
+  testWidgets('envoie la photo après la publication, puis réessaie', (
+    tester,
+  ) async {
+    var publishes = 0;
+    var uploads = 0;
+    var closes = 0;
+    Completer<void>? firstUpload;
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: ReportComposerSheet(
+            onClose: () => closes++,
+            onPublish: (_, _) async => publishes++,
+            onUploadPhoto: () {
+              uploads++;
+              if (uploads == 1) {
+                firstUpload = Completer<void>();
+                return firstUpload!.future;
+              }
+              return Future.value();
+            },
+          ),
+        ),
+      ),
+    );
+
+    await tester.tap(find.byTooltip('Pollution'));
+    await tester.pump();
+    await tester.tap(find.text('Publier le signalement'));
+    await tester.pump();
+    expect(publishes, 1);
+    expect(uploads, 1);
+    expect(
+      find.text('Signalement publié · envoi de la photo…'),
+      findsOneWidget,
+    );
+    expect(
+      tester
+          .widget<IconButton>(
+            find.ancestor(
+              of: find.byIcon(Icons.close),
+              matching: find.byType(IconButton),
+            ),
+          )
+          .onPressed,
+      isNull,
+    );
+
+    firstUpload!.completeError(
+      const ApiException(statusCode: 404, body: 'Not Found'),
+    );
+    await tester.pump();
+    expect(
+      find.text('Envoi de photo indisponible sur ce serveur.'),
+      findsOneWidget,
+    );
+    expect(find.text('Publier le signalement'), findsNothing);
+
+    await tester.tap(find.text('Réessayer l’envoi'));
+    await tester.pump();
+    expect(publishes, 1);
+    expect(uploads, 2);
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: ReportComposerSheet(
+            key: const ValueKey('second'),
+            onClose: () => closes++,
+            onPublish: (_, _) async {},
+            onUploadPhoto: () async =>
+                throw const ApiException(statusCode: 503, body: ''),
+          ),
+        ),
+      ),
+    );
+    await tester.tap(find.byTooltip('Obstacle'));
+    await tester.pump();
+    await tester.tap(find.text('Publier le signalement'));
+    await tester.pump();
+    expect(find.text('Photo non envoyée. Réessayez.'), findsOneWidget);
+    await tester.tap(find.text('Terminer sans photo'));
+    expect(closes, 1);
   });
 }
 
