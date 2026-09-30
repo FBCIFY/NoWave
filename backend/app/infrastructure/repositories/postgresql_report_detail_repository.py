@@ -4,11 +4,13 @@ from app.application.ports.report_detail_repository import (
     ReportDetailData,
     ReportDetailRepository,
 )
+from app.domain.boat import BoatType
 from app.domain.report import (
     ReportCategory,
     ReportPositioningMode,
     ReportStatus,
 )
+from app.domain.report_photo import UploadStatus
 from app.infrastructure.database.connection import (
     database_connection,
 )
@@ -100,8 +102,16 @@ class PostgreSQLReportDetailRepository(
             author_deleted=row[10],
             author_username=row[11],
             boat_name=row[12],
-            boat_type=row[13],
-            photo_status=row[14],
+            boat_type=(
+                BoatType(row[13])
+                if row[13] is not None
+                else None
+            ),
+            photo_status=(
+                UploadStatus(row[14])
+                if row[14] is not None
+                else None
+            ),
             photo_object_key=row[15],
             photo_hidden_at=row[16],
         )

@@ -1,15 +1,16 @@
 from datetime import datetime
-from typing import Literal
 from uuid import UUID
 
 from pydantic import BaseModel
 
 from app.api.schemas.report import GeoJSONPoint
+from app.domain.boat import BoatType
 from app.domain.report import (
     ReportCategory,
     ReportPositioningMode,
     ReportStatus,
 )
+from app.domain.report_photo import UploadStatus
 
 
 class ReportDetailAuthorResponse(BaseModel):
@@ -19,22 +20,11 @@ class ReportDetailAuthorResponse(BaseModel):
 
 class ReportDetailBoatResponse(BaseModel):
     name: str | None
-    boat_type: Literal[
-        "voilier",
-        "bateau_moteur",
-        "catamaran",
-        "semi_rigide",
-        "jet_ski",
-        "autre",
-    ]
+    boat_type: BoatType
 
 
 class ReportDetailPhotoResponse(BaseModel):
-    status: Literal[
-        "pending",
-        "uploaded",
-        "failed",
-    ]
+    status: UploadStatus
     url: str | None = None
 
 

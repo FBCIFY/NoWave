@@ -1,21 +1,15 @@
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from datetime import datetime
-from typing import Literal
 from uuid import UUID
 
+from app.domain.boat import BoatType
 from app.domain.report import (
     ReportCategory,
     ReportPositioningMode,
     ReportStatus,
 )
-
-
-PhotoStatus = Literal[
-    "pending",
-    "uploaded",
-    "failed",
-]
+from app.domain.report_photo import UploadStatus
 
 
 @dataclass(frozen=True)
@@ -35,9 +29,9 @@ class ReportDetailData:
     author_username: str | None
 
     boat_name: str | None
-    boat_type: str | None
+    boat_type: BoatType | None
 
-    photo_status: PhotoStatus | None
+    photo_status: UploadStatus | None
     photo_object_key: str | None
     photo_hidden_at: datetime | None
 
