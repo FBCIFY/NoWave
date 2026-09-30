@@ -1,6 +1,8 @@
 from fastapi.responses import JSONResponse
 
 from app.domain.errors import (
+    BoatAlreadyExistsError,
+    BoatNotFoundError,
     EmailNotVerifiedError,
     GpsPrecisionInsufficientError,
     InactiveUserError,
@@ -162,6 +164,36 @@ def invalid_positioning_input_handler(
         content={
             "error": {
                 "code": "INVALID_POSITIONING_INPUT",
+                "message": str(exc),
+                "details": None,
+            }
+        },
+    )
+
+
+
+def boat_not_found_handler(request, exc: BoatNotFoundError):
+    return JSONResponse(
+        status_code=404,
+        content={
+            "error": {
+                "code": "BOAT_NOT_FOUND",
+                "message": str(exc),
+                "details": None,
+            }
+        },
+    )
+
+
+def boat_already_exists_handler(
+    request,
+    exc: BoatAlreadyExistsError,
+):
+    return JSONResponse(
+        status_code=409,
+        content={
+            "error": {
+                "code": "BOAT_ALREADY_EXISTS",
                 "message": str(exc),
                 "details": None,
             }

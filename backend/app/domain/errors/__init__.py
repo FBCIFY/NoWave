@@ -1,4 +1,6 @@
 from app.domain.errors.exceptions import (
+    BoatAlreadyExistsError,
+    BoatNotFoundError,
     DomainError,
     EmailNotVerifiedError,
     GpsPrecisionInsufficientError,

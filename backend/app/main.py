@@ -2,6 +2,8 @@ from fastapi import FastAPI
 from app.config.production import configure_production, is_production
 
 from app.api.errors.handlers import (
+    boat_already_exists_handler,
+    boat_not_found_handler,
     email_not_verified_handler,
     gps_precision_insufficient_handler,
     inactive_user_handler,
@@ -16,6 +18,8 @@ from app.api.errors.handlers import (
 from app.api.router import router as api_router
 from app.api.routes.health import router as health_router
 from app.domain.errors import (
+    BoatAlreadyExistsError,
+    BoatNotFoundError,
     EmailNotVerifiedError,
     GpsPrecisionInsufficientError,
     InactiveUserError,
@@ -107,4 +111,16 @@ app.add_exception_handler(
 app.add_exception_handler(
     InvalidPositioningInputError,
     invalid_positioning_input_handler,
+)
+
+
+
+app.add_exception_handler(
+    BoatNotFoundError,
+    boat_not_found_handler,
+)
+
+app.add_exception_handler(
+    BoatAlreadyExistsError,
+    boat_already_exists_handler,
 )

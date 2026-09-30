@@ -76,3 +76,11 @@ class GpsPrecisionInsufficientError(DomainError):
 
 class InvalidPositioningInputError(DomainError):
     pass
+
+
+class BoatAlreadyExistsError(DomainError):
+    pass
+
+
+class BoatNotFoundError(DomainError):
+    pass
