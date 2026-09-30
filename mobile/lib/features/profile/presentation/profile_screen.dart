@@ -1,18 +1,67 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 import '../../../app/theme.dart';
 import '../../auth/presentation/widgets/auth_layout.dart';
 import '../domain/user_profile.dart';
+import '../../../core/notifications/notification_permission.dart';
 
-class ProfileScreen extends StatelessWidget {
+typedef UpdatePreferences = Future<UserProfile> Function({
+  bool? showUserName,
+  bool? showBoatInfo,
+  bool? notificationsEnabled,
+});
+
+class ProfileScreen extends StatefulWidget {
   final UserProfile profile;
   final Future<void> Function() onSignOut;
+  final UpdatePreferences onUpdatePreferences;
+  final NotificationPermissionService notificationPermissions;
 
   const ProfileScreen({
     super.key,
     required this.profile,
     required this.onSignOut,
+    required this.onUpdatePreferences,
+    required this.notificationPermissions,
   });
+
+  @override
+  State<ProfileScreen> createState() => _ProfileScreenState();
+}
+
+class _ProfileScreenState extends State<ProfileScreen> {
+  late UserProfile _profile;
+  bool _isSaving = false;
+  NotificationPermission? _permission;
+  late final AppLifecycleListener _lifecycleListener;
+
+  @override
+  void initState() {
+    super.initState();
+    _profile = widget.profile;
+    unawaited(_loadPermission());
+    _lifecycleListener = AppLifecycleListener(
+      onResume: () => unawaited(_loadPermission()),
+    );
+  }
+
+  @override
+  void dispose() {
+    _lifecycleListener.dispose();
+    super.dispose();
+  }
+
+  Future<void> _loadPermission() async {
+    try {
+      final permission = await widget.notificationPermissions.getStatus();
+      if (!mounted) return;
+      setState(() => _permission = permission);
+    } catch (_) {
+      // Sans réponse du téléphone, on n'affiche simplement pas l'état.
+    }
+  }
 
   String _formatDate(DateTime? date) {
     if (date == null) return 'Non renseignée';
@@ -33,10 +82,75 @@ class ProfileScreen extends StatelessWidget {
     _ => status,
   };
 
-  Future<void> _signOut(BuildContext context) async {
-    await onSignOut();
-    if (!context.mounted) return;
+  Future<void> _signOut() async {
+    await widget.onSignOut();
+    if (!mounted) return;
     Navigator.of(context).popUntil((route) => route.isFirst);
+  }
+
+  Future<void> _updatePreferences({
+    bool? showUserName,
+    bool? showBoatInfo,
+    bool? notificationsEnabled,
+  }) async {
+    final previousProfile = _profile;
+
+    setState(() {
+      _isSaving = true;
+      _profile = previousProfile.copyWith(
+        showUserName: showUserName,
+        showBoatInfo: showBoatInfo,
+        notificationsEnabled: notificationsEnabled,
+      );
+    });
+
+    try {
+      final updatedProfile = await widget.onUpdatePreferences(
+        showUserName: showUserName,
+        showBoatInfo: showBoatInfo,
+        notificationsEnabled: notificationsEnabled,
+      );
+      if (!mounted) return;
+      setState(() {
+        _profile = updatedProfile;
+        _isSaving = false;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _profile = previousProfile;
+        _isSaving = false;
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Impossible d’enregistrer la préférence. Réessayez.'),
+        ),
+      );
+    }
+  }
+
+  Future<void> _onAlertsChanged(bool enabled) async {
+    await _updatePreferences(notificationsEnabled: enabled);
+    if (!enabled || !mounted || !_profile.notificationsEnabled) return;
+    await _askPhonePermission();
+  }
+
+  Future<void> _askPhonePermission() async {
+    final permissions = widget.notificationPermissions;
+    try {
+      switch (await permissions.getStatus()) {
+        case NotificationPermission.granted:
+          return;
+        case NotificationPermission.notDetermined:
+          final permission = await permissions.request();
+          if (!mounted) return;
+          setState(() => _permission = permission);
+        case NotificationPermission.denied:
+          await permissions.openSettings();
+      }
+    } catch (_) {
+      // Si le téléphone ne répond pas, la préférence reste enregistrée.
+    }
   }
 
   @override
@@ -63,9 +177,9 @@ class ProfileScreen extends StatelessWidget {
                   ),
                 ),
                 child: Text(
-                  profile.username.isEmpty
+                  _profile.username.isEmpty
                       ? '?'
-                      : profile.username.substring(0, 1).toUpperCase(),
+                      : _profile.username.substring(0, 1).toUpperCase(),
                   style: const TextStyle(
                     color: Colors.white,
                     fontSize: 30,
@@ -79,7 +193,7 @@ class ProfileScreen extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      profile.username,
+                      _profile.username,
                       style: const TextStyle(
                         color: Colors.white,
                         fontSize: 22,
@@ -111,14 +225,14 @@ class ProfileScreen extends StatelessWidget {
                     Expanded(
                       child: _ProfileDetail(
                         label: 'Rôle',
-                        value: _roleLabel(profile.role),
+                        value: _roleLabel(_profile.role),
                       ),
                     ),
                     const SizedBox(width: 16),
                     Expanded(
                       child: _ProfileDetail(
                         label: 'Statut',
-                        value: _statusLabel(profile.status),
+                        value: _statusLabel(_profile.status),
                       ),
                     ),
                   ],
@@ -130,14 +244,14 @@ class ProfileScreen extends StatelessWidget {
                     Expanded(
                       child: _ProfileDetail(
                         label: 'Date de naissance',
-                        value: _formatDate(profile.dateOfBirth),
+                        value: _formatDate(_profile.dateOfBirth),
                       ),
                     ),
                     const SizedBox(width: 16),
                     Expanded(
                       child: _ProfileDetail(
                         label: 'Nationalité',
-                        value: profile.nationality ?? 'Non renseignée',
+                        value: _profile.nationality ?? 'Non renseignée',
                       ),
                     ),
                   ],
@@ -151,26 +265,40 @@ class ProfileScreen extends StatelessWidget {
           _ProfileCard(
             child: Column(
               children: [
-                _PreferenceRow(
+                _PreferenceSwitch(
+                  switchKey: const Key('showUserNameSwitch'),
                   label: 'Afficher le nom d’utilisateur',
-                  enabled: profile.showUserName,
+                  value: _profile.showUserName,
+                  onChanged: _isSaving
+                      ? null
+                      : (value) => _updatePreferences(showUserName: value),
                 ),
                 const _CardDivider(),
-                _PreferenceRow(
+                _PreferenceSwitch(
+                  switchKey: const Key('showBoatInfoSwitch'),
                   label: 'Afficher les informations du bateau',
-                  enabled: profile.showBoatInfo,
+                  value: _profile.showBoatInfo,
+                  onChanged: _isSaving
+                      ? null
+                      : (value) => _updatePreferences(showBoatInfo: value),
                 ),
                 const _CardDivider(),
-                _PreferenceRow(
-                  label: 'Notifications activées',
-                  enabled: profile.notificationsEnabled,
+                _PreferenceSwitch(
+                  switchKey: const Key('notificationsEnabledSwitch'),
+                  label: 'Alertes à proximité',
+                  value: _profile.notificationsEnabled,
+                  onChanged: _isSaving ? null : _onAlertsChanged,
                 ),
+                if (_permission case final permission?) ...[
+                  const SizedBox(height: 8),
+                  _PermissionStatus(permission),
+                ],
               ],
             ),
           ),
           const SizedBox(height: 28),
           FilledButton.icon(
-            onPressed: () => _signOut(context),
+            onPressed: _signOut,
             icon: const Icon(Icons.logout, size: 18),
             label: const Text('Se déconnecter'),
             style: FilledButton.styleFrom(
@@ -259,40 +387,66 @@ class _ProfileDetail extends StatelessWidget {
   );
 }
 
-class _PreferenceRow extends StatelessWidget {
+class _PreferenceSwitch extends StatelessWidget {
+  final Key switchKey;
   final String label;
-  final bool enabled;
-  const _PreferenceRow({required this.label, required this.enabled});
+  final bool value;
+  final ValueChanged<bool>? onChanged;
+
+  const _PreferenceSwitch({
+    required this.switchKey,
+    required this.label,
+    required this.value,
+    required this.onChanged,
+  });
 
   @override
-  Widget build(BuildContext context) => Row(
-    children: [
-      Expanded(
-        child: Text(
-          label,
-          style: const TextStyle(color: Colors.white, fontSize: 13),
-        ),
-      ),
-      const SizedBox(width: 12),
-      Container(
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-        decoration: BoxDecoration(
-          color: enabled
-              ? AppColors.cyan500.withValues(alpha: 0.15)
-              : Colors.white.withValues(alpha: 0.08),
-          borderRadius: BorderRadius.circular(8),
-        ),
-        child: Text(
-          enabled ? 'Oui' : 'Non',
-          style: TextStyle(
-            color: enabled
-                ? const Color(0xFF67E8F9)
-                : Colors.white.withValues(alpha: 0.55),
-            fontSize: 12,
-            fontWeight: FontWeight.w600,
+  Widget build(BuildContext context) => MergeSemantics(
+    child: Row(
+      children: [
+        Expanded(
+          child: Text(
+            label,
+            style: const TextStyle(color: Colors.white, fontSize: 13),
           ),
         ),
-      ),
-    ],
+        const SizedBox(width: 12),
+        Switch(
+          key: switchKey,
+          value: value,
+          onChanged: onChanged,
+          activeTrackColor: AppColors.cyan500,
+          inactiveTrackColor: Colors.white.withValues(alpha: 0.12),
+          inactiveThumbColor: Colors.white.withValues(alpha: 0.7),
+        ),
+      ],
+    ),
   );
+}
+
+class _PermissionStatus extends StatelessWidget {
+  final NotificationPermission permission;
+  const _PermissionStatus(this.permission);
+
+  @override
+  Widget build(BuildContext context) {
+    final label = switch (permission) {
+      NotificationPermission.granted => 'Autorisées sur ce téléphone',
+      NotificationPermission.denied =>
+        'Bloquées dans les réglages du téléphone',
+      NotificationPermission.notDetermined =>
+        'Pas encore autorisées sur ce téléphone',
+    };
+
+    return Align(
+      alignment: Alignment.centerLeft,
+      child: Text(
+        label,
+        style: TextStyle(
+          color: Colors.white.withValues(alpha: 0.55),
+          fontSize: 12,
+        ),
+      ),
+    );
+  }
 }

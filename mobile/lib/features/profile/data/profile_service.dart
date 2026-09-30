@@ -53,6 +53,35 @@ class ProfileService {
     return _decodeProfile(response);
   }
 
+  Future<UserProfile> updatePreferences({
+    bool? showUserName,
+    bool? showBoatInfo,
+    bool? notificationsEnabled,
+  }) async {
+    final changes = <String, bool>{
+      'show_user_name': ?showUserName,
+      'show_boat_info': ?showBoatInfo,
+      'notifications_enabled': ?notificationsEnabled,
+    };
+
+    if (changes.isEmpty) {
+      throw ArgumentError('Aucune préférence à mettre à jour.');
+    }
+
+    final token = await _getIdToken();
+
+    final response = await _apiService.patch(
+      _profilePath,
+      headers: {
+        'Authorization': 'Bearer $token',
+        'Content-Type': 'application/json',
+      },
+      body: jsonEncode(changes),
+    );
+
+    return _decodeProfile(response);
+  }
+
   UserProfile _decodeProfile(String response) {
     final json = jsonDecode(response);
 
