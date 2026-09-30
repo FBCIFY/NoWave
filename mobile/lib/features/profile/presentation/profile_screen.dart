@@ -129,6 +129,30 @@ class _ProfileScreenState extends State<ProfileScreen> {
     }
   }
 
+  Future<void> _onAlertsChanged(bool enabled) async {
+    await _updatePreferences(notificationsEnabled: enabled);
+    if (!enabled || !mounted || !_profile.notificationsEnabled) return;
+    await _askPhonePermission();
+  }
+
+  Future<void> _askPhonePermission() async {
+    final permissions = widget.notificationPermissions;
+    try {
+      switch (await permissions.getStatus()) {
+        case NotificationPermission.granted:
+          return;
+        case NotificationPermission.notDetermined:
+          final permission = await permissions.request();
+          if (!mounted) return;
+          setState(() => _permission = permission);
+        case NotificationPermission.denied:
+          await permissions.openSettings();
+      }
+    } catch (_) {
+      // Si le téléphone ne répond pas, la préférence reste enregistrée.
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return AuthLayout(
@@ -263,10 +287,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   switchKey: const Key('notificationsEnabledSwitch'),
                   label: 'Alertes à proximité',
                   value: _profile.notificationsEnabled,
-                  onChanged: _isSaving
-                      ? null
-                      : (value) =>
-                            _updatePreferences(notificationsEnabled: value),
+                  onChanged: _isSaving ? null : _onAlertsChanged,
                 ),
                 if (_permission case final permission?) ...[
                   const SizedBox(height: 8),

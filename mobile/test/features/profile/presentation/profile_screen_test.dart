@@ -33,6 +33,30 @@ void main() {
     return tester.widget<Switch>(find.byKey(Key(key)));
   }
 
+  Future<void> enableAlerts(
+    WidgetTester tester,
+    FakeNotificationPermissionService permissions,
+  ) async {
+    await tester.binding.setSurfaceSize(const Size(430, 1200));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: ProfileScreen(
+          profile: profile,
+          onSignOut: () async {},
+          onUpdatePreferences:
+              ({showUserName, showBoatInfo, notificationsEnabled}) async =>
+                  profile.copyWith(notificationsEnabled: notificationsEnabled),
+          notificationPermissions: permissions,
+        ),
+      ),
+    );
+
+    await tester.tap(find.byKey(const Key('notificationsEnabledSwitch')));
+    await tester.pumpAndSettle();
+  }
+
   testWidgets('affiche le profil et les préférences par défaut', (
     tester,
   ) async {
@@ -264,6 +288,44 @@ void main() {
 
     expect(find.text('Autorisées sur ce téléphone'), findsOneWidget);
   });
+
+  testWidgets('demande l’autorisation si elle n’a jamais été demandée', (
+    tester,
+  ) async {
+    final permissions = FakeNotificationPermissionService();
+
+    await enableAlerts(tester, permissions);
+
+    expect(permissions.requestCalls, 1);
+    expect(permissions.openSettingsCalls, 0);
+    expect(find.text('Autorisées sur ce téléphone'), findsOneWidget);
+  });
+
+  testWidgets('ouvre les réglages si les notifications sont bloquées', (
+    tester,
+  ) async {
+    final permissions = FakeNotificationPermissionService(
+      NotificationPermission.denied,
+    );
+
+    await enableAlerts(tester, permissions);
+
+    expect(permissions.requestCalls, 0);
+    expect(permissions.openSettingsCalls, 1);
+  });
+
+  testWidgets('ne redemande rien si les notifications sont déjà autorisées', (
+    tester,
+  ) async {
+    final permissions = FakeNotificationPermissionService(
+      NotificationPermission.granted,
+    );
+
+    await enableAlerts(tester, permissions);
+
+    expect(permissions.requestCalls, 0);
+    expect(permissions.openSettingsCalls, 0);
+  });
 }
 
 class FakeNotificationPermissionService
@@ -277,8 +339,14 @@ class FakeNotificationPermissionService
   @override
   Future<NotificationPermission> getStatus() async => status;
 
+  int requestCalls = 0;
+
   @override
-  Future<NotificationPermission> request() async => status;
+  Future<NotificationPermission> request() async {
+    requestCalls++;
+    status = NotificationPermission.granted;
+    return status;
+  }
 
   int openSettingsCalls = 0;
 
