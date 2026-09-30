@@ -37,7 +37,7 @@ class FakeUserRepository:
 def verified_identity():
     return {
         "uid": "firebase-user-123",
-        "email": "user@blueway.test",
+        "email": "user@nowave.test",
         "email_verified": True,
     }
 
@@ -45,7 +45,7 @@ def verified_identity():
 def unverified_identity():
     return {
         "uid": "firebase-user-123",
-        "email": "user@blueway.test",
+        "email": "user@nowave.test",
         "email_verified": False,
     }
 
@@ -115,7 +115,7 @@ def test_create_existing_profile_returns_409(monkeypatch):
     existing_user = User(
         firebase_uid="firebase-user-123",
         username="ExistingUser",
-        email="existing@blueway.test",
+        email="existing@nowave.test",
     )
 
     repository = FakeUserRepository(
@@ -148,7 +148,7 @@ def test_create_profile_with_existing_username_returns_409(monkeypatch):
     existing_user = User(
         firebase_uid="another-firebase-user",
         username="Jonathan",
-        email="another@blueway.test",
+        email="another@nowave.test",
     )
 
     repository = FakeUserRepository(
@@ -205,7 +205,7 @@ def test_get_my_profile(monkeypatch):
     existing_user = User(
         firebase_uid="firebase-user-123",
         username="Jonathan",
-        email="user@blueway.test",
+        email="user@nowave.test",
     )
 
     repository = FakeUserRepository(
@@ -267,7 +267,7 @@ def test_update_my_profile(monkeypatch):
     existing_user = User(
         firebase_uid="firebase-user-123",
         username="Jonathan",
-        email="user@blueway.test",
+        email="user@nowave.test",
     )
 
     repository = FakeUserRepository(
@@ -335,13 +335,13 @@ def test_update_with_existing_username_returns_409(monkeypatch):
     current_user = User(
         firebase_uid="firebase-user-123",
         username="Jonathan",
-        email="user@blueway.test",
+        email="user@nowave.test",
     )
 
     other_user = User(
         firebase_uid="another-firebase-user",
         username="Brice",
-        email="brice@blueway.test",
+        email="brice@nowave.test",
     )
 
     repository = FakeUserRepository(
@@ -377,7 +377,7 @@ def test_update_with_invalid_payload_returns_422(monkeypatch):
     existing_user = User(
         firebase_uid="firebase-user-123",
         username="Jonathan",
-        email="user@blueway.test",
+        email="user@nowave.test",
     )
 
     repository = FakeUserRepository(
@@ -417,7 +417,7 @@ def test_delete_my_profile(monkeypatch):
     existing_user = User(
         firebase_uid="firebase-user-123",
         username="Jonathan",
-        email="user@blueway.test",
+        email="user@nowave.test",
     )
 
     repository = FakeUserRepository(

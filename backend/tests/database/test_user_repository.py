@@ -12,7 +12,7 @@ def test_user_repository_crud(dsn, monkeypatch):
     user = User(
         firebase_uid="firebase-repository-test",
         username="repository-user",
-        email="repository-user@blueway.test",
+        email="repository-user@nowave.test",
     )
 
     # CREATE

@@ -57,7 +57,7 @@ class CreateReport:
 
         if user is None:
             raise UserNotFoundError(
-                "BlueWay user not found"
+                "NoWave user not found"
             )
 
         if user.status != UserStatus.ACTIVE:

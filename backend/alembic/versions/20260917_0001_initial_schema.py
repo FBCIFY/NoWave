@@ -1,4 +1,4 @@
-"""Create the initial Blueway schema.
+"""Create the initial NoWave schema.
 
 Revision ID: 20260917_0001
 Revises:
