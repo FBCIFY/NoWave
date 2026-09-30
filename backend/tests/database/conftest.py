@@ -81,7 +81,7 @@ def dsn():
 
 
 def insert(conn, table, **values):
-    query = sql.SQL('INSERT INTO blueway.{} ({}) VALUES ({}) RETURNING *').format(
+    query = sql.SQL('INSERT INTO nowave.{} ({}) VALUES ({}) RETURNING *').format(
         sql.Identifier(table), sql.SQL(',').join(map(sql.Identifier, values)),
         sql.SQL(',').join(sql.Placeholder() for _ in values))
     return conn.execute(query, list(values.values())).fetchone()

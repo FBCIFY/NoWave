@@ -38,7 +38,7 @@ class PostgreSQLReportRepository(ReportRepository):
                 created_at,
                 updated_at,
                 removed_at
-            FROM blueway.reports
+            FROM nowave.reports
             WHERE author_id = %s
               AND client_report_id = %s
         """
@@ -139,7 +139,7 @@ class PostgreSQLReportRepository(ReportRepository):
                 estimated_distance_m,
                 algorithm_version,
                 captured_at
-            FROM blueway.report_positioning
+            FROM nowave.report_positioning
             WHERE report_id = %s
         """
 
@@ -183,7 +183,7 @@ class PostgreSQLReportRepository(ReportRepository):
     ) -> UploadStatus | None:
         query = """
             SELECT upload_status
-            FROM blueway.report_photos
+            FROM nowave.report_photos
             WHERE report_id = %s
         """
 
@@ -215,7 +215,7 @@ class PostgreSQLReportRepository(ReportRepository):
             """
 
         query = f"""
-            INSERT INTO blueway.reports (
+            INSERT INTO nowave.reports (
                 id,
                 author_id,
                 client_report_id,
@@ -301,7 +301,7 @@ class PostgreSQLReportRepository(ReportRepository):
         estimate: PositionEstimateResult,
     ) -> None:
         query = """
-            INSERT INTO blueway.report_positioning (
+            INSERT INTO nowave.report_positioning (
                 report_id,
                 observer_position,
                 gps_accuracy_m,
@@ -374,7 +374,7 @@ class PostgreSQLReportRepository(ReportRepository):
         report: Report,
     ) -> None:
         query = """
-            INSERT INTO blueway.report_photos (
+            INSERT INTO nowave.report_photos (
                 report_id,
                 upload_status,
                 created_at,

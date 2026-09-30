@@ -92,7 +92,7 @@ def test_visible_author_and_boat_are_loaded(
 
     connection.execute(
         """
-        UPDATE blueway.users
+        UPDATE nowave.users
         SET
             username = %s,
             show_user_name = TRUE,
@@ -107,7 +107,7 @@ def test_visible_author_and_boat_are_loaded(
 
     connection.execute(
         """
-        UPDATE blueway.boats
+        UPDATE nowave.boats
         SET name = %s
         WHERE id = %s
         """,
@@ -146,7 +146,7 @@ def test_deleted_author_is_detected(
 
     connection.execute(
         """
-        DELETE FROM blueway.users
+        DELETE FROM nowave.users
         WHERE id = %s
         """,
         (ids["user"],),
@@ -187,7 +187,7 @@ def test_uploaded_photo_metadata_is_loaded(
 
     connection.execute(
         """
-        UPDATE blueway.report_photos
+        UPDATE nowave.report_photos
         SET
             upload_status = 'uploaded',
             object_key = %s,
