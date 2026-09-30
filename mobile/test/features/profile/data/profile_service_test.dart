@@ -54,7 +54,16 @@ void main() {
 
   test('retourne null lorsque le profil n’existe pas', () async {
     final client = MockClient((request) async {
-      return http.Response(jsonEncode({'code': 'USER_NOT_FOUND'}), 404);
+      return http.Response(
+        jsonEncode({
+          'error': {
+            'code': 'user_not_found',
+            'message': 'User not found',
+            'details': null,
+          },
+        }),
+        404,
+      );
     });
 
     final profile = await createService(client).getCurrentProfile();
@@ -115,7 +124,16 @@ void main() {
 
   test('propage l’erreur du serveur lors de la mise à jour', () async {
     final client = MockClient((request) async {
-      return http.Response(jsonEncode({'code': 'VALIDATION_ERROR'}), 422);
+      return http.Response(
+        jsonEncode({
+          'error': {
+            'code': 'request_validation_error',
+            'message': 'Invalid request payload',
+            'details': [],
+          },
+        }),
+        422,
+      );
     });
 
     await expectLater(

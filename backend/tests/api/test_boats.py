@@ -151,7 +151,7 @@ def test_create_second_boat_returns_409(monkeypatch):
     assert response.status_code == 409
     assert (
         response.json()["error"]["code"]
-        == "BOAT_ALREADY_EXISTS"
+        == "boat_already_exists"
     )
 
 
@@ -212,7 +212,7 @@ def test_get_missing_boat_returns_404(monkeypatch):
     assert response.status_code == 404
     assert (
         response.json()["error"]["code"]
-        == "BOAT_NOT_FOUND"
+        == "boat_not_found"
     )
 
 
@@ -378,7 +378,7 @@ def test_delete_missing_boat_returns_404(monkeypatch):
     assert response.status_code == 404
     assert (
         response.json()["error"]["code"]
-        == "BOAT_NOT_FOUND"
+        == "boat_not_found"
     )
 
 
@@ -473,5 +473,5 @@ def test_get_boat_without_user_profile_returns_404(
     assert response.status_code == 404
     assert (
         response.json()["error"]["code"]
-        == "USER_NOT_FOUND"
+        == "user_not_found"
     )

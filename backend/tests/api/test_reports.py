@@ -223,7 +223,7 @@ def test_same_client_report_id_with_different_data_returns_409(
 
     assert (
         data["error"]["code"]
-        == "REPORT_CLIENT_ID_CONFLICT"
+        == "report_client_id_conflict"
     )
 
     assert len(report_repository.reports) == 1

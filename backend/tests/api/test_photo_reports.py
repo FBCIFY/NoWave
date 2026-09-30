@@ -392,7 +392,7 @@ def test_same_photo_id_with_different_data_returns_409(
 
     assert (
         second.json()["error"]["code"]
-        == "REPORT_CLIENT_ID_CONFLICT"
+        == "report_client_id_conflict"
     )
 
     assert len(repository.reports) == 1

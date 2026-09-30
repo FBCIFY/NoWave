@@ -108,7 +108,7 @@ def test_create_profile_with_unverified_email_returns_403(monkeypatch):
     app.dependency_overrides.clear()
 
     assert response.status_code == 403
-    assert response.json()["error"]["code"] == "EMAIL_NOT_VERIFIED"
+    assert response.json()["error"]["code"] == "email_not_verified"
 
 
 def test_create_existing_profile_returns_409(monkeypatch):
@@ -141,7 +141,7 @@ def test_create_existing_profile_returns_409(monkeypatch):
     app.dependency_overrides.clear()
 
     assert response.status_code == 409
-    assert response.json()["error"]["code"] == "USER_ALREADY_EXISTS"
+    assert response.json()["error"]["code"] == "user_already_exists"
 
 
 def test_create_profile_with_existing_username_returns_409(monkeypatch):
@@ -174,7 +174,7 @@ def test_create_profile_with_existing_username_returns_409(monkeypatch):
     app.dependency_overrides.clear()
 
     assert response.status_code == 409
-    assert response.json()["error"]["code"] == "USERNAME_ALREADY_EXISTS"
+    assert response.json()["error"]["code"] == "username_already_exists"
 
 
 def test_create_profile_with_invalid_payload_returns_422(monkeypatch):
@@ -258,7 +258,7 @@ def test_get_missing_profile_returns_404(monkeypatch):
     app.dependency_overrides.clear()
 
     assert response.status_code == 404
-    assert response.json()["error"]["code"] == "USER_NOT_FOUND"
+    assert response.json()["error"]["code"] == "user_not_found"
 
     assert repository.users == []
 
@@ -328,7 +328,7 @@ def test_update_missing_profile_returns_404(monkeypatch):
     app.dependency_overrides.clear()
 
     assert response.status_code == 404
-    assert response.json()["error"]["code"] == "USER_NOT_FOUND"
+    assert response.json()["error"]["code"] == "user_not_found"
 
 
 def test_update_with_existing_username_returns_409(monkeypatch):
@@ -370,7 +370,7 @@ def test_update_with_existing_username_returns_409(monkeypatch):
     app.dependency_overrides.clear()
 
     assert response.status_code == 409
-    assert response.json()["error"]["code"] == "USERNAME_ALREADY_EXISTS"
+    assert response.json()["error"]["code"] == "username_already_exists"
 
 
 def test_update_with_invalid_payload_returns_422(monkeypatch):
@@ -480,7 +480,7 @@ def test_delete_missing_profile_returns_404(monkeypatch):
     app.dependency_overrides.clear()
 
     assert response.status_code == 404
-    assert response.json()["error"]["code"] == "USER_NOT_FOUND"
+    assert response.json()["error"]["code"] == "user_not_found"
 
     assert repository.users == []
     assert auth_provider.deleted_uids == []
