@@ -271,8 +271,17 @@ class _MapScreenState extends State<MapScreen> {
     }
   }
 
+  /// Zoom sur l'utilisateur au lancement et à chaque recentrage.
+  static const _userZoom = 14.0;
+
+  /// Durée maximale du vol vers l'utilisateur au recentrage : Mapbox
+  /// raccourcit l'animation quand la distance est faible.
+  static const _recenterMaxDuration = Duration(milliseconds: 1200);
+
   // Centre la carte sur l'utilisateur puis le suit à chaque nouvelle position.
-  Future<void> _locate() async {
+  // [animated] : vol jusqu'à l'utilisateur (bouton), sinon saut direct
+  // (lancement de la carte).
+  Future<void> _locate({bool animated = false}) async {
     setState(() {
       _isLocating = true;
       _locationError = null;
@@ -304,10 +313,12 @@ class _MapScreenState extends State<MapScreen> {
 
       if (!mounted) return;
 
-      setState(() {
+      void followUser() {
         _isFollowing = true;
         _viewport = FollowPuckViewportState(
-          zoom: previousCamera?.zoom ?? 14,
+          // Toujours le zoom du lancement : après un dézoom sur le globe,
+          // recentrer doit aussi ramener au niveau de la rue.
+          zoom: _userZoom,
           bearing: switch (_orientationMode) {
             _MapOrientationMode.north =>
               const FollowPuckViewportStateBearingConstant(0),
@@ -322,7 +333,20 @@ class _MapScreenState extends State<MapScreen> {
           },
           pitch: previousCamera?.pitch ?? 60,
         );
-      });
+      }
+
+      if (animated) {
+        // Mapbox marks this animated viewport helper as experimental.
+        // ignore: experimental_member_use
+        setStateWithViewportAnimation(
+          followUser,
+          transition: const DefaultViewportTransition(
+            maxDuration: _recenterMaxDuration,
+          ),
+        );
+      } else {
+        setState(followUser);
+      }
 
       _positionSubscription ??=
           geo.Geolocator.getPositionStream(
@@ -509,7 +533,7 @@ class _MapScreenState extends State<MapScreen> {
     setState(() {
       _isFollowing = true;
       _viewport = FollowPuckViewportState(
-        zoom: camera?.zoom ?? 14,
+        zoom: camera?.zoom ?? _userZoom,
         pitch: camera?.pitch ?? 60,
         padding: camera?.padding,
         bearing: FollowPuckViewportStateBearingConstant(
@@ -926,7 +950,7 @@ class _MapScreenState extends State<MapScreen> {
                         tooltip: 'Recentrer sur ma position',
                         onPressed: _isLocating || _mapboxMap == null
                             ? null
-                            : () => unawaited(_locate()),
+                            : () => unawaited(_locate(animated: true)),
                         icon: _isLocating
                             ? const SizedBox(
                                 width: 20,
