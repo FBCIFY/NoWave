@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 
 import '../../../../app/theme.dart';
 
+/// Bouton principal en dégradé. Affiche un indicateur de chargement quand
+/// [isLoading] est vrai.
 class AuthPrimaryButton extends StatelessWidget {
   final String label;
   final VoidCallback? onPressed;

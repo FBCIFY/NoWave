@@ -6,6 +6,10 @@ import '../data/auth_service.dart';
 import 'widgets/auth_layout.dart';
 import 'widgets/auth_primary_button.dart';
 
+/// Attente de la vérification de l'e-mail.
+///
+/// Vérifie toutes les 5 secondes et au retour dans l'app. Dès que l'adresse
+/// est vérifiée, `AuthGate` passe automatiquement au profil.
 class VerifyEmailScreen extends StatefulWidget {
   final AuthService authService;
 

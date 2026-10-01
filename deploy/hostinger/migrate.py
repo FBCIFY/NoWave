@@ -19,9 +19,9 @@ with psycopg.connect(get_settings().require_database_url()) as conn:
     conn.execute('GRANT CONNECT ON DATABASE nowave TO nowave_runtime')
     conn.execute('REVOKE CREATE ON SCHEMA public FROM PUBLIC')
     conn.execute('GRANT USAGE ON SCHEMA nowave, public TO nowave_runtime')
-    conn.execute('GRANT SELECT, INSERT, UPDATE, DELETE ON nowave.users, nowave.reports TO nowave_runtime')
+    conn.execute('GRANT SELECT, INSERT, UPDATE, DELETE ON nowave.users, nowave.reports, nowave.boats TO nowave_runtime')
     # Deferred integrity triggers read these tables when writing a report.
-    conn.execute('GRANT SELECT ON nowave.report_photos, nowave.report_positioning TO nowave_runtime')
+    conn.execute('GRANT SELECT, INSERT ON nowave.report_photos, nowave.report_positioning TO nowave_runtime')
     conn.execute('ALTER ROLE nowave_runtime SET statement_timeout = \'10s\'')
     conn.execute('ALTER ROLE nowave_runtime SET idle_in_transaction_session_timeout = \'15s\'')
 print('Migrations and runtime grants applied.')

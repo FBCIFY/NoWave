@@ -1,9 +1,15 @@
+from fastapi.exceptions import RequestValidationError
+from starlette.exceptions import HTTPException as StarletteHTTPException
 from fastapi.responses import JSONResponse
 
 from app.domain.errors import (
+    BoatAlreadyExistsError,
+    BoatNotFoundError,
     EmailNotVerifiedError,
+    GpsPrecisionInsufficientError,
     InactiveUserError,
     InvalidObservedAtError,
+    InvalidPositioningInputError,
     InvalidReportCategoryError,
     InvalidReportDescriptionError,
     InvalidReportPositionError,
@@ -16,11 +22,42 @@ from app.domain.errors import (
 
 
 REPORT_VALIDATION_CODES = {
-    InvalidReportCategoryError: "INVALID_REPORT_CATEGORY",
-    InvalidReportDescriptionError: "INVALID_REPORT_DESCRIPTION",
-    InvalidReportPositionError: "INVALID_REPORT_POSITION",
-    InvalidObservedAtError: "INVALID_OBSERVED_AT",
+    InvalidReportCategoryError: "invalid_report_category",
+    InvalidReportDescriptionError: "invalid_report_description",
+    InvalidReportPositionError: "invalid_report_position",
+    InvalidObservedAtError: "invalid_observed_at",
 }
+
+
+def http_exception_handler(
+    request,
+    exc: StarletteHTTPException,
+):
+    error_codes = {
+        "Authentication required": "authentication_required",
+        "Invalid authentication token": "invalid_authentication_token",
+    }
+
+    if isinstance(exc.detail, str):
+        message = exc.detail
+        code = error_codes.get(
+            exc.detail,
+            f"http_{exc.status_code}",
+        )
+    else:
+        message = "Request failed"
+        code = f"http_{exc.status_code}"
+
+    return JSONResponse(
+        status_code=exc.status_code,
+        content={
+            "error": {
+                "code": code,
+                "message": message,
+                "details": None,
+            }
+        },
+    )
 
 
 def report_not_found_handler(request, exc: ReportNotFoundError):
@@ -28,7 +65,7 @@ def report_not_found_handler(request, exc: ReportNotFoundError):
         status_code=404,
         content={
             "error": {
-                "code": "REPORT_NOT_FOUND",
+                "code": "report_not_found",
                 "message": str(exc),
                 "details": None,
             }
@@ -59,7 +96,7 @@ def report_client_id_conflict_handler(
         status_code=409,
         content={
             "error": {
-                "code": "REPORT_CLIENT_ID_CONFLICT",
+                "code": "report_client_id_conflict",
                 "message": str(exc),
                 "details": None,
             }
@@ -72,7 +109,7 @@ def inactive_user_handler(request, exc: InactiveUserError):
         status_code=403,
         content={
             "error": {
-                "code": "USER_INACTIVE",
+                "code": "user_inactive",
                 "message": str(exc),
                 "details": None,
             }
@@ -85,7 +122,7 @@ def email_not_verified_handler(request, exc: EmailNotVerifiedError):
         status_code=403,
         content={
             "error": {
-                "code": "EMAIL_NOT_VERIFIED",
+                "code": "email_not_verified",
                 "message": str(exc),
                 "details": None,
             }
@@ -98,7 +135,7 @@ def user_already_exists_handler(request, exc: UserAlreadyExistsError):
         status_code=409,
         content={
             "error": {
-                "code": "USER_ALREADY_EXISTS",
+                "code": "user_already_exists",
                 "message": str(exc),
                 "details": None,
             }
@@ -111,7 +148,7 @@ def username_already_exists_handler(request, exc: UsernameAlreadyExistsError):
         status_code=409,
         content={
             "error": {
-                "code": "USERNAME_ALREADY_EXISTS",
+                "code": "username_already_exists",
                 "message": str(exc),
                 "details": None,
             }
@@ -124,7 +161,96 @@ def user_not_found_handler(request, exc: UserNotFoundError):
         status_code=404,
         content={
             "error": {
-                "code": "USER_NOT_FOUND",
+                "code": "user_not_found",
+                "message": str(exc),
+                "details": None,
+            }
+        },
+    )
+
+
+def gps_precision_insufficient_handler(
+    request,
+    exc: GpsPrecisionInsufficientError,
+):
+    return JSONResponse(
+        status_code=422,
+        content={
+            "error": {
+                "code": "gps_precision_insufficient",
+                "message": str(exc),
+                "details": {
+                    "accuracy_m": exc.accuracy_m,
+                    "maximum_accuracy_m": 50,
+                },
+            }
+        },
+    )
+
+
+def invalid_positioning_input_handler(
+    request,
+    exc: InvalidPositioningInputError,
+):
+    return JSONResponse(
+        status_code=422,
+        content={
+            "error": {
+                "code": "invalid_positioning_input",
+                "message": str(exc),
+                "details": None,
+            }
+        },
+    )
+
+
+def request_validation_error_handler(
+    request,
+    exc: RequestValidationError,
+):
+    details = [
+        {
+            "loc": list(error["loc"]),
+            "msg": error["msg"],
+            "type": error["type"],
+        }
+        for error in exc.errors()
+    ]
+
+    return JSONResponse(
+        status_code=422,
+        content={
+            "error": {
+                "code": "request_validation_error",
+                "message": "Invalid request payload",
+                "details": details,
+            }
+        },
+    )
+
+
+def boat_not_found_handler(request, exc: BoatNotFoundError):
+    return JSONResponse(
+        status_code=404,
+        content={
+            "error": {
+                "code": "boat_not_found",
+                "message": str(exc),
+                "details": None,
+            }
+        },
+    )
+
+
+def boat_already_exists_handler(
+    request,
+    exc: BoatAlreadyExistsError,
+):
+    return JSONResponse(
+        status_code=409,
+        content={
+            "error": {
+                "code": "boat_already_exists",
                 "message": str(exc),
                 "details": None,
             }

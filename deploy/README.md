@@ -18,11 +18,11 @@ Le script `hostinger/ci-deploy.sh` reconstruit et audite les images sur le VPS, 
 ## Schéma PostgreSQL NoWave
 
 La base `nowave` utilise le schéma applicatif `nowave` : `nowave.users`,
-`nowave.reports` et les huit autres tables. La migration
-`20260930_schema_nowave` renomme l’ancien schéma `blueway`, conserve les données
-et corrige les références et les `search_path` des fonctions de contrôle.
-Les noms `blueway` restent dans les migrations historiques pour permettre
-leur rejeu et leur retour arrière. Le projet Firebase reste `blueway-dev`.
+`nowave.reports` et les huit autres tables. La migration initiale
+`20260917_0001` crée directement ce schéma, avec l’index spatial
+`reports_final_position_geometry_gist` utilisé par les tuiles. Une base existante
+doit recevoir cet index séparément ; la migration initiale ne doit pas être
+rejouée en production. Le projet Firebase reste `blueway-dev`.
 
 Une remise à zéro est une opération distincte, jamais exécutée par la CI.
 Après sauvegarde vérifiée et arrêt de l’API, un opérateur peut lancer, avec les

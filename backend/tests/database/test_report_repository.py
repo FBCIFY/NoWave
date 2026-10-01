@@ -27,7 +27,7 @@ def test_report_repository_save_and_get(dsn, monkeypatch):
     user = User(
         firebase_uid="firebase-report-repository",
         username="report-repository-user",
-        email="report-repository@blueway.test",
+        email="report-repository@nowave.test",
     )
 
     user_repository.save(user)

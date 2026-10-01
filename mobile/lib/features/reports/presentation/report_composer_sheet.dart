@@ -1,5 +1,4 @@
 import 'dart:math' as math;
-import 'dart:convert';
 import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
@@ -7,6 +6,8 @@ import 'package:flutter/material.dart';
 import '../../../core/api/api_exception.dart';
 import '../domain/manual_report.dart';
 
+/// Panneau du bas en mode signalement : catégorie, commentaire facultatif
+/// (250 caractères max) et bouton Publier. L'envoi est fait par `MapScreen`.
 class ReportComposerSheet extends StatefulWidget {
   const ReportComposerSheet({super.key, required this.onClose, this.onPublish});
 
@@ -14,6 +15,7 @@ class ReportComposerSheet extends StatefulWidget {
   final Future<void> Function(ReportCategory category, String? description)?
   onPublish;
 
+  /// Hauteur du panneau, utilisée par la carte pour placer le marqueur.
   static double heightFor(MediaQueryData mediaQuery) {
     final availableHeight =
         mediaQuery.size.height -
@@ -64,14 +66,10 @@ class _ReportComposerSheetState extends State<ReportComposerSheet> {
 
   String _messageForApiError(ApiException error) {
     if (error.statusCode == 404) {
-      try {
-        final body = jsonDecode(error.body);
-        if (body is Map && body['error']?['code'] == 'USER_NOT_FOUND') {
-          return 'Votre profil NoWave est introuvable.';
-        }
-      } catch (_) {
-        // A missing route can return a different response format.
+      if (error.code == 'user_not_found') {
+        return 'Votre profil NoWave est introuvable.';
       }
+
       return 'Publication indisponible sur ce serveur.';
     }
     return switch (error.statusCode) {

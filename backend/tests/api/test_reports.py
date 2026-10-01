@@ -46,7 +46,7 @@ class FakeReportRepository:
 def verified_identity():
     return {
         "uid": "firebase-user-123",
-        "email": "user@blueway.test",
+        "email": "user@nowave.test",
         "email_verified": True,
     }
 
@@ -75,7 +75,7 @@ def setup_repositories(monkeypatch):
     user = User(
         firebase_uid="firebase-user-123",
         username="Jonathan",
-        email="user@blueway.test",
+        email="user@nowave.test",
     )
 
     user_repository = FakeUserRepository(
@@ -223,7 +223,7 @@ def test_same_client_report_id_with_different_data_returns_409(
 
     assert (
         data["error"]["code"]
-        == "REPORT_CLIENT_ID_CONFLICT"
+        == "report_client_id_conflict"
     )
 
     assert len(report_repository.reports) == 1

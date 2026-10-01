@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+/// Couleurs de la charte NoWave, réutilisées directement dans les écrans.
 abstract final class AppColors {
   static const slate900 = Color(0xFF0F172A);
   static const blue950 = Color(0xFF172554);
@@ -10,6 +11,10 @@ abstract final class AppColors {
   static const text = Color(0xFF0F172A);
 }
 
+/// Thème Material par défaut (boutons, champs, barre du haut).
+///
+/// Les écrans sombres d'authentification et de profil ont leur propre style :
+/// voir `AuthLayout`.
 final appTheme = ThemeData(
   useMaterial3: true,
   colorScheme: ColorScheme.fromSeed(

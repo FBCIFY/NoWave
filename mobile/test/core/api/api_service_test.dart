@@ -52,6 +52,33 @@ void main() {
     expect(result, '{"username":"Vadim"}');
   });
 
+  test('patch transmet le jeton et les champs modifiés', () async {
+    final client = MockClient((request) async {
+      expect(request.method, 'PATCH');
+      expect(request.url, Uri.parse('https://example.com/api/v1/users/me'));
+      expect(request.headers['authorization'], 'Bearer firebase-token');
+      expect(request.headers['content-type'], 'application/json');
+      expect(request.body, '{"notifications_enabled":true}');
+
+      return http.Response('{"notifications_enabled":true}', 200);
+    });
+
+    addTearDown(client.close);
+
+    final api = ApiService(client: client, baseUrl: 'https://example.com/');
+
+    final result = await api.patch(
+      'api/v1/users/me',
+      headers: {
+        'Authorization': 'Bearer firebase-token',
+        'Content-Type': 'application/json',
+      },
+      body: '{"notifications_enabled":true}',
+    );
+
+    expect(result, '{"notifications_enabled":true}');
+  });
+
   test('get lève une exception pour une réponse HTTP 500', () async {
     final client = MockClient((request) async {
       return http.Response('Erreur serveur', 500);
@@ -103,5 +130,24 @@ void main() {
 
     await tester.pump(const Duration(seconds: 10));
     await verification;
+  });
+
+  test('ApiException lit le contrat d’erreur NoWave', () {
+    const error = ApiException(
+      statusCode: 404,
+      body: '''
+{
+  "error": {
+    "code": "user_not_found",
+    "message": "User not found",
+    "details": null
+  }
+}
+''',
+    );
+
+    expect(error.code, 'user_not_found');
+    expect(error.message, 'User not found');
+    expect(error.details, isNull);
   });
 }

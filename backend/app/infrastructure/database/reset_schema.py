@@ -33,12 +33,12 @@ def main() -> None:
         conn.execute("ALTER TABLE nowave.users ALTER COLUMN email SET NOT NULL")
         conn.execute("GRANT USAGE ON SCHEMA nowave TO nowave_runtime")
         conn.execute(
-            "GRANT SELECT, INSERT, UPDATE, DELETE ON nowave.users, nowave.reports TO nowave_runtime"
+            "GRANT SELECT, INSERT, UPDATE, DELETE ON nowave.users, nowave.reports, nowave.boats TO nowave_runtime"
         )
-        conn.execute("GRANT SELECT ON nowave.report_photos, nowave.report_positioning TO nowave_runtime")
+        conn.execute("GRANT SELECT, INSERT ON nowave.report_photos, nowave.report_positioning TO nowave_runtime")
         conn.execute(
             "UPDATE public.alembic_version SET version_num = %s",
-            ("20260930_schema_nowave",),
+            ("20260917_0001",),
         )
     print("Recreated the empty nowave schema with runtime grants.")
 

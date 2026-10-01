@@ -11,6 +11,10 @@ import 'register_screen.dart';
 import 'verify_email_screen.dart';
 import 'widgets/flow_transition.dart';
 
+/// Premier aiguillage de l'app, piloté par la session Firebase :
+/// connexion ou inscription → vérification de l'e-mail → [ProfileGate].
+///
+/// `step` ne sert qu'au sens de l'animation entre deux écrans.
 class AuthGate extends StatefulWidget {
   final AuthService authService;
   final ProfileService profileService;
@@ -61,6 +65,7 @@ class _AuthGateState extends State<AuthGate> {
             step = 2;
             screen = VerifyEmailScreen(authService: widget.authService);
           } else {
+            // Compte vérifié : on écoute les notifications et on passe au profil.
             step = 3;
             screen = PushNotificationListener(
               child: ProfileGate(
@@ -84,6 +89,7 @@ class _AuthGateState extends State<AuthGate> {
           );
         }
 
+        // Le bouton retour du téléphone ramène de l'inscription à la connexion.
         return PopScope(
           canPop: step != 1,
           onPopInvokedWithResult: (didPop, _) {

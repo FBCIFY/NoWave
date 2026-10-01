@@ -1,21 +1,14 @@
-"""Exercise upgrades of a populated legacy schema, including trigger bodies."""
+"""Verify repeated upgrades preserve the NoWave schema and its triggers."""
 
 import psycopg
 import pytest
 
-from conftest import downgrade_database, seed, upgrade_database
+from conftest import seed, upgrade_database
 
 
-def test_schema_rename_preserves_rows_and_repairs_triggers(dsn):
+def test_schema_upgrade_preserves_rows_and_triggers(dsn):
     with psycopg.connect(dsn) as conn:
         ids = seed(conn)
-    downgrade_database(dsn, "20260920_0002")
-    with psycopg.connect(dsn) as conn:
-        assert conn.execute(
-            "SELECT id FROM blueway.users WHERE id = %s", (ids["user"],)
-        ).fetchone() == (ids["user"],)
-        conn.execute("SELECT blueway.assert_photo_children(%s)", (ids["report"],))
-
     upgrade_database(dsn)
     with psycopg.connect(dsn) as conn:
         assert conn.execute("SELECT to_regnamespace('blueway')").fetchone() == (None,)

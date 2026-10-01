@@ -1,3 +1,5 @@
+/// Profil renvoyé par le backend. [UserProfile.fromJson] lit les clés en
+/// snake_case ; [copyWith] ne modifie que les trois préférences.
 class UserProfile {
   final String id;
   final String username;
@@ -40,6 +42,26 @@ class UserProfile {
       notificationsEnabled: json['notifications_enabled'] as bool,
       createdAt: DateTime.parse(json['created_at'] as String),
       updatedAt: DateTime.parse(json['updated_at'] as String),
+    );
+  }
+
+  UserProfile copyWith({
+    bool? showUserName,
+    bool? showBoatInfo,
+    bool? notificationsEnabled,
+  }) {
+    return UserProfile(
+      id: id,
+      username: username,
+      dateOfBirth: dateOfBirth,
+      nationality: nationality,
+      role: role,
+      status: status,
+      showUserName: showUserName ?? this.showUserName,
+      showBoatInfo: showBoatInfo ?? this.showBoatInfo,
+      notificationsEnabled: notificationsEnabled ?? this.notificationsEnabled,
+      createdAt: createdAt,
+      updatedAt: updatedAt,
     );
   }
 }

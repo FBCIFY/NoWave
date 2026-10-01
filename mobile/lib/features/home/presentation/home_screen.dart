@@ -4,16 +4,20 @@ import '../../map/presentation/map_screen.dart';
 import '../../profile/domain/user_profile.dart';
 import '../../profile/presentation/profile_screen.dart';
 import '../../reports/data/manual_report_service.dart';
+import '../../../core/notifications/notification_permission.dart';
 
+/// Accueil après connexion : la carte, avec un bouton qui ouvre le profil.
 class HomeScreen extends StatelessWidget {
   final UserProfile? profile;
   final Future<void> Function()? onSignOut;
+  final UpdatePreferences? onUpdatePreferences;
   final ManualReportService? reportService;
 
   const HomeScreen({
     super.key,
     this.profile,
     this.onSignOut,
+    this.onUpdatePreferences,
     this.reportService,
   });
 
@@ -21,13 +25,19 @@ class HomeScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     return MapScreen(
       reportService: reportService,
-      onOpenProfile: profile == null || onSignOut == null
+      onOpenProfile:
+          profile == null || onSignOut == null || onUpdatePreferences == null
           ? null
           : () {
               Navigator.of(context).push(
                 MaterialPageRoute<void>(
-                  builder: (_) =>
-                      ProfileScreen(profile: profile!, onSignOut: onSignOut!),
+                  builder: (_) => ProfileScreen(
+                    profile: profile!,
+                    onSignOut: onSignOut!,
+                    onUpdatePreferences: onUpdatePreferences!,
+                    notificationPermissions:
+                        const NotificationPermissionService(),
+                  ),
                 ),
               );
             },

@@ -3,6 +3,8 @@ import 'package:flutter/services.dart';
 
 import '../../../../app/theme.dart';
 
+/// Champ de saisie du thème sombre. Il gère l'affichage du mot de passe et le
+/// bouton pour masquer le clavier.
 class AuthTextField extends StatefulWidget {
   final TextEditingController controller;
   final String label;

@@ -12,6 +12,8 @@ import 'features/profile/data/profile_service.dart';
 import 'features/reports/data/manual_report_service.dart';
 import 'firebase_options.dart';
 
+/// Point d'entrée : initialise Firebase et Mapbox, crée les services partagés,
+/// puis lance l'app sur [AuthGate], qui choisit le premier écran à afficher.
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
@@ -19,6 +21,7 @@ Future<void> main() async {
 
   MapboxOptions.setAccessToken(MapConfig.accessToken);
 
+  // Services créés une seule fois, puis transmis aux écrans qui en ont besoin.
   final authService = AuthService();
   final apiService = ApiService(client: http.Client());
   final profileService = ProfileService(

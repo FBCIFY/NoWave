@@ -1,3 +1,4 @@
+/// Formate une coordonnée en degrés, minutes, secondes (ex. `48° 23′ 12″ N`).
 String formatDms(double value, {required bool isLatitude}) {
   final totalSeconds = (value.abs() * 3600).round();
 

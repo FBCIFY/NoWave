@@ -1,13 +1,20 @@
 import 'package:flutter/material.dart';
 
+import '../../../core/notifications/notification_permission.dart';
 import '../../auth/data/auth_service.dart';
 import '../../auth/presentation/widgets/flow_transition.dart';
 import '../../home/presentation/home_screen.dart';
 import '../data/profile_service.dart';
 import '../domain/user_profile.dart';
 import '../../reports/data/manual_report_service.dart';
+import 'alerts_onboarding_screen.dart';
 import 'profile_setup_screen.dart';
 
+/// Second aiguillage, une fois l'e-mail vérifié : charge le profil puis
+/// affiche la création du profil, l'écran d'alertes (une seule fois, juste
+/// après la création) ou l'accueil.
+///
+/// Garde aussi le dernier profil modifié pour que l'accueil reste à jour.
 class ProfileGate extends StatefulWidget {
   final AuthService authService;
   final ProfileService profileService;
@@ -27,6 +34,8 @@ class ProfileGate extends StatefulWidget {
 class _ProfileGateState extends State<ProfileGate> {
   late Future<UserProfile?> _profileFuture;
   bool _profileWasJustCreated = false;
+  UserProfile? _latestProfile;
+  bool _showAlertsOnboarding = false;
 
   @override
   void initState() {
@@ -37,8 +46,34 @@ class _ProfileGateState extends State<ProfileGate> {
   void _reloadProfile() {
     setState(() {
       _profileWasJustCreated = true;
+      _latestProfile = null;
       _profileFuture = widget.profileService.getCurrentProfile();
     });
+  }
+
+  // Seul chemin qui affiche l'écran d'alertes : les comptes existants ne le
+  // voient pas.
+  void _onProfileCreated() {
+    _showAlertsOnboarding = true;
+    _reloadProfile();
+  }
+
+  Future<UserProfile> _updatePreferences({
+    bool? showUserName,
+    bool? showBoatInfo,
+    bool? notificationsEnabled,
+  }) async {
+    final profile = await widget.profileService.updatePreferences(
+      showUserName: showUserName,
+      showBoatInfo: showBoatInfo,
+      notificationsEnabled: notificationsEnabled,
+    );
+
+    if (mounted) {
+      setState(() => _latestProfile = profile);
+    }
+
+    return profile;
   }
 
   @override
@@ -54,7 +89,7 @@ class _ProfileGateState extends State<ProfileGate> {
             step = 1;
             screen = ProfileSetupScreen(
               profileService: widget.profileService,
-              onProfileCreated: _reloadProfile,
+              onProfileCreated: _onProfileCreated,
               onSignOut: widget.authService.signOut,
             );
           } else {
@@ -95,18 +130,27 @@ class _ProfileGateState extends State<ProfileGate> {
               ),
             ),
           );
-        } else if (snapshot.data case final profile?) {
+        } else if (snapshot.data != null && _showAlertsOnboarding) {
           step = 2;
+          screen = AlertsOnboardingScreen(
+            onEnableAlerts: () =>
+                _updatePreferences(notificationsEnabled: true),
+            onDone: () => setState(() => _showAlertsOnboarding = false),
+            notificationPermissions: const NotificationPermissionService(),
+          );
+        } else if (snapshot.data case final profile?) {
+          step = 3;
           screen = HomeScreen(
-            profile: profile,
+            profile: _latestProfile ?? profile,
             onSignOut: widget.authService.signOut,
+            onUpdatePreferences: _updatePreferences,
             reportService: widget.reportService,
           );
         } else {
           step = 1;
           screen = ProfileSetupScreen(
             profileService: widget.profileService,
-            onProfileCreated: _reloadProfile,
+            onProfileCreated: _onProfileCreated,
             onSignOut: widget.authService.signOut,
           );
         }

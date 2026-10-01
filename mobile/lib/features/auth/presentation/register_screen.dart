@@ -6,6 +6,9 @@ import 'widgets/auth_layout.dart';
 import 'widgets/auth_primary_button.dart';
 import 'widgets/auth_text_field.dart';
 
+/// Création du compte Firebase, puis envoi de l'e-mail de vérification.
+///
+/// Une fois le compte créé, `AuthGate` affiche l'écran de vérification.
 class RegisterScreen extends StatefulWidget {
   final AuthService authService;
   final VoidCallback? onBack;

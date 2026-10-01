@@ -7,6 +7,10 @@ import '../../auth/presentation/widgets/auth_layout.dart';
 import '../../auth/presentation/widgets/auth_primary_button.dart';
 import '../../auth/presentation/widgets/auth_text_field.dart';
 
+/// Création du profil NoWave (nom d'utilisateur) au premier passage.
+///
+/// Le backend répond 409 si le nom est pris et 403 si l'e-mail n'est pas
+/// vérifié.
 class ProfileSetupScreen extends StatefulWidget {
   final ProfileService profileService;
   final VoidCallback onProfileCreated;
@@ -53,13 +57,16 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
       if (!mounted) return;
 
       setState(() {
-        if (error.statusCode == 409) {
-          _errorMessage = 'Ce nom d’utilisateur est déjà utilisé.';
-        } else if (error.statusCode == 403) {
-          _errorMessage = 'Votre adresse e-mail doit être vérifiée.';
-        } else {
-          _errorMessage = 'Impossible de créer votre profil.';
-        }
+        _errorMessage = switch (error.code) {
+          'username_already_exists' => 'Ce nom d’utilisateur est déjà utilisé.',
+          'user_already_exists' => 'Votre profil NoWave existe déjà.',
+          'email_not_verified' => 'Votre adresse e-mail doit être vérifiée.',
+          'request_validation_error' => 'Vérifiez le nom d’utilisateur.',
+          _ when error.statusCode == 409 => 'Impossible de créer ce profil.',
+          _ when error.statusCode == 403 =>
+            'Votre compte ne permet pas cette opération.',
+          _ => 'Impossible de créer votre profil.',
+        };
       });
     } catch (_) {
       if (!mounted) return;

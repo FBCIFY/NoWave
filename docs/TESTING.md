@@ -50,19 +50,19 @@ Depuis la racine, avec l'environnement Python activé :
 
 ```sh
 export COMPOSE_FILE=compose.test.yaml
-export COMPOSE_PROJECT_NAME=blueway-ci-local
-export BLUEWAY_TEST_ADMIN_URL=postgresql://blueway_ci:ci-test-only@127.0.0.1:55433/blueway_ci
+export COMPOSE_PROJECT_NAME=nowave-ci-local
+export NOWAVE_TEST_ADMIN_URL=postgresql://nowave_ci:ci-test-only@127.0.0.1:55433/nowave_ci
 trap 'docker compose down --volumes --remove-orphans' EXIT
 docker compose up -d --build --wait database
 python -m pytest backend/tests/database -q --junitxml=test-results/database.xml
 ```
 
-La fixture crée une base `blueway_test_<uuid>`, applique les migrations et la
+La fixture crée une base `nowave_test_<uuid>`, applique les migrations et la
 supprime en fin de suite, y compris en cas d'échec. En CI, le conteneur et son
 stockage sont également supprimés par une étape `always()`. Les exécutions GitHub
 utilisent des runners indépendants et des noms de projet Compose distincts.
 Pour plusieurs exécutions locales simultanées, changer à la fois
-`COMPOSE_PROJECT_NAME`, `BLUEWAY_TEST_PORT` et le port de `BLUEWAY_TEST_ADMIN_URL`.
+`COMPOSE_PROJECT_NAME`, `NOWAVE_TEST_PORT` et le port de `NOWAVE_TEST_ADMIN_URL`.
 
 La suite vérifie schéma, contraintes, migrations, repositories, PostGIS et le
 readiness HTTP contre une vraie base migrée. `/health/ready` conserve son contrat :
@@ -89,5 +89,5 @@ Le compte ayant préparé BLU-50 dispose du droit de pousser, pas d'administrer 
 règles. Une CI visible ne prouve donc pas à elle seule le blocage de la fusion.
 Après approbation, fusionner dans `dev` et vérifier le nouvel ensemble de contrôles.
 
-Références : BLU-50, Technical Documentation BlueWay Stage 3 (QA/SCM), Stage 4.
+Références : BLU-50, Technical Documentation NoWave Stage 3 (QA/SCM), Stage 4.
 La base persistante de recette Railway appartient à BLU-57, jamais à cette suite.

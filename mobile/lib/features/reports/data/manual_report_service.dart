@@ -3,6 +3,8 @@ import 'dart:convert';
 import '../../../core/api/api_service.dart';
 import '../domain/manual_report.dart';
 
+/// Envoie un signalement manuel au backend (`POST api/v1/reports`) et
+/// renvoie son identifiant.
 class ManualReportService {
   factory ManualReportService({
     required ApiService apiService,

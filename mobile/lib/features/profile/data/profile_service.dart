@@ -4,6 +4,8 @@ import '../../../core/api/api_exception.dart';
 import '../../../core/api/api_service.dart';
 import '../domain/user_profile.dart';
 
+/// Accès au profil NoWave côté backend (`api/v1/users/me`) : lecture,
+/// création et mise à jour des préférences, avec le token Firebase.
 class ProfileService {
   static const String _profilePath = 'api/v1/users/me';
 
@@ -19,6 +21,7 @@ class ProfileService {
 
   ProfileService._(this._apiService, this._getIdToken);
 
+  /// Renvoie `null` si le backend répond 404 : le profil n'existe pas encore.
   Future<UserProfile?> getCurrentProfile() async {
     final token = await _getIdToken();
 
@@ -48,6 +51,36 @@ class ProfileService {
         'Content-Type': 'application/json',
       },
       body: jsonEncode({'username': username.trim()}),
+    );
+
+    return _decodeProfile(response);
+  }
+
+  /// N'envoie que les préférences non nulles (PATCH partiel).
+  Future<UserProfile> updatePreferences({
+    bool? showUserName,
+    bool? showBoatInfo,
+    bool? notificationsEnabled,
+  }) async {
+    final changes = <String, bool>{
+      'show_user_name': ?showUserName,
+      'show_boat_info': ?showBoatInfo,
+      'notifications_enabled': ?notificationsEnabled,
+    };
+
+    if (changes.isEmpty) {
+      throw ArgumentError('Aucune préférence à mettre à jour.');
+    }
+
+    final token = await _getIdToken();
+
+    final response = await _apiService.patch(
+      _profilePath,
+      headers: {
+        'Authorization': 'Bearer $token',
+        'Content-Type': 'application/json',
+      },
+      body: jsonEncode(changes),
     );
 
     return _decodeProfile(response);

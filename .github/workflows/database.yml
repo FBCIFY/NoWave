@@ -17,8 +17,8 @@ jobs:
     timeout-minutes: 15
     env:
       COMPOSE_FILE: compose.test.yaml
-      COMPOSE_PROJECT_NAME: blueway-ci-${{ github.run_id }}-${{ github.run_attempt }}
-      BLUEWAY_TEST_ADMIN_URL: postgresql://blueway_ci:ci-test-only@127.0.0.1:55433/blueway_ci
+      COMPOSE_PROJECT_NAME: nowave-ci-${{ github.run_id }}-${{ github.run_attempt }}
+      NOWAVE_TEST_ADMIN_URL: postgresql://nowave_ci:ci-test-only@127.0.0.1:55433/nowave_ci
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5

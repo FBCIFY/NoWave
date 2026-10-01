@@ -1,11 +1,19 @@
 from fastapi import FastAPI
+from fastapi.exceptions import RequestValidationError
+from starlette.exceptions import HTTPException as StarletteHTTPException
 from app.config.production import configure_production, is_production
 
 from app.api.errors.handlers import (
+    http_exception_handler,
+    boat_already_exists_handler,
+    boat_not_found_handler,
     email_not_verified_handler,
+    gps_precision_insufficient_handler,
     inactive_user_handler,
+    invalid_positioning_input_handler,
     report_client_id_conflict_handler,
     report_not_found_handler,
+    request_validation_error_handler,
     report_validation_handler,
     user_already_exists_handler,
     user_not_found_handler,
@@ -14,9 +22,13 @@ from app.api.errors.handlers import (
 from app.api.router import router as api_router
 from app.api.routes.health import router as health_router
 from app.domain.errors import (
+    BoatAlreadyExistsError,
+    BoatNotFoundError,
     EmailNotVerifiedError,
+    GpsPrecisionInsufficientError,
     InactiveUserError,
     InvalidObservedAtError,
+    InvalidPositioningInputError,
     InvalidReportCategoryError,
     InvalidReportDescriptionError,
     InvalidReportPositionError,
@@ -39,6 +51,16 @@ app.include_router(health_router)
 app.include_router(api_router)
 
 app.add_exception_handler(
+    StarletteHTTPException,
+    http_exception_handler,
+)
+
+app.add_exception_handler(
+    RequestValidationError,
+    request_validation_error_handler,
+)
+
+app.add_exception_handler(
     ReportNotFoundError,
     report_not_found_handler,
 )
@@ -91,4 +113,27 @@ app.add_exception_handler(
 app.add_exception_handler(
     UserNotFoundError,
     user_not_found_handler,
+)
+
+
+app.add_exception_handler(
+    GpsPrecisionInsufficientError,
+    gps_precision_insufficient_handler,
+)
+
+
+app.add_exception_handler(
+    InvalidPositioningInputError,
+    invalid_positioning_input_handler,
+)
+
+
+app.add_exception_handler(
+    BoatNotFoundError,
+    boat_not_found_handler,
+)
+
+app.add_exception_handler(
+    BoatAlreadyExistsError,
+    boat_already_exists_handler,
 )

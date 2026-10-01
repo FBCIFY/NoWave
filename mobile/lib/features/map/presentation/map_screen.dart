@@ -16,8 +16,15 @@ import '../../reports/presentation/report_composer_sheet.dart';
 import '../../reports/data/manual_report_service.dart';
 import '../../reports/domain/manual_report.dart';
 
+/// Nord en haut, carte tournée selon le cap du téléphone, ou rotation libre
+/// faite au doigt.
 enum _MapOrientationMode { north, heading, manual }
 
+/// Carte principale : position GPS, suivi de l'utilisateur, boussole et
+/// création d'un signalement.
+///
+/// En mode signalement, le marqueur reste fixe à l'écran et c'est la carte
+/// qu'on déplace dessous ; le point visé est recalculé à chaque mouvement.
 class MapScreen extends StatefulWidget {
   final VoidCallback? onOpenProfile;
   final ManualReportService? reportService;
@@ -82,6 +89,8 @@ class _MapScreenState extends State<MapScreen> {
     setState(() => _compassTurns += change / 360);
   }
 
+  // Un geste de l'utilisateur coupe le suivi GPS ; une rotation au doigt
+  // passe la boussole en mode manuel.
   void _handleMapCameraChange(CameraChangedEventData event) {
     final bearing = event.cameraState.bearing;
     final bearingDelta = ((bearing - _cameraBearing + 540) % 360 - 180);
@@ -140,6 +149,7 @@ class _MapScreenState extends State<MapScreen> {
     }
   }
 
+  // Bascule entre nord en haut et cap du téléphone.
   Future<void> _toggleCompass() async {
     final map = _mapboxMap;
     if (map == null) return;
@@ -229,6 +239,7 @@ class _MapScreenState extends State<MapScreen> {
     }
   }
 
+  // Centre la carte sur l'utilisateur puis le suit à chaque nouvelle position.
   Future<void> _locate() async {
     setState(() {
       _isLocating = true;
@@ -332,6 +343,7 @@ class _MapScreenState extends State<MapScreen> {
     }
   }
 
+  // Ouvre le formulaire et mémorise la caméra pour la rétablir à la fermeture.
   Future<void> _openReportComposer() async {
     if (_reportComposerOpen) return;
     final position = _position;
@@ -454,6 +466,8 @@ class _MapScreenState extends State<MapScreen> {
     final latitude = double.parse(
       point.coordinates.lat.toDouble().toStringAsFixed(6),
     );
+    // Même contenu qu'un envoi raté : on garde le même `client_report_id` pour
+    // que le backend ne crée pas de doublon.
     final previous = _pendingReport;
     final request =
         previous != null &&
@@ -506,6 +520,7 @@ class _MapScreenState extends State<MapScreen> {
     );
   }
 
+  // Convertit la pointe du marqueur (pixels) en coordonnées sur la carte.
   Future<void> _updateReportPoint() async {
     final map = _mapboxMap;
     final mapBox = _mapAreaKey.currentContext?.findRenderObject() as RenderBox?;
@@ -845,6 +860,7 @@ class _MapScreenState extends State<MapScreen> {
   }
 }
 
+/// Icône de la boussole, qui tourne avec le cap du téléphone.
 class _CompassGlyph extends StatelessWidget {
   const _CompassGlyph({required this.headingTurns});
 
@@ -906,6 +922,7 @@ class _CompassRingPainter extends CustomPainter {
   bool shouldRepaint(covariant _CompassRingPainter oldDelegate) => false;
 }
 
+/// Bouton rond de la carte avec une petite animation au toucher.
 class _PoppingMapButton extends StatefulWidget {
   const _PoppingMapButton({
     required this.tooltip,
