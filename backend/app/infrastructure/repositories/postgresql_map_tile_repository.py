@@ -1,11 +1,11 @@
 from uuid import UUID
 
-from app.application.ports.map_tile_repository import MapTileRepository
+from app.application.ports.map_tile_reader import MapTileReader
 from app.domain.report import ReportCategory
 from app.infrastructure.database.connection import database_connection
 
 
-class PostgreSQLMapTileRepository(MapTileRepository):
+class PostgreSQLMapTileRepository(MapTileReader):
     """Build Mapbox Vector Tiles from current report locations."""
 
     def get_tile(

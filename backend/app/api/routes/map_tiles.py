@@ -32,7 +32,7 @@ def get_map_tile(
         )
 
     service = MapQueryService(
-        map_tile_repository=PostgreSQLMapTileRepository(),
+        map_tile_reader=PostgreSQLMapTileRepository(),
     )
     tile = service.get_tile(
         zoom=z,

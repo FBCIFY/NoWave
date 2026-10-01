@@ -8,13 +8,13 @@ def test_map_query_delegates_to_repository():
     expected_tile = b"vector tile bytes"
     received = {}
 
-    class FakeMapTileRepository:
+    class FakeMapTileReader:
         def get_tile(self, **kwargs):
             received.update(kwargs)
             return expected_tile
 
     service = MapQueryService(
-        map_tile_repository=FakeMapTileRepository(),
+        map_tile_reader=FakeMapTileReader(),
     )
 
     tile = service.get_tile(

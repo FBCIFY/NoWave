@@ -4,8 +4,8 @@ from uuid import UUID
 from app.domain.report import ReportCategory
 
 
-class MapTileRepository(ABC):
-    """Provide encoded map tiles independently of their storage implementation."""
+class MapTileReader(ABC):
+    """Read encoded map tiles independently of their storage implementation."""
 
     @abstractmethod
     def get_tile(
