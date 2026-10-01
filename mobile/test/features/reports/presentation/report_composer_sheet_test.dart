@@ -219,6 +219,15 @@ void main() {
     expect(find.byType(Image), findsOneWidget);
     expect(find.text('Nouveau signalement'), findsOneWidget);
     expect(find.text('Estimé à 120 m · ajustez si besoin'), findsOneWidget);
+
+    await tester.tap(find.bySemanticsLabel('Agrandir la photo'));
+    await tester.pumpAndSettle();
+    expect(find.byType(InteractiveViewer), findsOneWidget);
+
+    await tester.tap(find.byTooltip('Fermer la photo'));
+    await tester.pumpAndSettle();
+    expect(find.byType(InteractiveViewer), findsNothing);
+    expect(find.text('Nouveau signalement'), findsOneWidget);
   });
 
   testWidgets('envoie la photo après la publication, puis réessaie', (

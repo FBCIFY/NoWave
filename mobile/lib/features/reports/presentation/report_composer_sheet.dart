@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 
 import '../../../core/api/api_exception.dart';
 import '../domain/manual_report.dart';
+import 'report_photo_viewer.dart';
 
 /// Panneau du bas en mode signalement : catégorie, commentaire facultatif
 /// (250 caractères max) et bouton Publier. L'envoi est fait par `MapScreen`.
@@ -290,16 +291,7 @@ class _ReportComposerSheetState extends State<ReportComposerSheet> {
         child: Row(
           children: [
             if (photo != null) ...[
-              ClipRRect(
-                borderRadius: BorderRadius.circular(8),
-                child: Image.memory(
-                  photo,
-                  width: 44,
-                  height: 44,
-                  fit: BoxFit.cover,
-                  gaplessPlayback: true,
-                ),
-              ),
+              _photoThumbnail(photo),
               const SizedBox(width: 12),
             ],
             Expanded(
@@ -336,6 +328,46 @@ class _ReportComposerSheetState extends State<ReportComposerSheet> {
                 icon: const Icon(Icons.close),
               ),
           ],
+        ),
+      ),
+    );
+  }
+
+  // Le badge montre que la miniature s'ouvre : sans lui, rien ne l'indique.
+  Widget _photoThumbnail(Uint8List photo) {
+    return Semantics(
+      button: true,
+      label: 'Agrandir la photo',
+      child: GestureDetector(
+        onTap: () => ReportPhotoViewer.show(context, photo),
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(8),
+          child: Stack(
+            children: [
+              Image.memory(
+                photo,
+                width: 44,
+                height: 44,
+                fit: BoxFit.cover,
+                gaplessPlayback: true,
+              ),
+              const Positioned(
+                right: 0,
+                bottom: 0,
+                child: ColoredBox(
+                  color: Colors.black54,
+                  child: Padding(
+                    padding: EdgeInsets.all(2),
+                    child: Icon(
+                      Icons.open_in_full,
+                      color: Colors.white,
+                      size: 12,
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );
