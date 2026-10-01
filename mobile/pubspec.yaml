@@ -70,6 +70,19 @@ flutter:
   # the material Icons class.
   uses-material-design: true
 
+  # Raleway, la police du logo NoWave (licence OFL dans le même dossier).
+  # Embarquée plutôt que téléchargée : elle reste disponible hors réseau.
+  fonts:
+    - family: Raleway
+      fonts:
+        - asset: assets/fonts/raleway/Raleway-Regular.ttf
+        - asset: assets/fonts/raleway/Raleway-Medium.ttf
+          weight: 500
+        - asset: assets/fonts/raleway/Raleway-SemiBold.ttf
+          weight: 600
+        - asset: assets/fonts/raleway/Raleway-Bold.ttf
+          weight: 700
+
   # To add assets to your application, add an assets section, like this:
   # assets:
   #   - images/a_dot_burr.jpeg
