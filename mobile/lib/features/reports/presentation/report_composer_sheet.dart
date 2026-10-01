@@ -229,9 +229,15 @@ class _ReportComposerSheetState extends State<ReportComposerSheet> {
                             ? null
                             : _publish,
                         style: _primaryButtonStyle,
+                        // Grisé sans explication, le bouton laissait chercher
+                        // ce qui manquait : son libellé dit quoi faire.
                         child: _isBusy
                             ? const _ButtonSpinner()
-                            : const Text('Publier le signalement'),
+                            : Text(
+                                _category == null
+                                    ? 'Choisissez une catégorie'
+                                    : 'Publier le signalement',
+                              ),
                       ),
                   ],
                 ),

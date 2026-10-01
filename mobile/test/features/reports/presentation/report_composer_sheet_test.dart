@@ -75,7 +75,7 @@ void main() {
       tester.widget<EditableText>(find.byType(EditableText)).focusNode.hasFocus,
       isTrue,
     );
-    final button = find.widgetWithText(FilledButton, 'Publier le signalement');
+    final button = find.byType(FilledButton);
     expect(button, findsOneWidget);
     expect(tester.getBottomLeft(button).dy, lessThan(844 - 300));
     expect(
@@ -121,7 +121,11 @@ void main() {
       tester.widget<FilledButton>(find.byType(FilledButton)).onPressed,
       isNull,
     );
+    expect(find.text('Choisissez une catégorie'), findsOneWidget);
+    expect(publish, findsNothing);
     await tester.tap(find.text('Pollution'));
+    await tester.pump();
+    expect(find.text('Choisissez une catégorie'), findsNothing);
     await tester.enterText(find.byType(TextField), '  Pollution visible  ');
     await tester.tap(publish);
     await tester.pump();
