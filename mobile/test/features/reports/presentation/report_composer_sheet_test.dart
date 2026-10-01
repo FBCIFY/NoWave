@@ -42,12 +42,18 @@ void main() {
     );
 
     await tester.pumpWidget(sheetWithInsets(0));
-    expect(find.byTooltip('Animal marin'), findsOneWidget);
-    expect(find.byTooltip('Obstacle'), findsOneWidget);
+    expect(find.text('Animal marin'), findsOneWidget);
+    expect(find.text('Obstacle'), findsOneWidget);
     expect(find.byType(TextField), findsOneWidget);
     expect(
       ReportComposerSheet.heightFor(const MediaQueryData(size: Size(390, 844))),
-      300,
+      272,
+    );
+    // La carte place le marqueur avec heightFor : il doit correspondre à la
+    // hauteur réelle du formulaire (+ 12 de marge sous le panneau).
+    expect(
+      tester.getSize(find.byKey(const ValueKey('report-composer'))).height,
+      272 + 12,
     );
 
     await tester.tap(find.byType(TextField));
@@ -61,8 +67,8 @@ void main() {
       findsOneWidget,
     );
 
-    expect(find.byTooltip('Animal marin'), findsOneWidget);
-    expect(find.byTooltip('Obstacle'), findsOneWidget);
+    expect(find.text('Animal marin'), findsOneWidget);
+    expect(find.text('Obstacle'), findsOneWidget);
     await tester.enterText(find.byType(TextField), 'Le clavier reste actif');
     expect(find.text('Le clavier reste actif'), findsOneWidget);
     expect(
@@ -79,11 +85,11 @@ void main() {
           viewInsets: EdgeInsets.only(bottom: 300),
         ),
       ),
-      300,
+      272,
     );
 
     await tester.pumpWidget(sheetWithInsets(0));
-    expect(find.byTooltip('Animal marin'), findsOneWidget);
+    expect(find.text('Animal marin'), findsOneWidget);
   });
 
   testWidgets('publie la catégorie et le commentaire, puis permet un réessai', (
@@ -115,7 +121,7 @@ void main() {
       tester.widget<FilledButton>(find.byType(FilledButton)).onPressed,
       isNull,
     );
-    await tester.tap(find.byTooltip('Pollution'));
+    await tester.tap(find.text('Pollution'));
     await tester.enterText(find.byType(TextField), '  Pollution visible  ');
     await tester.tap(publish);
     await tester.pump();
@@ -134,6 +140,53 @@ void main() {
       find.text('Ce signalement a changé depuis le premier envoi.'),
       findsNothing,
     );
+  });
+
+  testWidgets('ferme le clavier quand on touche en dehors du champ', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      const MaterialApp(
+        home: Scaffold(
+          body: Column(
+            children: [
+              Expanded(child: SizedBox.expand(key: ValueKey('map'))),
+              ReportComposerSheet(onClose: _noop),
+            ],
+          ),
+        ),
+      ),
+    );
+    bool hasFocus() => tester
+        .widget<EditableText>(find.byType(EditableText))
+        .focusNode
+        .hasFocus;
+
+    await tester.tap(find.byType(TextField));
+    await tester.pump();
+    expect(hasFocus(), isTrue);
+
+    await tester.tap(find.byKey(const ValueKey('map')));
+    await tester.pump();
+    expect(hasFocus(), isFalse);
+  });
+
+  testWidgets('n’affiche le compteur qu’à l’approche de la limite', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      const MaterialApp(
+        home: Scaffold(body: ReportComposerSheet(onClose: _noop)),
+      ),
+    );
+
+    await tester.enterText(find.byType(TextField), 'a' * 199);
+    await tester.pump();
+    expect(find.text('199/250'), findsNothing);
+
+    await tester.enterText(find.byType(TextField), 'a' * 200);
+    await tester.pump();
+    expect(find.text('200/250'), findsOneWidget);
   });
 
   testWidgets('affiche la photo et l’estimation dans l’en-tête', (
@@ -190,7 +243,7 @@ void main() {
       ),
     );
 
-    await tester.tap(find.byTooltip('Pollution'));
+    await tester.tap(find.text('Pollution'));
     await tester.pump();
     await tester.tap(find.text('Publier le signalement'));
     await tester.pump();
@@ -231,7 +284,7 @@ void main() {
         ),
       ),
     );
-    await tester.tap(find.byTooltip('Obstacle'));
+    await tester.tap(find.text('Obstacle'));
     await tester.pump();
     await tester.tap(find.text('Publier le signalement'));
     await tester.pump();

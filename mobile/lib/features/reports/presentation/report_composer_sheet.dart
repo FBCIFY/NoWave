@@ -30,16 +30,23 @@ class ReportComposerSheet extends StatefulWidget {
   final Uint8List? photo;
   final String? subtitle;
 
-  /// Hauteur du panneau, utilisée par la carte pour placer le marqueur.
-  static double heightFor(MediaQueryData mediaQuery) {
-    final availableHeight =
-        mediaQuery.size.height -
+  /// Hauteur réservée au panneau par la carte pour placer le marqueur : celle
+  /// du formulaire sans message. Un message d'erreur ou d'envoi agrandit le
+  /// panneau vers le haut sans déplacer le marqueur.
+  static double heightFor(MediaQueryData mediaQuery) =>
+      math.min(_formHeight, _maxHeightFor(mediaQuery));
+
+  // En-tête 12 + 48, catégories 12 + 64, commentaire 12 + 48,
+  // bouton 12 + 48 + 16.
+  static const _formHeight = 272.0;
+
+  static double _maxHeightFor(MediaQueryData mediaQuery) => math.max(
+    0,
+    mediaQuery.size.height -
         mediaQuery.padding.top -
         mediaQuery.viewInsets.bottom -
-        24;
-    const preferredHeight = 300.0;
-    return math.min(preferredHeight, math.max(0, availableHeight));
-  }
+        24,
+  );
 
   @override
   State<ReportComposerSheet> createState() => _ReportComposerSheetState();
@@ -151,10 +158,8 @@ class _ReportComposerSheetState extends State<ReportComposerSheet> {
   @override
   Widget build(BuildContext context) {
     final mediaQuery = MediaQuery.of(context);
-    final photo = widget.photo;
-    final subtitle = widget.subtitle;
-    final isLocked = _isBusy || _isPublished;
 
+    // Espacements : 16 contre les bords du panneau, 12 entre deux blocs.
     return Padding(
       padding: EdgeInsets.fromLTRB(
         12,
@@ -162,13 +167,15 @@ class _ReportComposerSheetState extends State<ReportComposerSheet> {
         12,
         mediaQuery.viewInsets.bottom + 12,
       ),
-      child: SizedBox(
-        height: ReportComposerSheet.heightFor(mediaQuery),
+      child: ConstrainedBox(
+        constraints: BoxConstraints(
+          maxHeight: ReportComposerSheet._maxHeightFor(mediaQuery),
+        ),
         child: DecoratedBox(
           decoration: BoxDecoration(
             color: const Color(0xFFF6F8FA),
             borderRadius: BorderRadius.circular(24),
-            border: Border.all(color: const Color(0xFFDDE3EA)),
+            border: Border.all(color: _borderColor),
             boxShadow: const [
               BoxShadow(
                 color: Color(0x290D2238),
@@ -178,161 +185,55 @@ class _ReportComposerSheetState extends State<ReportComposerSheet> {
             ],
           ),
           child: Column(
+            mainAxisSize: MainAxisSize.min,
             children: [
-              SizedBox(
-                height: 56,
-                child: Padding(
-                  padding: const EdgeInsets.fromLTRB(16, 6, 12, 6),
-                  child: Row(
-                    children: [
-                      if (photo != null) ...[
-                        ClipRRect(
-                          borderRadius: BorderRadius.circular(8),
-                          child: Image.memory(
-                            photo,
-                            width: 44,
-                            height: 44,
-                            fit: BoxFit.cover,
-                            gaplessPlayback: true,
-                          ),
-                        ),
-                        const SizedBox(width: 12),
-                      ],
-                      Expanded(
-                        child: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            const Text(
-                              'Nouveau signalement',
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: TextStyle(
-                                color: Color(0xFF243243),
-                                fontSize: 18,
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
-                            if (subtitle != null)
-                              Text(
-                                subtitle,
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: const TextStyle(
-                                  color: Color(0xFF687789),
-                                  fontSize: 12,
-                                ),
-                              ),
-                          ],
-                        ),
-                      ),
-                      if (!_isPublished)
-                        IconButton(
-                          tooltip: 'Fermer',
-                          onPressed: _isBusy ? null : widget.onClose,
-                          color: const Color(0xFF243243),
-                          style: IconButton.styleFrom(
-                            backgroundColor: Colors.white,
-                          ),
-                          icon: const Icon(Icons.close),
-                        ),
-                    ],
-                  ),
-                ),
-              ),
-              Expanded(
+              _header(),
+              Flexible(
                 child: SingleChildScrollView(
-                  padding: const EdgeInsets.fromLTRB(16, 4, 16, 4),
+                  padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                        children: [
-                          _categoryButton(
-                            ReportCategory.marineAnimal,
-                            Icons.pets_outlined,
-                            'Animal marin',
-                          ),
-                          _categoryButton(
-                            ReportCategory.obstruction,
-                            Icons.warning_amber_rounded,
-                            'Obstacle',
-                          ),
-                          _categoryButton(
-                            ReportCategory.pollution,
-                            Icons.water_drop_outlined,
-                            'Pollution',
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 8),
-                      TextField(
-                        controller: _commentController,
-                        enabled: !isLocked,
-                        maxLength: 250,
-                        maxLines: 2,
-                        minLines: 1,
-                        textInputAction: TextInputAction.done,
-                        onSubmitted: (_) => FocusScope.of(context).unfocus(),
-                        style: const TextStyle(color: Color(0xFF243243)),
-                        decoration: InputDecoration(
-                          hintText: 'Ajouter un commentaire…',
-                          hintStyle: const TextStyle(color: Color(0xFF687789)),
-                          filled: true,
-                          fillColor: Colors.white,
-                          isDense: true,
-                          border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(12),
-                            borderSide: const BorderSide(
-                              color: Color(0xFFDDE3EA),
-                            ),
-                          ),
-                          enabledBorder: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(12),
-                            borderSide: const BorderSide(
-                              color: Color(0xFFDDE3EA),
-                            ),
-                          ),
-                          counterStyle: const TextStyle(
-                            color: Color(0xFF687789),
-                          ),
-                        ),
-                      ),
+                      _categoryPicker(),
+                      const SizedBox(height: 12),
+                      _commentField(),
                     ],
                   ),
                 ),
               ),
-              if (_isPublished)
-                _publishedStatus()
-              else if (_errorMessage != null)
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
-                  child: Text(
-                    _errorMessage!,
-                    textAlign: TextAlign.center,
-                    style: const TextStyle(color: _errorColor),
-                  ),
-                ),
               Padding(
-                padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-                child: _isPublished && _errorMessage != null
-                    ? _photoRetryActions()
-                    : SizedBox(
-                        width: double.infinity,
-                        child: FilledButton(
-                          onPressed:
-                              _category == null ||
-                                  isLocked ||
-                                  widget.onPublish == null
-                              ? null
-                              : _publish,
-                          style: _primaryButtonStyle,
-                          child: _isBusy
-                              ? const _ButtonSpinner()
-                              : const Text('Publier le signalement'),
-                        ),
+                padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    if (_isPublished) ...[
+                      _publishedStatus(),
+                      const SizedBox(height: 12),
+                    ] else if (_errorMessage != null) ...[
+                      Text(
+                        _errorMessage!,
+                        textAlign: TextAlign.center,
+                        style: const TextStyle(color: _errorColor),
                       ),
+                      const SizedBox(height: 12),
+                    ],
+                    if (_isPublished && _errorMessage != null)
+                      _photoRetryActions()
+                    else
+                      FilledButton(
+                        onPressed:
+                            _category == null ||
+                                _isLocked ||
+                                widget.onPublish == null
+                            ? null
+                            : _publish,
+                        style: _primaryButtonStyle,
+                        child: _isBusy
+                            ? const _ButtonSpinner()
+                            : const Text('Publier le signalement'),
+                      ),
+                  ],
+                ),
               ),
             ],
           ),
@@ -341,108 +242,253 @@ class _ReportComposerSheetState extends State<ReportComposerSheet> {
     );
   }
 
+  bool get _isLocked => _isBusy || _isPublished;
+
+  static const _textColor = Color(0xFF243243);
+  static const _mutedColor = Color(0xFF687789);
+  static const _borderColor = Color(0xFFDDE3EA);
+  static const _accentColor = Color(0xFF0DB8D5);
+  static const _errorColor = Color(0xFFAF3942);
+
+  // Même arrondi que les champs et boutons du thème.
+  static const _controlRadius = BorderRadius.all(Radius.circular(14));
+
   static final _primaryButtonStyle = FilledButton.styleFrom(
     minimumSize: const ui.Size.fromHeight(48),
-    backgroundColor: const Color(0xFF0DB8D5),
+    backgroundColor: _accentColor,
     disabledBackgroundColor: const Color(0xFFD5E4EC),
     disabledForegroundColor: const Color(0xFF637888),
   );
 
-  static const _errorColor = Color(0xFFAF3942);
+  static const _categories = [
+    (ReportCategory.marineAnimal, Icons.pets_outlined, 'Animal marin'),
+    (ReportCategory.obstruction, Icons.warning_amber_rounded, 'Obstacle'),
+    (ReportCategory.pollution, Icons.water_drop_outlined, 'Pollution'),
+  ];
+
+  // Le compteur n'apparaît qu'à l'approche de la limite de 250 caractères.
+  static const _commentMaxLength = 250;
+  static const _counterThreshold = 200;
+
+  Widget _header() {
+    final photo = widget.photo;
+    final subtitle = widget.subtitle;
+    // La croix (40 px dans une zone de 48) tombe à 16 du coin.
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 12, 12, 0),
+      child: SizedBox(
+        height: 48,
+        child: Row(
+          children: [
+            if (photo != null) ...[
+              ClipRRect(
+                borderRadius: BorderRadius.circular(8),
+                child: Image.memory(
+                  photo,
+                  width: 44,
+                  height: 44,
+                  fit: BoxFit.cover,
+                  gaplessPlayback: true,
+                ),
+              ),
+              const SizedBox(width: 12),
+            ],
+            Expanded(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    'Nouveau signalement',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      color: _textColor,
+                      fontSize: 18,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  if (subtitle != null)
+                    Text(
+                      subtitle,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(color: _mutedColor, fontSize: 12),
+                    ),
+                ],
+              ),
+            ),
+            if (!_isPublished)
+              IconButton(
+                tooltip: 'Fermer',
+                onPressed: _isBusy ? null : widget.onClose,
+                color: _textColor,
+                style: IconButton.styleFrom(backgroundColor: Colors.white),
+                icon: const Icon(Icons.close),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _categoryPicker() {
+    return Row(
+      children: [
+        for (final (index, (category, icon, label)) in _categories.indexed) ...[
+          if (index > 0) const SizedBox(width: 8),
+          Expanded(child: _categoryTile(category, icon, label)),
+        ],
+      ],
+    );
+  }
+
+  // Icône et nom visibles : une infobulle demande un appui long, que
+  // personne ne fait sur l'eau.
+  Widget _categoryTile(ReportCategory category, IconData icon, String label) {
+    final selected = _category == category;
+    final foreground = selected ? Colors.white : _textColor;
+    return Semantics(
+      selected: selected,
+      inMutuallyExclusiveGroup: true,
+      child: Opacity(
+        // Une fois verrouillé, seule la catégorie choisie reste en avant.
+        opacity: _isLocked && !selected ? 0.5 : 1,
+        child: Material(
+          color: selected ? _accentColor : Colors.white,
+          shape: RoundedRectangleBorder(
+            borderRadius: _controlRadius,
+            side: BorderSide(color: selected ? _accentColor : _borderColor),
+          ),
+          clipBehavior: Clip.antiAlias,
+          child: InkWell(
+            onTap: _isLocked
+                ? null
+                : () => setState(() {
+                    _category = category;
+                    _errorMessage = null;
+                  }),
+            child: SizedBox(
+              height: 64,
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(icon, color: foreground),
+                  const SizedBox(height: 4),
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 4),
+                    child: FittedBox(
+                      fit: BoxFit.scaleDown,
+                      child: Text(
+                        label,
+                        maxLines: 1,
+                        style: TextStyle(
+                          color: foreground,
+                          fontSize: 13,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _commentField() {
+    const border = OutlineInputBorder(
+      borderRadius: _controlRadius,
+      borderSide: BorderSide(color: _borderColor),
+    );
+    return TextField(
+      controller: _commentController,
+      enabled: !_isLocked,
+      maxLength: _commentMaxLength,
+      maxLines: 2,
+      minLines: 1,
+      textInputAction: TextInputAction.done,
+      onSubmitted: (_) => FocusScope.of(context).unfocus(),
+      // Sur mobile, Flutter garde le clavier ouvert par défaut quand on touche
+      // ailleurs : un appui sur la carte ou le panneau le referme.
+      onTapOutside: (_) => FocusScope.of(context).unfocus(),
+      buildCounter:
+          (context, {required currentLength, required isFocused, maxLength}) =>
+              currentLength < _counterThreshold
+              ? null
+              : Text(
+                  '$currentLength/$maxLength',
+                  style: const TextStyle(color: _mutedColor, fontSize: 12),
+                ),
+      style: const TextStyle(color: _textColor),
+      decoration: const InputDecoration(
+        hintText: 'Ajouter un commentaire (facultatif)',
+        hintMaxLines: 1,
+        hintStyle: TextStyle(color: _mutedColor),
+        contentPadding: EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        border: border,
+        enabledBorder: border,
+      ),
+    );
+  }
 
   // Le signalement est en ligne quoi qu'il arrive à la photo : on le dit
   // d'abord, puis l'état de l'envoi.
   Widget _publishedStatus() {
     final photoMessage = _errorMessage ?? 'Envoi de la photo…';
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
-      child: Column(
-        children: [
-          const Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Icon(Icons.check_circle, color: Color(0xFF1E8E5A), size: 18),
-              SizedBox(width: 6),
-              Text(
-                'Signalement publié',
-                style: TextStyle(
-                  color: Color(0xFF1E8E5A),
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 2),
-          Text(
-            photoMessage,
-            textAlign: TextAlign.center,
-            style: TextStyle(
-              color: _errorMessage != null
-                  ? _errorColor
-                  : const Color(0xFF687789),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  // Signalement publié mais photo non envoyée : réessayer, ou terminer en
-  // abandonnant la photo.
-  Widget _photoRetryActions() {
-    return Row(
+    return Column(
       children: [
-        Expanded(
-          child: OutlinedButton(
-            onPressed: widget.onClose,
-            style: OutlinedButton.styleFrom(
-              minimumSize: const ui.Size.fromHeight(48),
-              foregroundColor: const Color(0xFF243243),
-              side: const BorderSide(color: Color(0xFFDDE3EA)),
+        const Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Icons.check_circle, color: Color(0xFF1E8E5A), size: 18),
+            SizedBox(width: 6),
+            Text(
+              'Signalement publié',
+              style: TextStyle(
+                color: Color(0xFF1E8E5A),
+                fontWeight: FontWeight.w600,
+              ),
             ),
-            child: const Text('Terminer sans photo'),
-          ),
+          ],
         ),
-        const SizedBox(width: 12),
-        Expanded(
-          child: FilledButton(
-            onPressed: _uploadPhoto,
-            style: _primaryButtonStyle,
-            child: const Text('Réessayer l’envoi'),
+        const SizedBox(height: 2),
+        Text(
+          photoMessage,
+          textAlign: TextAlign.center,
+          style: TextStyle(
+            color: _errorMessage != null ? _errorColor : _mutedColor,
           ),
         ),
       ],
     );
   }
 
-  Widget _categoryButton(ReportCategory category, IconData icon, String label) {
-    final selected = _category == category;
-    return Semantics(
-      label: label,
-      selected: selected,
-      button: true,
-      child: Tooltip(
-        message: label,
-        child: IconButton.filledTonal(
-          onPressed: _isBusy || _isPublished
-              ? null
-              : () => setState(() {
-                  _category = category;
-                  _errorMessage = null;
-                }),
-          style: IconButton.styleFrom(
-            minimumSize: const ui.Size(54, 54),
-            backgroundColor: selected ? const Color(0xFF0DB8D5) : Colors.white,
-            foregroundColor: selected ? Colors.white : const Color(0xFF243243),
-            side: BorderSide(
-              color: selected
-                  ? const Color(0xFF0DB8D5)
-                  : const Color(0xFFDDE3EA),
-            ),
-          ),
-          icon: Icon(icon),
+  // Signalement publié mais photo non envoyée : réessayer, ou terminer en
+  // abandonnant la photo. L'un sous l'autre, les libellés tiennent sur une
+  // ligne.
+  Widget _photoRetryActions() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        FilledButton(
+          onPressed: _uploadPhoto,
+          style: _primaryButtonStyle,
+          child: const Text('Réessayer l’envoi'),
         ),
-      ),
+        const SizedBox(height: 8),
+        TextButton(
+          onPressed: widget.onClose,
+          style: TextButton.styleFrom(
+            minimumSize: const ui.Size.fromHeight(40),
+            foregroundColor: _textColor,
+          ),
+          child: const Text('Terminer sans photo'),
+        ),
+      ],
     );
   }
 }
@@ -452,9 +498,14 @@ class _ButtonSpinner extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // Le bouton est désactivé pendant l'envoi : un spinner blanc y serait
+    // presque invisible.
     return const SizedBox.square(
       dimension: 20,
-      child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+      child: CircularProgressIndicator(
+        strokeWidth: 2,
+        color: Color(0xFF637888),
+      ),
     );
   }
 }
