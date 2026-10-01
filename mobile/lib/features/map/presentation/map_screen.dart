@@ -16,6 +16,7 @@ import '../../camera/domain/photo_report_draft.dart';
 import '../../reports/presentation/report_composer_sheet.dart';
 import '../../reports/data/manual_report_service.dart';
 import '../../reports/domain/manual_report.dart';
+import 'widgets/map_notice_banner.dart';
 
 /// Nord en haut, carte tournée selon le cap du téléphone, ou rotation libre
 /// faite au doigt.
@@ -79,6 +80,9 @@ class _MapScreenState extends State<MapScreen> {
   final _mapAreaKey = GlobalKey();
   final _reportMarkerKey = GlobalKey();
   bool _wasKeyboardVisible = false;
+  MapNotice? _notice;
+  int _noticeId = 0;
+  Timer? _noticeTimer;
 
   @override
   void initState() {
@@ -95,6 +99,23 @@ class _MapScreenState extends State<MapScreen> {
         _deviceHeading = null;
       },
     );
+  }
+
+  // En haut de la carte plutôt qu'en SnackBar : le bas est pris par les
+  // boutons.
+  void _showNotice(String message, MapNoticeKind kind) {
+    _noticeTimer?.cancel();
+    setState(() {
+      _notice = MapNotice(message, kind);
+      _noticeId++;
+    });
+    _noticeTimer = Timer(const Duration(seconds: 4), _hideNotice);
+  }
+
+  void _hideNotice() {
+    _noticeTimer?.cancel();
+    if (!mounted || _notice == null) return;
+    setState(() => _notice = null);
   }
 
   void _setCompassTurnsForHeading(double heading) {
@@ -175,9 +196,7 @@ class _MapScreenState extends State<MapScreen> {
         : _MapOrientationMode.north;
     final heading = _deviceHeading;
     if (nextMode == _MapOrientationMode.heading && heading == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Cap du téléphone indisponible.')),
-      );
+      _showNotice('Cap du téléphone indisponible.', MapNoticeKind.error);
       return;
     }
     final targetBearing = nextMode == _MapOrientationMode.north
@@ -215,9 +234,7 @@ class _MapScreenState extends State<MapScreen> {
         _orientationMode = previousMode;
         _selectedBearing = previousSelectedBearing;
       });
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Impossible de changer l’orientation.')),
-      );
+      _showNotice('Impossible de changer l’orientation.', MapNoticeKind.error);
     }
   }
 
@@ -394,10 +411,9 @@ class _MapScreenState extends State<MapScreen> {
         ? null
         : Position(position.longitude, position.latitude);
     if (start == null || map == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Attendez que votre position GPS soit disponible.'),
-        ),
+      _showNotice(
+        'Attendez que votre position GPS soit disponible.',
+        MapNoticeKind.warning,
       );
       return;
     }
@@ -553,8 +569,7 @@ class _MapScreenState extends State<MapScreen> {
       return;
     }
     unawaited(_closeReportComposer());
-    ScaffoldMessenger.of(context)
-        .showSnackBar(const SnackBar(content: Text('Signalement publié.')));
+    _showNotice('Signalement publié.', MapNoticeKind.success);
   }
 
   Future<void> _uploadReportPhoto() async {
@@ -576,9 +591,7 @@ class _MapScreenState extends State<MapScreen> {
     }
     if (!mounted || !_reportComposerOpen) return;
     unawaited(_closeReportComposer());
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Signalement publié avec sa photo.')),
-    );
+    _showNotice('Signalement publié avec sa photo.', MapNoticeKind.success);
   }
 
   // Le JPEG n'est gardé que pendant ce parcours : fermer après la publication
@@ -588,9 +601,7 @@ class _MapScreenState extends State<MapScreen> {
     final publishedWithoutPhoto = _publishedReportId != null;
     unawaited(_closeReportComposer());
     if (!publishedWithoutPhoto) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Signalement publié sans photo.')),
-    );
+    _showNotice('Signalement publié sans photo.', MapNoticeKind.warning);
   }
 
   String? _photoHint() {
@@ -682,6 +693,7 @@ class _MapScreenState extends State<MapScreen> {
   @override
   void dispose() {
     _reportPointTimer?.cancel();
+    _noticeTimer?.cancel();
     _reportPoint.dispose();
     final subscription = _positionSubscription;
     if (subscription != null) unawaited(subscription.cancel());
@@ -704,6 +716,7 @@ class _MapScreenState extends State<MapScreen> {
         ReportComposerSheet.heightFor(mediaQuery) +
         mediaQuery.viewInsets.bottom +
         12;
+    final notice = _notice;
     final gpsLabel = _isLocating
         ? 'Localisation…'
         : _locationError ??
@@ -780,44 +793,75 @@ class _MapScreenState extends State<MapScreen> {
                   bottom: false,
                   child: Padding(
                     padding: const EdgeInsets.all(16),
-                    child: Row(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
-                        Expanded(
-                          child: Align(
-                            alignment: Alignment.centerLeft,
-                            child: Container(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 12,
-                                vertical: 9,
-                              ),
-                              decoration: BoxDecoration(
-                                color: const Color(0xFFF6F8FA)
-                                    .withValues(alpha: 0.90),
-                                borderRadius: BorderRadius.circular(14),
-                              ),
-                              child: Text(
-                                gpsLabel,
-                                maxLines: 2,
-                                overflow: TextOverflow.ellipsis,
-                                style: const TextStyle(
-                                  color: Color(0xFF243243),
-                                  fontSize: 12,
+                        Row(
+                          children: [
+                            Expanded(
+                              child: Align(
+                                alignment: Alignment.centerLeft,
+                                child: Container(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 12,
+                                    vertical: 9,
+                                  ),
+                                  decoration: BoxDecoration(
+                                    color: const Color(0xFFF6F8FA)
+                                        .withValues(alpha: 0.90),
+                                    borderRadius: BorderRadius.circular(14),
+                                  ),
+                                  child: Text(
+                                    gpsLabel,
+                                    maxLines: 2,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: const TextStyle(
+                                      color: Color(0xFF243243),
+                                      fontSize: 12,
+                                    ),
+                                  ),
                                 ),
                               ),
                             ),
-                          ),
+                            if (widget.onOpenProfile != null) ...[
+                              const SizedBox(width: 12),
+                              _PoppingMapButton(
+                                tooltip: 'Mon profil',
+                                onPressed: widget.onOpenProfile,
+                                icon: const Icon(
+                                  Icons.person_outline,
+                                  color: Color(0xFF243243),
+                                ),
+                              ),
+                            ],
+                          ],
                         ),
-                        if (widget.onOpenProfile != null) ...[
-                          const SizedBox(width: 12),
-                          _PoppingMapButton(
-                            tooltip: 'Mon profil',
-                            onPressed: widget.onOpenProfile,
-                            icon: const Icon(
-                              Icons.person_outline,
-                              color: Color(0xFF243243),
-                            ),
-                          ),
-                        ],
+                        AnimatedSwitcher(
+                          duration: const Duration(milliseconds: 220),
+                          // Pas de SizeTransition : son découpage rectangulaire
+                          // coupait l'ombre et laissait des coins gris.
+                          transitionBuilder: (child, animation) =>
+                              FadeTransition(
+                                opacity: animation,
+                                child: SlideTransition(
+                                  position: Tween(
+                                    begin: const Offset(0, -0.25),
+                                    end: Offset.zero,
+                                  ).animate(animation),
+                                  child: child,
+                                ),
+                              ),
+                          child: notice == null
+                              ? const SizedBox.shrink()
+                              : Padding(
+                                  key: ValueKey(_noticeId),
+                                  padding: const EdgeInsets.only(top: 12),
+                                  child: MapNoticeBanner(
+                                    notice: notice,
+                                    onDismiss: _hideNotice,
+                                  ),
+                                ),
+                        ),
                       ],
                     ),
                   ),
