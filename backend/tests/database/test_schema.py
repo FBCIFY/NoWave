@@ -177,7 +177,7 @@ def test_historical_versions_are_not_foreign_keys(db):
 def test_migration_replay(dsn):
     upgrade_database(dsn)
     with psycopg.connect(dsn) as conn:
-        assert conn.execute('SELECT version_num FROM alembic_version').fetchone()==('20260930_0003',)
+        assert conn.execute('SELECT version_num FROM alembic_version').fetchone()==('20260930_schema_nowave',)
 
 
 def test_migrations_roundtrip(dsn):

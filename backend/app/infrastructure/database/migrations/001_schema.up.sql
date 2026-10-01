@@ -150,6 +150,7 @@ CREATE TABLE moderation_actions (
 );
 
 CREATE INDEX reports_final_position_gist ON reports USING gist (final_position);
+CREATE INDEX reports_final_position_geometry_gist ON reports USING gist ((final_position::geometry));
 
 CREATE INDEX device_positions_position_gist ON device_positions USING gist (position);
 
