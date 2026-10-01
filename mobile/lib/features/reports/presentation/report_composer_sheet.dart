@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:math' as math;
 import 'dart:typed_data';
 import 'dart:ui' as ui;
@@ -16,6 +17,8 @@ import 'report_photo_viewer.dart';
 /// [onUploadPhoto] envoie le JPEG une fois le signalement publié. En cas
 /// d'échec, l'utilisateur peut réessayer ou terminer sans photo. Une fois
 /// publié, le bouton Fermer disparaît : il laissait croire à une annulation.
+/// Avant, la croix et le retour arrière demandent confirmation s'il y a déjà
+/// une photo, une catégorie ou un commentaire à perdre.
 class ReportComposerSheet extends StatefulWidget {
   const ReportComposerSheet({
     super.key,
@@ -131,6 +134,41 @@ class _ReportComposerSheetState extends State<ReportComposerSheet> {
     }
   }
 
+  bool get _hasDraft =>
+      widget.photo != null ||
+      _category != null ||
+      _commentController.text.trim().isNotEmpty;
+
+  Future<void> _requestClose() async {
+    if (_isBusy) return;
+    if (!_isPublished && _hasDraft) {
+      final discard = await showDialog<bool>(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: const Text('Abandonner ce signalement ?'),
+          content: Text(
+            widget.photo == null
+                ? 'Il ne sera pas publié.'
+                : 'Il ne sera pas publié, et la photo ne sera pas gardée.',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(false),
+              child: const Text('Continuer'),
+            ),
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(true),
+              style: TextButton.styleFrom(foregroundColor: _errorColor),
+              child: const Text('Abandonner'),
+            ),
+          ],
+        ),
+      );
+      if (discard != true || !mounted) return;
+    }
+    widget.onClose();
+  }
+
   String _messageForApiError(ApiException error) {
     if (error.statusCode == 404) {
       if (error.code == 'user_not_found') {
@@ -170,88 +208,94 @@ class _ReportComposerSheetState extends State<ReportComposerSheet> {
     final mediaQuery = MediaQuery.of(context);
 
     // Espacements : 16 contre les bords du panneau, 12 entre deux blocs.
-    return Padding(
-      padding: EdgeInsets.fromLTRB(
-        12,
-        0,
-        12,
-        mediaQuery.viewInsets.bottom + 12,
-      ),
-      child: ConstrainedBox(
-        constraints: BoxConstraints(
-          maxHeight: ReportComposerSheet._maxHeightFor(mediaQuery),
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, _) {
+        if (!didPop) unawaited(_requestClose());
+      },
+      child: Padding(
+        padding: EdgeInsets.fromLTRB(
+          12,
+          0,
+          12,
+          mediaQuery.viewInsets.bottom + 12,
         ),
-        child: DecoratedBox(
-          decoration: BoxDecoration(
-            color: const Color(0xFFF6F8FA),
-            borderRadius: BorderRadius.circular(24),
-            border: Border.all(color: _borderColor),
-            boxShadow: const [
-              BoxShadow(
-                color: Color(0x290D2238),
-                blurRadius: 28,
-                offset: Offset(0, 10),
-              ),
-            ],
+        child: ConstrainedBox(
+          constraints: BoxConstraints(
+            maxHeight: ReportComposerSheet._maxHeightFor(mediaQuery),
           ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              _header(),
-              Flexible(
-                child: SingleChildScrollView(
-                  padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+          child: DecoratedBox(
+            decoration: BoxDecoration(
+              color: const Color(0xFFF6F8FA),
+              borderRadius: BorderRadius.circular(24),
+              border: Border.all(color: _borderColor),
+              boxShadow: const [
+                BoxShadow(
+                  color: Color(0x290D2238),
+                  blurRadius: 28,
+                  offset: Offset(0, 10),
+                ),
+              ],
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                _header(),
+                Flexible(
+                  child: SingleChildScrollView(
+                    padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        _categoryPicker(),
+                        const SizedBox(height: 12),
+                        _commentField(),
+                      ],
+                    ),
+                  ),
+                ),
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
-                      _categoryPicker(),
-                      const SizedBox(height: 12),
-                      _commentField(),
+                      if (_isPublished) ...[
+                        _publishedStatus(),
+                        const SizedBox(height: 12),
+                      ] else if (_errorMessage != null) ...[
+                        Text(
+                          _errorMessage!,
+                          textAlign: TextAlign.center,
+                          style: const TextStyle(color: _errorColor),
+                        ),
+                        const SizedBox(height: 12),
+                      ],
+                      if (_isPublished && _errorMessage != null)
+                        _photoRetryActions()
+                      else
+                        FilledButton(
+                          onPressed:
+                              _category == null ||
+                                  _isLocked ||
+                                  widget.onPublish == null
+                              ? null
+                              : _publish,
+                          style: _primaryButtonStyle,
+                          // Grisé sans explication, le bouton laissait chercher
+                          // ce qui manquait : son libellé dit quoi faire.
+                          child: _isBusy
+                              ? const _ButtonSpinner()
+                              : Text(
+                                  _category == null
+                                      ? 'Choisissez une catégorie'
+                                      : 'Publier le signalement',
+                                ),
+                        ),
                     ],
                   ),
                 ),
-              ),
-              Padding(
-                padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    if (_isPublished) ...[
-                      _publishedStatus(),
-                      const SizedBox(height: 12),
-                    ] else if (_errorMessage != null) ...[
-                      Text(
-                        _errorMessage!,
-                        textAlign: TextAlign.center,
-                        style: const TextStyle(color: _errorColor),
-                      ),
-                      const SizedBox(height: 12),
-                    ],
-                    if (_isPublished && _errorMessage != null)
-                      _photoRetryActions()
-                    else
-                      FilledButton(
-                        onPressed:
-                            _category == null ||
-                                _isLocked ||
-                                widget.onPublish == null
-                            ? null
-                            : _publish,
-                        style: _primaryButtonStyle,
-                        // Grisé sans explication, le bouton laissait chercher
-                        // ce qui manquait : son libellé dit quoi faire.
-                        child: _isBusy
-                            ? const _ButtonSpinner()
-                            : Text(
-                                _category == null
-                                    ? 'Choisissez une catégorie'
-                                    : 'Publier le signalement',
-                              ),
-                      ),
-                  ],
-                ),
-              ),
-            ],
+              ],
+            ),
           ),
         ),
       ),
@@ -330,7 +374,7 @@ class _ReportComposerSheetState extends State<ReportComposerSheet> {
             if (!_isPublished)
               IconButton(
                 tooltip: 'Fermer',
-                onPressed: _isBusy ? null : widget.onClose,
+                onPressed: _isBusy ? null : () => unawaited(_requestClose()),
                 color: _textColor,
                 style: IconButton.styleFrom(backgroundColor: Colors.white),
                 icon: const Icon(Icons.close),

@@ -1,3 +1,4 @@
+import 'dart:typed_data';
 import 'dart:async';
 
 import 'package:blueway/features/reports/presentation/report_composer_sheet.dart';
@@ -181,6 +182,66 @@ void main() {
     await tester.tap(find.byKey(const ValueKey('map')));
     await tester.pump();
     expect(hasFocus(), isFalse);
+  });
+
+  testWidgets('demande confirmation avant d’abandonner une saisie', (
+    tester,
+  ) async {
+    var closes = 0;
+    Future<void> pumpSheet({Uint8List? photo}) => tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: ReportComposerSheet(
+            key: UniqueKey(),
+            onClose: () => closes++,
+            photo: photo,
+          ),
+        ),
+      ),
+    );
+    const question = 'Abandonner ce signalement ?';
+
+    // Rien à perdre : la croix ferme directement.
+    await pumpSheet();
+    await tester.tap(find.byTooltip('Fermer'));
+    await tester.pumpAndSettle();
+    expect(find.text(question), findsNothing);
+    expect(closes, 1);
+
+    // « Continuer » garde la saisie.
+    await pumpSheet();
+    await tester.tap(find.text('Obstacle'));
+    await tester.enterText(find.byType(TextField), 'Bouée à la dérive');
+    await tester.tap(find.byTooltip('Fermer'));
+    await tester.pumpAndSettle();
+    expect(find.text(question), findsOneWidget);
+    expect(find.text('Il ne sera pas publié.'), findsOneWidget);
+    await tester.tap(find.text('Continuer'));
+    await tester.pumpAndSettle();
+    expect(find.text(question), findsNothing);
+    expect(closes, 1);
+    expect(find.text('Bouée à la dérive'), findsOneWidget);
+    expect(find.text('Publier le signalement'), findsOneWidget);
+
+    // Le retour arrière passe par la même question.
+    await tester.binding.handlePopRoute();
+    await tester.pumpAndSettle();
+    expect(find.text(question), findsOneWidget);
+    await tester.tap(find.text('Abandonner'));
+    await tester.pumpAndSettle();
+    expect(closes, 2);
+
+    // Une photo seule suffit à demander confirmation.
+    await pumpSheet(photo: img.encodeJpg(img.Image(width: 4, height: 4)));
+    await tester.tap(find.byTooltip('Fermer'));
+    await tester.pumpAndSettle();
+    expect(
+      find.text('Il ne sera pas publié, et la photo ne sera pas gardée.'),
+      findsOneWidget,
+    );
+    await tester.tap(find.text('Abandonner'));
+    await tester.pumpAndSettle();
+    expect(closes, 3);
   });
 
   testWidgets('n’affiche le compteur qu’à l’approche de la limite', (

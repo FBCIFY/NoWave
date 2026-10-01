@@ -775,324 +775,313 @@ class _MapScreenState extends State<MapScreen> {
                   : 'Lat. ${formatDms(_position!.latitude, isLatitude: true)}\n'
                         'Lon. ${formatDms(_position!.longitude, isLatitude: false)}');
 
-    return PopScope(
-      canPop: !_reportComposerOpen,
-      onPopInvokedWithResult: (didPop, _) {
-        if (!didPop && _reportComposerOpen) _leaveReportComposer();
-      },
-      child: Scaffold(
-        resizeToAvoidBottomInset: false,
-        body: Stack(
-          children: [
-            Positioned.fill(
-              child: Listener(
-                key: _mapAreaKey,
-                onPointerDown: (_) {
-                  _mapTouchActive = true;
-                  _touchStartBearing = _cameraBearing;
+    // Pendant un signalement, le retour arrière est géré par
+    // ReportComposerSheet : il passe par la même confirmation que la croix.
+    return Scaffold(
+      resizeToAvoidBottomInset: false,
+      body: Stack(
+        children: [
+          Positioned.fill(
+            child: Listener(
+              key: _mapAreaKey,
+              onPointerDown: (_) {
+                _mapTouchActive = true;
+                _touchStartBearing = _cameraBearing;
+              },
+              onPointerUp: (_) => _mapTouchActive = false,
+              onPointerCancel: (_) => _mapTouchActive = false,
+              child: MapWidget(
+                onMapCreated: (map) {
+                  setState(() => _mapboxMap = map);
+                  unawaited(MapConfig.hideDefaultOrnaments(map));
+                  unawaited(_locate());
                 },
-                onPointerUp: (_) => _mapTouchActive = false,
-                onPointerCancel: (_) => _mapTouchActive = false,
-                child: MapWidget(
-                  onMapCreated: (map) {
-                    setState(() => _mapboxMap = map);
-                    unawaited(MapConfig.hideDefaultOrnaments(map));
-                    unawaited(_locate());
-                  },
-                  onMapLoadedListener: _handleMapLoaded,
-                  onMapLoadErrorListener: _handleMapLoadError,
-                  onCameraChangeListener: _handleMapCameraChange,
-                  onScrollListener: _handleMapGesture,
-                  onZoomListener: _handleMapGesture,
-                  styleUri: MapConfig.styleUrl,
-                  viewport: _viewport,
+                onMapLoadedListener: _handleMapLoaded,
+                onMapLoadErrorListener: _handleMapLoadError,
+                onCameraChangeListener: _handleMapCameraChange,
+                onScrollListener: _handleMapGesture,
+                onZoomListener: _handleMapGesture,
+                styleUri: MapConfig.styleUrl,
+                viewport: _viewport,
+              ),
+            ),
+          ),
+          if (_mapError != null)
+            Positioned.fill(
+              child: ColoredBox(
+                color: Theme.of(context).colorScheme.surface,
+                child: Center(
+                  child: Padding(
+                    padding: const EdgeInsets.all(24),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Icon(Icons.map_outlined, size: 48),
+                        const SizedBox(height: 16),
+                        Text(_mapError!, textAlign: TextAlign.center),
+                        const SizedBox(height: 16),
+                        FilledButton.icon(
+                          onPressed: _retryMapLoad,
+                          icon: const Icon(Icons.refresh),
+                          label: const Text('Réessayer'),
+                        ),
+                      ],
+                    ),
+                  ),
                 ),
               ),
             ),
-            if (_mapError != null)
-              Positioned.fill(
-                child: ColoredBox(
-                  color: Theme.of(context).colorScheme.surface,
-                  child: Center(
-                    child: Padding(
-                      padding: const EdgeInsets.all(24),
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          const Icon(Icons.map_outlined, size: 48),
-                          const SizedBox(height: 16),
-                          Text(_mapError!, textAlign: TextAlign.center),
-                          const SizedBox(height: 16),
-                          FilledButton.icon(
-                            onPressed: _retryMapLoad,
-                            icon: const Icon(Icons.refresh),
-                            label: const Text('Réessayer'),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-            if (!_reportComposerOpen)
-              Positioned(
-                top: 0,
-                left: 0,
-                right: 0,
-                child: SafeArea(
-                  bottom: false,
-                  child: Padding(
-                    padding: const EdgeInsets.all(16),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        Row(
-                          children: [
-                            Expanded(
-                              child: Align(
-                                alignment: Alignment.centerLeft,
-                                child: Container(
-                                  padding: const EdgeInsets.symmetric(
-                                    horizontal: 12,
-                                    vertical: 9,
-                                  ),
-                                  decoration: BoxDecoration(
-                                    color: const Color(0xFFF6F8FA)
-                                        .withValues(alpha: 0.90),
-                                    borderRadius: BorderRadius.circular(14),
-                                  ),
-                                  child: Text(
-                                    gpsLabel,
-                                    maxLines: 2,
-                                    overflow: TextOverflow.ellipsis,
-                                    style: const TextStyle(
-                                      color: Color(0xFF243243),
-                                      fontSize: 12,
-                                    ),
-                                  ),
-                                ),
-                              ),
-                            ),
-                            if (widget.onOpenProfile != null) ...[
-                              const SizedBox(width: 12),
-                              _PoppingMapButton(
-                                tooltip: 'Mon profil',
-                                onPressed: widget.onOpenProfile,
-                                icon: const Icon(
-                                  Icons.person_outline,
-                                  color: Color(0xFF243243),
-                                ),
-                              ),
-                            ],
-                          ],
-                        ),
-                        AnimatedSwitcher(
-                          duration: const Duration(milliseconds: 220),
-                          // Pas de SizeTransition : son découpage rectangulaire
-                          // coupait l'ombre et laissait des coins gris.
-                          transitionBuilder: (child, animation) =>
-                              FadeTransition(
-                                opacity: animation,
-                                child: SlideTransition(
-                                  position: Tween(
-                                    begin: const Offset(0, -0.25),
-                                    end: Offset.zero,
-                                  ).animate(animation),
-                                  child: child,
-                                ),
-                              ),
-                          child: notice == null
-                              ? const SizedBox.shrink()
-                              : Padding(
-                                  key: ValueKey(_noticeId),
-                                  padding: const EdgeInsets.only(top: 12),
-                                  child: MapNoticeBanner(
-                                    notice: notice,
-                                    onDismiss: _hideNotice,
-                                  ),
-                                ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              ),
-            if (!_reportComposerOpen)
-              Positioned(
-                bottom: 16,
-                left: 0,
-                right: 0,
-                child: SafeArea(
-                  top: false,
-                  child: Center(
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        _PoppingMapButton(
-                          tooltip: 'Créer un signalement',
-                          onPressed: _mapError == null
-                              ? _openReportComposer
-                              : null,
-                          icon: const Icon(Icons.add, size: 30),
-                        ),
-                        if (widget.onOpenCamera != null) ...[
-                          const SizedBox(width: 16),
-                          _PoppingMapButton(
-                            tooltip: 'Signaler avec une photo',
-                            onPressed: _mapError == null
-                                ? () => unawaited(_openCamera())
-                                : null,
-                            icon: const Icon(
-                              Icons.photo_camera_outlined,
-                              color: Color(0xFF243243),
-                            ),
-                          ),
-                        ],
-                      ],
-                    ),
-                  ),
-                ),
-              ),
-            if (!_reportComposerOpen)
-              Positioned(
-                right: 16,
-                bottom: 80,
-                child: SafeArea(
-                  top: false,
+          if (!_reportComposerOpen)
+            Positioned(
+              top: 0,
+              left: 0,
+              right: 0,
+              child: SafeArea(
+                bottom: false,
+                child: Padding(
+                  padding: const EdgeInsets.all(16),
                   child: Column(
-                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
-                      _PoppingMapButton(
-                        tooltip: _orientationMode == _MapOrientationMode.north
-                            ? 'Aligner la carte sur le cap actuel'
-                            : 'Orienter la carte vers le nord',
-                        onPressed: _mapboxMap == null || _mapError != null
-                            ? null
-                            : () => unawaited(_toggleCompass()),
-                        icon: _CompassGlyph(headingTurns: _compassTurns),
-                      ),
-                      const SizedBox(height: 12),
-                      _PoppingMapButton(
-                        tooltip: 'Recentrer sur ma position',
-                        onPressed: _isLocating || _mapboxMap == null
-                            ? null
-                            : () {
-                                AppHaptics.selection();
-                                unawaited(_locate(animated: true));
-                              },
-                        icon: _isLocating
-                            ? const SizedBox(
-                                width: 20,
-                                height: 20,
-                                child: CircularProgressIndicator(
-                                  strokeWidth: 2,
+                      Row(
+                        children: [
+                          Expanded(
+                            child: Align(
+                              alignment: Alignment.centerLeft,
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 12,
+                                  vertical: 9,
                                 ),
-                              )
-                            : Stack(
-                                alignment: Alignment.center,
-                                children: [
-                                  const Icon(
-                                    Icons.my_location,
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFFF6F8FA)
+                                      .withValues(alpha: 0.90),
+                                  borderRadius: BorderRadius.circular(14),
+                                ),
+                                child: Text(
+                                  gpsLabel,
+                                  maxLines: 2,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: const TextStyle(
                                     color: Color(0xFF243243),
+                                    fontSize: 12,
                                   ),
-                                  AnimatedContainer(
-                                    duration: const Duration(milliseconds: 220),
-                                    width: 7,
-                                    height: 7,
-                                    decoration: BoxDecoration(
-                                      color: _isFollowing
-                                          ? const Color(0xFF329CFF)
-                                          : const Color(0xFF243243),
-                                      shape: BoxShape.circle,
-                                    ),
-                                  ),
-                                ],
+                                ),
+                              ),
+                            ),
+                          ),
+                          if (widget.onOpenProfile != null) ...[
+                            const SizedBox(width: 12),
+                            _PoppingMapButton(
+                              tooltip: 'Mon profil',
+                              onPressed: widget.onOpenProfile,
+                              icon: const Icon(
+                                Icons.person_outline,
+                                color: Color(0xFF243243),
+                              ),
+                            ),
+                          ],
+                        ],
+                      ),
+                      AnimatedSwitcher(
+                        duration: const Duration(milliseconds: 220),
+                        // Pas de SizeTransition : son découpage rectangulaire
+                        // coupait l'ombre et laissait des coins gris.
+                        transitionBuilder: (child, animation) => FadeTransition(
+                          opacity: animation,
+                          child: SlideTransition(
+                            position: Tween(
+                              begin: const Offset(0, -0.25),
+                              end: Offset.zero,
+                            ).animate(animation),
+                            child: child,
+                          ),
+                        ),
+                        child: notice == null
+                            ? const SizedBox.shrink()
+                            : Padding(
+                                key: ValueKey(_noticeId),
+                                padding: const EdgeInsets.only(top: 12),
+                                child: MapNoticeBanner(
+                                  notice: notice,
+                                  onDismiss: _hideNotice,
+                                ),
                               ),
                       ),
                     ],
                   ),
                 ),
               ),
-            if (_reportComposerOpen) ...[
-              const Positioned.fill(
-                child: IgnorePointer(
-                  child: ColoredBox(color: Color(0x220D2238)),
-                ),
-              ),
-              if (!keyboardVisible)
-                Positioned(
-                  top: mediaQuery.padding.top,
-                  bottom: reportPanelBottom,
-                  left: 0,
-                  right: 0,
-                  child: IgnorePointer(
-                    child: Stack(
-                      alignment: Alignment.center,
-                      children: [
-                        Transform.translate(
-                          offset: const Offset(0, -18),
-                          child: ValueListenableBuilder<bool>(
-                            valueListenable: _reportMarkerLifted,
-                            builder: (context, lifted, _) => ReportMarker(
-                              key: _reportMarkerKey,
-                              lifted: lifted,
-                            ),
+            ),
+          if (!_reportComposerOpen)
+            Positioned(
+              bottom: 16,
+              left: 0,
+              right: 0,
+              child: SafeArea(
+                top: false,
+                child: Center(
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      _PoppingMapButton(
+                        tooltip: 'Créer un signalement',
+                        onPressed: _mapError == null
+                            ? _openReportComposer
+                            : null,
+                        icon: const Icon(Icons.add, size: 30),
+                      ),
+                      if (widget.onOpenCamera != null) ...[
+                        const SizedBox(width: 16),
+                        _PoppingMapButton(
+                          tooltip: 'Signaler avec une photo',
+                          onPressed: _mapError == null
+                              ? () => unawaited(_openCamera())
+                              : null,
+                          icon: const Icon(
+                            Icons.photo_camera_outlined,
+                            color: Color(0xFF243243),
                           ),
                         ),
-                        Transform.translate(
-                          offset: const Offset(0, 46),
-                          child: DecoratedBox(
-                            decoration: BoxDecoration(
-                              color: const Color(0xFFF6F8FA)
-                                  .withValues(alpha: 0.94),
-                              borderRadius: BorderRadius.circular(18),
-                            ),
-                            child: Padding(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 10,
-                                vertical: 5,
-                              ),
-                              child: ValueListenableBuilder<Point?>(
-                                valueListenable: _reportPoint,
-                                builder: (context, point, _) => Text(
-                                  '${formatDms(point?.coordinates.lat.toDouble() ?? _position!.latitude, isLatitude: true)}\n'
-                                  '${formatDms(point?.coordinates.lng.toDouble() ?? _position!.longitude, isLatitude: false)}',
-                                  textAlign: TextAlign.center,
-                                  style: const TextStyle(
-                                    color: Color(0xFF243243),
-                                    fontSize: 11,
-                                    fontWeight: FontWeight.w600,
+                      ],
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          if (!_reportComposerOpen)
+            Positioned(
+              right: 16,
+              bottom: 80,
+              child: SafeArea(
+                top: false,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    _PoppingMapButton(
+                      tooltip: _orientationMode == _MapOrientationMode.north
+                          ? 'Aligner la carte sur le cap actuel'
+                          : 'Orienter la carte vers le nord',
+                      onPressed: _mapboxMap == null || _mapError != null
+                          ? null
+                          : () => unawaited(_toggleCompass()),
+                      icon: _CompassGlyph(headingTurns: _compassTurns),
+                    ),
+                    const SizedBox(height: 12),
+                    _PoppingMapButton(
+                      tooltip: 'Recentrer sur ma position',
+                      onPressed: _isLocating || _mapboxMap == null
+                          ? null
+                          : () {
+                              AppHaptics.selection();
+                              unawaited(_locate(animated: true));
+                            },
+                      icon: _isLocating
+                          ? const SizedBox(
+                              width: 20,
+                              height: 20,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            )
+                          : Stack(
+                              alignment: Alignment.center,
+                              children: [
+                                const Icon(
+                                  Icons.my_location,
+                                  color: Color(0xFF243243),
+                                ),
+                                AnimatedContainer(
+                                  duration: const Duration(milliseconds: 220),
+                                  width: 7,
+                                  height: 7,
+                                  decoration: BoxDecoration(
+                                    color: _isFollowing
+                                        ? const Color(0xFF329CFF)
+                                        : const Color(0xFF243243),
+                                    shape: BoxShape.circle,
                                   ),
+                                ),
+                              ],
+                            ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          if (_reportComposerOpen) ...[
+            const Positioned.fill(
+              child: IgnorePointer(child: ColoredBox(color: Color(0x220D2238))),
+            ),
+            if (!keyboardVisible)
+              Positioned(
+                top: mediaQuery.padding.top,
+                bottom: reportPanelBottom,
+                left: 0,
+                right: 0,
+                child: IgnorePointer(
+                  child: Stack(
+                    alignment: Alignment.center,
+                    children: [
+                      Transform.translate(
+                        offset: const Offset(0, -18),
+                        child: ValueListenableBuilder<bool>(
+                          valueListenable: _reportMarkerLifted,
+                          builder: (context, lifted, _) => ReportMarker(
+                            key: _reportMarkerKey,
+                            lifted: lifted,
+                          ),
+                        ),
+                      ),
+                      Transform.translate(
+                        offset: const Offset(0, 46),
+                        child: DecoratedBox(
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFF6F8FA)
+                                .withValues(alpha: 0.94),
+                            borderRadius: BorderRadius.circular(18),
+                          ),
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 10,
+                              vertical: 5,
+                            ),
+                            child: ValueListenableBuilder<Point?>(
+                              valueListenable: _reportPoint,
+                              builder: (context, point, _) => Text(
+                                '${formatDms(point?.coordinates.lat.toDouble() ?? _position!.latitude, isLatitude: true)}\n'
+                                '${formatDms(point?.coordinates.lng.toDouble() ?? _position!.longitude, isLatitude: false)}',
+                                textAlign: TextAlign.center,
+                                style: const TextStyle(
+                                  color: Color(0xFF243243),
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w600,
                                 ),
                               ),
                             ),
                           ),
                         ),
-                      ],
-                    ),
+                      ),
+                    ],
                   ),
                 ),
-              Positioned(
-                key: const ValueKey('report-composer'),
-                left: 0,
-                right: 0,
-                bottom: 0,
-                child: ReportComposerSheet(
-                  photo: _photoDraft?.capture.jpegBytes,
-                  subtitle: _reportHint(),
-                  onClose: _leaveReportComposer,
-                  onPublish: widget.reportService == null
-                      ? null
-                      : _publishReport,
-                  onUploadPhoto:
-                      widget.reportService == null || _photoDraft == null
-                      ? null
-                      : _uploadReportPhoto,
-                ),
               ),
-            ],
+            Positioned(
+              key: const ValueKey('report-composer'),
+              left: 0,
+              right: 0,
+              bottom: 0,
+              child: ReportComposerSheet(
+                photo: _photoDraft?.capture.jpegBytes,
+                subtitle: _reportHint(),
+                onClose: _leaveReportComposer,
+                onPublish: widget.reportService == null ? null : _publishReport,
+                onUploadPhoto:
+                    widget.reportService == null || _photoDraft == null
+                    ? null
+                    : _uploadReportPhoto,
+              ),
+            ),
           ],
-        ),
+        ],
       ),
     );
   }
