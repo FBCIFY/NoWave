@@ -96,3 +96,15 @@ PYTHONPATH=backend python -m pytest backend/tests/database
 
 Ils créent leur propre base, appliquent les migrations puis la suppriment. Ils
 ne doivent jamais réinitialiser la base partagée.
+
+
+### Tuiles des signalements
+
+`GET /api/v1/map/tiles/{z}/{x}/{y}.mvt` demande un jeton Firebase et renvoie
+une tuile Mapbox Vector Tile (`application/vnd.mapbox-vector-tile`). Les paramètres
+optionnels `category` et `report_id` filtrent les résultats. Chaque point porte
+`report_id` et `category`. Sous le zoom 9, des points proches sont regroupés ;
+un cluster porte `cluster=true` et `cluster_count`. Seuls les signalements de
+statut `active` dont `expires_at` est futur sont inclus. La réponse a un cache
+privé de 15 secondes. Les retraits et les expirations sont pris en compte à
+chaque nouvelle requête de tuile.
