@@ -17,6 +17,7 @@ import '../../reports/presentation/report_composer_sheet.dart';
 import '../../reports/data/manual_report_service.dart';
 import '../../reports/domain/manual_report.dart';
 import 'widgets/map_notice_banner.dart';
+import 'widgets/report_marker.dart';
 
 /// Nord en haut, carte tournée selon le cap du téléphone, ou rotation libre
 /// faite au doigt.
@@ -69,6 +70,8 @@ class _MapScreenState extends State<MapScreen> {
   CameraState? _cameraBeforeReport;
   bool _restoreFollowAfterReport = false;
   final ValueNotifier<Point?> _reportPoint = ValueNotifier(null);
+  final ValueNotifier<bool> _reportMarkerLifted = ValueNotifier(false);
+  Timer? _reportMarkerDropTimer;
   final Uuid _uuid = const Uuid();
   ManualReportRequest? _pendingReport;
   PhotoReportDraft? _photoDraft;
@@ -136,6 +139,7 @@ class _MapScreenState extends State<MapScreen> {
     final userRotatedMap = _mapTouchActive && touchBearingDelta.abs() > 2;
     if (bearingDelta.abs() >= 1) _cameraBearing = bearing;
     if (_reportComposerOpen) {
+      _liftReportMarker();
       _scheduleReportPointUpdate();
       return;
     }
@@ -493,6 +497,8 @@ class _MapScreenState extends State<MapScreen> {
     FocusManager.instance.primaryFocus?.unfocus();
     _reportPointTimer?.cancel();
     _reportPointRequest++;
+    _reportMarkerDropTimer?.cancel();
+    _reportMarkerLifted.value = false;
     final camera = _cameraBeforeReport;
     final map = _mapboxMap;
     final resumeFollowing = _restoreFollowAfterReport;
@@ -642,6 +648,17 @@ class _MapScreenState extends State<MapScreen> {
     return 'Estimé à $distanceText · ajustez si besoin';
   }
 
+  // onMapIdle attend aussi le chargement des tuiles, lent en mer : le repère
+  // se pose dès que la caméra ne bouge plus depuis 200 ms.
+  void _liftReportMarker() {
+    _reportMarkerLifted.value = true;
+    _reportMarkerDropTimer?.cancel();
+    _reportMarkerDropTimer = Timer(
+      const Duration(milliseconds: 200),
+      () => _reportMarkerLifted.value = false,
+    );
+  }
+
   void _scheduleReportPointUpdate() {
     if (!_reportComposerOpen || _reportPointTimer?.isActive == true) return;
     _reportPointTimer = Timer(
@@ -707,7 +724,10 @@ class _MapScreenState extends State<MapScreen> {
   }
 
   Offset _markerTipGlobal(RenderBox markerBox) => markerBox.localToGlobal(
-    Offset(markerBox.size.width / 2, markerBox.size.height - 4),
+    Offset(
+      markerBox.size.width / 2,
+      markerBox.size.height - ReportMarker.tipInset,
+    ),
   );
 
   ViewportState _viewport = CameraViewportState(
@@ -719,8 +739,10 @@ class _MapScreenState extends State<MapScreen> {
   @override
   void dispose() {
     _reportPointTimer?.cancel();
+    _reportMarkerDropTimer?.cancel();
     _noticeTimer?.cancel();
     _reportPoint.dispose();
+    _reportMarkerLifted.dispose();
     final subscription = _positionSubscription;
     if (subscription != null) unawaited(subscription.cancel());
     final headingSubscription = _headingSubscription;
@@ -1004,16 +1026,11 @@ class _MapScreenState extends State<MapScreen> {
                       children: [
                         Transform.translate(
                           offset: const Offset(0, -18),
-                          child: SizedBox.square(
-                            key: _reportMarkerKey,
-                            dimension: 44,
-                            child: const Icon(
-                              Icons.place,
-                              color: Color(0xFF0DB8D5),
-                              size: 44,
-                              shadows: [
-                                Shadow(color: Colors.black87, blurRadius: 8),
-                              ],
+                          child: ValueListenableBuilder<bool>(
+                            valueListenable: _reportMarkerLifted,
+                            builder: (context, lifted, _) => ReportMarker(
+                              key: _reportMarkerKey,
+                              lifted: lifted,
                             ),
                           ),
                         ),
