@@ -5,6 +5,7 @@ import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 
 import '../../../core/api/api_exception.dart';
+import '../../../core/haptics/app_haptics.dart';
 import '../domain/manual_report.dart';
 import 'report_photo_viewer.dart';
 
@@ -77,13 +78,17 @@ class _ReportComposerSheetState extends State<ReportComposerSheet> {
     try {
       final description = _commentController.text.trim();
       await onPublish(category, description.isEmpty ? null : description);
+      // En mode photo, le succès attend l'envoi de la photo.
+      if (widget.onUploadPhoto == null) AppHaptics.success();
     } on ApiException catch (error) {
+      AppHaptics.failure();
       if (!mounted) return;
       setState(() {
         _errorMessage = _messageForApiError(error);
       });
       return;
     } catch (_) {
+      AppHaptics.failure();
       if (!mounted) return;
       setState(() {
         _errorMessage = 'Impossible de publier. Vérifiez votre connexion.';
@@ -108,12 +113,15 @@ class _ReportComposerSheetState extends State<ReportComposerSheet> {
     });
     try {
       await onUploadPhoto();
+      AppHaptics.success();
     } on ApiException catch (error) {
+      AppHaptics.failure();
       if (!mounted) return;
       setState(() {
         _errorMessage = _messageForPhotoError(error);
       });
     } catch (_) {
+      AppHaptics.failure();
       if (!mounted) return;
       setState(() {
         _errorMessage = 'Photo non envoyée : vérifiez votre connexion.';
@@ -405,10 +413,13 @@ class _ReportComposerSheetState extends State<ReportComposerSheet> {
           child: InkWell(
             onTap: _isLocked
                 ? null
-                : () => setState(() {
-                    _category = category;
-                    _errorMessage = null;
-                  }),
+                : () {
+                    AppHaptics.selection();
+                    setState(() {
+                      _category = category;
+                      _errorMessage = null;
+                    });
+                  },
             child: SizedBox(
               height: 64,
               child: Column(

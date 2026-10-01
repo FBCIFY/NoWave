@@ -7,6 +7,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:image/image.dart' as img;
 
+import '../../../core/haptics/record_haptics.dart';
+
 void main() {
   testWidgets('garde le texte et le focus quand le clavier masque le repère', (
     tester,
@@ -95,6 +97,7 @@ void main() {
   testWidgets('publie la catégorie et le commentaire, puis permet un réessai', (
     tester,
   ) async {
+    final haptics = recordHaptics(tester);
     var attempts = 0;
     ReportCategory? submittedCategory;
     String? submittedDescription;
@@ -140,6 +143,11 @@ void main() {
     await tester.tap(publish);
     await tester.pump();
     expect(attempts, 2);
+    expect(haptics, [
+      'HapticFeedbackType.selectionClick',
+      'HapticFeedbackType.heavyImpact',
+      'HapticFeedbackType.mediumImpact',
+    ]);
     expect(
       find.text('Ce signalement a changé depuis le premier envoi.'),
       findsNothing,
@@ -233,6 +241,7 @@ void main() {
   testWidgets('envoie la photo après la publication, puis réessaie', (
     tester,
   ) async {
+    final haptics = recordHaptics(tester);
     var publishes = 0;
     var uploads = 0;
     var closes = 0;
@@ -271,6 +280,8 @@ void main() {
     expect(uploads, 1);
     expect(find.text('Signalement publié'), findsOneWidget);
     expect(find.text('Envoi de la photo…'), findsOneWidget);
+    // Publié, mais pas encore de vibration de succès : la photo est en cours.
+    expect(haptics, ['HapticFeedbackType.selectionClick']);
     // Publié : plus de croix, qui laissait croire à une annulation.
     expect(find.byTooltip('Fermer'), findsNothing);
 
@@ -290,6 +301,11 @@ void main() {
     await tester.pump();
     expect(publishes, 1);
     expect(uploads, 2);
+    expect(haptics, [
+      'HapticFeedbackType.selectionClick',
+      'HapticFeedbackType.heavyImpact',
+      'HapticFeedbackType.mediumImpact',
+    ]);
 
     await tester.pumpWidget(
       MaterialApp(

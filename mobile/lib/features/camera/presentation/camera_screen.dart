@@ -9,6 +9,7 @@ import 'package:geolocator/geolocator.dart' as geo;
 import 'package:precise_compass/precise_compass.dart';
 
 import '../../../core/api/api_exception.dart';
+import '../../../core/haptics/app_haptics.dart';
 import '../../../core/location/location_service.dart';
 import '../../../core/sensors/camera_inclination_service.dart';
 import '../../../core/sensors/device_orientation_service.dart';
@@ -300,6 +301,7 @@ class _CameraScreenState extends State<CameraScreen> {
       capturedAt: DateTime.now(),
     );
 
+    AppHaptics.capture();
     setState(() {
       _isCapturing = true;
       _captureError = null;

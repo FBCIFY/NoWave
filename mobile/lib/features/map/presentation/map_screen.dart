@@ -12,6 +12,7 @@ import '../../../core/map/map_config.dart';
 import '../../../core/location/coordinate_formatter.dart';
 import '../../../core/location/location_service.dart';
 import '../../../core/sensors/device_orientation_service.dart';
+import '../../../core/haptics/app_haptics.dart';
 import '../../camera/domain/photo_report_draft.dart';
 import '../../reports/presentation/report_composer_sheet.dart';
 import '../../reports/data/manual_report_service.dart';
@@ -203,6 +204,7 @@ class _MapScreenState extends State<MapScreen> {
       _showNotice('Cap du téléphone indisponible.', MapNoticeKind.error);
       return;
     }
+    AppHaptics.selection();
     final targetBearing = nextMode == _MapOrientationMode.north
         ? 0.0
         : heading!;
@@ -974,7 +976,10 @@ class _MapScreenState extends State<MapScreen> {
                         tooltip: 'Recentrer sur ma position',
                         onPressed: _isLocating || _mapboxMap == null
                             ? null
-                            : () => unawaited(_locate(animated: true)),
+                            : () {
+                                AppHaptics.selection();
+                                unawaited(_locate(animated: true));
+                              },
                         icon: _isLocating
                             ? const SizedBox(
                                 width: 20,

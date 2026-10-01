@@ -20,10 +20,13 @@ import 'package:image/image.dart' as img;
 import 'package:precise_compass/precise_compass.dart';
 import 'package:sensors_plus/sensors_plus.dart';
 
+import '../../../core/haptics/record_haptics.dart';
+
 void main() {
   testWidgets('« Reprendre » efface la photo et rend le déclencheur', (
     tester,
   ) async {
+    final haptics = recordHaptics(tester);
     final camera = _FakeCamera();
     await _openCameraScreen(tester, camera: camera);
 
@@ -32,6 +35,7 @@ void main() {
 
     await _takePhoto(tester);
     expect(camera.pictures, 1);
+    expect(haptics, ['HapticFeedbackType.lightImpact']);
     // La photo figée remplace l'aperçu, avec les mesures prises à l'appui.
     expect(find.byKey(_previewKey), findsNothing);
     expect(
