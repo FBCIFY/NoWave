@@ -9,7 +9,8 @@ import '../domain/manual_report.dart';
 
 /// Panneau du bas en mode signalement : catégorie, commentaire facultatif
 /// (250 caractères max) et bouton Publier. L'envoi est fait par `MapScreen`.
-/// En mode photo, la miniature et [subtitle] s'affichent dans l'en-tête, et
+/// [subtitle] guide le placement du point dans l'en-tête et disparaît une fois
+/// le signalement publié. En mode photo, la miniature s'y ajoute, et
 /// [onUploadPhoto] envoie le JPEG une fois le signalement publié. En cas
 /// d'échec, l'utilisateur peut réessayer ou terminer sans photo. Une fois
 /// publié, le bouton Fermer disparaît : il laissait croire à une annulation.
@@ -272,7 +273,9 @@ class _ReportComposerSheetState extends State<ReportComposerSheet> {
 
   Widget _header() {
     final photo = widget.photo;
-    final subtitle = widget.subtitle;
+    // Une fois publié, le point est envoyé : le guide de placement n'a plus
+    // lieu d'être.
+    final subtitle = _isPublished ? null : widget.subtitle;
     // La croix (40 px dans une zone de 48) tombe à 16 du coin.
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 12, 12, 0),

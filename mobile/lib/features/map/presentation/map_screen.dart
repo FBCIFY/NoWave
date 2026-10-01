@@ -628,9 +628,11 @@ class _MapScreenState extends State<MapScreen> {
     _showNotice('Signalement publié sans photo.', MapNoticeKind.warning);
   }
 
-  String? _photoHint() {
+  // Sans photo, rien n'indique que le repère est fixe et que c'est la carte
+  // qui bouge dessous.
+  String _reportHint() {
     final draft = _photoDraft;
-    if (draft == null) return null;
+    if (draft == null) return 'Déplacez la carte pour placer le point';
     final estimate = draft.estimate;
     if (estimate == null) return 'Placez le point sur l’objet photographié';
     final distance = estimate.distanceMeters;
@@ -1055,7 +1057,7 @@ class _MapScreenState extends State<MapScreen> {
                 bottom: 0,
                 child: ReportComposerSheet(
                   photo: _photoDraft?.capture.jpegBytes,
-                  subtitle: _photoHint(),
+                  subtitle: _reportHint(),
                   onClose: _leaveReportComposer,
                   onPublish: widget.reportService == null
                       ? null

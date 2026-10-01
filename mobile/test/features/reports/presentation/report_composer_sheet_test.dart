@@ -229,6 +229,7 @@ void main() {
         home: Scaffold(
           body: ReportComposerSheet(
             onClose: () => closes++,
+            subtitle: 'Placez le point sur l’objet photographié',
             onPublish: (_, _) async => publishes++,
             onUploadPhoto: () {
               uploads++;
@@ -243,11 +244,17 @@ void main() {
       ),
     );
 
+    expect(
+      find.text('Placez le point sur l’objet photographié'),
+      findsOneWidget,
+    );
     await tester.tap(find.text('Pollution'));
     await tester.pump();
     await tester.tap(find.text('Publier le signalement'));
     await tester.pump();
     expect(publishes, 1);
+    // Le point est envoyé : plus rien à placer.
+    expect(find.text('Placez le point sur l’objet photographié'), findsNothing);
     expect(uploads, 1);
     expect(find.text('Signalement publié'), findsOneWidget);
     expect(find.text('Envoi de la photo…'), findsOneWidget);
