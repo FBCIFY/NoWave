@@ -303,7 +303,7 @@ class _MapScreenState extends State<MapScreen> {
       });
 
       await _mapboxMap?.location.updateSettings(
-        LocationComponentSettings(enabled: true),
+        MapConfig.locationPuckSettings(),
       );
 
       if (!mounted) return;
