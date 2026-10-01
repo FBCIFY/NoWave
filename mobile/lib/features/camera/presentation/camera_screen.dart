@@ -11,8 +11,8 @@ import 'package:precise_compass/precise_compass.dart';
 
 import '../../../core/api/api_exception.dart';
 import '../../../core/location/location_service.dart';
+import '../../../core/sensors/camera_inclination_service.dart';
 import '../../../core/sensors/device_orientation_service.dart';
-import '../../../core/sensors/camera_orientation.dart';
 import '../data/position_estimate_service.dart';
 import '../domain/capture_requirements.dart';
 import '../domain/photo_capture.dart';
@@ -23,7 +23,7 @@ import '../domain/report_jpeg.dart';
 /// plein écran, réticule central, position GPS et orientation du téléphone.
 ///
 /// La photo n'est autorisée qu'avec une précision GPS d'au plus 50 m et une
-/// orientation complète (cap, tangage, roulis). Les mesures sont figées au
+/// orientation complète (cap et inclinaison). Les mesures sont figées au
 /// moment de l'appui ; la photo reste en mémoire tant que l'écran est ouvert.
 ///
 /// « Continuer » demande l'estimation au backend puis ferme l'écran en
@@ -40,6 +40,7 @@ class CameraScreen extends StatefulWidget {
 class _CameraScreenState extends State<CameraScreen> {
   final _locationService = LocationService();
   final _orientationService = DeviceOrientationService();
+  final _inclinationService = CameraInclinationService();
 
   geo.Position? _position;
   bool _isLocating = false;
@@ -55,16 +56,20 @@ class _CameraScreenState extends State<CameraScreen> {
   StreamSubscription<CompassReading>? _orientationSubscription;
   CompassReading? _orientation;
   String? _orientationError;
+  StreamSubscription<double>? _inclinationSubscription;
+  double? _inclinationDegrees;
+  String? _inclinationError;
   late final AppLifecycleListener _lifecycleListener;
 
   @override
   void initState() {
     super.initState();
-    // L'aperçu plein écran et le calcul de l'inclinaison supposent le portrait.
+    // L'aperçu plein écran suppose le portrait.
     SystemChrome.setPreferredOrientations([DeviceOrientation.portraitUp]);
     _initializeCamera();
     _listenToPosition();
     _listenToOrientation();
+    _listenToInclination();
     _lifecycleListener = AppLifecycleListener(
       onResume: _retryLocationIfBlocked,
     );
@@ -168,6 +173,34 @@ class _CameraScreenState extends State<CameraScreen> {
     );
   }
 
+  void _listenToInclination() {
+    _inclinationSubscription = _inclinationService.inclinationDegrees.listen(
+      (inclination) {
+        if (!mounted) return;
+
+        // ~50 mesures par seconde : on garde toujours la dernière pour la
+        // capture, mais on ne redessine que si le degré affiché change.
+        if (_inclinationError == null &&
+            _inclinationDegrees?.round() == inclination.round()) {
+          _inclinationDegrees = inclination;
+          return;
+        }
+
+        setState(() {
+          _inclinationDegrees = inclination;
+          _inclinationError = null;
+        });
+      },
+      onError: (Object error) {
+        if (!mounted) return;
+
+        setState(() {
+          _inclinationError = 'Inclinomètre indisponible.';
+        });
+      },
+    );
+  }
+
   Future<void> _initializeCamera() async {
     try {
       final cameras = await availableCameras();
@@ -249,12 +282,11 @@ class _CameraScreenState extends State<CameraScreen> {
       return _orientationError;
     }
 
-    final orientation = _orientation;
+    if (_inclinationError != null) {
+      return _inclinationError;
+    }
 
-    if (orientation == null ||
-        orientation.headingTrue == null ||
-        orientation.pitch == null ||
-        orientation.roll == null) {
+    if (_orientation?.headingTrue == null || _inclinationDegrees == null) {
       return 'Recherche de l’orientation…';
     }
 
@@ -275,15 +307,13 @@ class _CameraScreenState extends State<CameraScreen> {
     final controller = _controller;
     final position = _position;
     final heading = _orientation?.headingTrue;
-    final pitch = _orientation?.pitch;
-    final roll = _orientation?.roll;
+    final inclination = _inclinationDegrees;
 
     if (!_canCapture ||
         controller == null ||
         position == null ||
         heading == null ||
-        pitch == null ||
-        roll == null) {
+        inclination == null) {
       return;
     }
 
@@ -293,10 +323,7 @@ class _CameraScreenState extends State<CameraScreen> {
       observerLatitude: position.latitude,
       gpsAccuracyMeters: position.accuracy,
       azimuthDegrees: heading,
-      inclinationDegrees: calculateCameraInclinationDegrees(
-        pitchDegrees: pitch,
-        rollDegrees: roll,
-      ),
+      inclinationDegrees: inclination,
       cameraHeightMeters: defaultCameraHeightMeters,
       cameraHeightSource: defaultCameraHeightSource,
       cameraHeightUncertaintyMeters: defaultCameraHeightUncertaintyMeters,
@@ -454,10 +481,7 @@ class _CameraScreenState extends State<CameraScreen> {
     final measures = _measuresText(
       accuracyMeters: position.accuracy,
       headingDegrees: orientation.headingTrue!,
-      inclinationDegrees: calculateCameraInclinationDegrees(
-        pitchDegrees: orientation.pitch!,
-        rollDegrees: orientation.roll!,
-      ),
+      inclinationDegrees: _inclinationDegrees!,
     );
 
     if (orientation.shouldCalibrate) {
@@ -497,6 +521,7 @@ class _CameraScreenState extends State<CameraScreen> {
     _lifecycleListener.dispose();
     _positionSubscription?.cancel();
     _orientationSubscription?.cancel();
+    _inclinationSubscription?.cancel();
     _controller?.dispose();
     super.dispose();
   }
