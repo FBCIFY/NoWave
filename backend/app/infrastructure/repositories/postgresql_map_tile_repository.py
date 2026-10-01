@@ -1,10 +1,11 @@
 from uuid import UUID
 
+from app.application.ports.map_tile_repository import MapTileRepository
 from app.domain.report import ReportCategory
 from app.infrastructure.database.connection import database_connection
 
 
-class PostgreSQLMapTileRepository:
+class PostgreSQLMapTileRepository(MapTileRepository):
     """Build Mapbox Vector Tiles from current report locations."""
 
     def get_tile(
@@ -27,6 +28,12 @@ class PostgreSQLMapTileRepository:
             ), tile AS (
                 SELECT
                     ST_TileEnvelope(zoom, x, y) AS bounds,
+                    ST_TileEnvelope(
+                        zoom,
+                        x,
+                        y,
+                        margin => 64.0 / 4096
+                    ) AS query_bounds,
                     zoom,
                     category,
                     report_id
@@ -41,10 +48,10 @@ class PostgreSQLMapTileRepository:
                 WHERE report.status = 'active'
                   AND report.expires_at > statement_timestamp()
                   AND report.final_position::geometry &&
-                      ST_Transform(tile.bounds, 4326)
+                      ST_Transform(tile.query_bounds, 4326)
                   AND ST_Intersects(
                       report.final_position::geometry,
-                      ST_Transform(tile.bounds, 4326)
+                      ST_Transform(tile.query_bounds, 4326)
                   )
                   AND (tile.category IS NULL OR report.category = tile.category)
                   AND (tile.report_id IS NULL OR report.id = tile.report_id)

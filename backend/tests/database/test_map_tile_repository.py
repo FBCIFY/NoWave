@@ -161,3 +161,34 @@ def test_nearby_reports_form_one_cluster_until_zoom_nine(dsn, monkeypatch):
 
     assert _feature_count(low_zoom_tile) == 1
     assert _feature_count(high_zoom_tile) == 2
+
+
+def test_tile_buffer_includes_report_just_across_boundary(dsn, monkeypatch):
+    monkeypatch.setenv("DATABASE_URL", dsn)
+    user = User(
+        firebase_uid=f"tile-buffer-{uuid4()}",
+        username=f"tile-buffer-{uuid4()}",
+        email=f"tile-buffer-{uuid4()}@nowave.test",
+    )
+    PostgreSQLUserRepository().save(user)
+
+    # At zoom 2, longitude 0 separates tiles x=1 and x=2. The report is in
+    # x=2, but remains inside the 64/4096 buffer requested for adjacent x=1.
+    report = Report.create_manual(
+        author_id=user.id,
+        client_report_id=uuid4(),
+        category=ReportCategory.OBSTRUCTION,
+        longitude=0.1,
+        latitude=10.0,
+        observed_at=datetime.now(UTC) - timedelta(minutes=5),
+    )
+    PostgreSQLReportRepository().save(report)
+
+    tile = PostgreSQLMapTileRepository().get_tile(
+        zoom=2,
+        x=1,
+        y=1,
+        report_id=report.id,
+    )
+
+    assert _feature_count(tile) == 1

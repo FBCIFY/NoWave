@@ -4,6 +4,7 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException, Path, Query, Response
 
 from app.api.dependencies.auth import get_current_identity
+from app.application.services.map_query import MapQueryService
 from app.domain.report import ReportCategory
 from app.infrastructure.repositories.postgresql_map_tile_repository import (
     PostgreSQLMapTileRepository,
@@ -30,7 +31,10 @@ def get_map_tile(
             detail="Tile coordinates must be within the selected zoom level.",
         )
 
-    tile = PostgreSQLMapTileRepository().get_tile(
+    service = MapQueryService(
+        map_tile_repository=PostgreSQLMapTileRepository(),
+    )
+    tile = service.get_tile(
         zoom=z,
         x=x,
         y=y,
