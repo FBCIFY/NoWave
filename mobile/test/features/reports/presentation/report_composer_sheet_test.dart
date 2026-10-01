@@ -196,30 +196,21 @@ void main() {
     await tester.pump();
     expect(publishes, 1);
     expect(uploads, 1);
-    expect(
-      find.text('Signalement publié · envoi de la photo…'),
-      findsOneWidget,
-    );
-    expect(
-      tester
-          .widget<IconButton>(
-            find.ancestor(
-              of: find.byIcon(Icons.close),
-              matching: find.byType(IconButton),
-            ),
-          )
-          .onPressed,
-      isNull,
-    );
+    expect(find.text('Signalement publié'), findsOneWidget);
+    expect(find.text('Envoi de la photo…'), findsOneWidget);
+    // Publié : plus de croix, qui laissait croire à une annulation.
+    expect(find.byTooltip('Fermer'), findsNothing);
 
     firstUpload!.completeError(
       const ApiException(statusCode: 404, body: 'Not Found'),
     );
     await tester.pump();
+    expect(find.text('Signalement publié'), findsOneWidget);
     expect(
-      find.text('Envoi de photo indisponible sur ce serveur.'),
+      find.text('Photo non envoyée : envoi indisponible sur ce serveur.'),
       findsOneWidget,
     );
+    expect(find.byTooltip('Fermer'), findsNothing);
     expect(find.text('Publier le signalement'), findsNothing);
 
     await tester.tap(find.text('Réessayer l’envoi'));

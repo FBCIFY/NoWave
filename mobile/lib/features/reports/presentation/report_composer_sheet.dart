@@ -11,7 +11,8 @@ import '../domain/manual_report.dart';
 /// (250 caractères max) et bouton Publier. L'envoi est fait par `MapScreen`.
 /// En mode photo, la miniature et [subtitle] s'affichent dans l'en-tête, et
 /// [onUploadPhoto] envoie le JPEG une fois le signalement publié. En cas
-/// d'échec, l'utilisateur peut réessayer ou terminer sans photo.
+/// d'échec, l'utilisateur peut réessayer ou terminer sans photo. Une fois
+/// publié, le bouton Fermer disparaît : il laissait croire à une annulation.
 class ReportComposerSheet extends StatefulWidget {
   const ReportComposerSheet({
     super.key,
@@ -106,7 +107,7 @@ class _ReportComposerSheetState extends State<ReportComposerSheet> {
     } catch (_) {
       if (!mounted) return;
       setState(() {
-        _errorMessage = 'Photo non envoyée. Vérifiez votre connexion.';
+        _errorMessage = 'Photo non envoyée : vérifiez votre connexion.';
       });
     } finally {
       if (mounted) setState(() => _isUploadingPhoto = false);
@@ -133,10 +134,10 @@ class _ReportComposerSheetState extends State<ReportComposerSheet> {
   // Le signalement est déjà publié : seul l'envoi de la photo a échoué.
   String _messageForPhotoError(ApiException error) {
     return switch (error.statusCode) {
-      401 => 'Session expirée : photo non envoyée. Reconnectez-vous.',
-      403 => 'Votre compte ne peut pas envoyer de photo.',
-      404 => 'Envoi de photo indisponible sur ce serveur.',
-      413 || 415 || 422 => 'Photo refusée par le serveur.',
+      401 => 'Photo non envoyée : session expirée. Reconnectez-vous.',
+      403 => 'Photo non envoyée : votre compte ne peut pas en envoyer.',
+      404 => 'Photo non envoyée : envoi indisponible sur ce serveur.',
+      413 || 415 || 422 => 'Photo non envoyée : refusée par le serveur.',
       _ => 'Photo non envoyée. Réessayez.',
     };
   }
@@ -153,9 +154,6 @@ class _ReportComposerSheetState extends State<ReportComposerSheet> {
     final photo = widget.photo;
     final subtitle = widget.subtitle;
     final isLocked = _isBusy || _isPublished;
-    final statusMessage =
-        _errorMessage ??
-        (_isPublished ? 'Signalement publié · envoi de la photo…' : null);
 
     return Padding(
       padding: EdgeInsets.fromLTRB(
@@ -228,15 +226,16 @@ class _ReportComposerSheetState extends State<ReportComposerSheet> {
                           ],
                         ),
                       ),
-                      IconButton(
-                        tooltip: 'Fermer',
-                        onPressed: _isBusy ? null : widget.onClose,
-                        color: const Color(0xFF243243),
-                        style: IconButton.styleFrom(
-                          backgroundColor: Colors.white,
+                      if (!_isPublished)
+                        IconButton(
+                          tooltip: 'Fermer',
+                          onPressed: _isBusy ? null : widget.onClose,
+                          color: const Color(0xFF243243),
+                          style: IconButton.styleFrom(
+                            backgroundColor: Colors.white,
+                          ),
+                          icon: const Icon(Icons.close),
                         ),
-                        icon: const Icon(Icons.close),
-                      ),
                     ],
                   ),
                 ),
@@ -304,17 +303,15 @@ class _ReportComposerSheetState extends State<ReportComposerSheet> {
                   ),
                 ),
               ),
-              if (statusMessage != null)
+              if (_isPublished)
+                _publishedStatus()
+              else if (_errorMessage != null)
                 Padding(
                   padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
                   child: Text(
-                    statusMessage,
+                    _errorMessage!,
                     textAlign: TextAlign.center,
-                    style: TextStyle(
-                      color: _errorMessage != null
-                          ? const Color(0xFFAF3942)
-                          : const Color(0xFF687789),
-                    ),
+                    style: const TextStyle(color: _errorColor),
                   ),
                 ),
               Padding(
@@ -350,6 +347,45 @@ class _ReportComposerSheetState extends State<ReportComposerSheet> {
     disabledBackgroundColor: const Color(0xFFD5E4EC),
     disabledForegroundColor: const Color(0xFF637888),
   );
+
+  static const _errorColor = Color(0xFFAF3942);
+
+  // Le signalement est en ligne quoi qu'il arrive à la photo : on le dit
+  // d'abord, puis l'état de l'envoi.
+  Widget _publishedStatus() {
+    final photoMessage = _errorMessage ?? 'Envoi de la photo…';
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+      child: Column(
+        children: [
+          const Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(Icons.check_circle, color: Color(0xFF1E8E5A), size: 18),
+              SizedBox(width: 6),
+              Text(
+                'Signalement publié',
+                style: TextStyle(
+                  color: Color(0xFF1E8E5A),
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 2),
+          Text(
+            photoMessage,
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              color: _errorMessage != null
+                  ? _errorColor
+                  : const Color(0xFF687789),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 
   // Signalement publié mais photo non envoyée : réessayer, ou terminer en
   // abandonnant la photo.
