@@ -1,10 +1,11 @@
 import 'package:geolocator/geolocator.dart';
 
-/// Récupère la position GPS une fois, en demandant l'autorisation si besoin.
-///
-/// Lève une [StateError] avec un message prêt à afficher si la localisation
-/// est désactivée ou refusée.
+/// Position GPS du téléphone.
 class LocationService {
+  /// Récupère la position une fois, en demandant l'autorisation si besoin.
+  ///
+  /// Lève une [StateError] avec un message prêt à afficher si la localisation
+  /// est désactivée ou refusée.
   Future<Position> getCurrentPosition() async {
     final serviceEnabled = await Geolocator.isLocationServiceEnabled();
 
@@ -35,6 +36,13 @@ class LocationService {
         accuracy: LocationAccuracy.high,
         timeLimit: Duration(seconds: 15),
       ),
+    );
+  }
+
+  /// Suivi continu, une fois l'autorisation obtenue par [getCurrentPosition].
+  Stream<Position> watchPosition() {
+    return Geolocator.getPositionStream(
+      locationSettings: const LocationSettings(accuracy: LocationAccuracy.high),
     );
   }
 }

@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:io';
 
 import 'package:app_settings/app_settings.dart';
 import 'package:camera/camera.dart';
@@ -18,6 +17,7 @@ import '../domain/capture_requirements.dart';
 import '../domain/photo_capture.dart';
 import '../domain/photo_report_draft.dart';
 import '../domain/report_jpeg.dart';
+import 'report_camera.dart';
 
 /// Photo d'un signalement (NW-115), ouverte depuis la carte : aperçu caméra
 /// plein écran, réticule central, position GPS et orientation du téléphone.
@@ -28,26 +28,43 @@ import '../domain/report_jpeg.dart';
 ///
 /// « Continuer » demande l'estimation au backend puis ferme l'écran en
 /// renvoyant un [PhotoReportDraft] à la carte.
+///
+/// Caméra, GPS et capteurs sont injectables pour les tests ; par défaut,
+/// ceux du téléphone. L'écran libère la caméra en se fermant.
 class CameraScreen extends StatefulWidget {
-  const CameraScreen({super.key, required this.positionEstimateService});
+  const CameraScreen({
+    super.key,
+    required this.positionEstimateService,
+    this.camera,
+    this.locationService,
+    this.orientationService,
+    this.inclinationService,
+  });
 
   final PositionEstimateService positionEstimateService;
+  final ReportCamera? camera;
+  final LocationService? locationService;
+  final DeviceOrientationService? orientationService;
+  final CameraInclinationService? inclinationService;
 
   @override
   State<CameraScreen> createState() => _CameraScreenState();
 }
 
 class _CameraScreenState extends State<CameraScreen> {
-  final _locationService = LocationService();
-  final _orientationService = DeviceOrientationService();
-  final _inclinationService = CameraInclinationService();
+  late final _camera = widget.camera ?? DeviceReportCamera();
+  late final _locationService = widget.locationService ?? LocationService();
+  late final _orientationService =
+      widget.orientationService ?? DeviceOrientationService();
+  late final _inclinationService =
+      widget.inclinationService ?? CameraInclinationService();
 
   geo.Position? _position;
   bool _isLocating = false;
   String? _locationError;
   bool _locationNeedsSettings = false;
   StreamSubscription<geo.Position>? _positionSubscription;
-  CameraController? _controller;
+  bool _isCameraReady = false;
   String? _cameraError;
   bool _isCapturing = false;
   String? _captureError;
@@ -103,28 +120,23 @@ class _CameraScreenState extends State<CameraScreen> {
         _position = position;
       });
 
-      _positionSubscription =
-          geo.Geolocator.getPositionStream(
-            locationSettings: const geo.LocationSettings(
-              accuracy: geo.LocationAccuracy.high,
-            ),
-          ).listen(
-            (position) {
-              if (!mounted) return;
+      _positionSubscription = _locationService.watchPosition().listen(
+        (position) {
+          if (!mounted) return;
 
-              setState(() {
-                _position = position;
-                _locationError = null;
-              });
-            },
-            onError: (Object _) {
-              if (!mounted) return;
+          setState(() {
+            _position = position;
+            _locationError = null;
+          });
+        },
+        onError: (Object _) {
+          if (!mounted) return;
 
-              setState(() {
-                _locationError = 'Position GPS indisponible pour le moment.';
-              });
-            },
-          );
+          setState(() {
+            _locationError = 'Position GPS indisponible pour le moment.';
+          });
+        },
+      );
     } on StateError catch (error) {
       if (!mounted) return;
 
@@ -203,50 +215,13 @@ class _CameraScreenState extends State<CameraScreen> {
 
   Future<void> _initializeCamera() async {
     try {
-      final cameras = await availableCameras();
-
-      if (cameras.isEmpty) {
-        setState(() {
-          _cameraError = 'Aucune caméra disponible sur cet appareil.';
-        });
-        return;
-      }
-
-      final backCameras = cameras.where(
-        (camera) => camera.lensDirection == CameraLensDirection.back,
-      );
-
-      if (backCameras.isEmpty) {
-        setState(() {
-          _cameraError = 'Aucune caméra arrière disponible sur cet appareil.';
-        });
-        return;
-      }
-
-      final backCamera = backCameras.first;
-
-      final controller = CameraController(
-        backCamera,
-        // 1920 × 1080 : assez net pour reconnaître l'objet une fois réduit.
-        ResolutionPreset.veryHigh,
-        enableAudio: false,
-      );
-
-      _controller = controller;
-      await controller.initialize();
-
-      if (!mounted) {
-        await controller.dispose();
-        return;
-      }
-
-      // L'interface reste en portrait : sans ce verrou, le plugin tourne
-      // l'aperçu quand on met le téléphone à l'horizontale.
-      await controller.lockCaptureOrientation(DeviceOrientation.portraitUp);
+      await _camera.initialize();
 
       if (!mounted) return;
 
-      setState(() {});
+      setState(() {
+        _isCameraReady = true;
+      });
     } on CameraException catch (error) {
       if (!mounted) return;
 
@@ -294,23 +269,18 @@ class _CameraScreenState extends State<CameraScreen> {
   }
 
   bool get _canCapture {
-    final controller = _controller;
-
-    return controller != null &&
-        controller.value.isInitialized &&
+    return _isCameraReady &&
         !_isCapturing &&
         !_isEstimating &&
         _blockingReason() == null;
   }
 
   Future<void> _capturePhoto() async {
-    final controller = _controller;
     final position = _position;
     final heading = _orientation?.headingTrue;
     final inclination = _inclinationDegrees;
 
     if (!_canCapture ||
-        controller == null ||
         position == null ||
         heading == null ||
         inclination == null) {
@@ -336,9 +306,7 @@ class _CameraScreenState extends State<CameraScreen> {
     });
 
     try {
-      final photo = await controller.takePicture();
-      final originalBytes = await photo.readAsBytes();
-      await _deleteOriginalPhoto(photo.path);
+      final originalBytes = await _camera.takePicture();
       // compute avec une fonction de haut niveau : une closure créée ici
       // emporterait l'écran (this) vers l'autre isolate, ce qui est interdit.
       final jpegBytes = await compute(prepareReportJpeg, originalBytes);
@@ -438,25 +406,18 @@ class _CameraScreenState extends State<CameraScreen> {
     };
   }
 
-  /// L'original garde la position GPS dans ses EXIF : seule la version
-  /// nettoyée reste, en mémoire.
-  Future<void> _deleteOriginalPhoto(String path) async {
-    try {
-      await File(path).delete();
-    } on FileSystemException {
-      // Fichier temporaire de l'app : le système finira par le supprimer.
-    }
-  }
-
   String _cameraErrorMessage(CameraException error) {
-    if (error.code == 'CameraAccessDenied' ||
-        error.code == 'CameraAccessDeniedWithoutPrompt' ||
-        error.code == 'CameraAccessRestricted') {
-      return 'L’accès à la caméra est refusé. '
-          'Autorisez-le dans les réglages du téléphone.';
-    }
-
-    return 'Impossible d’ouvrir la caméra.';
+    return switch (error.code) {
+      ReportCamera.noCameraCode => 'Aucune caméra disponible sur cet appareil.',
+      ReportCamera.noBackCameraCode =>
+        'Aucune caméra arrière disponible sur cet appareil.',
+      'CameraAccessDenied' ||
+      'CameraAccessDeniedWithoutPrompt' ||
+      'CameraAccessRestricted' =>
+        'L’accès à la caméra est refusé. '
+            'Autorisez-le dans les réglages du téléphone.',
+      _ => 'Impossible d’ouvrir la caméra.',
+    };
   }
 
   String _measuresText({
@@ -522,13 +483,12 @@ class _CameraScreenState extends State<CameraScreen> {
     _positionSubscription?.cancel();
     _orientationSubscription?.cancel();
     _inclinationSubscription?.cancel();
-    _controller?.dispose();
+    _camera.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    final controller = _controller;
     final capture = _capture;
     final lastCaptureStatus = _lastCaptureStatus();
     final overlayButtonStyle = IconButton.styleFrom(
@@ -556,7 +516,7 @@ class _CameraScreenState extends State<CameraScreen> {
                   ),
                 ),
               )
-            else if (controller == null || !controller.value.isInitialized)
+            else if (!_isCameraReady)
               const Center(
                 child: CircularProgressIndicator(color: Colors.white),
               )
@@ -570,7 +530,7 @@ class _CameraScreenState extends State<CameraScreen> {
                   gaplessPlayback: true,
                 )
               else
-                _FullScreenPreview(controller: controller),
+                _camera.buildPreview(),
               const _Reticle(),
             ],
             Positioned(
@@ -657,35 +617,6 @@ class _CameraScreenState extends State<CameraScreen> {
               ),
             ),
           ],
-        ),
-      ),
-    );
-  }
-}
-
-/// Aperçu recadré pour remplir l'écran. Le recadrage est centré : le réticule
-/// vise le centre de la photo, qui montre un peu plus que l'aperçu.
-class _FullScreenPreview extends StatelessWidget {
-  const _FullScreenPreview({required this.controller});
-
-  final CameraController controller;
-
-  @override
-  Widget build(BuildContext context) {
-    final previewSize = controller.value.previewSize;
-
-    if (previewSize == null) {
-      return CameraPreview(controller);
-    }
-
-    // previewSize est donné en paysage : largeur et hauteur sont inversées.
-    return ClipRect(
-      child: FittedBox(
-        fit: BoxFit.cover,
-        child: SizedBox(
-          width: previewSize.height,
-          height: previewSize.width,
-          child: CameraPreview(controller),
         ),
       ),
     );
