@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../../core/notifications/notification_permission.dart';
 import '../../auth/data/auth_service.dart';
 import '../../auth/presentation/widgets/flow_transition.dart';
+import '../../camera/data/position_estimate_service.dart';
 import '../../home/presentation/home_screen.dart';
 import '../data/profile_service.dart';
 import '../domain/user_profile.dart';
@@ -19,12 +20,14 @@ class ProfileGate extends StatefulWidget {
   final AuthService authService;
   final ProfileService profileService;
   final ManualReportService reportService;
+  final PositionEstimateService positionEstimateService;
 
   const ProfileGate({
     super.key,
     required this.authService,
     required this.profileService,
     required this.reportService,
+    required this.positionEstimateService,
   });
 
   @override
@@ -145,6 +148,7 @@ class _ProfileGateState extends State<ProfileGate> {
             onSignOut: widget.authService.signOut,
             onUpdatePreferences: _updatePreferences,
             reportService: widget.reportService,
+            positionEstimateService: widget.positionEstimateService,
           );
         } else {
           step = 1;

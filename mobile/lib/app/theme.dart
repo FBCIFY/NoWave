@@ -11,12 +11,39 @@ abstract final class AppColors {
   static const text = Color(0xFF0F172A);
 }
 
-/// Thème Material par défaut (boutons, champs, barre du haut).
+const _fontFamily = 'Raleway';
+
+/// Chiffres alignés : par défaut, Raleway dessine des chiffres de hauteurs
+/// inégales, peu lisibles dans les coordonnées, distances et compteurs.
+const _liningFigures = TextStyle(fontFeatures: [FontFeature.liningFigures()]);
+
+const _liningFiguresTheme = TextTheme(
+  displayLarge: _liningFigures,
+  displayMedium: _liningFigures,
+  displaySmall: _liningFigures,
+  headlineLarge: _liningFigures,
+  headlineMedium: _liningFigures,
+  headlineSmall: _liningFigures,
+  titleLarge: _liningFigures,
+  titleMedium: _liningFigures,
+  titleSmall: _liningFigures,
+  bodyLarge: _liningFigures,
+  bodyMedium: _liningFigures,
+  bodySmall: _liningFigures,
+  labelLarge: _liningFigures,
+  labelMedium: _liningFigures,
+  labelSmall: _liningFigures,
+);
+
+/// Thème Material par défaut (police, boutons, champs, barre du haut).
 ///
 /// Les écrans sombres d'authentification et de profil ont leur propre style :
 /// voir `AuthLayout`.
 final appTheme = ThemeData(
   useMaterial3: true,
+  fontFamily: _fontFamily,
+  textTheme: _liningFiguresTheme,
+  primaryTextTheme: _liningFiguresTheme,
   colorScheme: ColorScheme.fromSeed(
     seedColor: AppColors.blue600,
     primary: AppColors.blue600,
@@ -54,7 +81,14 @@ final appTheme = ThemeData(
     style: FilledButton.styleFrom(
       minimumSize: const Size.fromHeight(52),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-      textStyle: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+      // Ce style remplace celui du thème au lieu de le compléter : la police
+      // et les chiffres alignés doivent être repris ici.
+      textStyle: const TextStyle(
+        fontFamily: _fontFamily,
+        fontSize: 16,
+        fontWeight: FontWeight.w600,
+        fontFeatures: [FontFeature.liningFigures()],
+      ),
     ),
   ),
 );

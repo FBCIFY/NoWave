@@ -1,3 +1,5 @@
+import '../../camera/domain/photo_capture.dart';
+
 /// Catégories proposées ; [apiValue] est la valeur attendue par le backend.
 enum ReportCategory {
   marineAnimal('marine_animal'),
@@ -11,6 +13,9 @@ enum ReportCategory {
 
 /// Signalement à envoyer. `clientReportId` est généré par l'app et réutilisé
 /// si l'envoi est retenté avec le même contenu.
+///
+/// Avec [positioning], le signalement part en mode photo : le backend garde
+/// les mesures de la photo à côté du point confirmé par l'utilisateur.
 class ManualReportRequest {
   const ManualReportRequest({
     required this.clientReportId,
@@ -19,6 +24,7 @@ class ManualReportRequest {
     required this.latitude,
     required this.observedAt,
     this.description,
+    this.positioning,
   });
 
   final String clientReportId;
@@ -27,17 +33,21 @@ class ManualReportRequest {
   final double latitude;
   final DateTime observedAt;
   final String? description;
+  final PhotoCaptureMeasurements? positioning;
 
   bool matchesContent({
     required ReportCategory category,
     required double longitude,
     required double latitude,
     required String? description,
+    PhotoCaptureMeasurements? positioning,
   }) =>
       this.category == category &&
       this.longitude == longitude &&
       this.latitude == latitude &&
-      this.description == description;
+      this.description == description &&
+      // Mêmes mesures = même photo : une nouvelle photo change de signalement.
+      identical(this.positioning, positioning);
 
   Map<String, Object?> toJson() => {
     'client_report_id': clientReportId,
@@ -48,5 +58,9 @@ class ManualReportRequest {
       'coordinates': [longitude, latitude],
     },
     'observed_at': observedAt.toUtc().toIso8601String(),
+    if (positioning != null) ...{
+      'positioning_mode': 'photo',
+      'positioning': positioning!.toJson(),
+    },
   };
 }

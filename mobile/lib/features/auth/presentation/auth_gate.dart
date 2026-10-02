@@ -2,6 +2,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 
 import '../../../core/notifications/push_notification_listener.dart';
+import '../../camera/data/position_estimate_service.dart';
 import '../../profile/data/profile_service.dart';
 import '../../profile/presentation/profile_gate.dart';
 import '../../reports/data/manual_report_service.dart';
@@ -19,12 +20,14 @@ class AuthGate extends StatefulWidget {
   final AuthService authService;
   final ProfileService profileService;
   final ManualReportService reportService;
+  final PositionEstimateService positionEstimateService;
 
   const AuthGate({
     super.key,
     required this.authService,
     required this.profileService,
     required this.reportService,
+    required this.positionEstimateService,
   });
 
   @override
@@ -72,6 +75,7 @@ class _AuthGateState extends State<AuthGate> {
                 authService: widget.authService,
                 profileService: widget.profileService,
                 reportService: widget.reportService,
+                positionEstimateService: widget.positionEstimateService,
               ),
             );
           }
