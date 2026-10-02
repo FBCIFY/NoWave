@@ -8,6 +8,7 @@ import 'package:flutter/material.dart';
 import '../../../core/api/api_exception.dart';
 import '../../../core/haptics/app_haptics.dart';
 import '../domain/manual_report.dart';
+import 'report_category_style.dart';
 import 'report_photo_viewer.dart';
 
 /// Panneau du bas en mode signalement : catégorie, commentaire facultatif
@@ -320,12 +321,6 @@ class _ReportComposerSheetState extends State<ReportComposerSheet> {
     disabledForegroundColor: const Color(0xFF637888),
   );
 
-  static const _categories = [
-    (ReportCategory.marineAnimal, Icons.pets_outlined, 'Animal marin'),
-    (ReportCategory.obstruction, Icons.warning_amber_rounded, 'Obstacle'),
-    (ReportCategory.pollution, Icons.water_drop_outlined, 'Pollution'),
-  ];
-
   /// Le compteur n'apparaît qu'à l'approche de la limite de 250 caractères.
   static const _commentMaxLength = 250;
   static const _counterThreshold = 200;
@@ -428,9 +423,9 @@ class _ReportComposerSheetState extends State<ReportComposerSheet> {
   Widget _categoryPicker() {
     return Row(
       children: [
-        for (final (index, (category, icon, label)) in _categories.indexed) ...[
+        for (final (index, category) in ReportCategory.values.indexed) ...[
           if (index > 0) const SizedBox(width: 8),
-          Expanded(child: _categoryTile(category, icon, label)),
+          Expanded(child: _categoryTile(category)),
         ],
       ],
     );
@@ -438,7 +433,7 @@ class _ReportComposerSheetState extends State<ReportComposerSheet> {
 
   /// Icône et nom visibles : une infobulle demande un appui long, que
   /// personne ne fait sur l'eau.
-  Widget _categoryTile(ReportCategory category, IconData icon, String label) {
+  Widget _categoryTile(ReportCategory category) {
     final selected = _category == category;
     final foreground = selected ? Colors.white : _textColor;
     return Semantics(
@@ -469,14 +464,14 @@ class _ReportComposerSheetState extends State<ReportComposerSheet> {
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  Icon(icon, color: foreground),
+                  Icon(category.icon, color: foreground),
                   const SizedBox(height: 4),
                   Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 4),
                     child: FittedBox(
                       fit: BoxFit.scaleDown,
                       child: Text(
-                        label,
+                        category.label,
                         maxLines: 1,
                         style: TextStyle(
                           color: foreground,
