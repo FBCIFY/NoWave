@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../map/data/report_tiles.dart';
 import '../../map/presentation/map_screen.dart';
 import '../../profile/domain/user_profile.dart';
 import '../../profile/presentation/profile_screen.dart';
@@ -16,6 +17,7 @@ class HomeScreen extends StatelessWidget {
   final UpdatePreferences? onUpdatePreferences;
   final ManualReportService? reportService;
   final PositionEstimateService? positionEstimateService;
+  final ReportTiles? reportTiles;
 
   const HomeScreen({
     super.key,
@@ -24,6 +26,7 @@ class HomeScreen extends StatelessWidget {
     this.onUpdatePreferences,
     this.reportService,
     this.positionEstimateService,
+    this.reportTiles,
   });
 
   @override
@@ -32,6 +35,7 @@ class HomeScreen extends StatelessWidget {
 
     return MapScreen(
       reportService: reportService,
+      reportTiles: reportTiles,
       // La caméra renvoie la photo et le point estimé, que la carte fait
       // confirmer avant publication.
       onOpenCamera: positionEstimateService == null

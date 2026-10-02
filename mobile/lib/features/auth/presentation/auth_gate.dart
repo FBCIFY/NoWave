@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 
 import '../../../core/notifications/push_notification_listener.dart';
 import '../../camera/data/position_estimate_service.dart';
+import '../../map/data/report_tiles.dart';
 import '../../profile/data/profile_service.dart';
 import '../../profile/presentation/profile_gate.dart';
 import '../../reports/data/manual_report_service.dart';
@@ -21,6 +22,7 @@ class AuthGate extends StatefulWidget {
   final ProfileService profileService;
   final ManualReportService reportService;
   final PositionEstimateService positionEstimateService;
+  final ReportTiles reportTiles;
 
   const AuthGate({
     super.key,
@@ -28,6 +30,7 @@ class AuthGate extends StatefulWidget {
     required this.profileService,
     required this.reportService,
     required this.positionEstimateService,
+    required this.reportTiles,
   });
 
   @override
@@ -76,6 +79,7 @@ class _AuthGateState extends State<AuthGate> {
                 profileService: widget.profileService,
                 reportService: widget.reportService,
                 positionEstimateService: widget.positionEstimateService,
+                reportTiles: widget.reportTiles,
               ),
             );
           }

@@ -17,6 +17,7 @@ import '../../camera/domain/photo_report_draft.dart';
 import '../../reports/presentation/report_composer_sheet.dart';
 import '../../reports/data/manual_report_service.dart';
 import '../../reports/domain/manual_report.dart';
+import '../data/report_tiles.dart';
 import 'widgets/map_notice_banner.dart';
 import 'widgets/report_marker.dart';
 
@@ -38,11 +39,15 @@ class MapScreen extends StatefulWidget {
   final Future<PhotoReportDraft?> Function()? onOpenCamera;
   final ManualReportService? reportService;
 
+  /// Couche des signalements publiés ; absente dans les tests.
+  final ReportTiles? reportTiles;
+
   const MapScreen({
     super.key,
     this.onOpenProfile,
     this.onOpenCamera,
     this.reportService,
+    this.reportTiles,
   });
 
   @override
@@ -256,6 +261,20 @@ class _MapScreenState extends State<MapScreen> {
   void _handleMapLoaded(MapLoadedEventData event) {
     if (!mounted || _mapError == null) return;
     setState(() => _mapError = null);
+  }
+
+  /// Chaque chargement de style efface les couches ajoutées : on remet celle
+  /// des signalements. Une erreur ici ne doit pas bloquer la carte.
+  Future<void> _addReportTiles() async {
+    final map = _mapboxMap;
+    final reportTiles = widget.reportTiles;
+    if (map == null || reportTiles == null) return;
+
+    try {
+      await reportTiles.addTo(map);
+    } catch (error) {
+      debugPrint('Couche des signalements indisponible : $error');
+    }
   }
 
   Future<void> _retryMapLoad() async {
@@ -798,6 +817,7 @@ class _MapScreenState extends State<MapScreen> {
                   unawaited(_locate());
                 },
                 onMapLoadedListener: _handleMapLoaded,
+                onStyleLoadedListener: (_) => unawaited(_addReportTiles()),
                 onMapLoadErrorListener: _handleMapLoadError,
                 onCameraChangeListener: _handleMapCameraChange,
                 onScrollListener: _handleMapGesture,

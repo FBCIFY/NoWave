@@ -5,6 +5,7 @@ import '../../auth/data/auth_service.dart';
 import '../../auth/presentation/widgets/flow_transition.dart';
 import '../../camera/data/position_estimate_service.dart';
 import '../../home/presentation/home_screen.dart';
+import '../../map/data/report_tiles.dart';
 import '../data/profile_service.dart';
 import '../domain/user_profile.dart';
 import '../../reports/data/manual_report_service.dart';
@@ -21,6 +22,7 @@ class ProfileGate extends StatefulWidget {
   final ProfileService profileService;
   final ManualReportService reportService;
   final PositionEstimateService positionEstimateService;
+  final ReportTiles reportTiles;
 
   const ProfileGate({
     super.key,
@@ -28,6 +30,7 @@ class ProfileGate extends StatefulWidget {
     required this.profileService,
     required this.reportService,
     required this.positionEstimateService,
+    required this.reportTiles,
   });
 
   @override
@@ -149,6 +152,7 @@ class _ProfileGateState extends State<ProfileGate> {
             onUpdatePreferences: _updatePreferences,
             reportService: widget.reportService,
             positionEstimateService: widget.positionEstimateService,
+            reportTiles: widget.reportTiles,
           );
         } else {
           step = 1;

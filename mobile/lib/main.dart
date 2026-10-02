@@ -9,6 +9,7 @@ import 'core/api/api_service.dart';
 import 'features/auth/data/auth_service.dart';
 import 'features/auth/presentation/auth_gate.dart';
 import 'features/camera/data/position_estimate_service.dart';
+import 'features/map/data/report_tiles.dart';
 import 'features/profile/data/profile_service.dart';
 import 'features/reports/data/manual_report_service.dart';
 import 'firebase_options.dart';
@@ -37,6 +38,7 @@ Future<void> main() async {
     apiService: apiService,
     getIdToken: authService.getIdToken,
   );
+  final reportTiles = ReportTiles(getIdToken: authService.getIdToken);
 
   runApp(
     MyApp(
@@ -45,6 +47,7 @@ Future<void> main() async {
         profileService: profileService,
         reportService: reportService,
         positionEstimateService: positionEstimateService,
+        reportTiles: reportTiles,
       ),
     ),
   );
