@@ -5,6 +5,9 @@ from fastapi.responses import JSONResponse
 from app.domain.errors import (
     BoatAlreadyExistsError,
     BoatNotFoundError,
+    DeviceConflictError,
+    DeviceNotFoundError,
+    DevicePositionStaleError,
     EmailNotVerifiedError,
     GpsPrecisionInsufficientError,
     InactiveUserError,
@@ -251,6 +254,54 @@ def boat_already_exists_handler(
         content={
             "error": {
                 "code": "boat_already_exists",
+                "message": str(exc),
+                "details": None,
+            }
+        },
+    )
+
+
+def device_conflict_handler(
+    request,
+    exc: DeviceConflictError,
+):
+    return JSONResponse(
+        status_code=409,
+        content={
+            "error": {
+                "code": "device_conflict",
+                "message": str(exc),
+                "details": None,
+            }
+        },
+    )
+
+
+def device_not_found_handler(
+    request,
+    exc: DeviceNotFoundError,
+):
+    return JSONResponse(
+        status_code=404,
+        content={
+            "error": {
+                "code": "device_not_found",
+                "message": str(exc),
+                "details": None,
+            }
+        },
+    )
+
+
+def device_position_stale_handler(
+    request,
+    exc: DevicePositionStaleError,
+):
+    return JSONResponse(
+        status_code=409,
+        content={
+            "error": {
+                "code": "device_position_stale",
                 "message": str(exc),
                 "details": None,
             }

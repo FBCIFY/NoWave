@@ -1,0 +1,34 @@
+from abc import ABC, abstractmethod
+from uuid import UUID
+
+from app.domain.device import Device
+from app.domain.device_position import DevicePosition
+
+
+class DeviceRepository(ABC):
+    @abstractmethod
+    def register(self, device: Device) -> Device:
+        pass
+
+    @abstractmethod
+    def get_active_by_user_and_installation(
+        self,
+        user_id: UUID,
+        installation_id: UUID,
+    ) -> Device | None:
+        pass
+
+    @abstractmethod
+    def save_position(
+        self,
+        position: DevicePosition,
+    ) -> DevicePosition | None:
+        pass
+
+    @abstractmethod
+    def deactivate(
+        self,
+        user_id: UUID,
+        installation_id: UUID,
+    ) -> bool:
+        pass
