@@ -4,6 +4,9 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 from app.config.production import configure_production, is_production
 
 from app.api.errors.handlers import (
+    device_conflict_handler,
+    device_not_found_handler,
+    device_position_stale_handler,
     http_exception_handler,
     boat_already_exists_handler,
     boat_not_found_handler,
@@ -22,6 +25,9 @@ from app.api.errors.handlers import (
 from app.api.router import router as api_router
 from app.api.routes.health import router as health_router
 from app.domain.errors import (
+    DeviceConflictError,
+    DeviceNotFoundError,
+    DevicePositionStaleError,
     BoatAlreadyExistsError,
     BoatNotFoundError,
     EmailNotVerifiedError,
@@ -136,4 +142,20 @@ app.add_exception_handler(
 app.add_exception_handler(
     BoatAlreadyExistsError,
     boat_already_exists_handler,
+)
+
+
+app.add_exception_handler(
+    DeviceConflictError,
+    device_conflict_handler,
+)
+
+app.add_exception_handler(
+    DeviceNotFoundError,
+    device_not_found_handler,
+)
+
+app.add_exception_handler(
+    DevicePositionStaleError,
+    device_position_stale_handler,
 )
