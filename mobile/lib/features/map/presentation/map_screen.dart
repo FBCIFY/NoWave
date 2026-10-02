@@ -76,7 +76,8 @@ class _MapScreenState extends State<MapScreen> {
   final Uuid _uuid = const Uuid();
   ManualReportRequest? _pendingReport;
   PhotoReportDraft? _photoDraft;
-  // Signalement photo publié dont le JPEG n'est pas encore envoyé.
+
+  /// Signalement photo publié dont le JPEG n'est pas encore envoyé.
   String? _publishedReportId;
   bool _isUploadingPhoto = false;
   Timer? _reportPointTimer;
@@ -105,8 +106,8 @@ class _MapScreenState extends State<MapScreen> {
     );
   }
 
-  // En haut de la carte plutôt qu'en SnackBar : le bas est pris par les
-  // boutons.
+  /// En haut de la carte plutôt qu'en SnackBar : le bas est pris par les
+  /// boutons.
   void _showNotice(String message, MapNoticeKind kind) {
     _noticeTimer?.cancel();
     setState(() {
@@ -129,8 +130,8 @@ class _MapScreenState extends State<MapScreen> {
     setState(() => _compassTurns += change / 360);
   }
 
-  // Un geste de l'utilisateur coupe le suivi GPS ; une rotation au doigt
-  // passe la boussole en mode manuel.
+  /// Un geste de l'utilisateur coupe le suivi GPS ; une rotation au doigt
+  /// passe la boussole en mode manuel.
   void _handleMapCameraChange(CameraChangedEventData event) {
     final bearing = event.cameraState.bearing;
     final bearingDelta = ((bearing - _cameraBearing + 540) % 360 - 180);
@@ -186,11 +187,11 @@ class _MapScreenState extends State<MapScreen> {
         ),
       ]);
     } catch (_) {
-      // Keep Mapbox's default placement if ornament settings are unavailable.
+      // Ornements non réglables : Mapbox garde sa disposition par défaut.
     }
   }
 
-  // Bascule entre nord en haut et cap du téléphone.
+  /// Bascule entre nord en haut et cap du téléphone.
   Future<void> _toggleCompass() async {
     final map = _mapboxMap;
     if (map == null) return;
@@ -213,7 +214,7 @@ class _MapScreenState extends State<MapScreen> {
       if (_isFollowing) {
         final camera = await map.getCameraState();
         if (!mounted) return;
-        // Mapbox marks this animated viewport helper as experimental.
+        // Mapbox marque cette animation du viewport comme expérimentale.
         // ignore: experimental_member_use
         setStateWithViewportAnimation(() {
           _orientationMode = nextMode;
@@ -284,9 +285,9 @@ class _MapScreenState extends State<MapScreen> {
   /// raccourcit l'animation quand la distance est faible.
   static const _recenterMaxDuration = Duration(milliseconds: 1200);
 
-  // Centre la carte sur l'utilisateur puis le suit à chaque nouvelle position.
-  // [animated] : vol jusqu'à l'utilisateur (bouton), sinon saut direct
-  // (lancement de la carte).
+  /// Centre la carte sur l'utilisateur puis le suit à chaque nouvelle position.
+  /// [animated] : vol jusqu'à l'utilisateur (bouton), sinon saut direct
+  /// (lancement de la carte).
   Future<void> _locate({bool animated = false}) async {
     setState(() {
       _isLocating = true;
@@ -313,7 +314,7 @@ class _MapScreenState extends State<MapScreen> {
         try {
           previousCamera = await _mapboxMap?.getCameraState();
         } catch (_) {
-          // The default camera values below remain available.
+          // Pas de caméra précédente : valeurs par défaut ci-dessous.
         }
       }
 
@@ -342,7 +343,7 @@ class _MapScreenState extends State<MapScreen> {
       }
 
       if (animated) {
-        // Mapbox marks this animated viewport helper as experimental.
+        // Mapbox marque cette animation du viewport comme expérimentale.
         // ignore: experimental_member_use
         setStateWithViewportAnimation(
           followUser,
@@ -413,8 +414,8 @@ class _MapScreenState extends State<MapScreen> {
     await _openReportComposer(photoDraft: draft);
   }
 
-  // Le résultat de la caméra arrive dès le début de sa fermeture : on attend
-  // que la carte soit de nouveau visible pour que l'animation se voie.
+  /// Le résultat de la caméra arrive dès le début de sa fermeture : on attend
+  /// que la carte soit de nouveau visible pour que l'animation se voie.
   Future<void> _waitForCoveringRouteToClose() async {
     final animation = ModalRoute.of(context)?.secondaryAnimation;
     if (animation == null || animation.isDismissed) return;
@@ -429,8 +430,8 @@ class _MapScreenState extends State<MapScreen> {
     await closed.future;
   }
 
-  // Ouvre le formulaire et mémorise la caméra pour la rétablir à la fermeture.
-  // Avec une photo, le point part de l'estimation plutôt que du GPS actuel.
+  /// Ouvre le formulaire et mémorise la caméra pour la rétablir à la fermeture.
+  /// Avec une photo, le point part de l'estimation plutôt que du GPS actuel.
   Future<void> _openReportComposer({PhotoReportDraft? photoDraft}) async {
     if (_reportComposerOpen) return;
     final position = _position;
@@ -473,7 +474,7 @@ class _MapScreenState extends State<MapScreen> {
     // Caméra déclarée plutôt qu'un easeTo : Mapbox la garde (carte à plat,
     // point sur l'estimation) jusqu'à ce que l'utilisateur touche la carte,
     // sans qu'une fin de suivi GPS puisse l'annuler en cours de route.
-    // Mapbox marks this animated viewport helper as experimental.
+    // Mapbox marque cette animation du viewport comme expérimentale.
     // ignore: experimental_member_use
     setStateWithViewportAnimation(
       () {
@@ -534,7 +535,7 @@ class _MapScreenState extends State<MapScreen> {
           MapAnimationOptions(duration: 350),
         );
       } catch (_) {
-        // Keep the existing camera if restoration is unavailable.
+        // Restauration impossible : la carte reste où elle est.
       }
     }
     if (!mounted || !resumeFollowing || _reportComposerOpen) return;
@@ -626,8 +627,8 @@ class _MapScreenState extends State<MapScreen> {
     _showNotice('Signalement publié avec sa photo.', MapNoticeKind.success);
   }
 
-  // Le JPEG n'est gardé que pendant ce parcours : fermer après la publication
-  // abandonne la photo, le signalement reste publié.
+  /// Le JPEG n'est gardé que pendant ce parcours : fermer après la publication
+  /// abandonne la photo, le signalement reste publié.
   void _leaveReportComposer() {
     if (_isUploadingPhoto) return;
     final publishedWithoutPhoto = _publishedReportId != null;
@@ -636,8 +637,8 @@ class _MapScreenState extends State<MapScreen> {
     _showNotice('Signalement publié sans photo.', MapNoticeKind.warning);
   }
 
-  // Sans photo, rien n'indique que le repère est fixe et que c'est la carte
-  // qui bouge dessous.
+  /// Sans photo, rien n'indique que le repère est fixe et que c'est la carte
+  /// qui bouge dessous.
   String _reportHint() {
     final draft = _photoDraft;
     if (draft == null) return 'Déplacez la carte pour placer le point';
@@ -650,8 +651,8 @@ class _MapScreenState extends State<MapScreen> {
     return 'Estimé à $distanceText · ajustez si besoin';
   }
 
-  // onMapIdle attend aussi le chargement des tuiles, lent en mer : le repère
-  // se pose dès que la caméra ne bouge plus depuis 200 ms.
+  /// onMapIdle attend aussi le chargement des tuiles, lent en mer : le repère
+  /// se pose dès que la caméra ne bouge plus depuis 200 ms.
   void _liftReportMarker() {
     _reportMarkerLifted.value = true;
     _reportMarkerDropTimer?.cancel();
@@ -669,15 +670,15 @@ class _MapScreenState extends State<MapScreen> {
     );
   }
 
-  // En signalement, la carte reste à plat : inclinée, elle déformerait les
-  // distances autour du point à placer.
+  /// En signalement, la carte reste à plat : inclinée, elle déformerait les
+  /// distances autour du point à placer.
   Future<void> _setMapTiltEnabled(MapboxMap map, bool enabled) async {
     try {
       await map.gestures.updateSettings(
         GesturesSettings(pitchEnabled: enabled),
       );
     } catch (_) {
-      // Tilt stays available if gesture settings are unavailable.
+      // Réglages des gestes indisponibles : l'inclinaison reste possible.
     }
   }
 
@@ -698,7 +699,7 @@ class _MapScreenState extends State<MapScreen> {
     );
   }
 
-  // Convertit la pointe du marqueur (pixels) en coordonnées sur la carte.
+  /// Convertit la pointe du marqueur (pixels) en coordonnées sur la carte.
   Future<void> _updateReportPoint() async {
     final map = _mapboxMap;
     final mapBox = _mapAreaKey.currentContext?.findRenderObject() as RenderBox?;
@@ -721,7 +722,7 @@ class _MapScreenState extends State<MapScreen> {
       }
       _reportPoint.value = point;
     } catch (_) {
-      // Retain the last valid coordinates while the map animates.
+      // Pendant une animation, on garde les dernières coordonnées valides.
     }
   }
 

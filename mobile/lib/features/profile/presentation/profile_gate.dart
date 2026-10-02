@@ -54,8 +54,8 @@ class _ProfileGateState extends State<ProfileGate> {
     });
   }
 
-  // Seul chemin qui affiche l'écran d'alertes : les comptes existants ne le
-  // voient pas.
+  /// Seul chemin qui affiche l'écran d'alertes : les comptes existants ne le
+  /// voient pas.
   void _onProfileCreated() {
     _showAlertsOnboarding = true;
     _reloadProfile();
