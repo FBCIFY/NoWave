@@ -52,6 +52,7 @@ lib/
 ├── app/               racine de l’app et thème
 ├── core/              outils partagés par toutes les fonctionnalités
 │   ├── api/           client HTTP vers le backend
+│   ├── haptics/       retours haptiques
 │   ├── location/      position GPS et format degrés/minutes/secondes
 │   ├── map/           réglages Mapbox communs
 │   ├── notifications/ autorisation du téléphone et messages push
@@ -62,7 +63,7 @@ lib/
     ├── home/          accueil (la carte + accès au profil)
     ├── map/           carte, boussole, mode signalement
     ├── reports/       formulaire et envoi des signalements
-    └── camera/        prototype caméra et capteurs (NW-55)
+    └── camera/        prise de photo, mesures et estimation de position
 ```
 
 Chaque dossier de `features/` suit le même découpage :
@@ -85,7 +86,10 @@ AuthGate          (session Firebase)
     ├── ProfileSetupScreen
     ├── AlertsOnboardingScreen   une seule fois, après la création du profil
     └── HomeScreen → MapScreen
-                     └── ProfileScreen (bouton profil)
+                     ├── ProfileScreen (bouton profil)
+                     ├── ReportComposerSheet (bouton +, signalement manuel)
+                     └── CameraScreen (bouton appareil photo)
+                         └── ReportComposerSheet → ReportPhotoViewer
 ```
 
 `AuthGate` et `ProfileGate` choisissent l’écran à afficher. Les écrans eux-mêmes
@@ -97,7 +101,6 @@ Fichiers présents mais non utilisés par l’application :
 - `features/reports/presentation/reports_screen.dart` et
   `data/demo_reports_service.dart` : liste de démonstration, utilisée
   seulement dans les tests ;
-- `features/camera/` : prototype NW-55, aucun bouton n’y mène ;
 - `app/router.dart` : fichier vide.
 
 ## Authentification et profil — NW-51
@@ -233,20 +236,53 @@ au lancement suivant et seulement affiché dans les logs.
 - `ProfileGate` n’a pas de test automatisé : le parcours a été vérifié à la
   main sur iPhone.
 
-## Prototype caméra et capteurs — NW-55
+## Signalement photo — NW-55, NW-115
 
-Le prototype permet de :
+Le bouton appareil photo de la carte ouvre `CameraScreen` en plein écran.
+Le parcours reprend le prototype caméra de NW-55 :
 
-- afficher et capturer l’aperçu de la caméra arrière ;
-- afficher la position GPS et sa précision ;
-- bloquer la capture lorsque la précision dépasse 50 mètres ;
-- mesurer l’azimut, l’inclinaison et l’altitude ;
-- figer les mesures associées au moment de la capture.
+1. La caméra arrière affiche l’aperçu, la position GPS et sa précision. La
+   capture est bloquée tant que la précision dépasse 50 mètres.
+2. Au déclenchement, l’azimut, l’inclinaison (lue sur l’accéléromètre),
+   l’altitude et la position sont figés avec la photo.
+3. « Continuer » envoie ces mesures à `POST /api/v1/position-estimates`, avec
+   une hauteur de caméra de 2,5 m (source `default`). Rien n’est enregistré
+   côté serveur.
+4. De retour sur la carte, le repère est placé sur la position estimée.
+   L’utilisateur la confirme ou la corrige en déplaçant la carte. Sans
+   estimation, il place lui-même le point sur l’objet photographié.
+5. La photo est redressée, débarrassée de ses EXIF et réduite à 500 000 octets
+   au plus (`report_jpeg.dart`).
+6. « Publier » crée le signalement (`POST /api/v1/reports`), puis envoie la
+   photo à part : `POST /api/v1/reports/{id}/photo`, en multipart, champ
+   `file`. L’envoi est réussi si la réponse contient
+   `"upload_status": "uploaded"`.
+
+Si l’envoi de la photo échoue, le signalement reste publié. « Réessayer
+l’envoi » renvoie la même photo pour le même signalement ; « Terminer sans
+photo » ferme le formulaire. Le formulaire et la photo restent en mémoire
+tant que le parcours est ouvert, mais rien n’est gardé après fermeture : pas
+de brouillon, pas de file d’attente, pas d’envoi automatique plus tard.
+
+La vignette ouvre la photo en plein écran (`ReportPhotoViewer`). Fermer un
+signalement rempli demande une confirmation.
+
+### Flèche de position
+
+La position de l’utilisateur est affichée par une flèche 3D qui suit le cap
+du téléphone. Le modèle `assets/models/location_puck.glb` est généré par un
+script ; pour le modifier, changer le script puis, depuis `mobile/` :
+
+```bash
+python3 tool/make_location_puck.py assets/models/location_puck.glb
+```
 
 ### Limites connues
 
+- l’envoi de la photo suit le contrat de la doc technique mais n’a pas encore
+  été testé sur le serveur : la route de NW-112 n’est pas déployée et répond
+  404 (« envoi indisponible sur ce serveur ») ;
 - l’azimut dépend des perturbations magnétiques et de la calibration ;
 - l’inclinaison n’a pas été vérifiée avec un support d’angle étalonné ;
 - les conventions des capteurs doivent encore être validées sur Android réel ;
-- la précision verticale ne suffit pas seule à calculer une position ;
-- la photo reste dans le stockage temporaire de l’application.
+- la hauteur de caméra est fixée à 2,5 m pour le MVP.
