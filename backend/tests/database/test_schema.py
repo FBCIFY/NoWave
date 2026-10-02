@@ -32,7 +32,7 @@ def test_exact_dictionary_and_foreign_keys(dsn):
 def test_spatial_indexes_and_distance(db):
     conn, ids=db
     indexes=dict(conn.execute("SELECT indexname,indexdef FROM pg_indexes WHERE schemaname='nowave'"))
-    for name in ['reports_final_position_gist','device_positions_position_gist']:
+    for name in ['reports_final_position_gist','reports_final_position_geometry_gist','device_positions_position_gist']:
         assert 'USING gist' in indexes[name]
     for name in ['reports_author_idx','reports_status_expiry_idx','devices_user_idx','notifications_schedule_idx']:
         assert name in indexes
