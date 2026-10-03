@@ -286,3 +286,11 @@ python3 tool/make_location_puck.py assets/models/location_puck.glb
 - l’inclinaison n’a pas été vérifiée avec un support d’angle étalonné ;
 - les conventions des capteurs doivent encore être validées sur Android réel ;
 - la hauteur de caméra est fixée à 2,5 m pour le MVP.
+
+## POC du nouveau fond NoWave — NW-map-style
+
+Le POC MapLibre indépendant est dans [`../map_poc`](../map_poc/README.md).
+Le [guide cartographique](../cartography/README.md) donne les commandes,
+le parcours de test de Vadim et les limites des données fictives. L'écran
+métier décrit ci-dessus conserve son fonctionnement ; sa migration viendra
+après validation du fond.
