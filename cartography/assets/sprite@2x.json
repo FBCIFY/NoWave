@@ -1,0 +1,471 @@
+{
+  "port-commercial": {
+    "x": 0,
+    "y": 0,
+    "width": 80,
+    "height": 80,
+    "pixelRatio": 2
+  },
+  "port-pleasure": {
+    "x": 80,
+    "y": 0,
+    "width": 80,
+    "height": 80,
+    "pixelRatio": 2
+  },
+  "port-marina": {
+    "x": 160,
+    "y": 0,
+    "width": 80,
+    "height": 80,
+    "pixelRatio": 2
+  },
+  "port-industrial": {
+    "x": 240,
+    "y": 0,
+    "width": 80,
+    "height": 80,
+    "pixelRatio": 2
+  },
+  "port-military": {
+    "x": 320,
+    "y": 0,
+    "width": 80,
+    "height": 80,
+    "pixelRatio": 2
+  },
+  "lighthouse": {
+    "x": 400,
+    "y": 0,
+    "width": 80,
+    "height": 80,
+    "pixelRatio": 2
+  },
+  "light-red": {
+    "x": 480,
+    "y": 0,
+    "width": 80,
+    "height": 80,
+    "pixelRatio": 2
+  },
+  "light-green": {
+    "x": 560,
+    "y": 0,
+    "width": 80,
+    "height": 80,
+    "pixelRatio": 2
+  },
+  "light-yellow": {
+    "x": 0,
+    "y": 80,
+    "width": 80,
+    "height": 80,
+    "pixelRatio": 2
+  },
+  "light-white": {
+    "x": 80,
+    "y": 80,
+    "width": 80,
+    "height": 80,
+    "pixelRatio": 2
+  },
+  "light-black": {
+    "x": 160,
+    "y": 80,
+    "width": 80,
+    "height": 80,
+    "pixelRatio": 2
+  },
+  "lateral-port": {
+    "x": 240,
+    "y": 80,
+    "width": 80,
+    "height": 80,
+    "pixelRatio": 2
+  },
+  "lateral-starboard": {
+    "x": 320,
+    "y": 80,
+    "width": 80,
+    "height": 80,
+    "pixelRatio": 2
+  },
+  "cardinal-n": {
+    "x": 400,
+    "y": 80,
+    "width": 80,
+    "height": 80,
+    "pixelRatio": 2
+  },
+  "cardinal-e": {
+    "x": 480,
+    "y": 80,
+    "width": 80,
+    "height": 80,
+    "pixelRatio": 2
+  },
+  "cardinal-s": {
+    "x": 560,
+    "y": 80,
+    "width": 80,
+    "height": 80,
+    "pixelRatio": 2
+  },
+  "cardinal-w": {
+    "x": 0,
+    "y": 160,
+    "width": 80,
+    "height": 80,
+    "pixelRatio": 2
+  },
+  "safe-water": {
+    "x": 80,
+    "y": 160,
+    "width": 80,
+    "height": 80,
+    "pixelRatio": 2
+  },
+  "special": {
+    "x": 160,
+    "y": 160,
+    "width": 80,
+    "height": 80,
+    "pixelRatio": 2
+  },
+  "isolated-danger": {
+    "x": 240,
+    "y": 160,
+    "width": 80,
+    "height": 80,
+    "pixelRatio": 2
+  },
+  "buoy-sphere": {
+    "x": 320,
+    "y": 160,
+    "width": 80,
+    "height": 80,
+    "pixelRatio": 2
+  },
+  "buoy-spar": {
+    "x": 400,
+    "y": 160,
+    "width": 80,
+    "height": 80,
+    "pixelRatio": 2
+  },
+  "beacon": {
+    "x": 480,
+    "y": 160,
+    "width": 80,
+    "height": 80,
+    "pixelRatio": 2
+  },
+  "anchor": {
+    "x": 560,
+    "y": 160,
+    "width": 80,
+    "height": 80,
+    "pixelRatio": 2
+  },
+  "anchor-ship": {
+    "x": 0,
+    "y": 240,
+    "width": 80,
+    "height": 80,
+    "pixelRatio": 2
+  },
+  "mooring": {
+    "x": 80,
+    "y": 240,
+    "width": 80,
+    "height": 80,
+    "pixelRatio": 2
+  },
+  "wreck": {
+    "x": 160,
+    "y": 240,
+    "width": 80,
+    "height": 80,
+    "pixelRatio": 2
+  },
+  "landmark": {
+    "x": 240,
+    "y": 240,
+    "width": 80,
+    "height": 80,
+    "pixelRatio": 2
+  },
+  "foreshore-pattern": {
+    "x": 320,
+    "y": 240,
+    "width": 80,
+    "height": 80,
+    "pixelRatio": 2
+  },
+  "shoal-pattern": {
+    "x": 400,
+    "y": 240,
+    "width": 80,
+    "height": 80,
+    "pixelRatio": 2
+  },
+  "reef-pattern": {
+    "x": 480,
+    "y": 240,
+    "width": 80,
+    "height": 80,
+    "pixelRatio": 2
+  },
+  "lateral-port~cone": {
+    "x": 560,
+    "y": 240,
+    "width": 80,
+    "height": 80,
+    "pixelRatio": 2
+  },
+  "lateral-port~can": {
+    "x": 0,
+    "y": 320,
+    "width": 80,
+    "height": 80,
+    "pixelRatio": 2
+  },
+  "lateral-port~sphere": {
+    "x": 80,
+    "y": 320,
+    "width": 80,
+    "height": 80,
+    "pixelRatio": 2
+  },
+  "lateral-port~spar": {
+    "x": 160,
+    "y": 320,
+    "width": 80,
+    "height": 80,
+    "pixelRatio": 2
+  },
+  "lateral-starboard~cone": {
+    "x": 240,
+    "y": 320,
+    "width": 80,
+    "height": 80,
+    "pixelRatio": 2
+  },
+  "lateral-starboard~can": {
+    "x": 320,
+    "y": 320,
+    "width": 80,
+    "height": 80,
+    "pixelRatio": 2
+  },
+  "lateral-starboard~sphere": {
+    "x": 400,
+    "y": 320,
+    "width": 80,
+    "height": 80,
+    "pixelRatio": 2
+  },
+  "lateral-starboard~spar": {
+    "x": 480,
+    "y": 320,
+    "width": 80,
+    "height": 80,
+    "pixelRatio": 2
+  },
+  "cardinal-n~cone": {
+    "x": 560,
+    "y": 320,
+    "width": 80,
+    "height": 80,
+    "pixelRatio": 2
+  },
+  "cardinal-n~can": {
+    "x": 0,
+    "y": 400,
+    "width": 80,
+    "height": 80,
+    "pixelRatio": 2
+  },
+  "cardinal-n~sphere": {
+    "x": 80,
+    "y": 400,
+    "width": 80,
+    "height": 80,
+    "pixelRatio": 2
+  },
+  "cardinal-n~spar": {
+    "x": 160,
+    "y": 400,
+    "width": 80,
+    "height": 80,
+    "pixelRatio": 2
+  },
+  "cardinal-e~cone": {
+    "x": 240,
+    "y": 400,
+    "width": 80,
+    "height": 80,
+    "pixelRatio": 2
+  },
+  "cardinal-e~can": {
+    "x": 320,
+    "y": 400,
+    "width": 80,
+    "height": 80,
+    "pixelRatio": 2
+  },
+  "cardinal-e~sphere": {
+    "x": 400,
+    "y": 400,
+    "width": 80,
+    "height": 80,
+    "pixelRatio": 2
+  },
+  "cardinal-e~spar": {
+    "x": 480,
+    "y": 400,
+    "width": 80,
+    "height": 80,
+    "pixelRatio": 2
+  },
+  "cardinal-s~cone": {
+    "x": 560,
+    "y": 400,
+    "width": 80,
+    "height": 80,
+    "pixelRatio": 2
+  },
+  "cardinal-s~can": {
+    "x": 0,
+    "y": 480,
+    "width": 80,
+    "height": 80,
+    "pixelRatio": 2
+  },
+  "cardinal-s~sphere": {
+    "x": 80,
+    "y": 480,
+    "width": 80,
+    "height": 80,
+    "pixelRatio": 2
+  },
+  "cardinal-s~spar": {
+    "x": 160,
+    "y": 480,
+    "width": 80,
+    "height": 80,
+    "pixelRatio": 2
+  },
+  "cardinal-w~cone": {
+    "x": 240,
+    "y": 480,
+    "width": 80,
+    "height": 80,
+    "pixelRatio": 2
+  },
+  "cardinal-w~can": {
+    "x": 320,
+    "y": 480,
+    "width": 80,
+    "height": 80,
+    "pixelRatio": 2
+  },
+  "cardinal-w~sphere": {
+    "x": 400,
+    "y": 480,
+    "width": 80,
+    "height": 80,
+    "pixelRatio": 2
+  },
+  "cardinal-w~spar": {
+    "x": 480,
+    "y": 480,
+    "width": 80,
+    "height": 80,
+    "pixelRatio": 2
+  },
+  "safe-water~cone": {
+    "x": 560,
+    "y": 480,
+    "width": 80,
+    "height": 80,
+    "pixelRatio": 2
+  },
+  "safe-water~can": {
+    "x": 0,
+    "y": 560,
+    "width": 80,
+    "height": 80,
+    "pixelRatio": 2
+  },
+  "safe-water~sphere": {
+    "x": 80,
+    "y": 560,
+    "width": 80,
+    "height": 80,
+    "pixelRatio": 2
+  },
+  "safe-water~spar": {
+    "x": 160,
+    "y": 560,
+    "width": 80,
+    "height": 80,
+    "pixelRatio": 2
+  },
+  "special~cone": {
+    "x": 240,
+    "y": 560,
+    "width": 80,
+    "height": 80,
+    "pixelRatio": 2
+  },
+  "special~can": {
+    "x": 320,
+    "y": 560,
+    "width": 80,
+    "height": 80,
+    "pixelRatio": 2
+  },
+  "special~sphere": {
+    "x": 400,
+    "y": 560,
+    "width": 80,
+    "height": 80,
+    "pixelRatio": 2
+  },
+  "special~spar": {
+    "x": 480,
+    "y": 560,
+    "width": 80,
+    "height": 80,
+    "pixelRatio": 2
+  },
+  "isolated-danger~cone": {
+    "x": 560,
+    "y": 560,
+    "width": 80,
+    "height": 80,
+    "pixelRatio": 2
+  },
+  "isolated-danger~can": {
+    "x": 0,
+    "y": 640,
+    "width": 80,
+    "height": 80,
+    "pixelRatio": 2
+  },
+  "isolated-danger~sphere": {
+    "x": 80,
+    "y": 640,
+    "width": 80,
+    "height": 80,
+    "pixelRatio": 2
+  },
+  "isolated-danger~spar": {
+    "x": 160,
+    "y": 640,
+    "width": 80,
+    "height": 80,
+    "pixelRatio": 2
+  }
+}

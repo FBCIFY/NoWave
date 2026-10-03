@@ -1,0 +1,12 @@
+{
+  "name": "nowave-cartography-validation",
+  "private": true,
+  "scripts": {
+    "test": "node tools/validate_style.cjs",
+    "test:web": "node tools/browser_smoke.cjs"
+  },
+  "devDependencies": {
+    "@maplibre/maplibre-gl-style-spec": "26.4.4",
+    "playwright": "1.63.0"
+  }
+}

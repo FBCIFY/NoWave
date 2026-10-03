@@ -1,0 +1,50 @@
+// Start the map server on 8765 and serve map_poc/build/web on 8766 first.
+const fs = require('node:fs');
+const path = require('node:path');
+const output = path.resolve(__dirname, '../../test-results/map-poc');
+fs.mkdirSync(output, {recursive:true});
+const {chromium} = require('playwright');
+(async () => {
+ const browser = await chromium.launch({headless:true,args:['--no-sandbox','--enable-unsafe-swiftshader']});
+ const page = await browser.newPage({viewport:{width:430,height:900},deviceScaleFactor:2});
+ const errors=[]; const requests=[];
+ page.on('pageerror', e=>errors.push(String(e)));
+ page.on('console',m=>{if(m.type()==='error') errors.push(m.text())});
+ page.on('request',r=>requests.push(r.url()));
+ await page.addInitScript(async () => {
+  const value = await import('/vendor/maplibre/maplibre-gl.mjs');
+  window.maplibregl = {...value, Map: new Proxy(value.Map,{construct(target,args){
+    const map = Reflect.construct(target,args); window.__testMap=map;
+    window.__mapErrors=[]; map.on('error',e=>window.__mapErrors.push(String(e.error)));
+    return map;
+  }})};
+ });
+ await page.goto('http://127.0.0.1:8766');
+ try { await page.waitForFunction(()=>window.__testMap?.loaded(),null,{timeout:60000}); } catch(e) { console.log(errors); await page.screenshot({path:path.join(output,'failure.png')}); throw e; }
+ await page.screenshot({path:path.join(output,'overview.png')});
+ console.log('Overview:',await page.evaluate(()=>({zoom:__testMap.getZoom(),features:__testMap.queryRenderedFeatures().length, errors:__mapErrors})));
+ await page.evaluate(()=>__testMap.jumpTo({center:[.036,-.003],zoom:14}));
+ await page.waitForTimeout(1200);
+ await page.screenshot({path:path.join(output,'coast.png')});
+ console.log('Coast:',await page.evaluate(()=>({zoom:__testMap.getZoom(),features:__testMap.queryRenderedFeatures().length, errors:__mapErrors})));
+ await page.evaluate(()=>__testMap.jumpTo({center:[.048,-.015],zoom:16}));
+ await page.waitForTimeout(1200);
+ await page.screenshot({path:path.join(output,'buoys.png')});
+ if (!await page.evaluate(()=>__testMap.queryRenderedFeatures().some(f=>f.layer.id==='buoy-symbols'))) throw Error('Buoy symbols missing');
+ console.log('Port:',await page.evaluate(()=>({zoom:__testMap.getZoom(),features:__testMap.queryRenderedFeatures().length, errors:__mapErrors})));
+ const before = await page.evaluate(()=>__testMap.getCenter().toArray());
+ await page.mouse.move(215,500); await page.mouse.down(); await page.mouse.move(300,500,{steps:10}); await page.mouse.up();
+ await page.waitForTimeout(500);
+ const after = await page.evaluate(()=>__testMap.getCenter().toArray());
+ if (before[0]===after[0]) throw Error('Drag did not move the camera');
+ await page.mouse.wheel(0,-200); await page.waitForTimeout(1000);
+ const zoom = await page.evaluate(()=>__testMap.getZoom());
+ if (zoom<=16) throw Error('Wheel did not zoom');
+ console.log('Drag and wheel:',{before,after,zoom});
+ console.log('Errors:',errors);
+ const external=requests.filter(u=>!u.startsWith('http://127.0.0.1')&&!u.startsWith('blob:')&&!u.startsWith('data:'));
+ const mapErrors=await page.evaluate(()=>__mapErrors);
+ console.log('External requests:',external);
+ if(errors.length||mapErrors.length||external.length) throw Error('Unexpected errors or external requests');
+ await browser.close();
+})().catch(e=>{console.error(e);process.exit(1)});
