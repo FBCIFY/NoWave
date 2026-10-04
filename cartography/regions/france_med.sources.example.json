@@ -1,0 +1,24 @@
+{
+  "schema": 1,
+  "osm": {
+    "path": "/data/nowave/sources/france.osm.pbf",
+    "sha256": "REPLACE_WITH_VERIFIED_SHA256",
+    "source": "OpenStreetMap / Geofabrik, https://download.geofabrik.de/europe/france.html",
+    "license": "ODbL-1.0",
+    "date": "REPLACE_WITH_SNAPSHOT_DATE"
+  },
+  "land": {
+    "path": "/data/nowave/sources/land-france-med.geojson",
+    "sha256": "REPLACE_WITH_VERIFIED_SHA256",
+    "source": "OpenStreetMap assembled coastline / https://osmdata.openstreetmap.de/data/land-polygons.html",
+    "license": "ODbL-1.0",
+    "date": "REPLACE_WITH_SOURCE_DATE"
+  },
+  "coast_scope": {
+    "path": "/data/nowave/sources/french-mainland-coast-scope.geojson",
+    "sha256": "REPLACE_WITH_VERIFIED_SHA256",
+    "source": "REPLACE_WITH_SOURCED_FRENCH_COAST_SELECTION",
+    "license": "REPLACE_WITH_ACTUAL_LICENSE",
+    "date": "REPLACE_WITH_SOURCE_DATE"
+  }
+}

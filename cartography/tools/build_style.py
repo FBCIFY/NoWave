@@ -242,7 +242,7 @@ REAL_AREA_PROFILES = {
 
 def build_real_area(profile):
     """Apply the approved NoWave visual style to a real geographic dataset."""
-    manifest = json.loads((ROOT/profile['manifest']).read_text())
+    manifest = profile.get('manifest_data') or json.loads((ROOT/profile['manifest']).read_text())
     style = build()
 
     style['name'] = profile['name']
@@ -322,11 +322,88 @@ def build_real_area(profile):
     return style
 
 
+def mbtiles_metadata(path):
+    import sqlite3
+    from contextlib import closing
+    with closing(sqlite3.connect(f'file:{Path(path).resolve()}?mode=ro', uri=True)) as db:
+        return dict(db.execute('SELECT name,value FROM metadata'))
+
+
+def region_profile(region, manifest=None, tiles_metadata=None):
+    """Region-specific paths/credits, sharing every approved real-area visual rule."""
+    from region_config import resolve_region
+    config = resolve_region(region)
+    id_ = config['id']
+    if id_ in REAL_AREA_PROFILES:
+        profile = dict(REAL_AREA_PROFILES[id_])
+        archive = ROOT / 'tiles/vector' / (id_ + '.mbtiles')
+        if archive.is_file():
+            metadata = mbtiles_metadata(archive)
+            profile['features_minzoom'] = int(metadata['minzoom'])
+            profile['features_maxzoom'] = int(metadata['maxzoom'])
+        return profile
+    supplied_manifest = manifest is not None
+    if manifest is None:
+        from pipeline_io import current_generation
+        generation = current_generation(ROOT / 'data' / id_)
+        manifest = json.loads((generation / 'manifest.json').read_text())
+    if manifest.get('region') != id_ or manifest.get('bbox') != config['bbox']:
+        raise ValueError('Manifest does not match selected region')
+    if tiles_metadata is None:
+        path = ROOT / 'tiles' / 'bathymetry' / id_ / 'metadata.json'
+        tiles_metadata = json.loads(path.read_text())
+    if tiles_metadata.get('field_signature') != manifest['bathymetry']['signature']:
+        raise ValueError('Raster tiles and vector depth field are from different generations')
+    products = manifest['bathymetry']['products']
+    vector_min, vector_max = 6, 18
+    archive = ROOT / 'tiles/vector' / (id_ + '.mbtiles')
+    if archive.is_file() and not supplied_manifest:
+        vector_metadata = mbtiles_metadata(archive)
+        if vector_metadata.get('nowave:input_sha256') != manifest['features_sha256']:
+            raise ValueError('Vector MBTiles does not match prepared features; rebuild it')
+        vector_min, vector_max = int(vector_metadata['minzoom']), int(vector_metadata['maxzoom'])
+    return {
+        'name': 'NoWave · ' + config['name'], 'manifest_data': manifest,
+        'features_tiles': '{base}/tiles/vector/' + id_ + '/{z}/{x}/{y}.pbf',
+        'features_minzoom': vector_min, 'features_maxzoom': vector_max,
+        'bathymetry_tiles': '{base}/tiles/bathymetry/' + id_ + '/{z}/{x}/{y}.png',
+        'bathymetry_minzoom': tiles_metadata['minzoom'], 'bathymetry_maxzoom': tiles_metadata['maxzoom'],
+        'water': '{base}/data/' + id_ + '/water.geojson',
+        'features_attribution': '© OpenStreetMap contributors · ODbL 1.0',
+        'bathymetry_attribution': ' · ' + ' · '.join(
+            p['source'] + ' / ' + p['id'] + ' / ' + p['date'] + ' / ' + p['license'] for p in products),
+        'metadata': {'nowave:data_mode': 'REGION_REAL', 'nowave:region': id_,
+            'nowave:coast_label': 'réelle OSM', 'nowave:port_label': 'réels OSM',
+            'nowave:bathymetry_label': 'produits déclarés, couverture partielle',
+            'nowave:bathymetry_resolution': json.dumps([p['resolution_m'] for p in products]) + ' m (sources)',
+            'nowave:missing_depth_label': 'gris bleu = profondeur indisponible',
+            'nowave:navigation_label': 'objets OSM explicitement identifiés',
+            'nowave:manifest': '{base}/data/' + id_ + '/manifest.json',
+            'nowave:warning': 'NoWave n’est pas une carte officielle de navigation.'},
+    }
+
+
+def build_region(region):
+    return build_real_area(region_profile(region))
+
+
 def build_cassis():
     """Backward-compatible Cassis entry point during the national refactor."""
-    return build_real_area(REAL_AREA_PROFILES['cassis'])
+    return build_real_area(region_profile('cassis'))
 
 if __name__ == '__main__':
+    import argparse
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('--region')
+    parser.add_argument('--output', type=Path)
+    args = parser.parse_args()
+    if args.region:
+        result = json.dumps(build_region(args.region), ensure_ascii=False, indent=2) + '\n'
+        if args.output:
+            args.output.write_text(result)
+        else:
+            print(result, end='')
+        raise SystemExit(0)
     (ROOT / 'style.json').write_text(json.dumps(build(), ensure_ascii=False, indent=2)+'\n')
     if (ROOT/'data/cassis/manifest.json').exists():
         (ROOT/'cassis-style.json').write_text(json.dumps(build_cassis(), ensure_ascii=False, indent=2)+'\n')

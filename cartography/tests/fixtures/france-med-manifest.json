@@ -1,0 +1,47 @@
+{
+  "schema": 1,
+  "mode": "REGION_REAL",
+  "region": "france_med",
+  "bbox": [
+    2.95,
+    42.2,
+    7.75,
+    44.1
+  ],
+  "center": [
+    5.35,
+    43.15
+  ],
+  "zoom": 7,
+  "coordinates": [
+    [
+      2.95,
+      44.1
+    ],
+    [
+      7.75,
+      44.1
+    ],
+    [
+      7.75,
+      42.2
+    ],
+    [
+      2.95,
+      42.2
+    ]
+  ],
+  "features_sha256": "fixture-only",
+  "bathymetry": {
+    "signature": "fixture-only",
+    "products": [
+      {
+        "id": "OFFLINE_FIXTURE",
+        "source": "TEST DATA — NOT SHOM COVERAGE",
+        "date": "2026-01-01",
+        "resolution_m": 100,
+        "license": "test fixture"
+      }
+    ]
+  }
+}

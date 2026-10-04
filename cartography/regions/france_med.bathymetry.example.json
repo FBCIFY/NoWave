@@ -1,0 +1,33 @@
+{
+  "schema": 1,
+  "vertical_reference": "PBMA",
+  "products": [],
+  "instructions": "Add only acquired and verified products. Empty products intentionally fail preparation. S201300200 is not a regional source.",
+  "product_template": {
+    "id": "MNT_MED100m_GDL_CA_HOMONIM_WGS84",
+    "path": "/data/nowave/sources/homonim-pbma.tif",
+    "sha256": "REPLACE_WITH_VERIFIED_SHA256",
+    "source": "Shom, 2015, HOMONIM Golfe du Lion–Côte d’Azur; https://doi.org/10.17183/MNT_MED100m_GDL_CA_HOMONIM_WGS84",
+    "license": "Licence Ouverte / Open Data (verify downloaded metadata)",
+    "date": "2015",
+    "resolution_m": 111,
+    "resolution_degrees": 0.001,
+    "vertical_reference": "PBMA",
+    "positive": "up",
+    "priority": 0,
+    "coverage": {
+      "path": "/data/nowave/sources/homonim-coverage.geojson",
+      "sha256": "REPLACE_WITH_VERIFIED_SHA256",
+      "source": "REPLACE_WITH_PRODUCT_VALIDITY_FOOTPRINT_SOURCE",
+      "license": "REPLACE_WITH_ACTUAL_LICENSE",
+      "date": "REPLACE_WITH_SOURCE_DATE"
+    },
+    "metadata": {
+      "path": "/data/nowave/sources/homonim-metadata.xml",
+      "sha256": "REPLACE_WITH_VERIFIED_SHA256",
+      "source": "Shom official product metadata",
+      "license": "REPLACE_WITH_ACTUAL_LICENSE",
+      "date": "REPLACE_WITH_RETRIEVAL_DATE"
+    }
+  }
+}

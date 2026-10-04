@@ -1,3 +1,10 @@
 node_modules/
 .venv/
 *.mbtiles
+# Regional generated products and local source declarations (Cassis oracle stays tracked)
+/data/*/
+!/data/cassis/
+/tiles/bathymetry/*/
+!/tiles/bathymetry/cassis/
+/*-regional-style.json
+/regions/*.local.json

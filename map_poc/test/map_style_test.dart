@@ -32,7 +32,7 @@ void main() {
     client.close();
   });
   test('Demo and supplied data retain their provenance and camera', () async {
-    for (final mode in ['DEMO_FICTIVE', 'DONNEES_FOURNIES']) {
+    for (final mode in ['DEMO_FICTIVE', 'DONNEES_FOURNIES', 'REGION_REAL']) {
       final client = MockClient(
         (_) async => http.Response(
           jsonEncode(style(mode)),

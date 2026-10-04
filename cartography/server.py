@@ -1,7 +1,9 @@
 """Local static/style/MBTiles server; no connection to the NoWave backend."""
 import argparse
+from contextlib import closing
 import json
 import mimetypes
+import re
 import sqlite3
 import sys
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -10,13 +12,15 @@ from urllib.parse import unquote, urlsplit
 
 ROOT = Path(__file__).resolve().parent
 sys.path.insert(0, str(ROOT/'tools'))
-from build_style import outside_mask, relief_source, build_cassis
+from build_style import outside_mask, relief_source, build_cassis, build_region, mbtiles_metadata
+from region_config import resolve_region
+from pipeline_io import current_generation, GENERATION_FILES
 
 
-def make_style(base, mbtiles=None, bathymetry=None, relief=None, attribution=None, center=None, relief_attribution=None, relief_preview=False, zoom=None, real_cassis=False):
-    if real_cassis and (mbtiles or relief_preview):
+def make_style(base, mbtiles=None, bathymetry=None, relief=None, attribution=None, center=None, relief_attribution=None, relief_preview=False, zoom=None, real_cassis=False, region=None):
+    if (real_cassis or region) and (mbtiles or relief_preview):
         raise ValueError('CASSIS_REAL, MBTiles and relief-preview are separate modes')
-    style = build_cassis() if real_cassis else json.loads((ROOT/'style.json').read_text())
+    style = build_region(region) if region else build_cassis() if real_cassis else json.loads((ROOT/'style.json').read_text())
     if center:
         style['center'] = center
     if zoom is not None:
@@ -49,6 +53,10 @@ def make_style(base, mbtiles=None, bathymetry=None, relief=None, attribution=Non
             'features': {'type': 'vector', 'tiles': [base+'/tiles/{z}/{x}/{y}.pbf'],
                          'minzoom': 0, 'maxzoom': 18, 'attribution': attribution},
             'bathymetry': {'type': 'raster', 'tiles': [bathymetry], 'tileSize': 256}}
+        if Path(mbtiles).is_file():
+            metadata = mbtiles_metadata(mbtiles)
+            style['sources']['features'].update(minzoom=int(metadata['minzoom']),
+                                                 maxzoom=int(metadata['maxzoom']))
         if relief:
             style['sources']['relief'] = relief_source(relief, relief_attribution)
         for layer in style['layers']:
@@ -68,11 +76,21 @@ def make_style(base, mbtiles=None, bathymetry=None, relief=None, attribution=Non
 def read_tile(path, z, x, y):
     if not 0 <= z <= 22 or not 0 <= x < 2**z or not 0 <= y < 2**z:
         return None
-    with sqlite3.connect(f'file:{Path(path).resolve()}?mode=ro', uri=True) as connection:
+    with closing(sqlite3.connect(f'file:{Path(path).resolve()}?mode=ro', uri=True)) as connection:
         row = connection.execute(
             'SELECT tile_data FROM tiles WHERE zoom_level=? AND tile_column=? AND tile_row=?',
             (z, x, 2**z-1-y)).fetchone()
     return bytes(row[0]) if row else None
+
+
+def validate_mbtiles(path):
+    if not path.is_file():
+        raise ValueError(f'Build vector MBTiles first: {path}')
+    with closing(sqlite3.connect(f'file:{path.resolve()}?mode=ro', uri=True)) as connection:
+        metadata = dict(connection.execute('SELECT name,value FROM metadata'))
+    layers = json.loads(metadata.get('json', '{}')).get('vector_layers', [])
+    if metadata.get('format') not in ('pbf', 'mvt') or not any(l['id'] == 'nowave' for l in layers):
+        raise ValueError('Expected MVT MBTiles with source-layer nowave')
 
 
 def handler_class(config):
@@ -102,35 +120,59 @@ def handler_class(config):
                                    config.relief_tiles, config.attribution, config.center,
                                    getattr(config, 'relief_attribution', None),
                                    getattr(config, 'relief_preview', False), getattr(config, 'zoom', None),
-                                   getattr(config, 'real_cassis', False))
+                                   getattr(config, 'real_cassis', False), getattr(config, 'region', None))
                 self.respond(json.dumps(style, ensure_ascii=False).encode(), 'application/json')
                 return
             if path.startswith('/tiles/bathymetry/'):
-                file = (ROOT/path.lstrip('/')).resolve()
-                tiles_root = (ROOT/'tiles'/'bathymetry').resolve()
-
-                if (not file.is_relative_to(tiles_root)
-                        or not file.is_file()
-                        or file.suffix.lower() != '.png'):
+                match = re.fullmatch(r'/tiles/bathymetry/([a-z][a-z0-9_]{0,63})/(\d+)/(\d+)/(\d+)\.png', path)
+                if not match:
                     self.respond(b'Not found', 'text/plain', 404)
                     return
-
-                self.respond(file.read_bytes(), 'image/png')
+                region_id, z, x, y = match.groups()
+                selected = getattr(config, 'region', None) or ('cassis' if getattr(config, 'real_cassis', False) else None)
+                if selected and region_id != selected:
+                    self.respond(b'Not found', 'text/plain', 404)
+                    return
+                z, x, y = int(z), int(x), int(y)
+                if not 0 <= z <= 22 or not 0 <= x < 2**z or not 0 <= y < 2**z:
+                    self.respond(b'Invalid tile request', 'text/plain', 400)
+                    return
+                file = (ROOT/path.lstrip('/')).resolve()
+                tiles_root = (ROOT/'tiles'/'bathymetry').resolve()
+                if not file.is_relative_to(tiles_root):
+                    self.respond(b'Not found', 'text/plain', 404)
+                elif not file.is_file():
+                    self.respond(b'', 'image/png', 204)
+                else:
+                    self.respond(file.read_bytes(), 'image/png')
                 return
 
-            if path.startswith('/tiles/vector/cassis/'):
+            if path.startswith('/tiles/vector/'):
                 try:
-                    relative = path[len('/tiles/vector/cassis/'):].split('/')
-                    if len(relative) != 3:
+                    relative = path[len('/tiles/vector/'):].split('/')
+                    if len(relative) != 4:
                         raise ValueError('Expected z/x/y.pbf')
 
-                    z, x, filename = relative
+                    region_id, z, x, filename = relative
+                    if not re.fullmatch(r'[a-z][a-z0-9_]{0,63}', region_id):
+                        raise ValueError('Invalid region')
+                    selected = getattr(config, 'region', None) or ('cassis' if getattr(config, 'real_cassis', False) else None)
+                    if selected and selected != region_id:
+                        self.respond(b'Not found', 'text/plain', 404)
+                        return
+                    tile_file = (ROOT/'tiles/vector'/f'{region_id}.mbtiles').resolve()
+                    if not tile_file.is_relative_to((ROOT/'tiles/vector').resolve()):
+                        self.respond(b'Not found', 'text/plain', 404)
+                        return
+                    if not tile_file.is_file():
+                        self.respond(b'', 'application/vnd.mapbox-vector-tile', 204)
+                        return
 
                     if not filename.endswith('.pbf'):
                         raise ValueError('Expected .pbf')
 
                     data = read_tile(
-                        ROOT/'tiles/vector/cassis.mbtiles',
+                        tile_file,
                         int(z),
                         int(x),
                         int(filename[:-4]),
@@ -168,13 +210,26 @@ def handler_class(config):
                     self.respond(data, 'application/vnd.mapbox-vector-tile', gzip=data[:2] == b'\x1f\x8b')
                 return
             file = (ROOT/path.lstrip('/')).resolve()
+            # Stable public URLs resolve current once, never a mutable staging tree.
+            parts = Path(path).parts
+            if len(parts) >= 4 and parts[1] == 'data':
+                region_root = ROOT / 'data' / parts[2]
+                if (region_root / 'current').is_symlink() or (region_root / 'generations').exists():
+                    if len(parts) != 4 or parts[3] not in (*GENERATION_FILES, 'manifest.json'):
+                        self.respond(b'Not found', 'text/plain', 404)
+                        return
+                    try:
+                        file = (current_generation(region_root) / parts[3]).resolve()
+                    except (OSError, ValueError):
+                        self.respond(b'Not found', 'text/plain', 404)
+                        return
             if (not any(file.is_relative_to(ROOT/directory) for directory in ('assets', 'data')) or not file.is_file()
                     or not path.startswith(('/assets/', '/data/'))):
                 self.respond(b'Not found', 'text/plain', 404)
                 return
             # Real-data mode must not accidentally expose synthetic inputs.
             if ((config.mbtiles and (path.startswith('/data/') or 'demo-' in path))
-                    or (getattr(config, 'real_cassis', False) and
+                    or ((getattr(config, 'real_cassis', False) or getattr(config, 'region', None)) and
                         (file == ROOT/'data/demo.geojson' or 'demo-' in file.name or 'mapzen-preview-sea-mask' in file.name))):
                 self.respond(b'Not found', 'text/plain', 404)
                 return
@@ -195,6 +250,7 @@ def main():
     parser.add_argument('--relief-tiles', help='Land-only Terrarium DEM tiles; optional')
     parser.add_argument('--relief-attribution', help='Required credits for a custom DEM')
     parser.add_argument('--relief-preview', action='store_true', help='Real Marseille/Cassis terrain only; no demo bathymetry or objects')
+    parser.add_argument('--region', help='Configured region ID (cassis, france_med, …)')
     parser.add_argument('--real-cassis', action='store_true', help='Real Cassis pilot: OSM + SHOM, no demo data')
     parser.add_argument('--zoom', type=float, help='Initial zoom (4–18)')
     parser.add_argument('--attribution', help='Sources, dates, licenses')
@@ -202,6 +258,15 @@ def main():
     config = parser.parse_args()
     if config.relief_tiles and not config.relief_attribution:
         parser.error('--relief-tiles requires --relief-attribution')
+    if config.region:
+        if config.real_cassis or config.mbtiles or config.relief_preview:
+            parser.error('--region is separate from legacy mode flags')
+        try:
+            config.region = resolve_region(config.region)['id']
+            make_style('http://localhost', region=config.region)
+            validate_mbtiles(ROOT / 'tiles/vector' / (config.region + '.mbtiles'))
+        except (OSError, ValueError, sqlite3.Error) as error:
+            parser.error(str(error))
     if config.real_cassis:
         if config.relief_preview or config.mbtiles:
             parser.error('--real-cassis is separate from --relief-preview and --mbtiles')
@@ -217,7 +282,7 @@ def main():
         try:
             make_style('http://localhost', config.mbtiles, config.bathymetry_tiles,
                        config.relief_tiles, config.attribution, config.center, config.relief_attribution)
-            with sqlite3.connect(f'file:{config.mbtiles.resolve()}?mode=ro', uri=True) as connection:
+            with closing(sqlite3.connect(f'file:{config.mbtiles.resolve()}?mode=ro', uri=True)) as connection:
                 metadata = dict(connection.execute('SELECT name, value FROM metadata'))
                 if metadata.get('format') not in ('pbf', 'mvt'):
                     parser.error('Expected vector MBTiles (pbf/mvt)')
@@ -226,7 +291,7 @@ def main():
                     parser.error('Expected normalized source-layer nowave; see DATA_CONTRACT.md')
         except (ValueError, sqlite3.Error) as error:
             parser.error(str(error))
-    mode = 'CASSIS_REAL — OSM / SHOM / Mapzen' if config.real_cassis else 'DONNEES_FOURNIES' if config.mbtiles else 'RELIEF REEL EXTERNE — bathymétrie et objets fictifs dans la scène de démo'
+    mode = ('REGION_REAL — ' + config.region) if config.region else 'CASSIS_REAL — OSM / SHOM / Mapzen' if config.real_cassis else 'DONNEES_FOURNIES' if config.mbtiles else 'RELIEF REEL EXTERNE — bathymétrie et objets fictifs dans la scène de démo'
     print(f'NoWave {mode}\nhttp://{config.host}:{config.port}/style.json', flush=True)
     ThreadingHTTPServer((config.host, config.port), handler_class(config)).serve_forever()
 

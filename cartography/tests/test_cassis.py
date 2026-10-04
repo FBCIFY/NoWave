@@ -31,8 +31,11 @@ class CassisTest(unittest.TestCase):
         self.assertNotIn('demo-', json.dumps(style))
         self.assertNotIn('demo.geojson', json.dumps(style))
         for id_ in ['land-relief', 'contours', 'coast', 'pontoons', 'port-symbols', 'light-symbols']:
-            self.assertEqual(next(l for l in style['layers'] if l['id'] == id_),
-                             next(l for l in demo['layers'] if l['id'] == id_))
+            actual = next(l for l in style['layers'] if l['id'] == id_)
+            expected = dict(next(l for l in demo['layers'] if l['id'] == id_))
+            if expected.get('source') == 'features':
+                expected['source-layer'] = 'nowave'
+            self.assertEqual(actual, expected)
         layers = [l['id'] for l in style['layers']]
         self.assertLess(layers.index('land'), layers.index('land-relief'))
         self.assertLess(layers.index('land-relief'), layers.index('relief-sea-mask'))

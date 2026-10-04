@@ -56,7 +56,8 @@ class MapStyle {
     if (mode != 'DEMO_FICTIVE' &&
         mode != 'DONNEES_FOURNIES' &&
         mode != 'RELIEF_REAL_PREVIEW' &&
-        mode != 'CASSIS_REAL') {
+        mode != 'CASSIS_REAL' &&
+        mode != 'REGION_REAL') {
       throw const FormatException('Provenance absente du style NoWave');
     }
     final center = data['center'] as List? ?? [0, 0];
