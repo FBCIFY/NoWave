@@ -21,7 +21,8 @@ constituent pas un inventaire nautique officiel ni une vérification sur le terr
 et remplace les sources. L'ordre est adapté au masque vectoriel : terre,
 hillshade, masque d'eau, bathymétrie réelle puis isolignes/objets. Le serveur
 `--real-cassis` sélectionne ce style et refuse les URL des assets fictifs.
-Le POC lit `nowave:data_mode=CASSIS_REAL` pour afficher son bandeau de provenance.
+Le POC lit `nowave:data_mode=CASSIS_REAL` pour valider la provenance ;
+l’affichage reste plein écran, sans bandeau permanent.
 La source de vérité reste le générateur ; `cassis-style.json` est son résultat.
 
 ## Préparation et lancement
@@ -32,6 +33,10 @@ Depuis la racine du dépôt :
 python3 -m venv cartography/.venv
 cartography/.venv/bin/pip install -r cartography/requirements-cassis.txt
 cartography/.venv/bin/python cartography/tools/prepare_cassis.py
+cartography/tools/build_vector_tiles.sh
+cartography/.venv/bin/python cartography/tools/build_bathymetry_tiles.py \
+  --input cartography/assets/cassis-bathymetry.png --bbox 5.515 43.19 5.555 43.225 \
+  --output cartography/tiles/bathymetry/cassis --min-zoom 10 --max-zoom 14
 python3 cartography/tools/build_style.py
 python3 cartography/server.py --real-cassis
 ```
@@ -53,8 +58,8 @@ Le cache brut reste par défaut dans `~/.cache/nowave-cassis`, hors du dépôt.
 cartography/.venv/bin/python cartography/tools/prepare_cassis.py --offline
 ```
 
-Les seuls fichiers chargés par Flutter sont le GeoJSON local de Cassis,
-le polygone d'eau local, le petit PNG bathymétrique et les assets graphiques
+Les sources chargées par Flutter sont les tuiles MVT issues du MBTiles Cassis,
+le polygone d'eau local, les tuiles PNG XYZ bathymétriques et les assets graphiques
 habituels. Mapzen et MapLibre CDN nécessitent encore Internet. La préparation
 nécessite Internet pour OSM et SHOM ; aucune clé n'est utilisée par ces scripts.
 
@@ -155,3 +160,28 @@ d'attribution, qui change automatiquement lorsqu'une couche est masquée.
 
 Les résultats mesurés, tailles des fichiers, limites restantes et l'état Git sont
 consignés dans [CASSIS_REVIEW.md](CASSIS_REVIEW.md).
+
+## Compatibilité avec le pipeline régional
+
+L’entrée générique conserve la recette numérique Cassis et ses fichiers validés :
+
+```bash
+.venv/bin/python cartography/tools/prepare_region.py --region cassis --offline
+cartography/tools/build_vector_tiles.sh cartography/data/cassis/features.geojson cartography/tiles/vector/cassis.mbtiles
+.venv/bin/python cartography/tools/build_bathymetry_tiles.py \
+  --input cartography/assets/cassis-bathymetry.png --bbox 5.515 43.19 5.555 43.225 \
+  --output cartography/tiles/bathymetry/cassis --min-zoom 10 --max-zoom 14
+python3 cartography/server.py --region cassis
+```
+
+La première commande demande le cache Cassis complet ; sans `--offline`, elle
+conserve l’acquisition historique explicite. `prepare_cassis.py` et
+`--real-cassis` restent compatibles. Le centre du manifest validé
+`[5.536,43.2105]` reste volontairement inchangé, même si la configuration
+`cassis.json` contient `[5.535,43.2075]`. Le nouveau pipeline régional utilise
+le centre de sa configuration. Une modification de caméra Cassis doit faire
+l’objet d’une revue visuelle séparée.
+
+La référence `tests/fixtures/cassis-baseline.json` fige le style, les types et
+comptages d’objets, la palette et les empreintes des sorties réelles existantes.
+Elle ne doit être actualisée qu’après revue explicite d’un changement Cassis.

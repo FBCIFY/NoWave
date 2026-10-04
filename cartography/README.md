@@ -366,3 +366,28 @@ vectoriel et des objets OSM, une bathymétrie SHOM et le relief Mapzen inchangé
 Lancement : `python3 cartography/server.py --real-cassis`. Les sources DEMO et
 leurs six captures restent disponibles. Voir [préparation, licences et limites](CASSIS_REAL.md).
 **Ne pas utiliser NoWave pour la navigation officielle.**
+
+## Pipeline régional générique (France Méditerranée)
+
+Le point d’entrée est désormais `tools/prepare_region.py --region <id>`.
+Il conserve la recette Cassis et fournit une ingestion PBF locale, une mosaïque
+SHOM multi-source par blocs, des courbes issues du même champ et des PNG XYZ
+reprenables. Les produits réels doivent être déclarés avec leurs métadonnées,
+emprises et SHA256 ; aucune profondeur inconnue n’est remplacée par zéro.
+
+Voir **[FRANCE_MED_REAL.md](FRANCE_MED_REAL.md)** pour les entrées nécessaires,
+les commandes exactes, projections, cache, licences et limites. Les deux modèles
+`regions/france_med.*.example.json` sont volontairement incomplets : ils ne
+prétendent pas représenter des données déjà acquises.
+
+```bash
+python3 cartography/server.py --region cassis
+# Après préparation et construction des tuiles régionales :
+python3 cartography/server.py --region france_med
+```
+
+Les routes résolvent l’identifiant de région sans duplication. Le profil MapLibre
+réutilise les règles Cassis, la palette et l’interpolation linéaire. Flutter
+accepte `REGION_REAL` en conservant le plein écran et sans ajout de GPS.
+MBTiles et sorties régionales volumineuses restent ignorés par Git.
+**NoWave n’est pas une carte officielle de navigation.**

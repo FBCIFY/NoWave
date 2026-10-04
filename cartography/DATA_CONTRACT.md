@@ -105,11 +105,71 @@ ouverte, sans dépendance au service Mapbox.
 ## Pilote Cassis réel
 
 `CASSIS_REAL` utilise le même contrat de couches avec des sources locales
-GeoJSON/image découpées à Cassis. Voir [CASSIS_REAL.md](CASSIS_REAL.md).
+MVT/XYZ découpées à Cassis, avec un masque marin GeoJSON. Voir [CASSIS_REAL.md](CASSIS_REAL.md).
 Chaque objet OSM conserve ses tags et son identifiant. La grille de profondeurs
 SHOM distingue les sondes interpolées à 10 m, le MNT HOMONIM à 0,001° et NoData ;
 aucune source DEMO n’intervient dans ce mode. `marina_extent` conserve la géométrie
 OSM de marina pour les contrôles de couverture et n’est pas une couche visuelle
-de profondeur. Le masque marin est vectoriel. Les futures sources tuilées
-pourront remplacer ces petites sources locales sans changer les règles visuelles.
+de profondeur. Le masque marin est vectoriel. Les sources tuilées réutilisent les mêmes
+règles visuelles que les sorties intermédiaires GeoJSON/raster.
 **Ne pas utiliser NoWave pour la navigation officielle.**
+
+## Préparation régionale — précisions opérationnelles
+
+`REGION_REAL` utilise le même moteur `build_real_area(profile)` que Cassis.
+Le profil fournit les URLs vectorielles/raster, les zooms effectifs, la caméra,
+le masque marin et les crédits ; tous les objets de la source MVT `features`
+portent `source-layer=nowave`. Les données locales et leurs preuves sont décrites
+dans `data/<region>/manifest.json`. Voir [FRANCE_MED_REAL.md](FRANCE_MED_REAL.md).
+
+Mappings OSM régionaux explicites actuellement implémentés :
+
+| Tags source | Objets NoWave |
+|---|---|
+| `natural=coastline` | `coast` depuis la ligne réelle uniquement |
+| Polygones OSM de côte assemblés, déclarés | `land`, masque `water` |
+| `leisure=marina` ; `seamark:type=harbour` avec catégorie reconnue | `port`, `marina_extent` pour polygone |
+| `man_made=pier/quay/breakwater/groyne` | `pontoon/quay/breakwater` ; contour réel si polygonal |
+| `seamark:type=light_major/light_minor`, `man_made=lighthouse` | phare/feu, couleur explicite requise pour un feu mineur |
+| `buoy_*` / `beacon_*` : latérale, cardinale, eaux saines, spéciale, danger isolé | type et sprite précis ; latérales uniquement avec catégorie et couleur IALA A explicites |
+| `landuse=forest/grass`, `natural=wood/scrub` | `vegetation`, intersectée avec la terre |
+| `landuse=residential/commercial/industrial/retail` | `urban`, intersectée avec la terre |
+| `waterway=dock` polygonal | `basin` |
+| `highway=motorway/trunk/primary` dans la bande côtière | `road`, `coastal=true` |
+| `place=city/town/island/islet`, `natural=bay/cape/beach` nommés | noms géographiques correspondants |
+| `seamark:type=mooring/wreck/rock/anchorage` | `mooring/wreck/danger_rock/anchorage` identifié |
+
+Les autres catégories du contrat restent acceptées par le moteur de style,
+mais ne sont pas déduites automatiquement de tags insuffisants. En particulier,
+les secteurs lumineux, ponts sur zones navigables, limites permanentes,
+chenaux et amers qualifiés demandent des attributs supplémentaires et une
+normalisation validée ; l’adaptateur ne les invente pas. Les objets nautiques
+non normalisés figurent dans `osm-not-rendered.geojson`. Aucun objet inconnu
+n’est promu dans une catégorie de secours.
+
+Les IDs OSM, tags, versions, timestamps disponibles, empreinte de l’extrait,
+source et licence sont conservés. Déduplication par `(osm_id, kind)` ; les
+callbacks way/area ne doublent pas les polygones. Les géométries de relations
+multipolygonales sont assemblées avec leurs anneaux intérieurs.
+
+Bathymétrie régionale : catalogue schema 1, référentiel vertical commun,
+produits avec raster monobande, signe `up/down`, résolution en mètres,
+identifiant, date, source, licence, SHA256, métadonnées originales et polygone
+de validité WGS84. `exclude` permet une exclusion qualifiée, dont les ports
+non fiables à la résolution du produit. Aucun mélange vertical automatique.
+La meilleure résolution valide gagne, puis priorité explicite à résolution
+égale. Les conversions et déclarations restent auditables dans le manifest.
+
+Les blocs du cache contiennent profondeur et identifiant de source par cellule.
+NaN et source 0 signifient inconnu, jamais profondeur 0. Les courbes, avec
+`product_id`, `resolution_m`, `grid_resolution_m`, `vertical_reference`, licence,
+date et checksum, sont extraites du même champ que le raster. Elles ne
+traversent pas les frontières de produits ni les trous de profondeur.
+
+Les PNG gardent la palette validée, l’alpha prémultiplié pour les couleurs et
+un masque de support empêchant l’interpolation d’étendre la zone connue.
+Le zoom d’affichage ne certifie pas la résolution ou l’exactitude de la source.
+Le relief terrestre est protégé par un masque marin global dérivé des terres
+réelles, indépendant des limites des blocs. La bbox n’est jamais une côte.
+
+**NoWave n’est pas une carte officielle de navigation.**
