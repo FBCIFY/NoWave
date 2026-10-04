@@ -24,9 +24,11 @@ from shapely.geometry import LineString, Point, Polygon, box, mapping, shape
 from shapely.ops import polygonize, unary_union
 
 from build_style import COLORS
+from region_config import load_region
 
 ROOT = Path(__file__).resolve().parents[1]
-BBOX = (5.515, 43.19, 5.555, 43.225)
+REGION = load_region(ROOT / 'regions' / 'cassis.json')
+BBOX = tuple(REGION['bbox'])
 SURVEY = 'S201300200'
 SHOM = 'https://services.data.shom.fr'
 HOMONIM_URL = (SHOM+'/INSPIRE/telechargement/prepackageGroup/'

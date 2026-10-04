@@ -1,0 +1,26 @@
+{
+  "schema": 1,
+  "id": "cassis",
+  "name": "Cassis pilote réel",
+  "bbox": [
+    5.515,
+    43.19,
+    5.555,
+    43.225
+  ],
+  "center": [
+    5.535,
+    43.2075
+  ],
+  "zoom": 14.5,
+  "coverage": {
+    "mainland_france": true,
+    "corsica": false,
+    "sea_buffer_nm": 10
+  },
+  "sources": {
+    "vector": "OpenStreetMap",
+    "bathymetry": "SHOM",
+    "relief": "Mapzen/AWS"
+  }
+}
