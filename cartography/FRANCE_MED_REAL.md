@@ -2,27 +2,51 @@
 
 **NoWave n’est pas une carte officielle de navigation.**
 
-Le code prépare des données locales déclarées et vérifiées ; il ne prétend pas
-que les données France Méditerranée ont été acquises ou que la couverture est
-complète. Les tests utilisent une petite fixture explicitement synthétique,
-sans réseau, jamais publiée comme donnée SHOM. Cassis reste l’oracle réel.
+Les sources réelles acquises le 4 octobre 2026 sont figées dans
+`regions/france_med.acquisition.json`. Les sources lourdes, catalogues locaux,
+générations et tuiles restent hors Git. Les tests automatisés utilisent des
+fixtures synthétiques, sans réseau ; elles ne sont jamais publiées comme SHOM.
+Cassis reste l’oracle réel. Le bilan de la génération réelle figure dans
+[FRANCE_MED_VALIDATION.md](FRANCE_MED_VALIDATION.md).
 
 ## Installation et commandes
 
 Depuis `/home/palms/NoWave` :
 
 ```bash
-python3 -m venv .venv
+python3.13 -m venv .venv
 .venv/bin/pip install -r cartography/requirements-region.txt
 ```
 
-`tippecanoe` doit être disponible dans `PATH`. L’extracteur PBF utilise
+Le runtime de validation est CPython 3.13.16. Les premiers traitements non
+préfiltrés ont subi des segfaults natifs avec Python 3.14.4 et 3.13.16 sous WSL,
+alors que les fixtures passaient ; leur cause native n’est pas établie.
+Le traitement utilise désormais le filtre natif des tags utiles avant
+l’itération Python. Si Python 3.13 est absent, l’installation utilisateur
+`uv python install 3.13.16` évite de modifier le Python système.
+
+`tippecanoe` et `osmium-tool` doivent être disponibles dans `PATH`. `osmium-tool`
+sert à la préparation initiale des sources et à leur contrôle de références.
+L’extracteur PBF utilise
 `pyosmium==4.3.1` avec stockage des positions sur disque ; le binaire `osmium`
-n’est pas nécessaire. `pyproj==3.7.2` assure les transformations métriques.
+n’est pas nécessaire pour les préparations régionales ultérieures.
+`pyproj==3.7.2` assure les transformations métriques.
 Aucun GPU n’est utilisé.
 
-Créer les deux déclarations locales à partir des modèles, puis les renseigner
-avec les fichiers effectivement acquis (les marqueurs ne sont pas valides) :
+Pour reproduire le jeu réel acquis, préparer ses sources avec le lock vérifié :
+
+```bash
+.venv/bin/python cartography/tools/prepare_france_med_sources.py \
+  --source-root "$HOME/.local/share/nowave/sources" --download
+```
+
+Sans `--download`, cette commande vérifie et transforme uniquement les fichiers
+déjà acquis. Budget total : 2 GiB. Les URLs `land-polygons` et API OSM/CSW sont
+mutables : une évolution de contenu provoque un refus SHA256, jamais une mise
+à jour silencieuse. Conserver les snapshots externes pour une reproduction
+exacte. Les deux `*.local.json` sont produits automatiquement.
+
+Pour un autre jeu de données, créer les déclarations à partir des modèles :
 
 ```bash
 cp cartography/regions/france_med.sources.example.json cartography/regions/france_med.sources.local.json
@@ -158,11 +182,15 @@ d’entrée sont plafonnés à 128 MiB : ne pas fournir le GeoJSON mondial.
 ## OSM : acquisition et normalisation
 
 Source vérifiée le 4 octobre 2026 : [Geofabrik France](https://download.geofabrik.de/europe/france.html).
-La page annonce environ **4,7 Go** pour France ; les sous-extraits affichés
-Languedoc-Roussillon (~257 Mo) et PACA (~371 Mo) peuvent être une autre option,
-à fusionner avec un outil OSM préservant les références avant ingestion.
-Aucun de ces fichiers n’a été téléchargé durant la session. Choisir et archiver
-un millésime précis, sa date et son empreinte ; `latest` seul n’est pas reproductible.
+Les snapshots datés `261003` Languedoc-Roussillon (269 846 613 octets) et PACA
+(390 024 451 octets) ont été acquis et vérifiés par MD5 producteur puis SHA256.
+Ils partagent l’horodatage `2026-10-03T20:20:50Z`. Le préparateur de sources
+les fusionne sans tronquer les ways. Le multipolygone du Golfe du Lion traverse
+les extraits : ses références ont été acquises depuis l’API OSM officielle,
+figées par SHA256 et contrôlées comme antérieures au même horodatage.
+Les relations incomplètes sans mapping rendu sont exclues récursivement et
+consignées dans l’audit ; une relation rendue incomplète bloque le traitement.
+Le PBF final passe `osmium check-refs -r` avec zéro référence manquante.
 
 `fetch_source.py` fournit une acquisition facultative, explicite, plafonnée et
 reprenable. Lui donner une URL HTTPS obtenue du producteur, une taille connue
@@ -192,10 +220,13 @@ ogr2ogr -f GeoJSON /data/nowave/sources/land-france-med.geojson \
   -clipsrc 2.39 41.84 8.31 44.46 -t_srs EPSG:4326
 ```
 
-La marge évite que la découpe amont soit confondue avec le trait réel.
-Consigner la source, le millésime, ODbL et les éventuelles transformations.
-Le polygone `coast_scope` doit être fourni et revu ; aucun tracé approximatif
-France/Espagne/Italie n’est livré sous couvert de frontière officielle.
+La préparation réelle utilise pyshp et fusionne les morceaux dans une emprise
+plus large `[1.5,41.0,9.2,45.2]`, pour auditer le buffer avant découpe.
+Le README du fournisseur date les données terrestres du `2026-10-04T00:00:00Z`.
+Le `coast_scope` est l’union des sept départements OSM 06, 11, 13, 30, 34, 66,
+83 du même snapshot PBF. Les IDs, versions et tags sont conservés. Cette
+sélection exclut les portions espagnoles, italiennes et monégasques ; elle
+n’est ni émise comme côte ni présentée comme une frontière maritime officielle.
 
 L’extracteur pyosmium fait des lectures séquentielles du PBF : géométries
 intersectant la région, assemblage des multipolygones, puis récupération de leurs
@@ -203,6 +234,12 @@ références (ways, nodes, relations imbriquées jusqu’à dix niveaux).
 Les positions et les identifiants sélectionnés utilisent le disque. Le PBF
 extrait est conservé dans le cache avec checksum ; les caractéristiques utiles
 sont ensuite normalisées dans SQLite, clé `(osm_id, kind)`, et exportées en flux.
+Le filtre natif `KeyFilter` intervient après le stockage des positions et
+l’assemblage des aires : les références non taguées restent disponibles. La
+récupération des références conserve aussi les relations pouvant hériter des
+tags de leurs ways extérieurs. Les tests vérifient ces cas. Les prédicats préparés
+évitent les intersections coûteuses des objets entièrement hors de la zone
+utile ou déjà intégralement à l’intérieur, sans simplifier leur géométrie.
 Les représentations way/area d’un même objet ne créent pas de doublon.
 Les polygones de relations conservent leurs trous. Les objets distincts portant
 des IDs différents ne sont pas fusionnés sur une simple proximité.
@@ -224,7 +261,12 @@ ne garantissent pas une profondeur valide dans chaque port ou chaque cellule.
 La couverture effective est l’intersection de l’emprise déclarée, des cellules
 valides du fichier, du masque marin et de la bande côtière.
 
-Le template indique le produit connu, mais n’active aucun fichier supposé.
+Le jeu acquis utilise réellement l’archive officielle HOMONIM PBMA ZNEG,
+son ASC, son XML original et son descriptif 2015. L’ASC a été converti sans
+rééchantillonnage en GeoTIFF float32, avec EPSG:4326 confirmé par le XML.
+Le NoData original `-99999` est conservé ; les altitudes positives sont exclues
+de l’emprise bathymétrique. Le XML confirme la Licence Ouverte 1.0 (Etalab).
+Le template reste destiné à déclarer d’autres produits effectivement acquis.
 **S201300200 n’est jamais présenté comme une couverture régionale.**
 Les dates de levés, résolutions et licences des compléments portuaires doivent
 être reprises de leurs propres métadonnées. Il n’existe pas ici de découverte
@@ -275,6 +317,9 @@ plafonnée à 64 MiB par lecteur et cache GDAL global à 64 MiB, tableaux de cal
 le nombre de lecteurs ouverts reste proportionnel au nombre de produits.
 Les géométries côtières régionales et les références de relations OSM restent
 en mémoire ; ce n’est pas une garantie de mémoire constante pour un PBF mondial.
+Les buffers du littoral sont calculés par lots de lignes puis réunis, avec
+le même rayon et sans simplification. Cela évite le graphe intermédiaire de
+plus de 15 Go observé lors d’un buffer global du littoral réel.
 
 Chaque génération est identifiée par le catalogue, les checksums, la couverture,
 la maille, la taille des blocs et le code de mosaïque/palette. Les blocs sont des
@@ -348,12 +393,9 @@ des données Cassis, le style exact, le PBF et les objets dédupliqués, les blo
 la reprise, la corruption, les références verticales, NoData, raster RGBA,
 les styles MapLibre, un vrai MBTiles Tippecanoe et le serveur HTTP.
 
-Données restant à fournir : PBF millésimé ; polygones terrestres OSM régionaux ;
-sélection documentée du littoral français ; produits bathymétriques réels avec
-empreintes, emprises de validité, dates, licences et références ; compléments
-portuaires qualifiés là où HOMONIM ne suffit pas. Les références de provenance
-et exclusions doivent être revues avant une publication réelle.
-
-Aucune couverture France Méditerranée complète n’a été générée ou certifiée.
-Le test physique Android, l’évaluation du temps/disque à l’échelle régionale,
-la revue des données externes et la qualification de leurs lacunes restent à faire.
+Le MNT régional ne remplace pas des levés portuaires fins. Les cellules absentes,
+les écarts de littoral entre millésimes et les zones hors support du produit
+restent NoData. Aucun complément externe d’un autre référentiel n’est mélangé.
+Les mesures de couverture, tailles, temps et contrôles HTTP figurent dans
+[FRANCE_MED_VALIDATION.md](FRANCE_MED_VALIDATION.md). Les essais physiques
+Android et iOS restent dépendants d’un appareil et, pour iOS, de macOS/Xcode.

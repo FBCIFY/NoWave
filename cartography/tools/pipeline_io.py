@@ -114,8 +114,8 @@ def staged_generation(root):
             shutil.rmtree(staging)
 
 
-def validate_collection(path, nullable_geometry=False):
-    """Validate our canonical GeoJSON stream without loading a region into RAM."""
+def iter_collection(path, nullable_geometry=False):
+    """Read and validate the canonical stream without loading a region into RAM."""
     header = '{"type":"FeatureCollection","features":['
     decoder = json.JSONDecoder()
     with path.open() as stream:
@@ -151,7 +151,13 @@ def validate_collection(path, nullable_geometry=False):
                 raise ValueError(f'Invalid feature: {path}')
             # Serialization rejects NaN/Infinity, including in feature properties.
             json.dumps(value, allow_nan=False)
+            yield value
             pending, first, need_more = pending[end:], False, False
+
+
+def validate_collection(path, nullable_geometry=False):
+    for _ in iter_collection(path, nullable_geometry):
+        pass
 
 
 def fsync_directory(path):

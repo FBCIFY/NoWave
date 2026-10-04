@@ -379,6 +379,10 @@ Voir **[FRANCE_MED_REAL.md](FRANCE_MED_REAL.md)** pour les entrées nécessaires
 les commandes exactes, projections, cache, licences et limites. Les deux modèles
 `regions/france_med.*.example.json` sont volontairement incomplets : ils ne
 prétendent pas représenter des données déjà acquises.
+Le jeu réel du 4 octobre 2026 est épinglé dans
+`regions/france_med.acquisition.json` ; le préparateur de sources produit les
+catalogues locaux vérifiés. Voir [le bilan mesuré](FRANCE_MED_VALIDATION.md) et
+[la configuration commune Android/iOS](../map_poc/README.md).
 
 ```bash
 python3 cartography/server.py --region cassis

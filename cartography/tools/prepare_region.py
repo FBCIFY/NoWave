@@ -39,6 +39,11 @@ def _prepare_generation(region, sources_path, catalog_path, output, cache, resol
     # Scope is a sourced polygon selecting French coastline, including small islands.
     # Its boundary is NEVER emitted as coastline or used for a coastal buffer.
     paths = {name: checked_asset(sources[name], sources_path.parent) for name in ('osm', 'land', 'coast_scope')}
+    reference_audit = sources['osm'].get('reference_audit')
+    excluded_relations = []
+    if reference_audit:
+        audit_path = checked_asset(reference_audit, sources_path.parent)
+        excluded_relations = json.loads(audit_path.read_text())['excluded_relations']
     output.mkdir(parents=True, exist_ok=True)
     cache.mkdir(parents=True, exist_ok=True)
     extent = box(*region['bbox'])
@@ -64,7 +69,9 @@ def _prepare_generation(region, sources_path, catalog_path, output, cache, resol
         # Audit is streamed too: unsupported objects never acquire guessed types.
         audit = ({'type': 'Feature', 'geometry': None, 'properties': {'osm_id': i, 'osm_tags': json.loads(t), 'reason': r}}
                  for i, t, r in db.execute('SELECT id,tags,reason FROM skipped ORDER BY id'))
-        write_collection(output / 'osm-not-rendered.geojson', audit)
+        excluded = ({'type': 'Feature', 'geometry': None, 'properties': record}
+                    for record in excluded_relations)
+        write_collection(output / 'osm-not-rendered.geojson', chain(audit, excluded))
     atomic_json(output / 'bathymetry.json', bathymetry)
     west, south, east, north = region['bbox']
     manifest = {'schema': 1, 'mode': 'REGION_REAL', 'region': region['id'], 'bbox': region['bbox'],
