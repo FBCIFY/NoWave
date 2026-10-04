@@ -36,7 +36,7 @@ dependencies:
   cupertino_icons: ^1.0.8
   http: ^1.6.0
   http_parser: ^4.1.2
-  mapbox_maps_flutter: ^2.30.1
+  maplibre_gl: 0.27.1
   geolocator: ^14.0.3
   camera: ^0.12.1
   precise_compass: ^0.2.0
@@ -69,11 +69,6 @@ flutter:
   # included with your application, so that you can use the icons in
   # the material Icons class.
   uses-material-design: true
-
-  # Flèche 3D de la position sur la carte, générée par
-  # tool/make_location_puck.py.
-  assets:
-    - assets/models/location_puck.glb
 
   # Raleway, la police du logo NoWave (licence OFL dans le même dossier).
   # Embarquée plutôt que téléchargée : elle reste disponible hors réseau.

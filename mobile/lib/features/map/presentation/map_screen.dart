@@ -4,11 +4,12 @@ import 'dart:ui' as ui;
 
 import 'package:geolocator/geolocator.dart' as geo;
 import 'package:flutter/material.dart';
-import 'package:mapbox_maps_flutter/mapbox_maps_flutter.dart';
+import 'package:maplibre_gl/maplibre_gl.dart';
 import 'package:precise_compass/precise_compass.dart';
 import 'package:uuid/uuid.dart';
 
-import '../../../core/map/map_config.dart';
+import '../../../core/map/map_controller.dart';
+import '../../../core/map/map_view.dart';
 import '../../../core/location/coordinate_formatter.dart';
 import '../../../core/location/location_service.dart';
 import '../../../core/sensors/device_orientation_service.dart';
@@ -37,12 +38,18 @@ class MapScreen extends StatefulWidget {
   /// Ouvre la caméra ; renvoie null si l'utilisateur la ferme sans photo.
   final Future<PhotoReportDraft?> Function()? onOpenCamera;
   final ManualReportService? reportService;
+  final LocationService? locationService;
+  final Stream<CompassReading>? headingReadings;
+  final MapViewBuilder? mapViewBuilder;
 
   const MapScreen({
     super.key,
     this.onOpenProfile,
     this.onOpenCamera,
     this.reportService,
+    this.locationService,
+    this.headingReadings,
+    this.mapViewBuilder,
   });
 
   @override
@@ -50,7 +57,7 @@ class MapScreen extends StatefulWidget {
 }
 
 class _MapScreenState extends State<MapScreen> {
-  final _locationService = LocationService();
+  late final _locationService = widget.locationService ?? LocationService();
   StreamSubscription<geo.Position>? _positionSubscription;
   StreamSubscription<CompassReading>? _headingSubscription;
 
@@ -65,12 +72,18 @@ class _MapScreenState extends State<MapScreen> {
   _MapOrientationMode _orientationMode = _MapOrientationMode.north;
   bool _isLocating = false;
   String? _locationError;
-  MapboxMap? _mapboxMap;
+  NoWaveMapController? _map;
+  int _mapGeneration = 0;
+  Offset? _userPixel;
+  int _userPixelRequest = 0;
+  Offset? _touchStart;
+  double _followZoom = 14;
+  double _followTilt = 60;
   String? _mapError;
   bool _reportComposerOpen = false;
-  CameraState? _cameraBeforeReport;
+  CameraPosition? _cameraBeforeReport;
   bool _restoreFollowAfterReport = false;
-  final ValueNotifier<Point?> _reportPoint = ValueNotifier(null);
+  final ValueNotifier<LatLng?> _reportPoint = ValueNotifier(null);
   final ValueNotifier<bool> _reportMarkerLifted = ValueNotifier(false);
   Timer? _reportMarkerDropTimer;
   final Uuid _uuid = const Uuid();
@@ -91,18 +104,24 @@ class _MapScreenState extends State<MapScreen> {
   @override
   void initState() {
     super.initState();
-    _headingSubscription = DeviceOrientationService().readings.listen(
-      (reading) {
-        if (!mounted) return;
-        final heading = reading.headingTrue ?? reading.headingMagnetic;
-        if (heading == null || !heading.isFinite) return;
-        _deviceHeading = heading;
-        _setCompassTurnsForHeading(heading);
-      },
-      onError: (Object _) {
-        _deviceHeading = null;
-      },
-    );
+    _headingSubscription =
+        (widget.headingReadings ?? DeviceOrientationService().readings).listen(
+          (reading) {
+            if (!mounted) return;
+            final heading = reading.headingTrue ?? reading.headingMagnetic;
+            if (heading == null || !heading.isFinite) return;
+            _deviceHeading = heading;
+            _setCompassTurnsForHeading(heading);
+            if (_orientationMode == _MapOrientationMode.heading &&
+                !_reportComposerOpen) {
+              _selectedBearing = heading;
+              unawaited(_applyHeading());
+            }
+          },
+          onError: (Object _) {
+            _deviceHeading = null;
+          },
+        );
   }
 
   // En haut de la carte plutôt qu'en SnackBar : le bas est pris par les
@@ -131,8 +150,9 @@ class _MapScreenState extends State<MapScreen> {
 
   // Un geste de l'utilisateur coupe le suivi GPS ; une rotation au doigt
   // passe la boussole en mode manuel.
-  void _handleMapCameraChange(CameraChangedEventData event) {
-    final bearing = event.cameraState.bearing;
+  void _handleMapCameraChange(CameraPosition camera) {
+    final bearing = camera.bearing;
+    unawaited(_updateUserPixel());
     final bearingDelta = ((bearing - _cameraBearing + 540) % 360 - 180);
     final userMovedMap = _mapTouchActive && _isFollowing;
     final touchBearingDelta =
@@ -152,47 +172,76 @@ class _MapScreenState extends State<MapScreen> {
     });
   }
 
-  void _handleMapGesture(MapContentGestureContext _) {
-    if (_reportComposerOpen) return;
-    if (!_isFollowing) return;
-    setState(() => _isFollowing = false);
+  Future<void> _updateUserPixel() async {
+    final position = _position;
+    final map = _map;
+    if (position == null || map == null) return;
+    final request = ++_userPixelRequest;
+    try {
+      final pixel = await map.pixelForCoordinate(
+        LatLng(position.latitude, position.longitude),
+      );
+      if (mounted && request == _userPixelRequest) {
+        setState(() => _userPixel = pixel);
+      }
+    } catch (_) {
+      // Le SDK peut ne pas encore avoir de projection pendant le chargement.
+    }
   }
 
-  Future<void> _positionMapOrnaments(
-    MapboxMap map, {
-    required bool editing,
-  }) async {
+  Future<void> _applyHeading() async {
+    final map = _map;
+    if (map == null) return;
     try {
-      await Future.wait([
-        map.logo.updateSettings(
-          LogoSettings(
-            position: editing
-                ? OrnamentPosition.TOP_LEFT
-                : OrnamentPosition.BOTTOM_LEFT,
-            marginLeft: 16,
-            marginTop: editing ? 64 : 4,
-            marginBottom: 4,
-          ),
+      final camera = map.camera;
+      await map.move(
+        CameraPosition(
+          target: camera.target,
+          zoom: camera.zoom,
+          tilt: camera.tilt,
+          bearing: _selectedBearing ?? 0,
         ),
-        map.attribution.updateSettings(
-          AttributionSettings(
-            position: editing
-                ? OrnamentPosition.TOP_RIGHT
-                : OrnamentPosition.BOTTOM_RIGHT,
-            marginRight: 16,
-            marginTop: editing ? 64 : 4,
-            marginBottom: 4,
-          ),
-        ),
-      ]);
+      );
     } catch (_) {
-      // Keep Mapbox's default placement if ornament settings are unavailable.
+      // La prochaine lecture du cap réessaiera si le moteur était indisponible.
+    }
+  }
+
+  Future<void> _followPosition({Duration? duration}) async {
+    final map = _map;
+    final position = _position;
+    if (map == null ||
+        position == null ||
+        !_isFollowing ||
+        _reportComposerOpen) {
+      return;
+    }
+    try {
+      await map.move(
+        CameraPosition(
+          target: LatLng(position.latitude, position.longitude),
+          zoom: _followZoom,
+          tilt: _followTilt,
+          bearing: switch (_orientationMode) {
+            _MapOrientationMode.north => 0,
+            _MapOrientationMode.heading =>
+              _deviceHeading ?? _selectedBearing ?? _cameraBearing,
+            _MapOrientationMode.manual => _cameraBearing,
+          },
+        ),
+        duration: duration,
+      );
+      await _updateUserPixel();
+    } catch (_) {
+      if (mounted) {
+        _showNotice('Impossible de recentrer la carte.', MapNoticeKind.error);
+      }
     }
   }
 
   // Bascule entre nord en haut et cap du téléphone.
   Future<void> _toggleCompass() async {
-    final map = _mapboxMap;
+    final map = _map;
     if (map == null) return;
     final previousMode = _orientationMode;
     final previousSelectedBearing = _selectedBearing;
@@ -210,30 +259,20 @@ class _MapScreenState extends State<MapScreen> {
         : heading!;
 
     try {
-      if (_isFollowing) {
-        final camera = await map.getCameraState();
-        if (!mounted) return;
-        // Mapbox marks this animated viewport helper as experimental.
-        // ignore: experimental_member_use
-        setStateWithViewportAnimation(() {
-          _orientationMode = nextMode;
-          _selectedBearing = targetBearing;
-          _viewport = FollowPuckViewportState(
-            zoom: camera.zoom,
-            pitch: camera.pitch,
-            bearing: FollowPuckViewportStateBearingConstant(targetBearing),
-          );
-        });
-      } else {
-        setState(() {
-          _orientationMode = nextMode;
-          _selectedBearing = targetBearing;
-        });
-        await map.easeTo(
-          CameraOptions(bearing: targetBearing),
-          MapAnimationOptions(duration: 350),
-        );
-      }
+      setState(() {
+        _orientationMode = nextMode;
+        _selectedBearing = targetBearing;
+      });
+      final camera = map.camera;
+      await map.move(
+        CameraPosition(
+          target: camera.target,
+          zoom: camera.zoom,
+          tilt: camera.tilt,
+          bearing: targetBearing,
+        ),
+        duration: const Duration(milliseconds: 350),
+      );
     } catch (_) {
       if (!mounted) return;
       setState(() {
@@ -244,44 +283,33 @@ class _MapScreenState extends State<MapScreen> {
     }
   }
 
-  void _handleMapLoadError(MapLoadingErrorEventData event) {
-    if (!mounted) return;
-
-    setState(() {
-      _mapError = 'Impossible de charger la carte. Vérifiez votre connexion et réessayez.';
-    });
+  void _handleMapLoadError(String error) {
+    if (mounted) setState(() => _mapError = error);
   }
 
-  void _handleMapLoaded(MapLoadedEventData event) {
-    if (!mounted || _mapError == null) return;
-    setState(() => _mapError = null);
+  void _handleMapLoaded(NoWaveMapController map) {
+    if (!mounted) return;
+    setState(() {
+      _map = map;
+      _mapError = null;
+    });
+    unawaited(_locate());
   }
 
   Future<void> _retryMapLoad() async {
-    final map = _mapboxMap;
-
-    if (map == null) return;
-
     setState(() {
       _mapError = null;
+      _map = null;
+      _userPixel = null;
+      _userPixelRequest++;
+      _mapGeneration++;
     });
-
-    try {
-      await map.loadStyleURI(MapConfig.styleUrl);
-    } catch (_) {
-      if (!mounted) return;
-
-      setState(() {
-        _mapError = 'Impossible de charger la carte. Vérifiez votre connexion et réessayez.';
-      });
-    }
   }
 
   /// Zoom sur l'utilisateur au lancement et à chaque recentrage.
   static const _userZoom = 14.0;
 
-  /// Durée maximale du vol vers l'utilisateur au recentrage : Mapbox
-  /// raccourcit l'animation quand la distance est faible.
+  /// Durée du recentrage animé vers l'utilisateur.
   static const _recenterMaxDuration = Duration(milliseconds: 1200);
 
   // Centre la carte sur l'utilisateur puis le suit à chaque nouvelle position.
@@ -302,82 +330,37 @@ class _MapScreenState extends State<MapScreen> {
         _position = position;
       });
 
-      await _mapboxMap?.location.updateSettings(
-        MapConfig.locationPuckSettings(),
+      final previousCamera = _map?.camera;
+      if (!_reportComposerOpen) {
+        setState(() {
+          _isFollowing = true;
+          _followZoom = _userZoom;
+          _followTilt = previousCamera?.tilt ?? 60;
+        });
+        await _followPosition(duration: animated ? _recenterMaxDuration : null);
+      }
+      unawaited(_updateUserPixel());
+
+      _positionSubscription ??= _locationService.watchPosition().listen(
+        (position) {
+          if (!mounted) return;
+          setState(() {
+            _position = position;
+            _locationError = null;
+          });
+          unawaited(_updateUserPixel());
+          unawaited(_followPosition());
+        },
+        onError: (Object _) {
+          if (!mounted) return;
+          setState(() {
+            _locationError = 'Position indisponible pour le moment.';
+          });
+        },
+        onDone: () {
+          _positionSubscription = null;
+        },
       );
-
-      if (!mounted) return;
-
-      CameraState? previousCamera;
-      if (_positionSubscription != null) {
-        try {
-          previousCamera = await _mapboxMap?.getCameraState();
-        } catch (_) {
-          // The default camera values below remain available.
-        }
-      }
-
-      if (!mounted) return;
-
-      void followUser() {
-        _isFollowing = true;
-        _viewport = FollowPuckViewportState(
-          // Toujours le zoom du lancement : après un dézoom sur le globe,
-          // recentrer doit aussi ramener au niveau de la rue.
-          zoom: _userZoom,
-          bearing: switch (_orientationMode) {
-            _MapOrientationMode.north =>
-              const FollowPuckViewportStateBearingConstant(0),
-            _MapOrientationMode.heading =>
-              FollowPuckViewportStateBearingConstant(
-                _selectedBearing ?? previousCamera?.bearing ?? _cameraBearing,
-              ),
-            _MapOrientationMode.manual =>
-              FollowPuckViewportStateBearingConstant(
-                previousCamera?.bearing ?? _cameraBearing,
-              ),
-          },
-          pitch: previousCamera?.pitch ?? 60,
-        );
-      }
-
-      if (animated) {
-        // Mapbox marks this animated viewport helper as experimental.
-        // ignore: experimental_member_use
-        setStateWithViewportAnimation(
-          followUser,
-          transition: const DefaultViewportTransition(
-            maxDuration: _recenterMaxDuration,
-          ),
-        );
-      } else {
-        setState(followUser);
-      }
-
-      _positionSubscription ??=
-          geo.Geolocator.getPositionStream(
-            locationSettings: const geo.LocationSettings(
-              accuracy: geo.LocationAccuracy.high,
-              distanceFilter: 10,
-            ),
-          ).listen(
-            (position) {
-              if (!mounted) return;
-              setState(() {
-                _position = position;
-                _locationError = null;
-              });
-            },
-            onError: (Object _) {
-              if (!mounted) return;
-              setState(() {
-                _locationError = 'Position indisponible pour le moment.';
-              });
-            },
-            onDone: () {
-              _positionSubscription = null;
-            },
-          );
     } on StateError catch (error) {
       if (!mounted) return;
 
@@ -434,12 +417,12 @@ class _MapScreenState extends State<MapScreen> {
   Future<void> _openReportComposer({PhotoReportDraft? photoDraft}) async {
     if (_reportComposerOpen) return;
     final position = _position;
-    final map = _mapboxMap;
+    final map = _map;
     final start = photoDraft != null
-        ? Position(photoDraft.initialLongitude, photoDraft.initialLatitude)
+        ? LatLng(photoDraft.initialLatitude, photoDraft.initialLongitude)
         : position == null
         ? null
-        : Position(position.longitude, position.latitude);
+        : LatLng(position.latitude, position.longitude);
     if (start == null || map == null) {
       _showNotice(
         'Attendez que votre position GPS soit disponible.',
@@ -448,9 +431,9 @@ class _MapScreenState extends State<MapScreen> {
       return;
     }
 
-    CameraState camera;
+    CameraPosition camera;
     try {
-      camera = await map.getCameraState();
+      camera = map.camera;
     } catch (_) {
       return;
     }
@@ -463,35 +446,34 @@ class _MapScreenState extends State<MapScreen> {
       _pendingReport = null;
       _photoDraft = photoDraft;
       _isFollowing = false;
-      _reportPoint.value = Point(coordinates: start);
+      _reportPoint.value = start;
     });
-    unawaited(_positionMapOrnaments(map, editing: true));
-    unawaited(_setMapTiltEnabled(map, false));
     await WidgetsBinding.instance.endOfFrame;
     if (!mounted || !_reportComposerOpen) return;
     final reportPadding = _reportCameraPadding();
-    // Caméra déclarée plutôt qu'un easeTo : Mapbox la garde (carte à plat,
-    // point sur l'estimation) jusqu'à ce que l'utilisateur touche la carte,
-    // sans qu'une fin de suivi GPS puisse l'annuler en cours de route.
-    // Mapbox marks this animated viewport helper as experimental.
-    // ignore: experimental_member_use
-    setStateWithViewportAnimation(
-      () {
-        _viewport = CameraViewportState(
-          center: Point(coordinates: start),
-          // Plus près en mode photo : l'objet est souvent à quelques
-          // dizaines de mètres, et le point doit être ajusté finement.
+    try {
+      await map.setPadding(reportPadding);
+      if (!mounted || !_reportComposerOpen) return;
+      await map.move(
+        CameraPosition(
+          target: start,
           zoom: photoDraft == null ? 14 : 16,
-          pitch: 0,
+          tilt: 0,
           bearing: 0,
-          padding: reportPadding,
+        ),
+        duration: const Duration(milliseconds: 350),
+      );
+      _scheduleReportPointUpdate();
+    } catch (_) {
+      if (!mounted) return;
+      await _closeReportComposer();
+      if (mounted) {
+        _showNotice(
+          'Impossible de placer le signalement.',
+          MapNoticeKind.error,
         );
-      },
-      transition: const EasingViewportTransition(
-        duration: Duration(milliseconds: 350),
-      ),
-    );
-    _scheduleReportPointUpdate();
+      }
+    }
   }
 
   Future<void> _closeReportComposer() async {
@@ -502,7 +484,7 @@ class _MapScreenState extends State<MapScreen> {
     _reportMarkerDropTimer?.cancel();
     _reportMarkerLifted.value = false;
     final camera = _cameraBeforeReport;
-    final map = _mapboxMap;
+    final map = _map;
     final resumeFollowing = _restoreFollowAfterReport;
     setState(() {
       _reportComposerOpen = false;
@@ -511,62 +493,41 @@ class _MapScreenState extends State<MapScreen> {
       _photoDraft = null;
       _publishedReportId = null;
       _restoreFollowAfterReport = false;
-      // Rend la main à easeTo : la caméra du signalement ne doit plus
-      // s'imposer pendant la restauration.
-      _viewport = const IdleViewportState();
     });
-    if (map != null) {
-      unawaited(_positionMapOrnaments(map, editing: false));
-      unawaited(_setMapTiltEnabled(map, true));
-    }
     await WidgetsBinding.instance.endOfFrame;
-
+    if (!mounted) return;
     if (map != null && camera != null) {
       try {
-        await map.easeTo(
-          CameraOptions(
-            center: camera.center,
-            zoom: camera.zoom,
-            pitch: camera.pitch,
-            bearing: camera.bearing,
-            padding: camera.padding,
-          ),
-          MapAnimationOptions(duration: 350),
-        );
+        await map.setPadding(EdgeInsets.zero);
+        if (!mounted || _reportComposerOpen) return;
+        await map.move(camera, duration: const Duration(milliseconds: 350));
       } catch (_) {
-        // Keep the existing camera if restoration is unavailable.
+        // La caméra actuelle reste disponible si la restauration échoue.
       }
     }
     if (!mounted || !resumeFollowing || _reportComposerOpen) return;
     setState(() {
       _isFollowing = true;
-      _viewport = FollowPuckViewportState(
-        zoom: camera?.zoom ?? _userZoom,
-        pitch: camera?.pitch ?? 60,
-        padding: camera?.padding,
-        bearing: FollowPuckViewportStateBearingConstant(
-          camera?.bearing ?? _cameraBearing,
-        ),
-      );
+      _followZoom = camera?.zoom ?? _userZoom;
+      _followTilt = camera?.tilt ?? 60;
     });
+    await _followPosition();
   }
 
   Future<void> _publishReport(
     ReportCategory category,
     String? description,
   ) async {
+    await _updateReportPoint();
+    if (!mounted || !_reportComposerOpen) return;
     final service = widget.reportService;
     final point = _reportPoint.value;
     if (service == null || point == null) {
       throw StateError('Position du signalement indisponible.');
     }
 
-    final longitude = double.parse(
-      point.coordinates.lng.toDouble().toStringAsFixed(6),
-    );
-    final latitude = double.parse(
-      point.coordinates.lat.toDouble().toStringAsFixed(6),
-    );
+    final longitude = double.parse(point.longitude.toStringAsFixed(6));
+    final latitude = double.parse(point.latitude.toStringAsFixed(6));
     final positioning = _photoDraft?.capture.measurements;
     // Même contenu qu'un envoi raté : on garde le même `client_report_id` pour
     // que le backend ne crée pas de doublon.
@@ -669,18 +630,6 @@ class _MapScreenState extends State<MapScreen> {
     );
   }
 
-  // En signalement, la carte reste à plat : inclinée, elle déformerait les
-  // distances autour du point à placer.
-  Future<void> _setMapTiltEnabled(MapboxMap map, bool enabled) async {
-    try {
-      await map.gestures.updateSettings(
-        GesturesSettings(pitchEnabled: enabled),
-      );
-    } catch (_) {
-      // Tilt stays available if gesture settings are unavailable.
-    }
-  }
-
   EdgeInsets _reportCameraPadding() {
     final mapBox = _mapAreaKey.currentContext?.findRenderObject() as RenderBox?;
     final markerBox =
@@ -689,18 +638,12 @@ class _MapScreenState extends State<MapScreen> {
       return EdgeInsets.zero;
     }
     final localCenter = mapBox.globalToLocal(_markerTipGlobal(markerBox));
-    final delta = localCenter - mapBox.size.center(Offset.zero);
-    return EdgeInsets.fromLTRB(
-      math.max(0, delta.dx * 2),
-      math.max(0, delta.dy * 2),
-      math.max(0, -delta.dx * 2),
-      math.max(0, -delta.dy * 2),
-    );
+    return paddingForMarker(localCenter, mapBox.size);
   }
 
   // Convertit la pointe du marqueur (pixels) en coordonnées sur la carte.
   Future<void> _updateReportPoint() async {
-    final map = _mapboxMap;
+    final map = _map;
     final mapBox = _mapAreaKey.currentContext?.findRenderObject() as RenderBox?;
     final markerBox =
         _reportMarkerKey.currentContext?.findRenderObject() as RenderBox?;
@@ -713,9 +656,7 @@ class _MapScreenState extends State<MapScreen> {
     final mapPixel = mapBox.globalToLocal(_markerTipGlobal(markerBox));
     final request = ++_reportPointRequest;
     try {
-      final point = await map.coordinateForPixel(
-        ScreenCoordinate(x: mapPixel.dx, y: mapPixel.dy),
-      );
+      final point = await map.coordinateForPixel(mapPixel);
       if (!mounted || !_reportComposerOpen || request != _reportPointRequest) {
         return;
       }
@@ -732,12 +673,6 @@ class _MapScreenState extends State<MapScreen> {
     ),
   );
 
-  ViewportState _viewport = CameraViewportState(
-    center: Point(coordinates: Position(-4.49, 48.38)),
-    zoom: 7,
-    pitch: 60,
-  );
-
   @override
   void dispose() {
     _reportPointTimer?.cancel();
@@ -750,6 +685,18 @@ class _MapScreenState extends State<MapScreen> {
     final headingSubscription = _headingSubscription;
     if (headingSubscription != null) unawaited(headingSubscription.cancel());
     super.dispose();
+  }
+
+  Widget _buildMap() {
+    final options = MapViewOptions(
+      onReady: _handleMapLoaded,
+      onCameraMove: _handleMapCameraChange,
+      onError: _handleMapLoadError,
+      editing: _reportComposerOpen,
+      generation: _mapGeneration,
+    );
+    return widget.mapViewBuilder?.call(options) ??
+        NoWaveMapView(key: ValueKey(_mapGeneration), options: options);
   }
 
   @override
@@ -784,28 +731,42 @@ class _MapScreenState extends State<MapScreen> {
           Positioned.fill(
             child: Listener(
               key: _mapAreaKey,
-              onPointerDown: (_) {
+              onPointerDown: (event) {
                 _mapTouchActive = true;
+                _touchStart = event.localPosition;
                 _touchStartBearing = _cameraBearing;
               },
               onPointerUp: (_) => _mapTouchActive = false,
               onPointerCancel: (_) => _mapTouchActive = false,
-              child: MapWidget(
-                onMapCreated: (map) {
-                  setState(() => _mapboxMap = map);
-                  unawaited(MapConfig.hideDefaultOrnaments(map));
-                  unawaited(_locate());
-                },
-                onMapLoadedListener: _handleMapLoaded,
-                onMapLoadErrorListener: _handleMapLoadError,
-                onCameraChangeListener: _handleMapCameraChange,
-                onScrollListener: _handleMapGesture,
-                onZoomListener: _handleMapGesture,
-                styleUri: MapConfig.styleUrl,
-                viewport: _viewport,
-              ),
+              onPointerMove: (event) {
+                final start = _touchStart;
+                if (!_reportComposerOpen &&
+                    _isFollowing &&
+                    start != null &&
+                    (event.localPosition - start).distance > 3) {
+                  setState(() => _isFollowing = false);
+                }
+              },
+              child: _buildMap(),
             ),
           ),
+          if (_userPixel != null && _mapError == null)
+            Positioned(
+              left: _userPixel!.dx - 22,
+              top: _userPixel!.dy - 22,
+              child: IgnorePointer(
+                child: Transform.rotate(
+                  angle:
+                      ((_deviceHeading ?? 0) - _cameraBearing) * math.pi / 180,
+                  child: const Icon(
+                    Icons.navigation,
+                    size: 44,
+                    color: Color(0xFF329CFF),
+                    shadows: [Shadow(color: Colors.white, blurRadius: 4)],
+                  ),
+                ),
+              ),
+            ),
           if (_mapError != null)
             Positioned.fill(
               child: ColoredBox(
@@ -962,7 +923,7 @@ class _MapScreenState extends State<MapScreen> {
                       tooltip: _orientationMode == _MapOrientationMode.north
                           ? 'Aligner la carte sur le cap actuel'
                           : 'Orienter la carte vers le nord',
-                      onPressed: _mapboxMap == null || _mapError != null
+                      onPressed: _map == null || _mapError != null
                           ? null
                           : () => unawaited(_toggleCompass()),
                       icon: _CompassGlyph(headingTurns: _compassTurns),
@@ -970,7 +931,7 @@ class _MapScreenState extends State<MapScreen> {
                     const SizedBox(height: 12),
                     _PoppingMapButton(
                       tooltip: 'Recentrer sur ma position',
-                      onPressed: _isLocating || _mapboxMap == null
+                      onPressed: _isLocating || _map == null
                           ? null
                           : () {
                               AppHaptics.selection();
@@ -1044,11 +1005,11 @@ class _MapScreenState extends State<MapScreen> {
                               horizontal: 10,
                               vertical: 5,
                             ),
-                            child: ValueListenableBuilder<Point?>(
+                            child: ValueListenableBuilder<LatLng?>(
                               valueListenable: _reportPoint,
                               builder: (context, point, _) => Text(
-                                '${formatDms(point?.coordinates.lat.toDouble() ?? _position!.latitude, isLatitude: true)}\n'
-                                '${formatDms(point?.coordinates.lng.toDouble() ?? _position!.longitude, isLatitude: false)}',
+                                '${formatDms(point?.latitude ?? _photoDraft?.initialLatitude ?? _position?.latitude ?? 0, isLatitude: true)}\n'
+                                '${formatDms(point?.longitude ?? _photoDraft?.initialLongitude ?? _position?.longitude ?? 0, isLatitude: false)}',
                                 textAlign: TextAlign.center,
                                 style: const TextStyle(
                                   color: Color(0xFF243243),
