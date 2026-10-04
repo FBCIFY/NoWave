@@ -26,8 +26,12 @@
   },
   "sources": {
     "features": {
-      "type": "geojson",
-      "data": "{base}/data/cassis/features.geojson",
+      "type": "vector",
+      "tiles": [
+        "{base}/tiles/vector/cassis/{z}/{x}/{y}.pbf"
+      ],
+      "minzoom": 6,
+      "maxzoom": 18,
       "attribution": "<a href=\"https://www.openstreetmap.org/copyright\">© OpenStreetMap contributors · ODbL</a> · <a href=\"https://doi.org/10.17183/MNT_MED100m_GDL_CA_HOMONIM_WGS84\">Shom, 2015 · HOMONIM PBMA</a> · <a href=\"https://doi.org/10.17183/S201300200\">Shom · levé S201300200 (2007–2013)</a> · Licence Ouverte 2.0"
     },
     "bathymetry": {
@@ -175,7 +179,8 @@
           2,
           1
         ]
-      }
+      },
+      "source-layer": "nowave"
     },
     {
       "id": "land",
@@ -204,7 +209,8 @@
           17,
           "#E5E2D9"
         ]
-      }
+      },
+      "source-layer": "nowave"
     },
     {
       "id": "land-relief",
@@ -388,7 +394,8 @@
       "layout": {
         "line-cap": "round",
         "line-join": "round"
-      }
+      },
+      "source-layer": "nowave"
     },
     {
       "id": "contour-labels",
@@ -507,7 +514,8 @@
           0,
           0
         ]
-      }
+      },
+      "source-layer": "nowave"
     },
     {
       "id": "shoal-tint",
@@ -537,7 +545,8 @@
           13,
           0.035
         ]
-      }
+      },
+      "source-layer": "nowave"
     },
     {
       "id": "shoal-texture",
@@ -567,7 +576,8 @@
           15,
           0.35
         ]
-      }
+      },
+      "source-layer": "nowave"
     },
     {
       "id": "reef-tint",
@@ -597,7 +607,8 @@
           13,
           0.065
         ]
-      }
+      },
+      "source-layer": "nowave"
     },
     {
       "id": "reef-texture",
@@ -627,7 +638,8 @@
           15,
           0.55
         ]
-      }
+      },
+      "source-layer": "nowave"
     },
     {
       "id": "vegetation",
@@ -657,7 +669,8 @@
           12,
           0.22
         ]
-      }
+      },
+      "source-layer": "nowave"
     },
     {
       "id": "coastal-urban",
@@ -687,7 +700,8 @@
           14,
           0.28
         ]
-      }
+      },
+      "source-layer": "nowave"
     },
     {
       "id": "foreshore",
@@ -717,7 +731,8 @@
           10,
           0.3
         ]
-      }
+      },
+      "source-layer": "nowave"
     },
     {
       "id": "foreshore-texture",
@@ -747,7 +762,8 @@
           11,
           0.24
         ]
-      }
+      },
+      "source-layer": "nowave"
     },
     {
       "id": "coast",
@@ -794,7 +810,8 @@
       "layout": {
         "line-cap": "round",
         "line-join": "round"
-      }
+      },
+      "source-layer": "nowave"
     },
     {
       "id": "coastal-major-roads",
@@ -870,7 +887,8 @@
       "layout": {
         "line-cap": "round",
         "line-join": "round"
-      }
+      },
+      "source-layer": "nowave"
     },
     {
       "id": "basins",
@@ -900,7 +918,8 @@
           16,
           1
         ]
-      }
+      },
+      "source-layer": "nowave"
     },
     {
       "id": "breakwater-casing",
@@ -947,7 +966,8 @@
       "layout": {
         "line-cap": "round",
         "line-join": "round"
-      }
+      },
+      "source-layer": "nowave"
     },
     {
       "id": "breakwaters",
@@ -994,7 +1014,8 @@
       "layout": {
         "line-cap": "round",
         "line-join": "round"
-      }
+      },
+      "source-layer": "nowave"
     },
     {
       "id": "quays",
@@ -1041,7 +1062,8 @@
       "layout": {
         "line-cap": "round",
         "line-join": "round"
-      }
+      },
+      "source-layer": "nowave"
     },
     {
       "id": "pontoon-casing",
@@ -1088,7 +1110,8 @@
       "layout": {
         "line-cap": "round",
         "line-join": "round"
-      }
+      },
+      "source-layer": "nowave"
     },
     {
       "id": "pontoons",
@@ -1135,7 +1158,8 @@
       "layout": {
         "line-cap": "round",
         "line-join": "round"
-      }
+      },
+      "source-layer": "nowave"
     },
     {
       "id": "bridges",
@@ -1182,7 +1206,8 @@
       "layout": {
         "line-cap": "round",
         "line-join": "round"
-      }
+      },
+      "source-layer": "nowave"
     },
     {
       "id": "channels",
@@ -1233,7 +1258,8 @@
       "layout": {
         "line-cap": "round",
         "line-join": "round"
-      }
+      },
+      "source-layer": "nowave"
     },
     {
       "id": "port-entrances",
@@ -1280,7 +1306,8 @@
       "layout": {
         "line-cap": "round",
         "line-join": "round"
-      }
+      },
+      "source-layer": "nowave"
     },
     {
       "id": "shoal-names",
@@ -1341,7 +1368,8 @@
           0,
           1.5
         ]
-      }
+      },
+      "source-layer": "nowave"
     },
     {
       "id": "reef-names",
@@ -1402,7 +1430,8 @@
           0,
           1.5
         ]
-      }
+      },
+      "source-layer": "nowave"
     },
     {
       "id": "restricted-area",
@@ -1432,7 +1461,8 @@
           13,
           0.04
         ]
-      }
+      },
+      "source-layer": "nowave"
     },
     {
       "id": "restricted-outline",
@@ -1483,7 +1513,8 @@
       "layout": {
         "line-cap": "round",
         "line-join": "round"
-      }
+      },
+      "source-layer": "nowave"
     },
     {
       "id": "military-area",
@@ -1513,7 +1544,8 @@
           13,
           0.04
         ]
-      }
+      },
+      "source-layer": "nowave"
     },
     {
       "id": "military-outline",
@@ -1564,7 +1596,8 @@
       "layout": {
         "line-cap": "round",
         "line-join": "round"
-      }
+      },
+      "source-layer": "nowave"
     },
     {
       "id": "reserve-area",
@@ -1594,7 +1627,8 @@
           13,
           0.14
         ]
-      }
+      },
+      "source-layer": "nowave"
     },
     {
       "id": "reserve-outline",
@@ -1645,7 +1679,8 @@
       "layout": {
         "line-cap": "round",
         "line-join": "round"
-      }
+      },
+      "source-layer": "nowave"
     },
     {
       "id": "windfarm-outline",
@@ -1696,7 +1731,8 @@
       "layout": {
         "line-cap": "round",
         "line-join": "round"
-      }
+      },
+      "source-layer": "nowave"
     },
     {
       "id": "reserve-name",
@@ -1759,7 +1795,8 @@
         ],
         "text-letter-spacing": 0.025,
         "text-line-height": 1.3
-      }
+      },
+      "source-layer": "nowave"
     },
     {
       "id": "light-sectors",
@@ -1792,7 +1829,8 @@
           17,
           0.12
         ]
-      }
+      },
+      "source-layer": "nowave"
     },
     {
       "id": "port-symbols",
@@ -1900,7 +1938,8 @@
         "text-anchor": "top",
         "text-padding": 8,
         "text-optional": true
-      }
+      },
+      "source-layer": "nowave"
     },
     {
       "id": "lighthouse-symbols",
@@ -2025,7 +2064,8 @@
         "text-padding": 8,
         "text-optional": true,
         "icon-allow-overlap": true
-      }
+      },
+      "source-layer": "nowave"
     },
     {
       "id": "light-symbols",
@@ -2149,7 +2189,8 @@
         "text-anchor": "top",
         "text-padding": 8,
         "text-optional": true
-      }
+      },
+      "source-layer": "nowave"
     },
     {
       "id": "buoy-symbols",
@@ -2284,7 +2325,8 @@
         "text-anchor": "top",
         "text-padding": 8,
         "text-optional": true
-      }
+      },
+      "source-layer": "nowave"
     },
     {
       "id": "beacon-symbols",
@@ -2419,7 +2461,8 @@
         "text-anchor": "top",
         "text-padding": 8,
         "text-optional": true
-      }
+      },
+      "source-layer": "nowave"
     },
     {
       "id": "anchorage-symbols",
@@ -2538,7 +2581,8 @@
         "text-anchor": "top",
         "text-padding": 8,
         "text-optional": true
-      }
+      },
+      "source-layer": "nowave"
     },
     {
       "id": "ship_anchorage-symbols",
@@ -2657,7 +2701,8 @@
         "text-anchor": "top",
         "text-padding": 8,
         "text-optional": true
-      }
+      },
+      "source-layer": "nowave"
     },
     {
       "id": "mooring-symbols",
@@ -2765,7 +2810,8 @@
         "text-anchor": "top",
         "text-padding": 8,
         "text-optional": true
-      }
+      },
+      "source-layer": "nowave"
     },
     {
       "id": "wreck-symbols",
@@ -2873,7 +2919,8 @@
         "text-anchor": "top",
         "text-padding": 8,
         "text-optional": true
-      }
+      },
+      "source-layer": "nowave"
     },
     {
       "id": "danger_rock-symbols",
@@ -2981,7 +3028,8 @@
         "text-anchor": "top",
         "text-padding": 8,
         "text-optional": true
-      }
+      },
+      "source-layer": "nowave"
     },
     {
       "id": "landmark-symbols",
@@ -3089,7 +3137,8 @@
         "text-anchor": "top",
         "text-padding": 8,
         "text-optional": true
-      }
+      },
+      "source-layer": "nowave"
     },
     {
       "id": "sea_name",
@@ -3144,7 +3193,8 @@
         ],
         "text-letter-spacing": 0.18,
         "text-allow-overlap": true
-      }
+      },
+      "source-layer": "nowave"
     },
     {
       "id": "gulf_name",
@@ -3205,7 +3255,8 @@
           0,
           1.5
         ]
-      }
+      },
+      "source-layer": "nowave"
     },
     {
       "id": "roadstead_name",
@@ -3266,7 +3317,8 @@
           0,
           1.5
         ]
-      }
+      },
+      "source-layer": "nowave"
     },
     {
       "id": "coastal_city",
@@ -3327,7 +3379,8 @@
           0,
           1.5
         ]
-      }
+      },
+      "source-layer": "nowave"
     },
     {
       "id": "coastal_town",
@@ -3388,7 +3441,8 @@
           0,
           1.5
         ]
-      }
+      },
+      "source-layer": "nowave"
     },
     {
       "id": "bay_name",
@@ -3449,7 +3503,8 @@
           0,
           1.5
         ]
-      }
+      },
+      "source-layer": "nowave"
     },
     {
       "id": "cape_name",
@@ -3510,7 +3565,8 @@
           0,
           1.5
         ]
-      }
+      },
+      "source-layer": "nowave"
     },
     {
       "id": "island_name",
@@ -3571,7 +3627,8 @@
           0,
           1.5
         ]
-      }
+      },
+      "source-layer": "nowave"
     },
     {
       "id": "beach_name",
@@ -3632,7 +3689,8 @@
           0,
           1.5
         ]
-      }
+      },
+      "source-layer": "nowave"
     },
     {
       "id": "cove_name",
@@ -3693,7 +3751,8 @@
           0,
           1.5
         ]
-      }
+      },
+      "source-layer": "nowave"
     },
     {
       "id": "calanque_name",
@@ -3754,7 +3813,8 @@
           0,
           1.5
         ]
-      }
+      },
+      "source-layer": "nowave"
     }
   ]
 }

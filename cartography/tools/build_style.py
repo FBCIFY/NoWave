@@ -211,7 +211,9 @@ REAL_AREA_PROFILES = {
     'cassis': {
         'name': 'NoWave · Cassis réel',
         'manifest': 'data/cassis/manifest.json',
-        'features': '{base}/data/cassis/features.geojson',
+        'features_tiles': '{base}/tiles/vector/cassis/{z}/{x}/{y}.pbf',
+        'features_minzoom': 6,
+        'features_maxzoom': 18,
         'bathymetry_tiles': '{base}/tiles/bathymetry/cassis/{z}/{x}/{y}.png',
         'bathymetry_minzoom': 10,
         'bathymetry_maxzoom': 14,
@@ -249,8 +251,10 @@ def build_real_area(profile):
 
     style['sources'] = {
         'features': {
-            'type': 'geojson',
-            'data': profile['features'],
+            'type': 'vector',
+            'tiles': [profile['features_tiles']],
+            'minzoom': profile['features_minzoom'],
+            'maxzoom': profile['features_maxzoom'],
             'attribution': profile['features_attribution'],
         },
         'bathymetry': {
@@ -270,6 +274,12 @@ def build_real_area(profile):
             'data': outside_mask(manifest['coordinates']),
         },
     }
+
+    # Real feature data is now served as MVT using the normalized `nowave`
+    # source layer defined by DATA_CONTRACT.md.
+    for layer in style['layers']:
+        if layer.get('source') == 'features':
+            layer['source-layer'] = 'nowave'
 
     # Image sources do not support attribution in the v8 specification.
     style['sources']['features']['attribution'] += profile['bathymetry_attribution']

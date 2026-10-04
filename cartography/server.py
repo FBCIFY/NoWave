@@ -118,6 +118,41 @@ def handler_class(config):
                 self.respond(file.read_bytes(), 'image/png')
                 return
 
+            if path.startswith('/tiles/vector/cassis/'):
+                try:
+                    relative = path[len('/tiles/vector/cassis/'):].split('/')
+                    if len(relative) != 3:
+                        raise ValueError('Expected z/x/y.pbf')
+
+                    z, x, filename = relative
+
+                    if not filename.endswith('.pbf'):
+                        raise ValueError('Expected .pbf')
+
+                    data = read_tile(
+                        ROOT/'tiles/vector/cassis.mbtiles',
+                        int(z),
+                        int(x),
+                        int(filename[:-4]),
+                    )
+                except (ValueError, sqlite3.Error):
+                    self.respond(b'Invalid tile request', 'text/plain', 400)
+                    return
+
+                if data is None:
+                    self.respond(
+                        b'',
+                        'application/vnd.mapbox-vector-tile',
+                        204,
+                    )
+                else:
+                    self.respond(
+                        data,
+                        'application/vnd.mapbox-vector-tile',
+                        gzip=data[:2] == b'\x1f\x8b',
+                    )
+                return
+
             if path.startswith('/tiles/') and config.mbtiles:
                 try:
                     _, _, z, x, filename = path.split('/')
