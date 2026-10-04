@@ -1,0 +1,16 @@
+{
+  "schema": 1,
+  "format": "xyz",
+  "tile_size": 256,
+  "crs": "EPSG:3857",
+  "source_crs": "EPSG:4326",
+  "bbox": [
+    5.515,
+    43.19,
+    5.555,
+    43.225
+  ],
+  "minzoom": 10,
+  "maxzoom": 14,
+  "tiles": 20
+}

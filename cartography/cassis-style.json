@@ -31,26 +31,13 @@
       "attribution": "<a href=\"https://www.openstreetmap.org/copyright\">© OpenStreetMap contributors · ODbL</a> · <a href=\"https://doi.org/10.17183/MNT_MED100m_GDL_CA_HOMONIM_WGS84\">Shom, 2015 · HOMONIM PBMA</a> · <a href=\"https://doi.org/10.17183/S201300200\">Shom · levé S201300200 (2007–2013)</a> · Licence Ouverte 2.0"
     },
     "bathymetry": {
-      "type": "image",
-      "url": "{base}/assets/cassis-bathymetry.png",
-      "coordinates": [
-        [
-          5.515,
-          43.225
-        ],
-        [
-          5.555,
-          43.225
-        ],
-        [
-          5.555,
-          43.19
-        ],
-        [
-          5.515,
-          43.19
-        ]
-      ]
+      "type": "raster",
+      "tiles": [
+        "{base}/tiles/bathymetry/cassis/{z}/{x}/{y}.png"
+      ],
+      "tileSize": 256,
+      "minzoom": 10,
+      "maxzoom": 14
     },
     "relief": {
       "type": "raster-dem",

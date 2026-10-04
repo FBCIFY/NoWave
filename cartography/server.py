@@ -105,6 +105,19 @@ def handler_class(config):
                                    getattr(config, 'real_cassis', False))
                 self.respond(json.dumps(style, ensure_ascii=False).encode(), 'application/json')
                 return
+            if path.startswith('/tiles/bathymetry/'):
+                file = (ROOT/path.lstrip('/')).resolve()
+                tiles_root = (ROOT/'tiles'/'bathymetry').resolve()
+
+                if (not file.is_relative_to(tiles_root)
+                        or not file.is_file()
+                        or file.suffix.lower() != '.png'):
+                    self.respond(b'Not found', 'text/plain', 404)
+                    return
+
+                self.respond(file.read_bytes(), 'image/png')
+                return
+
             if path.startswith('/tiles/') and config.mbtiles:
                 try:
                     _, _, z, x, filename = path.split('/')

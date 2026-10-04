@@ -212,7 +212,9 @@ REAL_AREA_PROFILES = {
         'name': 'NoWave · Cassis réel',
         'manifest': 'data/cassis/manifest.json',
         'features': '{base}/data/cassis/features.geojson',
-        'bathymetry': '{base}/assets/cassis-bathymetry.png',
+        'bathymetry_tiles': '{base}/tiles/bathymetry/cassis/{z}/{x}/{y}.png',
+        'bathymetry_minzoom': 10,
+        'bathymetry_maxzoom': 14,
         'water': '{base}/data/cassis/water.geojson',
         'metadata': {
             'nowave:data_mode': 'CASSIS_REAL',
@@ -252,9 +254,11 @@ def build_real_area(profile):
             'attribution': profile['features_attribution'],
         },
         'bathymetry': {
-            'type': 'image',
-            'url': profile['bathymetry'],
-            'coordinates': manifest['coordinates'],
+            'type': 'raster',
+            'tiles': [profile['bathymetry_tiles']],
+            'tileSize': 256,
+            'minzoom': profile['bathymetry_minzoom'],
+            'maxzoom': profile['bathymetry_maxzoom'],
         },
         'relief': style['sources']['relief'],
         'relief-sea-mask': {
