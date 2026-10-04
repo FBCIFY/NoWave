@@ -9,6 +9,18 @@ TO_METRIC = Transformer.from_crs('EPSG:4326', METRIC_CRS, always_xy=True).transf
 TO_WGS84 = Transformer.from_crs(METRIC_CRS, 'EPSG:4326', always_xy=True).transform
 
 
+def line_buffer(coast, distance, batch_size=32):
+    """Union identical line buffers in bounded batches, without simplifying coast.
+
+    GEOS buffering a whole real coastline at once builds a huge intermediate
+    intersection graph. Buffering its parts gives the same union of discs.
+    """
+    parts = [coast] if coast.geom_type == 'LineString' else list(coast.geoms)
+    batches = [unary_union([part.buffer(distance) for part in parts[i:i + batch_size]])
+               for i in range(0, len(parts), batch_size)]
+    return unary_union(batches)
+
+
 def coastal_zone(coast, land, bbox, sea_buffer_nm=10, land_buffer_m=3000):
     if coast.is_empty or coast.geom_type not in ('LineString', 'MultiLineString'):
         raise ValueError('Real coastline lines required')
@@ -17,8 +29,8 @@ def coastal_zone(coast, land, bbox, sea_buffer_nm=10, land_buffer_m=3000):
     metric_coast = set_precision(transform(TO_METRIC, coast), .01)
     metric_land = set_precision(transform(TO_METRIC, land), .01)
     extent = set_precision(transform(TO_METRIC, segmentize(box(*bbox), .01)), .01)
-    sea = metric_coast.buffer(sea_buffer_nm * 1852).difference(metric_land).intersection(extent)
-    useful = sea.union(metric_coast.buffer(land_buffer_m).intersection(metric_land)).intersection(extent)
+    sea = line_buffer(metric_coast, sea_buffer_nm * 1852).difference(metric_land).intersection(extent)
+    useful = sea.union(line_buffer(metric_coast, land_buffer_m).intersection(metric_land)).intersection(extent)
     return polygonal(transform(TO_WGS84, sea)), polygonal(transform(TO_WGS84, useful))
 
 

@@ -11,6 +11,8 @@ from shapely.ops import unary_union
 
 from pipeline_io import digest, atomic_json, fingerprint, feature
 
+RELEVANT_KEYS = ('natural', 'landuse', 'leisure', 'harbour', 'waterway',
+                 'man_made', 'place', 'highway', 'seamark:type')
 
 
 def same_dimension(geometry, original_type):
@@ -43,7 +45,8 @@ def extract_pbf(source, bbox, cache):
         with closing(sqlite3.connect(Path(directory) / 'ids.sqlite')) as ids:
             ids.execute('CREATE TABLE selected (type TEXT, id INTEGER, PRIMARY KEY(type,id))')
             processor = osmium.FileProcessor(str(source)).with_locations(
-                'sparse_file_array,' + str(Path(directory) / 'nodes.idx')).with_areas()
+                'sparse_file_array,' + str(Path(directory) / 'nodes.idx')).with_areas().with_filter(
+                    osmium.filter.KeyFilter(*RELEVANT_KEYS))
             for obj in processor:
                 tags = dict(obj.tags)
                 if obj.is_relation() or not relevant(tags):
@@ -68,7 +71,10 @@ def extract_pbf(source, bbox, cache):
             ids.commit()
             with osmium.BackReferenceWriter(str(temporary), str(source), overwrite=True,
                                             remove_tags=False, relation_depth=10) as writer:
-                for obj in osmium.FileProcessor(str(source)):
+                # Relations may inherit area tags from an outer way, so they
+                # must pass even when the raw relation has no relevant key.
+                tagged = osmium.filter.KeyFilter(*RELEVANT_KEYS).enable_for(osmium.osm.NODE | osmium.osm.WAY)
+                for obj in osmium.FileProcessor(str(source)).with_filter(tagged):
                     if ids.execute('SELECT 1 FROM selected WHERE type=? AND id=?',
                                    (obj.type_str(), obj.id)).fetchone():
                         writer.add(obj)
@@ -78,8 +84,10 @@ def extract_pbf(source, bbox, cache):
 
 
 def relevant(tags):
-    return any(k in tags for k in ('natural', 'landuse', 'leisure', 'harbour', 'waterway',
-                                   'man_made', 'place', 'highway', 'seamark:type'))
+    # Avoid allocating a generator for every OSM object (millions of calls).
+    return ('natural' in tags or 'landuse' in tags or 'leisure' in tags or
+            'harbour' in tags or 'waterway' in tags or 'man_made' in tags or
+            'place' in tags or 'highway' in tags or 'seamark:type' in tags)
 
 
 def normalize(tags, geom):
@@ -179,7 +187,8 @@ def ingest(pbf, database, bbox, provenance, cache):
     # Sparse file indexes use disk, including for large national source PBFs.
     with tempfile.TemporaryDirectory(prefix='locations-', dir=cache) as location_dir:
         processor = osmium.FileProcessor(str(pbf)).with_locations(
-            'sparse_file_array,' + str(Path(location_dir) / 'nodes.idx')).with_areas()
+            'sparse_file_array,' + str(Path(location_dir) / 'nodes.idx')).with_areas().with_filter(
+                osmium.filter.KeyFilter(*RELEVANT_KEYS))
         for obj in processor:
             tags = dict(obj.tags)
             if not tags or obj.is_relation():
@@ -237,16 +246,22 @@ def coast_from_inventory(db, scope):
 
 
 def features_in_zone(db, useful, land, coast):
+    from shapely import prepare
+    # Most regional objects are inland. Avoid an expensive polygon intersection
+    # for each of them; the prepared predicate leaves retained geometries exact.
+    for geometry in (useful, land, coast):
+        prepare(geometry)
     for payload, in db.execute('SELECT payload FROM features ORDER BY id,kind'):
         value = json.loads(payload)
         kind = value['properties']['kind']
         geom = shape(value['geometry'])
         original_type = geom.geom_type
-        if kind == 'coast':
-            geom = geom.intersection(coast)
-        else:
-            geom = geom.intersection(useful)
-        if kind in ('vegetation', 'urban'):
+        zone = coast if kind == 'coast' else useful
+        if not zone.intersects(geom):
+            continue
+        if not zone.covers(geom):
+            geom = geom.intersection(zone)
+        if kind in ('vegetation', 'urban') and not land.covers(geom):
             geom = geom.intersection(land)
         geom = same_dimension(geom, original_type)
         if not geom.is_empty:
