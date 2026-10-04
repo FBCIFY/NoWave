@@ -207,56 +207,110 @@ def build():
             'layers': layers}
 
 
-def build_cassis():
-    """Reuse the approved visual layers with an entirely separate real dataset."""
-    manifest = json.loads((ROOT/'data/cassis/manifest.json').read_text())
+REAL_AREA_PROFILES = {
+    'cassis': {
+        'name': 'NoWave · Cassis réel',
+        'manifest': 'data/cassis/manifest.json',
+        'features': '{base}/data/cassis/features.geojson',
+        'bathymetry': '{base}/assets/cassis-bathymetry.png',
+        'water': '{base}/data/cassis/water.geojson',
+        'metadata': {
+            'nowave:data_mode': 'CASSIS_REAL',
+            'nowave:coast_label': 'réelle OSM',
+            'nowave:bathymetry_label': 'réelle SHOM : levé 2007–2013 / HOMONIM PBMA',
+            'nowave:bathymetry_resolution': 'grille 10 m sur sondes ; HOMONIM ≈111 m au large',
+            'nowave:missing_depth_label': 'gris bleu = profondeur indisponible ; aucune extrapolation portuaire',
+            'nowave:port_label': 'réels OSM',
+            'nowave:navigation_label': 'feux OSM réels ; autres catégories absentes non affichées',
+            'nowave:warning': 'Ne pas utiliser NoWave pour la navigation officielle.',
+        },
+        'features_attribution':
+            '<a href="https://www.openstreetmap.org/copyright">© OpenStreetMap contributors · ODbL</a>',
+        'bathymetry_attribution': (
+            ' · <a href="https://doi.org/10.17183/MNT_MED100m_GDL_CA_HOMONIM_WGS84">'
+            'Shom, 2015 · HOMONIM PBMA</a>'
+            ' · <a href="https://doi.org/10.17183/S201300200">'
+            'Shom · levé S201300200 (2007–2013)</a> · Licence Ouverte 2.0'
+        ),
+    },
+}
+
+
+def build_real_area(profile):
+    """Apply the approved NoWave visual style to a real geographic dataset."""
+    manifest = json.loads((ROOT/profile['manifest']).read_text())
     style = build()
-    style['name'] = 'NoWave · Cassis réel'
-    style['metadata'].update({
-        'nowave:data_mode': 'CASSIS_REAL',
-        'nowave:coast_label': 'réelle OSM',
-        'nowave:bathymetry_label': 'réelle SHOM : levé 2007–2013 / HOMONIM PBMA',
-        'nowave:bathymetry_resolution': 'grille 10 m sur sondes ; HOMONIM ≈111 m au large',
-        'nowave:missing_depth_label': 'gris bleu = profondeur indisponible ; aucune extrapolation portuaire',
-        'nowave:port_label': 'réels OSM',
-        'nowave:navigation_label': 'feux OSM réels ; autres catégories absentes non affichées',
-        'nowave:warning': 'Ne pas utiliser NoWave pour la navigation officielle.'})
+
+    style['name'] = profile['name']
+    style['metadata'].update(profile['metadata'])
     style['center'], style['zoom'] = manifest['center'], manifest['zoom']
+
     style['sources'] = {
-        'features': {'type': 'geojson', 'data': '{base}/data/cassis/features.geojson',
-            'attribution': '<a href="https://www.openstreetmap.org/copyright">© OpenStreetMap contributors · ODbL</a>'},
-        'bathymetry': {'type': 'image', 'url': '{base}/assets/cassis-bathymetry.png',
-            'coordinates': manifest['coordinates']},
+        'features': {
+            'type': 'geojson',
+            'data': profile['features'],
+            'attribution': profile['features_attribution'],
+        },
+        'bathymetry': {
+            'type': 'image',
+            'url': profile['bathymetry'],
+            'coordinates': manifest['coordinates'],
+        },
         'relief': style['sources']['relief'],
-        'relief-sea-mask': {'type': 'geojson', 'data': '{base}/data/cassis/water.geojson'},
-        'relief-outside': {'type': 'geojson', 'data': outside_mask(manifest['coordinates'])}}
+        'relief-sea-mask': {
+            'type': 'geojson',
+            'data': profile['water'],
+        },
+        'relief-outside': {
+            'type': 'geojson',
+            'data': outside_mask(manifest['coordinates']),
+        },
+    }
+
     # Image sources do not support attribution in the v8 specification.
-    # Credit both bathymetric datasets on the associated GeoJSON source.
-    style['sources']['features']['attribution'] += (
-        ' · <a href="https://doi.org/10.17183/MNT_MED100m_GDL_CA_HOMONIM_WGS84">Shom, 2015 · HOMONIM PBMA</a>'
-        ' · <a href="https://doi.org/10.17183/S201300200">Shom · levé S201300200 (2007–2013)</a> · Licence Ouverte 2.0')
+    style['sources']['features']['attribution'] += profile['bathymetry_attribution']
+
     layers = style['layers']
+
     land = next(l for l in layers if l['id'] == 'land')
     layers.remove(land)
-    layers.insert(next(i for i, l in enumerate(layers) if l['id'] == 'land-relief'), land)
+    layers.insert(
+        next(i for i, l in enumerate(layers) if l['id'] == 'land-relief'),
+        land,
+    )
+
     # A true vector water polygon covers underwater DEM at every zoom.
     mask = next(l for l in layers if l['id'] == 'relief-sea-mask')
     mask['type'] = 'fill'
-    mask['paint'] = {'fill-color': '#B9CDD7', 'fill-antialias': False}
-    next(l for l in layers if l['id'] == 'relief-outside-scene')['paint']['fill-color'] = '#B9CDD7'
+    mask['paint'] = {
+        'fill-color': '#B9CDD7',
+        'fill-antialias': False,
+    }
+
+    next(
+        l for l in layers if l['id'] == 'relief-outside-scene'
+    )['paint']['fill-color'] = '#B9CDD7'
+
     bathymetry = next(l for l in layers if l['id'] == 'bathymetry')
-    # Cassis REAL: keep linear raster interpolation for a smooth nautical
-    # rendering while slightly reducing high-zoom contrast on sparse survey data.
+
+    # Keep linear raster interpolation for smooth nautical rendering while
+    # slightly reducing high-zoom contrast on sparse survey data.
     bathymetry['paint']['raster-opacity'] = [
         'interpolate', ['linear'], ['zoom'],
         12, 1.0,
         16, 0.96,
         18, 0.90,
     ]
+
     layers.remove(bathymetry)
-    layers.insert(layers.index(mask)+1, bathymetry)
+    layers.insert(layers.index(mask) + 1, bathymetry)
+
     return style
 
+
+def build_cassis():
+    """Backward-compatible Cassis entry point during the national refactor."""
+    return build_real_area(REAL_AREA_PROFILES['cassis'])
 
 if __name__ == '__main__':
     (ROOT / 'style.json').write_text(json.dumps(build(), ensure_ascii=False, indent=2)+'\n')
