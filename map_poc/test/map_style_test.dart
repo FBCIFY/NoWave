@@ -98,6 +98,41 @@ void main() {
     await expectLater(MapStyle.load(client, uri), throwsStateError);
     client.close();
   });
+  test(
+    'Regional HTTPS style retains the same endpoints for native clients',
+    () async {
+      const base = 'https://maps.nowave.example';
+      final regional = style('REGION_REAL')
+        ..['glyphs'] = '$base/assets/font/{fontstack}/{range}.pbf'
+        ..['sprite'] = '$base/assets/sprite'
+        ..['sources'] = {
+          'features': {
+            'type': 'vector',
+            'tiles': ['$base/tiles/vector/france_med/{z}/{x}/{y}.pbf'],
+          },
+          'bathymetry': {
+            'type': 'raster',
+            'tiles': ['$base/tiles/bathymetry/france_med/{z}/{x}/{y}.png'],
+          },
+          'water': {
+            'type': 'geojson',
+            'data': '$base/data/france_med/water.geojson',
+          },
+        };
+      final client = MockClient((request) async {
+        expect(request.url, Uri.parse('$base/style.json'));
+        return http.Response(
+          jsonEncode(regional),
+          200,
+          headers: {'content-type': 'application/json; charset=utf-8'},
+        );
+      });
+      final loaded = await MapStyle.load(client, Uri.parse('$base/style.json'));
+      expect(loaded.isDemo, isFalse);
+      expect(jsonDecode(loaded.json), regional);
+      client.close();
+    },
+  );
   testWidgets('Unavailable server offers a working retry', (tester) async {
     var attempts = 0;
     final client = MockClient((_) async {
