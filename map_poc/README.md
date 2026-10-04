@@ -75,7 +75,7 @@ L’absence de Podfile correspond à cette intégration ; ne pas ajouter une sec
 chaîne CocoaPods sans besoin identifié sur Mac.
 
 `Runner/Info.plist` est utilisé par Release et Profile et ne désactive pas ATS.
-Debug utilise `Runner/Info-Debug.plist`, avec `NSAllowsLocalNetworking` et le texte
+Debug utilise `Runner/Info-Debug.plist`, avec `NSAllowsLocalNetworking` et exceptions CIDR pour loopback/réseaux privés IPv4 en Debug (iOS 17+) et le texte
 de permission réseau local. Il n’y a pas de `NSAllowsArbitraryLoads` global.
 Les deux plists doivent conserver les mêmes propriétés applicatives ; les tests
 vérifient cette cohérence. Pour un domaine distant HTTP, utiliser HTTPS plutôt

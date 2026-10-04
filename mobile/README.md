@@ -1,4 +1,4 @@
-# BlueWay mobile
+# NoWave mobile
 
 ## Développement
 
@@ -20,12 +20,11 @@ Créer le fichier local depuis l’exemple :
 cp .env.example.json .env.json
 ```
 
-Compléter ensuite les trois valeurs :
+Compléter ensuite les deux adresses :
 
 ```json
 {
-  "MAPBOX_ACCESS_TOKEN": "jeton-public-mapbox",
-  "MAPTILER_STYLE_URL": "https://api.maptiler.com/maps/ocean-v4/style.json?key=cle-maptiler",
+  "NOWAVE_STYLE_URL": "https://adresse-du-serveur-cartographique/style.json",
   "API_BASE_URL": "https://adresse-du-backend/"
 }
 ```
@@ -41,20 +40,61 @@ Le téléphone physique et le poste doivent être sur le même réseau. Une
 modification de `.env.json` nécessite un redémarrage complet de `flutter run`.
 Le fichier `.env.json` ne doit jamais être ajouté à Git.
 
-`MAPTILER_STYLE_URL` n’est plus lu par l’application : la carte utilise le
-style Mapbox Standard.
+Le style NoWave réel est chargé avec MapLibre, sans jeton cartographique.
+`NOWAVE_STYLE_URL` peut aussi être passé directement avec `--dart-define`.
+L’URL n’a pas de valeur locale implicite : configurez une adresse accessible à
+l’appareil. HTTP local est autorisé en Debug ; Release requiert HTTPS.
+
+Pour les données et le serveur, suivre [France Méditerranée](../cartography/FRANCE_MED_REAL.md).
+Sur le poste possédant les données préparées, depuis la racine :
+
+```bash
+.venv/bin/python cartography/server.py --region france_med --host 0.0.0.0 --port 8765
+```
+
+Le serveur reprend le `Host` reçu dans les URLs des MVT, PNG, GeoJSON, glyphs et
+sprites. Derrière un proxy HTTPS, utiliser `--public-url https://<DOMAINE>`.
+Les données régionales restent sur le serveur, hors des bundles Flutter.
+Les cartes affichent des profondeurs réelles SHOM uniquement dans leur couverture ;
+le fond gris bleu ailleurs représente NoData.
+
+Android sur le même LAN :
+
+```bash
+flutter run -d "<ANDROID_ID>" --dart-define-from-file=.env.json \
+  --dart-define=NOWAVE_STYLE_URL="http://<IP_SERVEUR>:8765/style.json"
+```
+
+Le backend doit aussi être accessible : `.env.json` contient son `API_BASE_URL`
+avec `/` final. Pour l’émulateur Android, utiliser `10.0.2.2` au lieu de l’IP LAN.
+Pour le développement USB uniquement, `adb reverse tcp:8765 tcp:8765` permet
+l’URL `http://127.0.0.1:8765/style.json`. Un backend USB local nécessite son
+propre reverse pour le port 8000. Le fonctionnement LAN/HTTPS reste indépendant d’ADB.
+
+Build ARM64 sur ce poste Linux (JDK 21 complet, avec `javac`) :
+
+```bash
+JAVA_HOME=/usr/lib/jvm/java-21-openjdk-amd64 \
+PATH=/usr/lib/jvm/java-21-openjdk-amd64/bin:$PATH \
+flutter build apk --release --split-per-abi --target-platform android-arm64 \
+  --dart-define-from-file=.env.json
+```
+
+Le build Release utilise HTTPS pour le backend et la carte. Le signing Android
+reste la clé Debug de développement existante ; ce build n’est pas une livraison Store.
+Le parcours iPhone et simulateur est dans [IOS_TESTING.md](IOS_TESTING.md).
 
 ## Organisation du code
 
 ```text
 lib/
-├── main.dart          démarrage : Firebase, Mapbox, services partagés
+├── main.dart          démarrage : Firebase, services partagés
 ├── app/               racine de l’app et thème
 ├── core/              outils partagés par toutes les fonctionnalités
 │   ├── api/           client HTTP vers le backend
 │   ├── haptics/       retours haptiques
 │   ├── location/      position GPS et format degrés/minutes/secondes
-│   ├── map/           réglages Mapbox communs
+│   ├── map/           adaptateur MapLibre, chargement du style
 │   ├── notifications/ autorisation du téléphone et messages push
 │   └── sensors/       cap et inclinaison du téléphone
 └── features/          une fonctionnalité par dossier
@@ -146,11 +186,11 @@ flutterfire configure \
   --project=blueway-dev \
   --platforms=android,ios \
   --android-package-name=fr.blueway.app \
-  --ios-bundle-id=fr.blueway.app
+  --ios-bundle-id=fr.blueway-arcadia.app
 ```
 
-Le projet de développement est `blueway-dev` et l’identifiant des applications
-est `fr.blueway.app`. Les fichiers `.env`, les clés privées Firebase Admin et
+Le projet de développement est `blueway-dev`. L’identifiant Android est
+`fr.blueway.app` ; celui d’iOS est `fr.blueway-arcadia.app`. Les fichiers `.env`, les clés privées Firebase Admin et
 les mots de passe ne doivent jamais être ajoutés à Git.
 
 La connexion Google, la connexion Apple et la récupération du mot de passe ne
@@ -179,8 +219,8 @@ flutter test
 
 La carte utilise :
 
-- le SDK Mapbox pour l’affichage et les interactions ;
-- le style Mapbox Standard pour le fond ;
+- `maplibre_gl` 0.27.1 pour l’affichage et les interactions ;
+- le style NoWave réel provenant du serveur configuré ;
 - Geolocator pour récupérer la position de l’appareil.
 
 L’écran permet de demander la permission de localisation, d’afficher la
@@ -269,28 +309,27 @@ signalement rempli demande une confirmation.
 
 ### Flèche de position
 
-La position de l’utilisateur est affichée par une flèche 3D qui suit le cap
-du téléphone. Le modèle `assets/models/location_puck.glb` est généré par un
-script ; pour le modifier, changer le script puis, depuis `mobile/` :
-
-```bash
-python3 tool/make_location_puck.py assets/models/location_puck.glb
-```
+Un overlay Flutter bleu de 44 points suit la position GPS projetée et tourne
+selon le cap du téléphone moins la rotation de la carte. Le modèle 3D historique
+reste dans le dépôt, mais n’est plus embarqué. La boussole propose nord en haut,
+cap du téléphone (actualisé en continu) ou rotation manuelle au doigt.
+Un déplacement au doigt coupe le suivi ; le recentrage retrouve le zoom 14.
+Pendant le placement d’un signalement, le GPS reste actif mais ne déplace pas
+la caméra. Après fermeture, la caméra et le suivi antérieurs sont rétablis.
 
 ### Limites connues
 
 - l’envoi de la photo suit le contrat de la doc technique mais n’a pas encore
-  été testé sur le serveur : la route de NW-112 n’est pas déployée et répond
-  404 (« envoi indisponible sur ce serveur ») ;
+  été testé sur le serveur : la route de NW-112 n’est pas définie dans le backend local actuel et
+  répondra 404 ; utiliser un backend qui implémente ce contrat pour valider l’upload ;
 - l’azimut dépend des perturbations magnétiques et de la calibration ;
 - l’inclinaison n’a pas été vérifiée avec un support d’angle étalonné ;
 - les conventions des capteurs doivent encore être validées sur Android réel ;
 - la hauteur de caméra est fixée à 2,5 m pour le MVP.
 
-## POC du nouveau fond NoWave — NW-map-style
+## Référence isolée et validation de la migration
 
-Le POC MapLibre indépendant est dans [`../map_poc`](../map_poc/README.md).
-Le [guide cartographique](../cartography/README.md) donne les commandes,
-le parcours de test de Vadim et les limites des données fictives. L'écran
-métier décrit ci-dessus conserve son fonctionnement ; sa migration viendra
-après validation du fond.
+Le [POC MapLibre](../map_poc/README.md) reste une référence isolée du rendu.
+L’application complète utilise maintenant le même moteur et le même serveur.
+Voir [MAPLIBRE_VALIDATION.md](MAPLIBRE_VALIDATION.md) pour l’audit, les résultats
+mesurés et les limites restantes des tests physiques et du backend.
