@@ -1,0 +1,1783 @@
+{
+  "mode": "CASSIS_REAL",
+  "bbox": [
+    5.515,
+    43.19,
+    5.555,
+    43.225
+  ],
+  "center": [
+    5.536,
+    43.2105
+  ],
+  "zoom": 14.5,
+  "generated_at": "2026-10-03T20:44:06.320325+00:00",
+  "retrieved_at": "2026-10-03T20:32:37.104694+00:00",
+  "osm_timestamp": "2026-05-06T03:25:00Z",
+  "osm_endpoint": "https://overpass.kumi.systems/api/interpreter",
+  "osm_inventory": [
+    {
+      "osm_id": "node/1420666229",
+      "kind": "light",
+      "tags": {
+        "man_made": "lighthouse",
+        "seamark:information": "Fl.(2)R. 6s marks head of breakwater in Port du Prado 1.2 miles NNE.",
+        "seamark:light:character": "Oc",
+        "seamark:light:colour": "green",
+        "seamark:light:group": "2",
+        "seamark:light:height": "17",
+        "seamark:light:period": "6",
+        "seamark:light:range": "6",
+        "seamark:light:reference": "E 0686",
+        "seamark:light:sequence": "1+(1)+3+(1)",
+        "seamark:type": "light_minor",
+        "source": "US NGA Pub. 113. 2010-10-22."
+      }
+    },
+    {
+      "osm_id": "node/1420666230",
+      "kind": "light",
+      "tags": {
+        "man_made": "lighthouse",
+        "seamark:information": "Visible 248°-068°.",
+        "seamark:light:1:character": "Fl",
+        "seamark:light:1:colour": "red",
+        "seamark:light:1:height": "11",
+        "seamark:light:1:period": "4",
+        "seamark:light:1:range": "6",
+        "seamark:light:1:sector_end": "68",
+        "seamark:light:1:sector_start": "248",
+        "seamark:light:1:sequence": "1+(3)",
+        "seamark:light:reference": "E 0687",
+        "seamark:name": "Cassis",
+        "seamark:type": "light_minor",
+        "source": "US NGA Pub. 113. 2010-10-22."
+      }
+    },
+    {
+      "osm_id": "way/11407276",
+      "kind": "port",
+      "tags": {
+        "leisure": "marina",
+        "name": "Port de Cassis",
+        "seamark:harbour:category": "marina",
+        "seamark:type": "harbour"
+      }
+    },
+    {
+      "osm_id": "way/30384270",
+      "kind": "pontoon",
+      "tags": {
+        "created_by": "Potlatch 0.10f",
+        "man_made": "pier"
+      }
+    },
+    {
+      "osm_id": "way/31062447",
+      "kind": "coast",
+      "tags": {
+        "natural": "coastline",
+        "source": "cadastre-dgi-fr source : Direction Générale des Impôts - Cadastre. Mise à jour : 2008"
+      }
+    },
+    {
+      "osm_id": "way/31062448",
+      "kind": "coast",
+      "tags": {
+        "natural": "coastline",
+        "source": "cadastre-dgi-fr source : Direction Générale des Impôts - Cadastre. Mise à jour : 2008"
+      }
+    },
+    {
+      "osm_id": "way/31062449",
+      "kind": "coast",
+      "tags": {
+        "natural": "coastline",
+        "source": "cadastre-dgi-fr source : Direction Générale des Impôts - Cadastre. Mise à jour : 2008"
+      }
+    },
+    {
+      "osm_id": "way/76017469",
+      "kind": "pontoon",
+      "tags": {
+        "man_made": "pier",
+        "source": "cadastre-dgi-fr source : Direction Générale des Impôts - Cadastre ; mise à jour : 2010"
+      }
+    },
+    {
+      "osm_id": "way/76017474",
+      "kind": "pontoon",
+      "tags": {
+        "man_made": "pier",
+        "source": "cadastre-dgi-fr source : Direction Générale des Impôts - Cadastre ; mise à jour : 2010"
+      }
+    },
+    {
+      "osm_id": "way/76017476",
+      "kind": "pontoon",
+      "tags": {
+        "man_made": "pier",
+        "source": "cadastre-dgi-fr source : Direction Générale des Impôts - Cadastre ; mise à jour : 2010"
+      }
+    },
+    {
+      "osm_id": "way/76017477",
+      "kind": "pontoon",
+      "tags": {
+        "man_made": "pier",
+        "source": "cadastre-dgi-fr source : Direction Générale des Impôts - Cadastre ; mise à jour : 2010"
+      }
+    },
+    {
+      "osm_id": "way/76017478",
+      "kind": "pontoon",
+      "tags": {
+        "man_made": "pier",
+        "source": "cadastre-dgi-fr source : Direction Générale des Impôts - Cadastre ; mise à jour : 2010"
+      }
+    },
+    {
+      "osm_id": "way/76017479",
+      "kind": "pontoon",
+      "tags": {
+        "man_made": "pier",
+        "source": "cadastre-dgi-fr source : Direction Générale des Impôts - Cadastre ; mise à jour : 2010"
+      }
+    },
+    {
+      "osm_id": "way/76017480",
+      "kind": "pontoon",
+      "tags": {
+        "man_made": "pier",
+        "source": "cadastre-dgi-fr source : Direction Générale des Impôts - Cadastre ; mise à jour : 2010"
+      }
+    },
+    {
+      "osm_id": "way/76017481",
+      "kind": "pontoon",
+      "tags": {
+        "man_made": "pier",
+        "source": "cadastre-dgi-fr source : Direction Générale des Impôts - Cadastre ; mise à jour : 2010"
+      }
+    },
+    {
+      "osm_id": "way/106136838",
+      "kind": "pontoon",
+      "tags": {
+        "access": "private",
+        "man_made": "pier",
+        "mooring": "yes"
+      }
+    },
+    {
+      "osm_id": "way/106136846",
+      "kind": "pontoon",
+      "tags": {
+        "access": "private",
+        "man_made": "pier",
+        "mooring": "yes"
+      }
+    },
+    {
+      "osm_id": "way/190081947",
+      "kind": "pontoon",
+      "tags": {
+        "access": "private",
+        "man_made": "pier",
+        "mooring": "yes"
+      }
+    },
+    {
+      "osm_id": "way/190081953",
+      "kind": "pontoon",
+      "tags": {
+        "access": "private",
+        "man_made": "pier",
+        "mooring": "yes"
+      }
+    },
+    {
+      "osm_id": "way/190081955",
+      "kind": "pontoon",
+      "tags": {
+        "access": "private",
+        "man_made": "pier",
+        "mooring": "yes"
+      }
+    },
+    {
+      "osm_id": "way/190081958",
+      "kind": "pontoon",
+      "tags": {
+        "access": "private",
+        "man_made": "pier",
+        "mooring": "yes"
+      }
+    },
+    {
+      "osm_id": "way/190081961",
+      "kind": "pontoon",
+      "tags": {
+        "access": "private",
+        "man_made": "pier",
+        "mooring": "yes"
+      }
+    },
+    {
+      "osm_id": "way/190081963",
+      "kind": "pontoon",
+      "tags": {
+        "access": "private",
+        "man_made": "pier",
+        "mooring": "yes"
+      }
+    },
+    {
+      "osm_id": "way/190081967",
+      "kind": "pontoon",
+      "tags": {
+        "access": "private",
+        "area": "yes",
+        "man_made": "pier"
+      }
+    },
+    {
+      "osm_id": "way/190107489",
+      "kind": "pontoon",
+      "tags": {
+        "access": "private",
+        "man_made": "pier",
+        "mooring": "yes"
+      }
+    },
+    {
+      "osm_id": "way/190107491",
+      "kind": "pontoon",
+      "tags": {
+        "access": "private",
+        "floating": "yes",
+        "man_made": "pier",
+        "mooring": "yes"
+      }
+    },
+    {
+      "osm_id": "way/190107492",
+      "kind": "pontoon",
+      "tags": {
+        "access": "private",
+        "floating": "yes",
+        "man_made": "pier",
+        "mooring": "yes"
+      }
+    },
+    {
+      "osm_id": "way/229726334",
+      "kind": "coast",
+      "tags": {
+        "natural": "coastline",
+        "source": "cadastre-dgi-fr source : Direction Générale des Impôts - Cadastre. Mise à jour : 2008"
+      }
+    },
+    {
+      "osm_id": "way/229730174",
+      "kind": "coast",
+      "tags": {
+        "natural": "coastline",
+        "source": "cadastre-dgi-fr source : Direction Générale des Impôts - Cadastre. Mise à jour : 2008"
+      }
+    },
+    {
+      "osm_id": "way/229730176",
+      "kind": "coast",
+      "tags": {
+        "natural": "coastline",
+        "source": "cadastre-dgi-fr source : Direction Générale des Impôts - Cadastre. Mise à jour : 2008"
+      }
+    },
+    {
+      "osm_id": "way/229730182",
+      "kind": "coast",
+      "tags": {
+        "natural": "coastline",
+        "source": "cadastre-dgi-fr source : Direction Générale des Impôts - Cadastre. Mise à jour : 2008"
+      }
+    },
+    {
+      "osm_id": "way/229730185",
+      "kind": "coast",
+      "tags": {
+        "natural": "coastline",
+        "source": "cadastre-dgi-fr source : Direction Générale des Impôts - Cadastre. Mise à jour : 2008"
+      }
+    },
+    {
+      "osm_id": "way/236487110",
+      "kind": "vegetation",
+      "tags": {
+        "CLC:code": "312",
+        "CLC:id": "FR-267561",
+        "CLC:year": "2006",
+        "landuse": "forest",
+        "leaf_type": "needleleaved",
+        "source": "Union européenne - SOeS, CORINE Land Cover, 2006."
+      }
+    },
+    {
+      "osm_id": "way/237168162",
+      "kind": "coast",
+      "tags": {
+        "natural": "coastline",
+        "source": "cadastre-dgi-fr source : Direction Générale des Impôts - Cadastre. Mise à jour : 2008"
+      }
+    },
+    {
+      "osm_id": "way/237168174",
+      "kind": "coast",
+      "tags": {
+        "natural": "coastline",
+        "source": "cadastre-dgi-fr source : Direction Générale des Impôts - Cadastre. Mise à jour : 2008"
+      }
+    },
+    {
+      "osm_id": "way/237168177",
+      "kind": "coast",
+      "tags": {
+        "natural": "coastline",
+        "source": "cadastre-dgi-fr source : Direction Générale des Impôts - Cadastre. Mise à jour : 2008"
+      }
+    },
+    {
+      "osm_id": "way/237168178",
+      "kind": "coast",
+      "tags": {
+        "natural": "coastline",
+        "source": "cadastre-dgi-fr source : Direction Générale des Impôts - Cadastre. Mise à jour : 2008"
+      }
+    },
+    {
+      "osm_id": "way/250305979",
+      "kind": "urban",
+      "tags": {
+        "landuse": "residential"
+      }
+    },
+    {
+      "osm_id": "way/335369616",
+      "kind": "pontoon",
+      "tags": {
+        "man_made": "pier"
+      }
+    },
+    {
+      "osm_id": "way/358830079",
+      "kind": "pontoon",
+      "tags": {
+        "access": "private",
+        "man_made": "pier",
+        "mooring": "yes"
+      }
+    },
+    {
+      "osm_id": "way/358830080",
+      "kind": "pontoon",
+      "tags": {
+        "man_made": "pier"
+      }
+    },
+    {
+      "osm_id": "way/358830082",
+      "kind": "pontoon",
+      "tags": {
+        "floating": "yes",
+        "man_made": "pier",
+        "mooring": "private"
+      }
+    },
+    {
+      "osm_id": "way/358830083",
+      "kind": "pontoon",
+      "tags": {
+        "access": "private",
+        "man_made": "pier",
+        "mooring": "yes"
+      }
+    },
+    {
+      "osm_id": "way/358843448",
+      "kind": "pontoon",
+      "tags": {
+        "man_made": "pier"
+      }
+    },
+    {
+      "osm_id": "way/358843449",
+      "kind": "pontoon",
+      "tags": {
+        "area": "yes",
+        "man_made": "pier"
+      }
+    },
+    {
+      "osm_id": "way/358843450",
+      "kind": "pontoon",
+      "tags": {
+        "area": "yes",
+        "man_made": "pier"
+      }
+    },
+    {
+      "osm_id": "way/358843451",
+      "kind": "pontoon",
+      "tags": {
+        "area": "yes",
+        "man_made": "pier"
+      }
+    },
+    {
+      "osm_id": "way/618356968",
+      "kind": "urban",
+      "tags": {
+        "description": "This is a gated community.",
+        "landuse": "residential",
+        "name": "Les Terres Marines",
+        "place": "neighbourhood",
+        "residential": "gated"
+      }
+    },
+    {
+      "osm_id": "way/1147420167",
+      "kind": "pontoon",
+      "tags": {
+        "man_made": "pier"
+      }
+    },
+    {
+      "osm_id": "way/1147420168",
+      "kind": "pontoon",
+      "tags": {
+        "man_made": "pier"
+      }
+    },
+    {
+      "osm_id": "way/1147420169",
+      "kind": "pontoon",
+      "tags": {
+        "man_made": "pier"
+      }
+    },
+    {
+      "osm_id": "way/1147420170",
+      "kind": "pontoon",
+      "tags": {
+        "man_made": "pier"
+      }
+    },
+    {
+      "osm_id": "way/1476570648",
+      "kind": "vegetation",
+      "tags": {
+        "CLC:code": "312",
+        "CLC:id": "FR-267561",
+        "CLC:year": "2006",
+        "landuse": "forest",
+        "leaf_type": "needleleaved",
+        "source": "Union européenne - SOeS, CORINE Land Cover, 2006."
+      }
+    },
+    {
+      "osm_id": "way/1476570670",
+      "kind": "urban",
+      "tags": {
+        "landuse": "residential"
+      }
+    },
+    {
+      "osm_id": "way/1476589887",
+      "kind": "urban",
+      "tags": {
+        "landuse": "residential"
+      }
+    },
+    {
+      "osm_id": "way/1476589888",
+      "kind": "urban",
+      "tags": {
+        "landuse": "residential"
+      }
+    },
+    {
+      "osm_id": "way/1476589892",
+      "kind": "urban",
+      "tags": {
+        "landuse": "residential"
+      }
+    },
+    {
+      "osm_id": "way/1476589893",
+      "kind": "urban",
+      "tags": {
+        "landuse": "residential"
+      }
+    },
+    {
+      "osm_id": "way/1476589894",
+      "kind": "urban",
+      "tags": {
+        "landuse": "residential"
+      }
+    },
+    {
+      "osm_id": "way/1476589895",
+      "kind": "urban",
+      "tags": {
+        "landuse": "residential"
+      }
+    },
+    {
+      "osm_id": "way/1476589897",
+      "kind": "vegetation",
+      "tags": {
+        "CLC:code": "312",
+        "CLC:id": "FR-267561",
+        "CLC:year": "2006",
+        "landuse": "forest",
+        "leaf_type": "needleleaved",
+        "source": "Union européenne - SOeS, CORINE Land Cover, 2006."
+      }
+    },
+    {
+      "osm_id": "way/1476589898",
+      "kind": "urban",
+      "tags": {
+        "landuse": "residential"
+      }
+    },
+    {
+      "osm_id": "way/1476589899",
+      "kind": "urban",
+      "tags": {
+        "landuse": "residential"
+      }
+    },
+    {
+      "osm_id": "way/1476589900",
+      "kind": "urban",
+      "tags": {
+        "landuse": "residential"
+      }
+    },
+    {
+      "osm_id": "way/1476589938",
+      "kind": "urban",
+      "tags": {
+        "landuse": "residential"
+      }
+    },
+    {
+      "osm_id": "way/1477732473",
+      "kind": "vegetation",
+      "tags": {
+        "landuse": "forest"
+      }
+    },
+    {
+      "osm_id": "way/1480365914",
+      "kind": "urban",
+      "tags": {
+        "landuse": "residential"
+      }
+    },
+    {
+      "osm_id": "way/1480365915",
+      "kind": "urban",
+      "tags": {
+        "landuse": "residential"
+      }
+    },
+    {
+      "osm_id": "way/1480365916",
+      "kind": "vegetation",
+      "tags": {
+        "landuse": "forest"
+      }
+    },
+    {
+      "osm_id": "way/1480365917",
+      "kind": "vegetation",
+      "tags": {
+        "landuse": "forest"
+      }
+    },
+    {
+      "osm_id": "way/1480365931",
+      "kind": "urban",
+      "tags": {
+        "landuse": "residential"
+      }
+    },
+    {
+      "osm_id": "way/1480365951",
+      "kind": "vegetation",
+      "tags": {
+        "landuse": "forest"
+      }
+    },
+    {
+      "osm_id": "way/1481322489",
+      "kind": "breakwater",
+      "tags": {
+        "man_made": "groyne"
+      }
+    },
+    {
+      "osm_id": "way/1481773643",
+      "kind": "urban",
+      "tags": {
+        "landuse": "residential"
+      }
+    },
+    {
+      "osm_id": "way/1481773667",
+      "kind": "urban",
+      "tags": {
+        "landuse": "residential"
+      }
+    },
+    {
+      "osm_id": "way/1481773669",
+      "kind": "urban",
+      "tags": {
+        "landuse": "residential"
+      }
+    },
+    {
+      "osm_id": "way/1481773670",
+      "kind": "urban",
+      "tags": {
+        "landuse": "residential"
+      }
+    },
+    {
+      "osm_id": "way/1481773671",
+      "kind": "urban",
+      "tags": {
+        "landuse": "residential"
+      }
+    },
+    {
+      "osm_id": "way/1481773672",
+      "kind": "urban",
+      "tags": {
+        "landuse": "residential"
+      }
+    },
+    {
+      "osm_id": "way/1481773673",
+      "kind": "urban",
+      "tags": {
+        "landuse": "residential"
+      }
+    },
+    {
+      "osm_id": "way/1481773674",
+      "kind": "urban",
+      "tags": {
+        "landuse": "residential"
+      }
+    },
+    {
+      "osm_id": "way/1481773675",
+      "kind": "urban",
+      "tags": {
+        "landuse": "residential"
+      }
+    },
+    {
+      "osm_id": "way/1481773676",
+      "kind": "urban",
+      "tags": {
+        "landuse": "residential"
+      }
+    },
+    {
+      "osm_id": "way/1482525724",
+      "kind": "urban",
+      "tags": {
+        "landuse": "residential"
+      }
+    },
+    {
+      "osm_id": "way/1482525725",
+      "kind": "urban",
+      "tags": {
+        "landuse": "residential"
+      }
+    },
+    {
+      "osm_id": "way/1482525726",
+      "kind": "urban",
+      "tags": {
+        "landuse": "residential"
+      }
+    },
+    {
+      "osm_id": "way/1482525727",
+      "kind": "urban",
+      "tags": {
+        "landuse": "residential"
+      }
+    },
+    {
+      "osm_id": "way/1482525728",
+      "kind": "urban",
+      "tags": {
+        "landuse": "residential"
+      }
+    },
+    {
+      "osm_id": "way/1482525729",
+      "kind": "urban",
+      "tags": {
+        "landuse": "residential"
+      }
+    },
+    {
+      "osm_id": "way/1482525730",
+      "kind": "urban",
+      "tags": {
+        "landuse": "residential"
+      }
+    },
+    {
+      "osm_id": "way/1482525731",
+      "kind": "urban",
+      "tags": {
+        "landuse": "residential"
+      }
+    },
+    {
+      "osm_id": "way/1482525732",
+      "kind": "urban",
+      "tags": {
+        "landuse": "residential"
+      }
+    },
+    {
+      "osm_id": "way/1482525735",
+      "kind": "urban",
+      "tags": {
+        "landuse": "residential"
+      }
+    },
+    {
+      "osm_id": "way/1482525736",
+      "kind": "urban",
+      "tags": {
+        "landuse": "residential"
+      }
+    },
+    {
+      "osm_id": "way/1482525737",
+      "kind": "urban",
+      "tags": {
+        "landuse": "residential"
+      }
+    },
+    {
+      "osm_id": "way/1482525739",
+      "kind": "urban",
+      "tags": {
+        "landuse": "residential"
+      }
+    },
+    {
+      "osm_id": "way/1482525741",
+      "kind": "urban",
+      "tags": {
+        "landuse": "residential"
+      }
+    },
+    {
+      "osm_id": "way/1482525742",
+      "kind": "urban",
+      "tags": {
+        "landuse": "residential"
+      }
+    },
+    {
+      "osm_id": "way/1482525743",
+      "kind": "urban",
+      "tags": {
+        "landuse": "residential"
+      }
+    },
+    {
+      "osm_id": "way/1482525744",
+      "kind": "urban",
+      "tags": {
+        "landuse": "residential"
+      }
+    },
+    {
+      "osm_id": "way/1482525745",
+      "kind": "urban",
+      "tags": {
+        "landuse": "residential"
+      }
+    },
+    {
+      "osm_id": "way/1482525746",
+      "kind": "urban",
+      "tags": {
+        "landuse": "residential"
+      }
+    },
+    {
+      "osm_id": "way/1482525747",
+      "kind": "urban",
+      "tags": {
+        "landuse": "residential"
+      }
+    },
+    {
+      "osm_id": "way/1482525748",
+      "kind": "urban",
+      "tags": {
+        "landuse": "residential"
+      }
+    },
+    {
+      "osm_id": "way/1482525749",
+      "kind": "urban",
+      "tags": {
+        "landuse": "residential",
+        "name": "Résidence Plein Sud"
+      }
+    },
+    {
+      "osm_id": "way/1483378071",
+      "kind": "urban",
+      "tags": {
+        "landuse": "residential"
+      }
+    },
+    {
+      "osm_id": "way/1483378104",
+      "kind": "vegetation",
+      "tags": {
+        "landuse": "forest"
+      }
+    },
+    {
+      "osm_id": "way/1484940140",
+      "kind": "urban",
+      "tags": {
+        "landuse": "residential"
+      }
+    },
+    {
+      "osm_id": "way/1484940141",
+      "kind": "urban",
+      "tags": {
+        "landuse": "residential",
+        "name": "Résidence l'Ermitage",
+        "residential": "apartments"
+      }
+    },
+    {
+      "osm_id": "way/1484940142",
+      "kind": "urban",
+      "tags": {
+        "landuse": "residential"
+      }
+    },
+    {
+      "osm_id": "way/1484940143",
+      "kind": "urban",
+      "tags": {
+        "landuse": "residential"
+      }
+    },
+    {
+      "osm_id": "way/1484940144",
+      "kind": "urban",
+      "tags": {
+        "landuse": "residential"
+      }
+    },
+    {
+      "osm_id": "way/1484940145",
+      "kind": "urban",
+      "tags": {
+        "landuse": "residential"
+      }
+    },
+    {
+      "osm_id": "way/1484940146",
+      "kind": "urban",
+      "tags": {
+        "landuse": "residential"
+      }
+    },
+    {
+      "osm_id": "way/1484940147",
+      "kind": "urban",
+      "tags": {
+        "landuse": "residential",
+        "name": "Résidence Les Hauts Cépages",
+        "residential": "apartments"
+      }
+    },
+    {
+      "osm_id": "way/1484940148",
+      "kind": "urban",
+      "tags": {
+        "landuse": "residential"
+      }
+    },
+    {
+      "osm_id": "way/1484940149",
+      "kind": "urban",
+      "tags": {
+        "landuse": "residential"
+      }
+    },
+    {
+      "osm_id": "way/1484940150",
+      "kind": "urban",
+      "tags": {
+        "landuse": "residential"
+      }
+    },
+    {
+      "osm_id": "way/1484940151",
+      "kind": "urban",
+      "tags": {
+        "landuse": "residential"
+      }
+    },
+    {
+      "osm_id": "way/1484940152",
+      "kind": "urban",
+      "tags": {
+        "landuse": "residential"
+      }
+    },
+    {
+      "osm_id": "way/1484940153",
+      "kind": "urban",
+      "tags": {
+        "landuse": "residential"
+      }
+    },
+    {
+      "osm_id": "way/1484940154",
+      "kind": "urban",
+      "tags": {
+        "landuse": "residential",
+        "name": "Résidence Maraveyre",
+        "residential": "apartments"
+      }
+    },
+    {
+      "osm_id": "way/1484940155",
+      "kind": "urban",
+      "tags": {
+        "landuse": "residential"
+      }
+    },
+    {
+      "osm_id": "way/1484940156",
+      "kind": "urban",
+      "tags": {
+        "landuse": "residential",
+        "name": "Les Résidences de la Rade",
+        "residential": "apartments"
+      }
+    },
+    {
+      "osm_id": "way/1484940157",
+      "kind": "urban",
+      "tags": {
+        "landuse": "residential"
+      }
+    },
+    {
+      "osm_id": "way/1484940159",
+      "kind": "urban",
+      "tags": {
+        "landuse": "residential"
+      }
+    },
+    {
+      "osm_id": "way/1484940160",
+      "kind": "urban",
+      "tags": {
+        "landuse": "residential"
+      }
+    },
+    {
+      "osm_id": "way/1484940162",
+      "kind": "urban",
+      "tags": {
+        "landuse": "residential"
+      }
+    },
+    {
+      "osm_id": "way/1484940163",
+      "kind": "urban",
+      "tags": {
+        "landuse": "residential"
+      }
+    },
+    {
+      "osm_id": "way/1484940164",
+      "kind": "urban",
+      "tags": {
+        "landuse": "residential"
+      }
+    },
+    {
+      "osm_id": "way/1484940165",
+      "kind": "urban",
+      "tags": {
+        "landuse": "residential"
+      }
+    },
+    {
+      "osm_id": "way/1484940166",
+      "kind": "urban",
+      "tags": {
+        "landuse": "residential",
+        "name": "Résidence du Vallat",
+        "residential": "apartments"
+      }
+    },
+    {
+      "osm_id": "way/1484940173",
+      "kind": "urban",
+      "tags": {
+        "landuse": "residential"
+      }
+    },
+    {
+      "osm_id": "way/1484940174",
+      "kind": "urban",
+      "tags": {
+        "landuse": "residential"
+      }
+    },
+    {
+      "osm_id": "way/1484940175",
+      "kind": "urban",
+      "tags": {
+        "landuse": "residential"
+      }
+    },
+    {
+      "osm_id": "way/1484940176",
+      "kind": "urban",
+      "tags": {
+        "landuse": "residential"
+      }
+    },
+    {
+      "osm_id": "way/1484940177",
+      "kind": "urban",
+      "tags": {
+        "landuse": "residential"
+      }
+    },
+    {
+      "osm_id": "way/1484940178",
+      "kind": "urban",
+      "tags": {
+        "landuse": "residential"
+      }
+    },
+    {
+      "osm_id": "way/1484940179",
+      "kind": "urban",
+      "tags": {
+        "landuse": "residential"
+      }
+    },
+    {
+      "osm_id": "way/1484940180",
+      "kind": "urban",
+      "tags": {
+        "landuse": "residential"
+      }
+    },
+    {
+      "osm_id": "way/1484940181",
+      "kind": "urban",
+      "tags": {
+        "landuse": "residential"
+      }
+    },
+    {
+      "osm_id": "way/1484940182",
+      "kind": "urban",
+      "tags": {
+        "landuse": "residential"
+      }
+    },
+    {
+      "osm_id": "way/1484940183",
+      "kind": "urban",
+      "tags": {
+        "landuse": "residential"
+      }
+    },
+    {
+      "osm_id": "way/1484940184",
+      "kind": "urban",
+      "tags": {
+        "landuse": "residential"
+      }
+    },
+    {
+      "osm_id": "way/1484940185",
+      "kind": "urban",
+      "tags": {
+        "landuse": "residential"
+      }
+    },
+    {
+      "osm_id": "way/1484940186",
+      "kind": "urban",
+      "tags": {
+        "landuse": "residential"
+      }
+    },
+    {
+      "osm_id": "way/1484940187",
+      "kind": "urban",
+      "tags": {
+        "landuse": "residential"
+      }
+    },
+    {
+      "osm_id": "way/1484940188",
+      "kind": "urban",
+      "tags": {
+        "landuse": "residential"
+      }
+    },
+    {
+      "osm_id": "way/1484940189",
+      "kind": "urban",
+      "tags": {
+        "landuse": "residential"
+      }
+    },
+    {
+      "osm_id": "way/1484940190",
+      "kind": "urban",
+      "tags": {
+        "landuse": "residential"
+      }
+    },
+    {
+      "osm_id": "way/1484940191",
+      "kind": "urban",
+      "tags": {
+        "landuse": "residential"
+      }
+    },
+    {
+      "osm_id": "way/1484940192",
+      "kind": "urban",
+      "tags": {
+        "landuse": "residential"
+      }
+    },
+    {
+      "osm_id": "way/1484940193",
+      "kind": "urban",
+      "tags": {
+        "landuse": "residential"
+      }
+    },
+    {
+      "osm_id": "way/1484940194",
+      "kind": "urban",
+      "tags": {
+        "landuse": "residential"
+      }
+    },
+    {
+      "osm_id": "way/1484940195",
+      "kind": "urban",
+      "tags": {
+        "landuse": "residential"
+      }
+    },
+    {
+      "osm_id": "way/1484940196",
+      "kind": "urban",
+      "tags": {
+        "landuse": "residential"
+      }
+    },
+    {
+      "osm_id": "way/1484949049",
+      "kind": "urban",
+      "tags": {
+        "landuse": "residential"
+      }
+    },
+    {
+      "osm_id": "way/1484949050",
+      "kind": "urban",
+      "tags": {
+        "landuse": "residential"
+      }
+    },
+    {
+      "osm_id": "way/1485350348",
+      "kind": "urban",
+      "tags": {
+        "landuse": "residential"
+      }
+    },
+    {
+      "osm_id": "way/1486503054",
+      "kind": "urban",
+      "tags": {
+        "landuse": "residential"
+      }
+    },
+    {
+      "osm_id": "way/1486608619",
+      "kind": "urban",
+      "tags": {
+        "landuse": "residential"
+      }
+    },
+    {
+      "osm_id": "way/1486608630",
+      "kind": "urban",
+      "tags": {
+        "landuse": "residential"
+      }
+    },
+    {
+      "osm_id": "way/1486849320",
+      "kind": "urban",
+      "tags": {
+        "landuse": "residential"
+      }
+    },
+    {
+      "osm_id": "way/1487761248",
+      "kind": "urban",
+      "tags": {
+        "landuse": "residential"
+      }
+    },
+    {
+      "osm_id": "way/1487761249",
+      "kind": "urban",
+      "tags": {
+        "landuse": "residential",
+        "name": "Résidence du Val d'Ore",
+        "residential": "apartments"
+      }
+    },
+    {
+      "osm_id": "way/1487761250",
+      "kind": "urban",
+      "tags": {
+        "landuse": "residential",
+        "name": "Résidence le Bosquet",
+        "residential": "apartments"
+      }
+    },
+    {
+      "osm_id": "way/1487761251",
+      "kind": "urban",
+      "tags": {
+        "landuse": "residential",
+        "name": "Résidence le Figuier Noir",
+        "residential": "apartments"
+      }
+    },
+    {
+      "osm_id": "way/1487761270",
+      "kind": "urban",
+      "tags": {
+        "landuse": "residential",
+        "name": "Résidence Villa Bestouan",
+        "residential": "apartments"
+      }
+    },
+    {
+      "osm_id": "way/1487761271",
+      "kind": "urban",
+      "tags": {
+        "landuse": "residential"
+      }
+    },
+    {
+      "osm_id": "way/1487761272",
+      "kind": "urban",
+      "tags": {
+        "landuse": "residential"
+      }
+    },
+    {
+      "osm_id": "way/1487761273",
+      "kind": "urban",
+      "tags": {
+        "landuse": "residential",
+        "name": "Résidence Super-Bestouan",
+        "residential": "apartments"
+      }
+    },
+    {
+      "osm_id": "way/1487761274",
+      "kind": "urban",
+      "tags": {
+        "landuse": "residential",
+        "name": "Résidence Grand Large",
+        "residential": "apartments"
+      }
+    },
+    {
+      "osm_id": "way/1487761278",
+      "kind": "urban",
+      "tags": {
+        "landuse": "residential"
+      }
+    },
+    {
+      "osm_id": "way/1487761279",
+      "kind": "urban",
+      "tags": {
+        "landuse": "residential"
+      }
+    },
+    {
+      "osm_id": "way/1487761281",
+      "kind": "urban",
+      "tags": {
+        "landuse": "residential"
+      }
+    },
+    {
+      "osm_id": "way/1487761285",
+      "kind": "urban",
+      "tags": {
+        "landuse": "residential",
+        "name": "Les Résidences du Monticule",
+        "residential": "apartments"
+      }
+    },
+    {
+      "osm_id": "way/1487761286",
+      "kind": "urban",
+      "tags": {
+        "landuse": "residential",
+        "name": "Résidence Kallisté",
+        "residential": "apartments"
+      }
+    },
+    {
+      "osm_id": "way/1487761287",
+      "kind": "urban",
+      "tags": {
+        "landuse": "residential"
+      }
+    },
+    {
+      "osm_id": "way/1487761288",
+      "kind": "urban",
+      "tags": {
+        "landuse": "residential",
+        "name": "Résidence l'Albatros",
+        "residential": "apartments"
+      }
+    },
+    {
+      "osm_id": "way/1487761289",
+      "kind": "urban",
+      "tags": {
+        "landuse": "residential",
+        "name": "Résidence Lou Coulet",
+        "residential": "apartments"
+      }
+    },
+    {
+      "osm_id": "way/1487761290",
+      "kind": "urban",
+      "tags": {
+        "landuse": "residential",
+        "name": "Résidence le Cézanne",
+        "residential": "apartments"
+      }
+    },
+    {
+      "osm_id": "way/1487761291",
+      "kind": "urban",
+      "tags": {
+        "landuse": "residential",
+        "name": "Résidence le Merignan",
+        "residential": "apartments"
+      }
+    },
+    {
+      "osm_id": "way/1487761292",
+      "kind": "urban",
+      "tags": {
+        "landuse": "residential",
+        "name": "Résidence Mireïo",
+        "residential": "apartments"
+      }
+    },
+    {
+      "osm_id": "way/1487761293",
+      "kind": "urban",
+      "tags": {
+        "landuse": "residential",
+        "name": "Résidence Calendaü",
+        "residential": "apartments"
+      }
+    },
+    {
+      "osm_id": "way/1487761294",
+      "kind": "urban",
+      "tags": {
+        "landuse": "residential",
+        "name": "Résidence 9 Avenue de Provence",
+        "residential": "apartments"
+      }
+    },
+    {
+      "osm_id": "way/1487761295",
+      "kind": "urban",
+      "tags": {
+        "landuse": "residential"
+      }
+    },
+    {
+      "osm_id": "way/1487761296",
+      "kind": "urban",
+      "tags": {
+        "landuse": "residential",
+        "name": "Résidence le Jardin des Hesperides",
+        "residential": "apartments"
+      }
+    },
+    {
+      "osm_id": "way/1487761297",
+      "kind": "urban",
+      "tags": {
+        "landuse": "residential",
+        "name": "Résidence le Panoramic",
+        "residential": "apartments"
+      }
+    },
+    {
+      "osm_id": "way/1487764189",
+      "kind": "urban",
+      "tags": {
+        "landuse": "residential"
+      }
+    },
+    {
+      "osm_id": "way/1487764190",
+      "kind": "urban",
+      "tags": {
+        "landuse": "residential"
+      }
+    },
+    {
+      "osm_id": "way/1487764191",
+      "kind": "urban",
+      "tags": {
+        "landuse": "residential",
+        "name": "Résidence le Cottage",
+        "residential": "apartments"
+      }
+    },
+    {
+      "osm_id": "way/1487764192",
+      "kind": "urban",
+      "tags": {
+        "landuse": "residential"
+      }
+    },
+    {
+      "osm_id": "way/1487764193",
+      "kind": "urban",
+      "tags": {
+        "landuse": "residential",
+        "name": "Résidence le Saint-Marc",
+        "residential": "apartments"
+      }
+    },
+    {
+      "osm_id": "way/1487764194",
+      "kind": "urban",
+      "tags": {
+        "landuse": "residential",
+        "name": "Résidence les Trois Caravelles",
+        "residential": "apartments"
+      }
+    },
+    {
+      "osm_id": "way/1488052064",
+      "kind": "urban",
+      "tags": {
+        "landuse": "residential"
+      }
+    },
+    {
+      "osm_id": "way/1488052065",
+      "kind": "urban",
+      "tags": {
+        "landuse": "residential"
+      }
+    },
+    {
+      "osm_id": "way/1488052066",
+      "kind": "urban",
+      "tags": {
+        "landuse": "residential"
+      }
+    },
+    {
+      "osm_id": "way/1488052067",
+      "kind": "urban",
+      "tags": {
+        "landuse": "residential",
+        "name": "Résidence la Pinède"
+      }
+    },
+    {
+      "osm_id": "way/1488662664",
+      "kind": "urban",
+      "tags": {
+        "landuse": "residential"
+      }
+    },
+    {
+      "osm_id": "way/1488662665",
+      "kind": "urban",
+      "tags": {
+        "landuse": "residential"
+      }
+    },
+    {
+      "osm_id": "way/1488662666",
+      "kind": "urban",
+      "tags": {
+        "landuse": "residential",
+        "name": "Résidence le Grand Large",
+        "residential": "apartments"
+      }
+    },
+    {
+      "osm_id": "way/1488662667",
+      "kind": "urban",
+      "tags": {
+        "landuse": "residential",
+        "name": "Résidence La Grande Bastide",
+        "name:fr": "Résidence La Grande Bastide",
+        "name:oc": "La Bastida Granda",
+        "residential": "single_family",
+        "source:name:oc": "ieo-bdtopoc"
+      }
+    },
+    {
+      "osm_id": "way/1488679093",
+      "kind": "urban",
+      "tags": {
+        "landuse": "residential",
+        "name": "Résidence Le Miramar",
+        "residential": "apartments"
+      }
+    },
+    {
+      "osm_id": "way/1488679094",
+      "kind": "urban",
+      "tags": {
+        "landuse": "residential",
+        "name": "Résidence Bellevue",
+        "residential": "single_family"
+      }
+    },
+    {
+      "osm_id": "way/1488679095",
+      "kind": "urban",
+      "tags": {
+        "landuse": "residential"
+      }
+    },
+    {
+      "osm_id": "way/1488679096",
+      "kind": "urban",
+      "tags": {
+        "landuse": "residential"
+      }
+    },
+    {
+      "osm_id": "way/1488679098",
+      "kind": "urban",
+      "tags": {
+        "landuse": "residential"
+      }
+    },
+    {
+      "osm_id": "way/1488679099",
+      "kind": "urban",
+      "tags": {
+        "landuse": "residential"
+      }
+    },
+    {
+      "osm_id": "way/1489442797",
+      "kind": "urban",
+      "tags": {
+        "landuse": "residential"
+      }
+    },
+    {
+      "osm_id": "way/1490278105",
+      "kind": "urban",
+      "tags": {
+        "landuse": "residential",
+        "name": "Résidence La Vigie de l'Arène",
+        "residential": "apartments"
+      }
+    },
+    {
+      "osm_id": "way/1490278106",
+      "kind": "urban",
+      "tags": {
+        "landuse": "residential"
+      }
+    },
+    {
+      "osm_id": "way/1491923113",
+      "kind": "urban",
+      "tags": {
+        "landuse": "residential"
+      }
+    },
+    {
+      "osm_id": "way/1491923119",
+      "kind": "urban",
+      "tags": {
+        "landuse": "residential"
+      }
+    }
+  ],
+  "osm_not_rendered": [
+    {
+      "osm_id": "way/301753502",
+      "tags": {
+        "name": "Zone Interdite aux Engins Motorisé",
+        "seamark:restricted_area:category": "kite_surfing",
+        "seamark:restricted_area:restriction": "no_boating",
+        "seamark:type": "restricted_area"
+      },
+      "reason": "No supported precise normalization; not rendered"
+    },
+    {
+      "osm_id": "relation/3080152",
+      "tags": {
+        "boundary": "protected_area",
+        "operator": "Parc National des Calanques",
+        "protect_class": "14",
+        "protection_title": "Zone de non-prélèvement",
+        "seamark:name": "Zone de non-prélèvement Cacau",
+        "seamark:precautionary_area:restriction": "no_fishing",
+        "seamark:type": "precautionary_area",
+        "type": "boundary"
+      },
+      "reason": "Relation geometry not normalized; not rendered"
+    },
+    {
+      "osm_id": "relation/3080153",
+      "tags": {
+        "boundary": "protected_area",
+        "operator": "Parc National des Calanques",
+        "protect_class": "14",
+        "protection_title": "Zone de non-prélèvement",
+        "seamark:name": "Zone de non-prélèvement Cap Soubeyran",
+        "seamark:precautionary_area:restriction": "no_fishing",
+        "seamark:type": "precautionary_area",
+        "type": "boundary"
+      },
+      "reason": "Relation geometry not normalized; not rendered"
+    }
+  ],
+  "bathymetry": {
+    "survey": "S201300200",
+    "survey_dates": [
+      "2007-09-30",
+      "2013-07-12"
+    ],
+    "points_in_bbox": 896940,
+    "wet_points": 802306,
+    "occupied_10m_cells": 34424,
+    "grid_dimensions": [
+      325,
+      390
+    ],
+    "grid_spacing_m": 10,
+    "homonim_resolution_degrees": 0.001,
+    "homonim_resolution_m_approx": 111,
+    "survey_interpolation": "10 m cell means; linear Delaunay; nearest <=20 m; all triangle edges <=40 m; no extrapolation",
+    "source_cells": {
+      "0": 66774,
+      "1": 25869,
+      "2": 34107
+    },
+    "depth_range_m": [
+      0.08115957297954887,
+      74.48473142290314
+    ],
+    "contour_count": 57,
+    "marina_water_grid_cells": 310,
+    "marina_surveyed_grid_cells": 104
+  },
+  "sources": {
+    "osm": "© OpenStreetMap contributors · ODbL 1.0",
+    "homonim": "Shom, 2015. MNT Golfe du Lion–Côte d’Azur (HOMONIM), PBMA · doi:10.17183/MNT_MED100m_GDL_CA_HOMONIM_WGS84",
+    "survey": "Shom, levé S201300200 (2007–2013), ZH assimilé PBMA · doi:10.17183/S201300200 · Licence Ouverte 2.0"
+  },
+  "download": {
+    "url": "https://services.data.shom.fr/INSPIRE/telechargement/prepackageGroup/LEVES_BATHY_APRES_2005_PACK_DL/prepackage/S201300200/file/S201300200.7z",
+    "bytes_transferred": 845989700,
+    "source_points_scanned": 99611561,
+    "bbox": [
+      5.515,
+      43.19,
+      5.555,
+      43.225
+    ],
+    "method": "Range stream + XYZ bbox filter; no global XYZ stored"
+  },
+  "coordinates": [
+    [
+      5.515,
+      43.225
+    ],
+    [
+      5.555,
+      43.225
+    ],
+    [
+      5.555,
+      43.19
+    ],
+    [
+      5.515,
+      43.19
+    ]
+  ]
+}

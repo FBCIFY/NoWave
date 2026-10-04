@@ -1,0 +1,29 @@
+{
+  "coordinates": [
+    [
+      5.2734375,
+      43.389081939117496
+    ],
+    [
+      5.712890625,
+      43.389081939117496
+    ],
+    [
+      5.712890625,
+      43.06888777416962
+    ],
+    [
+      5.2734375,
+      43.06888777416962
+    ]
+  ],
+  "source": "https://s3.amazonaws.com/elevation-tiles-prod/terrarium/{z}/{x}/{y}.png",
+  "method": "Terrarium elevation <= 0 metres, 3-pixel morphological water closing; preview only, not a surveyed coastline",
+  "zoom": 12,
+  "tiles": [
+    2108,
+    1499,
+    5,
+    5
+  ]
+}

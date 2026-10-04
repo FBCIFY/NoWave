@@ -2,4 +2,5 @@ __pycache__
 .venv
 *.mbtiles
 tests
-tools
+tools/*
+!tools/build_style.py

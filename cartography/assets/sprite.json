@@ -195,274 +195,309 @@
     "height": 40,
     "pixelRatio": 1
   },
-  "foreshore-pattern": {
+  "landmark-tower": {
     "x": 160,
     "y": 120,
     "width": 40,
     "height": 40,
     "pixelRatio": 1
   },
-  "shoal-pattern": {
+  "landmark-monument": {
     "x": 200,
     "y": 120,
     "width": 40,
     "height": 40,
     "pixelRatio": 1
   },
-  "reef-pattern": {
+  "landmark-chimney": {
     "x": 240,
     "y": 120,
     "width": 40,
     "height": 40,
     "pixelRatio": 1
   },
-  "lateral-port~cone": {
+  "landmark-pylon": {
     "x": 280,
     "y": 120,
     "width": 40,
     "height": 40,
     "pixelRatio": 1
   },
-  "lateral-port~can": {
+  "danger-rock": {
     "x": 0,
+    "y": 160,
+    "width": 40,
+    "height": 40,
+    "pixelRatio": 1
+  },
+  "foreshore-pattern": {
+    "x": 40,
+    "y": 160,
+    "width": 40,
+    "height": 40,
+    "pixelRatio": 1
+  },
+  "shoal-pattern": {
+    "x": 80,
+    "y": 160,
+    "width": 40,
+    "height": 40,
+    "pixelRatio": 1
+  },
+  "reef-pattern": {
+    "x": 120,
+    "y": 160,
+    "width": 40,
+    "height": 40,
+    "pixelRatio": 1
+  },
+  "lateral-port~cone": {
+    "x": 160,
+    "y": 160,
+    "width": 40,
+    "height": 40,
+    "pixelRatio": 1
+  },
+  "lateral-port~can": {
+    "x": 200,
     "y": 160,
     "width": 40,
     "height": 40,
     "pixelRatio": 1
   },
   "lateral-port~sphere": {
-    "x": 40,
+    "x": 240,
     "y": 160,
     "width": 40,
     "height": 40,
     "pixelRatio": 1
   },
   "lateral-port~spar": {
-    "x": 80,
+    "x": 280,
     "y": 160,
     "width": 40,
     "height": 40,
     "pixelRatio": 1
   },
   "lateral-starboard~cone": {
-    "x": 120,
-    "y": 160,
+    "x": 0,
+    "y": 200,
     "width": 40,
     "height": 40,
     "pixelRatio": 1
   },
   "lateral-starboard~can": {
-    "x": 160,
-    "y": 160,
+    "x": 40,
+    "y": 200,
     "width": 40,
     "height": 40,
     "pixelRatio": 1
   },
   "lateral-starboard~sphere": {
-    "x": 200,
-    "y": 160,
+    "x": 80,
+    "y": 200,
     "width": 40,
     "height": 40,
     "pixelRatio": 1
   },
   "lateral-starboard~spar": {
-    "x": 240,
-    "y": 160,
+    "x": 120,
+    "y": 200,
     "width": 40,
     "height": 40,
     "pixelRatio": 1
   },
   "cardinal-n~cone": {
-    "x": 280,
-    "y": 160,
+    "x": 160,
+    "y": 200,
     "width": 40,
     "height": 40,
     "pixelRatio": 1
   },
   "cardinal-n~can": {
-    "x": 0,
+    "x": 200,
     "y": 200,
     "width": 40,
     "height": 40,
     "pixelRatio": 1
   },
   "cardinal-n~sphere": {
-    "x": 40,
+    "x": 240,
     "y": 200,
     "width": 40,
     "height": 40,
     "pixelRatio": 1
   },
   "cardinal-n~spar": {
-    "x": 80,
+    "x": 280,
     "y": 200,
     "width": 40,
     "height": 40,
     "pixelRatio": 1
   },
   "cardinal-e~cone": {
-    "x": 120,
-    "y": 200,
+    "x": 0,
+    "y": 240,
     "width": 40,
     "height": 40,
     "pixelRatio": 1
   },
   "cardinal-e~can": {
-    "x": 160,
-    "y": 200,
+    "x": 40,
+    "y": 240,
     "width": 40,
     "height": 40,
     "pixelRatio": 1
   },
   "cardinal-e~sphere": {
-    "x": 200,
-    "y": 200,
+    "x": 80,
+    "y": 240,
     "width": 40,
     "height": 40,
     "pixelRatio": 1
   },
   "cardinal-e~spar": {
-    "x": 240,
-    "y": 200,
+    "x": 120,
+    "y": 240,
     "width": 40,
     "height": 40,
     "pixelRatio": 1
   },
   "cardinal-s~cone": {
-    "x": 280,
-    "y": 200,
+    "x": 160,
+    "y": 240,
     "width": 40,
     "height": 40,
     "pixelRatio": 1
   },
   "cardinal-s~can": {
-    "x": 0,
+    "x": 200,
     "y": 240,
     "width": 40,
     "height": 40,
     "pixelRatio": 1
   },
   "cardinal-s~sphere": {
-    "x": 40,
+    "x": 240,
     "y": 240,
     "width": 40,
     "height": 40,
     "pixelRatio": 1
   },
   "cardinal-s~spar": {
-    "x": 80,
+    "x": 280,
     "y": 240,
     "width": 40,
     "height": 40,
     "pixelRatio": 1
   },
   "cardinal-w~cone": {
-    "x": 120,
-    "y": 240,
+    "x": 0,
+    "y": 280,
     "width": 40,
     "height": 40,
     "pixelRatio": 1
   },
   "cardinal-w~can": {
-    "x": 160,
-    "y": 240,
+    "x": 40,
+    "y": 280,
     "width": 40,
     "height": 40,
     "pixelRatio": 1
   },
   "cardinal-w~sphere": {
-    "x": 200,
-    "y": 240,
+    "x": 80,
+    "y": 280,
     "width": 40,
     "height": 40,
     "pixelRatio": 1
   },
   "cardinal-w~spar": {
-    "x": 240,
-    "y": 240,
+    "x": 120,
+    "y": 280,
     "width": 40,
     "height": 40,
     "pixelRatio": 1
   },
   "safe-water~cone": {
-    "x": 280,
-    "y": 240,
+    "x": 160,
+    "y": 280,
     "width": 40,
     "height": 40,
     "pixelRatio": 1
   },
   "safe-water~can": {
-    "x": 0,
+    "x": 200,
     "y": 280,
     "width": 40,
     "height": 40,
     "pixelRatio": 1
   },
   "safe-water~sphere": {
-    "x": 40,
-    "y": 280,
-    "width": 40,
-    "height": 40,
-    "pixelRatio": 1
-  },
-  "safe-water~spar": {
-    "x": 80,
-    "y": 280,
-    "width": 40,
-    "height": 40,
-    "pixelRatio": 1
-  },
-  "special~cone": {
-    "x": 120,
-    "y": 280,
-    "width": 40,
-    "height": 40,
-    "pixelRatio": 1
-  },
-  "special~can": {
-    "x": 160,
-    "y": 280,
-    "width": 40,
-    "height": 40,
-    "pixelRatio": 1
-  },
-  "special~sphere": {
-    "x": 200,
-    "y": 280,
-    "width": 40,
-    "height": 40,
-    "pixelRatio": 1
-  },
-  "special~spar": {
     "x": 240,
     "y": 280,
     "width": 40,
     "height": 40,
     "pixelRatio": 1
   },
-  "isolated-danger~cone": {
+  "safe-water~spar": {
     "x": 280,
     "y": 280,
     "width": 40,
     "height": 40,
     "pixelRatio": 1
   },
-  "isolated-danger~can": {
+  "special~cone": {
     "x": 0,
     "y": 320,
     "width": 40,
     "height": 40,
     "pixelRatio": 1
   },
-  "isolated-danger~sphere": {
+  "special~can": {
     "x": 40,
     "y": 320,
     "width": 40,
     "height": 40,
     "pixelRatio": 1
   },
-  "isolated-danger~spar": {
+  "special~sphere": {
     "x": 80,
+    "y": 320,
+    "width": 40,
+    "height": 40,
+    "pixelRatio": 1
+  },
+  "special~spar": {
+    "x": 120,
+    "y": 320,
+    "width": 40,
+    "height": 40,
+    "pixelRatio": 1
+  },
+  "isolated-danger~cone": {
+    "x": 160,
+    "y": 320,
+    "width": 40,
+    "height": 40,
+    "pixelRatio": 1
+  },
+  "isolated-danger~can": {
+    "x": 200,
+    "y": 320,
+    "width": 40,
+    "height": 40,
+    "pixelRatio": 1
+  },
+  "isolated-danger~sphere": {
+    "x": 240,
+    "y": 320,
+    "width": 40,
+    "height": 40,
+    "pixelRatio": 1
+  },
+  "isolated-danger~spar": {
+    "x": 280,
     "y": 320,
     "width": 40,
     "height": 40,

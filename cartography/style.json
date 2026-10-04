@@ -3,7 +3,8 @@
   "name": "NoWave · Jour",
   "metadata": {
     "nowave:data_mode": "DEMO_FICTIVE",
-    "nowave:schema": 1
+    "nowave:schema": 1,
+    "nowave:relief_label": "réel Mapzen/AWS (externe)"
   },
   "center": [
     0.015,
@@ -20,7 +21,7 @@
     "features": {
       "type": "geojson",
       "data": "{base}/data/demo.geojson",
-      "attribution": "NoWave — scène entièrement fictive"
+      "attribution": "NoWave — terre, bathymétrie et objets nautiques fictifs"
     },
     "bathymetry": {
       "type": "image",
@@ -45,8 +46,18 @@
       ]
     },
     "relief": {
+      "type": "raster-dem",
+      "tiles": [
+        "https://s3.amazonaws.com/elevation-tiles-prod/terrarium/{z}/{x}/{y}.png"
+      ],
+      "tileSize": 256,
+      "encoding": "terrarium",
+      "maxzoom": 15,
+      "attribution": "Terrain: Mapzen/Tilezen · AWS Open Data · EU-DEM/Copernicus · USGS · NOAA · <a href=\"{base}/assets/mapzen-attribution.html\">Terrain data credits</a>"
+    },
+    "relief-sea-mask": {
       "type": "image",
-      "url": "{base}/assets/demo-relief.png",
+      "url": "{base}/assets/demo-sea-mask.png",
       "coordinates": [
         [
           -0.3,
@@ -65,6 +76,62 @@
           -0.3
         ]
       ]
+    },
+    "relief-outside": {
+      "type": "geojson",
+      "data": {
+        "type": "Feature",
+        "properties": {},
+        "geometry": {
+          "type": "Polygon",
+          "coordinates": [
+            [
+              [
+                -180,
+                -85.051129
+              ],
+              [
+                180,
+                -85.051129
+              ],
+              [
+                180,
+                85.051129
+              ],
+              [
+                -180,
+                85.051129
+              ],
+              [
+                -180,
+                -85.051129
+              ]
+            ],
+            [
+              [
+                -0.3,
+                0.3
+              ],
+              [
+                0.3,
+                0.3
+              ],
+              [
+                0.3,
+                -0.3
+              ],
+              [
+                -0.3,
+                -0.3
+              ],
+              [
+                -0.3,
+                0.3
+              ]
+            ]
+          ]
+        }
+      }
     }
   },
   "layers": [
@@ -144,10 +211,56 @@
       }
     },
     {
+      "id": "land-relief",
+      "type": "hillshade",
+      "source": "relief",
+      "paint": {
+        "hillshade-exaggeration": [
+          "interpolate",
+          [
+            "linear"
+          ],
+          [
+            "zoom"
+          ],
+          7,
+          0,
+          10,
+          0.15,
+          14,
+          0.2,
+          18,
+          0.22
+        ],
+        "hillshade-shadow-color": "#ACADA5",
+        "hillshade-highlight-color": "#F1EFE9",
+        "hillshade-accent-color": "#E5E2D9"
+      }
+    },
+    {
+      "id": "relief-outside-scene",
+      "type": "fill",
+      "source": "relief-outside",
+      "paint": {
+        "fill-color": "#0C2F50",
+        "fill-antialias": false
+      }
+    },
+    {
+      "id": "relief-sea-mask",
+      "type": "raster",
+      "source": "relief-sea-mask",
+      "paint": {
+        "raster-opacity": 1,
+        "raster-fade-duration": 0,
+        "raster-resampling": "linear"
+      }
+    },
+    {
       "id": "contours",
       "type": "line",
       "source": "features",
-      "minzoom": 9,
+      "minzoom": 6,
       "filter": [
         "all",
         [
@@ -161,24 +274,68 @@
         [
           "any",
           [
-            "<",
+            "all",
             [
-              "get",
-              "depth_m"
+              ">=",
+              [
+                "get",
+                "depth_m"
+              ],
+              100
             ],
-            100
+            [
+              ">=",
+              [
+                "zoom"
+              ],
+              7
+            ]
+          ],
+          [
+            "all",
+            [
+              "in",
+              [
+                "get",
+                "depth_m"
+              ],
+              [
+                "literal",
+                [
+                  10,
+                  20,
+                  50
+                ]
+              ]
+            ],
+            [
+              ">=",
+              [
+                "zoom"
+              ],
+              9
+            ]
           ],
           [
             ">=",
             [
               "zoom"
             ],
-            11
+            13
           ]
         ]
       ],
       "paint": {
-        "line-color": "#FFFFFF",
+        "line-color": [
+          "step",
+          [
+            "get",
+            "depth_m"
+          ],
+          "#81AABD",
+          5,
+          "#EAF7FD"
+        ],
         "line-width": [
           "interpolate",
           [
@@ -187,10 +344,10 @@
           [
             "zoom"
           ],
-          9,
+          6,
           0.3,
           17,
-          0.65
+          0.72
         ],
         "line-opacity": [
           "interpolate",
@@ -200,10 +357,14 @@
           [
             "zoom"
           ],
-          9,
+          6,
           0,
-          11,
-          0.33
+          10,
+          0.18,
+          13,
+          0.28,
+          17,
+          0.38
         ]
       },
       "layout": {
@@ -215,17 +376,59 @@
       "id": "contour-labels",
       "type": "symbol",
       "source": "features",
-      "minzoom": 11,
+      "minzoom": 10,
       "filter": [
-        "==",
+        "all",
         [
-          "get",
-          "kind"
+          "==",
+          [
+            "get",
+            "kind"
+          ],
+          "contour"
         ],
-        "contour"
+        [
+          "any",
+          [
+            "in",
+            [
+              "get",
+              "depth_m"
+            ],
+            [
+              "literal",
+              [
+                5,
+                10,
+                20,
+                50,
+                100,
+                200,
+                500,
+                1000
+              ]
+            ]
+          ],
+          [
+            ">=",
+            [
+              "zoom"
+            ],
+            16
+          ]
+        ]
       ],
       "paint": {
-        "text-color": "#FFFFFF",
+        "text-color": [
+          "step",
+          [
+            "get",
+            "depth_m"
+          ],
+          "#638A9E",
+          10,
+          "#EAF7FD"
+        ],
         "text-opacity": [
           "interpolate",
           [
@@ -234,25 +437,34 @@
           [
             "zoom"
           ],
+          10,
+          0,
           11,
           0,
-          12.5,
-          1
+          12,
+          0.55,
+          18,
+          0.72
         ],
-        "text-halo-color": "#337FAF",
-        "text-halo-width": 0.5
+        "text-halo-color": [
+          "step",
+          [
+            "get",
+            "depth_m"
+          ],
+          "#F4FBFF",
+          10,
+          "#337FAF"
+        ],
+        "text-halo-width": 0.35
       },
       "layout": {
         "text-field": [
-          "concat",
+          "to-string",
           [
-            "to-string",
-            [
-              "get",
-              "depth_m"
-            ]
-          ],
-          " m"
+            "get",
+            "depth_m"
+          ]
         ],
         "text-font": [
           "Open Sans Semibold"
@@ -265,17 +477,137 @@
           [
             "zoom"
           ],
-          11,
+          10,
           10,
           18,
           11
         ],
         "symbol-placement": "line",
-        "symbol-spacing": 240,
+        "symbol-spacing": 580,
         "text-padding": 10,
         "text-offset": [
           0,
           0
+        ]
+      }
+    },
+    {
+      "id": "shoal-tint",
+      "type": "fill",
+      "source": "features",
+      "minzoom": 11,
+      "filter": [
+        "==",
+        [
+          "get",
+          "kind"
+        ],
+        "shoal"
+      ],
+      "paint": {
+        "fill-color": "#667D8B",
+        "fill-opacity": [
+          "interpolate",
+          [
+            "linear"
+          ],
+          [
+            "zoom"
+          ],
+          11,
+          0,
+          13,
+          0.035
+        ]
+      }
+    },
+    {
+      "id": "shoal-texture",
+      "type": "fill",
+      "source": "features",
+      "minzoom": 11,
+      "filter": [
+        "==",
+        [
+          "get",
+          "kind"
+        ],
+        "shoal"
+      ],
+      "paint": {
+        "fill-pattern": "shoal-pattern",
+        "fill-opacity": [
+          "interpolate",
+          [
+            "linear"
+          ],
+          [
+            "zoom"
+          ],
+          11,
+          0,
+          15,
+          0.35
+        ]
+      }
+    },
+    {
+      "id": "reef-tint",
+      "type": "fill",
+      "source": "features",
+      "minzoom": 11,
+      "filter": [
+        "==",
+        [
+          "get",
+          "kind"
+        ],
+        "reef"
+      ],
+      "paint": {
+        "fill-color": "#566F7E",
+        "fill-opacity": [
+          "interpolate",
+          [
+            "linear"
+          ],
+          [
+            "zoom"
+          ],
+          11,
+          0,
+          13,
+          0.065
+        ]
+      }
+    },
+    {
+      "id": "reef-texture",
+      "type": "fill",
+      "source": "features",
+      "minzoom": 11,
+      "filter": [
+        "==",
+        [
+          "get",
+          "kind"
+        ],
+        "reef"
+      ],
+      "paint": {
+        "fill-pattern": "reef-pattern",
+        "fill-opacity": [
+          "interpolate",
+          [
+            "linear"
+          ],
+          [
+            "zoom"
+          ],
+          11,
+          0,
+          15,
+          0.55
         ]
       }
     },
@@ -306,27 +638,6 @@
           17,
           "#E5E2D9"
         ]
-      }
-    },
-    {
-      "id": "land-relief",
-      "type": "raster",
-      "source": "relief",
-      "paint": {
-        "raster-opacity": [
-          "interpolate",
-          [
-            "linear"
-          ],
-          [
-            "zoom"
-          ],
-          8,
-          0,
-          13,
-          0.32
-        ],
-        "raster-fade-duration": 0
       }
     },
     {
@@ -576,7 +887,7 @@
       "id": "basins",
       "type": "fill",
       "source": "features",
-      "minzoom": 10,
+      "minzoom": 14,
       "filter": [
         "==",
         [
@@ -595,18 +906,18 @@
           [
             "zoom"
           ],
-          10,
+          14,
           0,
-          12,
-          0.8
+          16,
+          1
         ]
       }
     },
     {
-      "id": "breakwaters",
+      "id": "breakwater-casing",
       "type": "line",
       "source": "features",
-      "minzoom": 10,
+      "minzoom": 12,
       "filter": [
         "==",
         [
@@ -625,57 +936,10 @@
           [
             "zoom"
           ],
-          10,
-          0.3,
-          17,
-          2.3
-        ],
-        "line-opacity": [
-          "interpolate",
-          [
-            "linear"
-          ],
-          [
-            "zoom"
-          ],
-          10,
-          0,
-          12,
-          0.9
-        ]
-      },
-      "layout": {
-        "line-cap": "round",
-        "line-join": "round"
-      }
-    },
-    {
-      "id": "quays",
-      "type": "line",
-      "source": "features",
-      "minzoom": 12,
-      "filter": [
-        "==",
-        [
-          "get",
-          "kind"
-        ],
-        "quay"
-      ],
-      "paint": {
-        "line-color": "#82919A",
-        "line-width": [
-          "interpolate",
-          [
-            "linear"
-          ],
-          [
-            "zoom"
-          ],
           12,
           0.3,
           17,
-          1.8
+          10
         ],
         "line-opacity": [
           "interpolate",
@@ -688,6 +952,147 @@
           12,
           0,
           14,
+          0.95
+        ]
+      },
+      "layout": {
+        "line-cap": "round",
+        "line-join": "round"
+      }
+    },
+    {
+      "id": "breakwaters",
+      "type": "line",
+      "source": "features",
+      "minzoom": 12,
+      "filter": [
+        "==",
+        [
+          "get",
+          "kind"
+        ],
+        "breakwater"
+      ],
+      "paint": {
+        "line-color": "#E5E2D9",
+        "line-width": [
+          "interpolate",
+          [
+            "linear"
+          ],
+          [
+            "zoom"
+          ],
+          12,
+          0.3,
+          17,
+          7
+        ],
+        "line-opacity": [
+          "interpolate",
+          [
+            "linear"
+          ],
+          [
+            "zoom"
+          ],
+          12,
+          0,
+          14,
+          1
+        ]
+      },
+      "layout": {
+        "line-cap": "round",
+        "line-join": "round"
+      }
+    },
+    {
+      "id": "quays",
+      "type": "line",
+      "source": "features",
+      "minzoom": 14,
+      "filter": [
+        "==",
+        [
+          "get",
+          "kind"
+        ],
+        "quay"
+      ],
+      "paint": {
+        "line-color": "#6B8794",
+        "line-width": [
+          "interpolate",
+          [
+            "linear"
+          ],
+          [
+            "zoom"
+          ],
+          14,
+          0.3,
+          17,
+          2
+        ],
+        "line-opacity": [
+          "interpolate",
+          [
+            "linear"
+          ],
+          [
+            "zoom"
+          ],
+          14,
+          0,
+          16,
+          0.9
+        ]
+      },
+      "layout": {
+        "line-cap": "round",
+        "line-join": "round"
+      }
+    },
+    {
+      "id": "pontoon-casing",
+      "type": "line",
+      "source": "features",
+      "minzoom": 14,
+      "filter": [
+        "==",
+        [
+          "get",
+          "kind"
+        ],
+        "pontoon"
+      ],
+      "paint": {
+        "line-color": "#708C99",
+        "line-width": [
+          "interpolate",
+          [
+            "linear"
+          ],
+          [
+            "zoom"
+          ],
+          14,
+          0.3,
+          17,
+          3.5
+        ],
+        "line-opacity": [
+          "interpolate",
+          [
+            "linear"
+          ],
+          [
+            "zoom"
+          ],
+          14,
+          0,
+          16,
           0.9
         ]
       },
@@ -700,7 +1105,7 @@
       "id": "pontoons",
       "type": "line",
       "source": "features",
-      "minzoom": 15,
+      "minzoom": 14,
       "filter": [
         "==",
         [
@@ -710,7 +1115,7 @@
         "pontoon"
       ],
       "paint": {
-        "line-color": "#9AA8AF",
+        "line-color": "#F4FBFF",
         "line-width": [
           "interpolate",
           [
@@ -719,10 +1124,10 @@
           [
             "zoom"
           ],
-          15,
+          14,
           0.3,
           17,
-          1.3
+          1.8
         ],
         "line-opacity": [
           "interpolate",
@@ -732,10 +1137,10 @@
           [
             "zoom"
           ],
-          15,
+          14,
           0,
-          17,
-          0.8
+          16,
+          1
         ]
       },
       "layout": {
@@ -747,7 +1152,7 @@
       "id": "bridges",
       "type": "line",
       "source": "features",
-      "minzoom": 10,
+      "minzoom": 14,
       "filter": [
         "==",
         [
@@ -766,7 +1171,7 @@
           [
             "zoom"
           ],
-          10,
+          14,
           0.3,
           17,
           2.5
@@ -779,9 +1184,9 @@
           [
             "zoom"
           ],
-          10,
+          14,
           0,
-          12,
+          16,
           0.9
         ]
       },
@@ -794,7 +1199,7 @@
       "id": "channels",
       "type": "line",
       "source": "features",
-      "minzoom": 9,
+      "minzoom": 11,
       "filter": [
         "==",
         [
@@ -804,7 +1209,7 @@
         "channel"
       ],
       "paint": {
-        "line-color": "#DCEFFA",
+        "line-color": "#F4FBFF",
         "line-width": [
           "interpolate",
           [
@@ -813,7 +1218,7 @@
           [
             "zoom"
           ],
-          9,
+          11,
           0.3,
           17,
           1.1
@@ -826,10 +1231,14 @@
           [
             "zoom"
           ],
-          9,
-          0,
           11,
-          0.4
+          0,
+          13,
+          0.55
+        ],
+        "line-dasharray": [
+          5,
+          4
         ]
       },
       "layout": {
@@ -841,7 +1250,7 @@
       "id": "port-entrances",
       "type": "line",
       "source": "features",
-      "minzoom": 9,
+      "minzoom": 11,
       "filter": [
         "==",
         [
@@ -851,7 +1260,7 @@
         "entrance"
       ],
       "paint": {
-        "line-color": "#DCEFFA",
+        "line-color": "#F4FBFF",
         "line-width": [
           "interpolate",
           [
@@ -860,7 +1269,7 @@
           [
             "zoom"
           ],
-          9,
+          11,
           0.3,
           17,
           1.5
@@ -873,75 +1282,15 @@
           [
             "zoom"
           ],
-          9,
-          0,
           11,
-          0.6
+          0,
+          13,
+          0.7
         ]
       },
       "layout": {
         "line-cap": "round",
         "line-join": "round"
-      }
-    },
-    {
-      "id": "shoal-tint",
-      "type": "fill",
-      "source": "features",
-      "minzoom": 11,
-      "filter": [
-        "==",
-        [
-          "get",
-          "kind"
-        ],
-        "shoal"
-      ],
-      "paint": {
-        "fill-color": "#667D8B",
-        "fill-opacity": [
-          "interpolate",
-          [
-            "linear"
-          ],
-          [
-            "zoom"
-          ],
-          11,
-          0,
-          13,
-          0.09
-        ]
-      }
-    },
-    {
-      "id": "shoal-texture",
-      "type": "fill",
-      "source": "features",
-      "minzoom": 11,
-      "filter": [
-        "==",
-        [
-          "get",
-          "kind"
-        ],
-        "shoal"
-      ],
-      "paint": {
-        "fill-pattern": "shoal-pattern",
-        "fill-opacity": [
-          "interpolate",
-          [
-            "linear"
-          ],
-          [
-            "zoom"
-          ],
-          11,
-          0,
-          15,
-          0.32
-        ]
       }
     },
     {
@@ -1002,66 +1351,6 @@
         "text-offset": [
           0,
           1.5
-        ]
-      }
-    },
-    {
-      "id": "reef-tint",
-      "type": "fill",
-      "source": "features",
-      "minzoom": 11,
-      "filter": [
-        "==",
-        [
-          "get",
-          "kind"
-        ],
-        "reef"
-      ],
-      "paint": {
-        "fill-color": "#566F7E",
-        "fill-opacity": [
-          "interpolate",
-          [
-            "linear"
-          ],
-          [
-            "zoom"
-          ],
-          11,
-          0,
-          13,
-          0.09
-        ]
-      }
-    },
-    {
-      "id": "reef-texture",
-      "type": "fill",
-      "source": "features",
-      "minzoom": 11,
-      "filter": [
-        "==",
-        [
-          "get",
-          "kind"
-        ],
-        "reef"
-      ],
-      "paint": {
-        "fill-pattern": "reef-pattern",
-        "fill-opacity": [
-          "interpolate",
-          [
-            "linear"
-          ],
-          [
-            "zoom"
-          ],
-          11,
-          0,
-          15,
-          0.32
         ]
       }
     },
@@ -1130,7 +1419,7 @@
       "id": "restricted-area",
       "type": "fill",
       "source": "features",
-      "minzoom": 13,
+      "minzoom": 11,
       "filter": [
         "==",
         [
@@ -1149,10 +1438,10 @@
           [
             "zoom"
           ],
-          13,
+          11,
           0,
-          15,
-          0.06
+          13,
+          0.04
         ]
       }
     },
@@ -1160,7 +1449,7 @@
       "id": "restricted-outline",
       "type": "line",
       "source": "features",
-      "minzoom": 13,
+      "minzoom": 11,
       "filter": [
         "==",
         [
@@ -1179,10 +1468,10 @@
           [
             "zoom"
           ],
-          13,
+          11,
           0.3,
           17,
-          0.8
+          1.1
         ],
         "line-opacity": [
           "interpolate",
@@ -1192,10 +1481,14 @@
           [
             "zoom"
           ],
-          13,
+          11,
           0,
-          15,
+          13,
           0.4
+        ],
+        "line-dasharray": [
+          5,
+          3
         ]
       },
       "layout": {
@@ -1207,7 +1500,7 @@
       "id": "military-area",
       "type": "fill",
       "source": "features",
-      "minzoom": 13,
+      "minzoom": 11,
       "filter": [
         "==",
         [
@@ -1226,10 +1519,10 @@
           [
             "zoom"
           ],
-          13,
+          11,
           0,
-          15,
-          0.06
+          13,
+          0.04
         ]
       }
     },
@@ -1237,7 +1530,7 @@
       "id": "military-outline",
       "type": "line",
       "source": "features",
-      "minzoom": 13,
+      "minzoom": 11,
       "filter": [
         "==",
         [
@@ -1256,10 +1549,10 @@
           [
             "zoom"
           ],
-          13,
+          11,
           0.3,
           17,
-          0.8
+          1.1
         ],
         "line-opacity": [
           "interpolate",
@@ -1269,10 +1562,14 @@
           [
             "zoom"
           ],
-          13,
+          11,
           0,
-          15,
+          13,
           0.4
+        ],
+        "line-dasharray": [
+          5,
+          3
         ]
       },
       "layout": {
@@ -1284,7 +1581,7 @@
       "id": "reserve-area",
       "type": "fill",
       "source": "features",
-      "minzoom": 13,
+      "minzoom": 11,
       "filter": [
         "==",
         [
@@ -1294,7 +1591,7 @@
         "reserve"
       ],
       "paint": {
-        "fill-color": "#6FB7A8",
+        "fill-color": "#4DB9A4",
         "fill-opacity": [
           "interpolate",
           [
@@ -1303,10 +1600,10 @@
           [
             "zoom"
           ],
-          13,
+          11,
           0,
-          15,
-          0.06
+          13,
+          0.14
         ]
       }
     },
@@ -1314,7 +1611,7 @@
       "id": "reserve-outline",
       "type": "line",
       "source": "features",
-      "minzoom": 13,
+      "minzoom": 11,
       "filter": [
         "==",
         [
@@ -1324,7 +1621,7 @@
         "reserve"
       ],
       "paint": {
-        "line-color": "#6FB7A8",
+        "line-color": "#39958E",
         "line-width": [
           "interpolate",
           [
@@ -1333,10 +1630,10 @@
           [
             "zoom"
           ],
-          13,
+          11,
           0.3,
-          17,
-          0.8
+          15,
+          1.3
         ],
         "line-opacity": [
           "interpolate",
@@ -1346,10 +1643,14 @@
           [
             "zoom"
           ],
-          13,
+          11,
           0,
-          15,
-          0.4
+          13,
+          0.8
+        ],
+        "line-dasharray": [
+          5,
+          3
         ]
       },
       "layout": {
@@ -1358,40 +1659,10 @@
       }
     },
     {
-      "id": "windfarm-area",
-      "type": "fill",
-      "source": "features",
-      "minzoom": 13,
-      "filter": [
-        "==",
-        [
-          "get",
-          "kind"
-        ],
-        "windfarm"
-      ],
-      "paint": {
-        "fill-color": "#8299A8",
-        "fill-opacity": [
-          "interpolate",
-          [
-            "linear"
-          ],
-          [
-            "zoom"
-          ],
-          13,
-          0,
-          15,
-          0.06
-        ]
-      }
-    },
-    {
       "id": "windfarm-outline",
       "type": "line",
       "source": "features",
-      "minzoom": 13,
+      "minzoom": 11,
       "filter": [
         "==",
         [
@@ -1410,10 +1681,10 @@
           [
             "zoom"
           ],
-          13,
+          11,
           0.3,
           17,
-          0.8
+          1.1
         ],
         "line-opacity": [
           "interpolate",
@@ -1423,10 +1694,14 @@
           [
             "zoom"
           ],
-          13,
+          11,
           0,
-          15,
+          13,
           0.4
+        ],
+        "line-dasharray": [
+          5,
+          3
         ]
       },
       "layout": {
@@ -1438,7 +1713,7 @@
       "id": "reserve-name",
       "type": "symbol",
       "source": "features",
-      "minzoom": 13,
+      "minzoom": 12,
       "filter": [
         "==",
         [
@@ -1448,7 +1723,7 @@
         "reserve"
       ],
       "paint": {
-        "text-color": "#57998D",
+        "text-color": "#366F7B",
         "text-opacity": [
           "interpolate",
           [
@@ -1457,13 +1732,13 @@
           [
             "zoom"
           ],
-          13,
+          12,
           0,
-          14.5,
+          13.5,
           1
         ],
-        "text-halo-color": "#F4FBFF",
-        "text-halo-width": 0.8
+        "text-halo-color": "#DCEFFA",
+        "text-halo-width": 0.65
       },
       "layout": {
         "text-field": [
@@ -1481,18 +1756,20 @@
           [
             "zoom"
           ],
-          13,
           12,
+          14,
           18,
-          13
+          15
         ],
         "symbol-placement": "point",
         "symbol-spacing": 240,
         "text-padding": 10,
         "text-offset": [
           0,
-          1.5
-        ]
+          3
+        ],
+        "text-letter-spacing": 0.025,
+        "text-line-height": 1.3
       }
     },
     {
@@ -1586,11 +1863,11 @@
             "zoom"
           ],
           9,
-          0.65,
+          0.85,
           18,
-          0.95
+          1.25
         ],
-        "icon-padding": 8,
+        "icon-padding": 4,
         "symbol-sort-key": [
           "coalesce",
           [
@@ -1694,11 +1971,11 @@
             "zoom"
           ],
           9,
-          0.65,
+          0.85,
           18,
-          0.95
+          1.25
         ],
-        "icon-padding": 8,
+        "icon-padding": 4,
         "symbol-sort-key": [
           "coalesce",
           [
@@ -1757,7 +2034,8 @@
         ],
         "text-anchor": "top",
         "text-padding": 8,
-        "text-optional": true
+        "text-optional": true,
+        "icon-allow-overlap": true
       }
     },
     {
@@ -1818,11 +2096,11 @@
             "zoom"
           ],
           13,
-          0.55,
+          0.8,
           18,
-          0.8
+          1.1
         ],
-        "icon-padding": 8,
+        "icon-padding": 4,
         "symbol-sort-key": [
           "coalesce",
           [
@@ -1888,7 +2166,7 @@
       "id": "buoy-symbols",
       "type": "symbol",
       "source": "features",
-      "minzoom": 13,
+      "minzoom": 12.5,
       "filter": [
         "all",
         [
@@ -1917,9 +2195,9 @@
           [
             "zoom"
           ],
-          13,
+          12.5,
           0,
-          14.5,
+          14.0,
           1
         ],
         "text-opacity": [
@@ -1952,12 +2230,12 @@
           [
             "zoom"
           ],
-          13,
-          0.55,
+          12.5,
+          0.8,
           18,
-          0.8
+          1.1
         ],
-        "icon-padding": 8,
+        "icon-padding": 4,
         "symbol-sort-key": [
           "coalesce",
           [
@@ -2005,7 +2283,7 @@
           [
             "zoom"
           ],
-          13,
+          12.5,
           11,
           18,
           12
@@ -2088,11 +2366,11 @@
             "zoom"
           ],
           13,
-          0.55,
+          0.8,
           18,
-          0.8
+          1.1
         ],
-        "icon-padding": 8,
+        "icon-padding": 4,
         "symbol-sort-key": [
           "coalesce",
           [
@@ -2223,11 +2501,11 @@
             "zoom"
           ],
           10,
-          0.65,
+          0.85,
           18,
-          0.95
+          1.25
         ],
-        "icon-padding": 8,
+        "icon-padding": 4,
         "symbol-sort-key": [
           "coalesce",
           [
@@ -2342,11 +2620,11 @@
             "zoom"
           ],
           11,
-          0.65,
+          0.85,
           18,
-          0.95
+          1.25
         ],
-        "icon-padding": 8,
+        "icon-padding": 4,
         "symbol-sort-key": [
           "coalesce",
           [
@@ -2396,7 +2674,7 @@
       "id": "mooring-symbols",
       "type": "symbol",
       "source": "features",
-      "minzoom": 15,
+      "minzoom": 14,
       "filter": [
         "==",
         [
@@ -2414,9 +2692,9 @@
           [
             "zoom"
           ],
-          15,
+          14,
           0,
-          16.5,
+          15.5,
           1
         ],
         "text-opacity": [
@@ -2449,12 +2727,12 @@
           [
             "zoom"
           ],
-          15,
-          0.55,
+          14,
+          0.8,
           18,
-          0.8
+          1.1
         ],
-        "icon-padding": 8,
+        "icon-padding": 4,
         "symbol-sort-key": [
           "coalesce",
           [
@@ -2486,7 +2764,7 @@
           [
             "zoom"
           ],
-          15,
+          14,
           11,
           18,
           12
@@ -2504,7 +2782,7 @@
       "id": "wreck-symbols",
       "type": "symbol",
       "source": "features",
-      "minzoom": 13,
+      "minzoom": 11,
       "filter": [
         "==",
         [
@@ -2512,6 +2790,114 @@
           "kind"
         ],
         "wreck"
+      ],
+      "paint": {
+        "icon-opacity": [
+          "interpolate",
+          [
+            "linear"
+          ],
+          [
+            "zoom"
+          ],
+          11,
+          0,
+          12.5,
+          1
+        ],
+        "text-opacity": [
+          "interpolate",
+          [
+            "linear"
+          ],
+          [
+            "zoom"
+          ],
+          17,
+          0,
+          18.5,
+          1
+        ],
+        "text-color": "#4F7187",
+        "text-halo-color": "#F4FBFF",
+        "text-halo-width": 0.7
+      },
+      "layout": {
+        "icon-image": [
+          "get",
+          "icon"
+        ],
+        "icon-size": [
+          "interpolate",
+          [
+            "linear"
+          ],
+          [
+            "zoom"
+          ],
+          11,
+          0.85,
+          18,
+          1.25
+        ],
+        "icon-padding": 4,
+        "symbol-sort-key": [
+          "coalesce",
+          [
+            "get",
+            "rank"
+          ],
+          10
+        ],
+        "text-field": [
+          "step",
+          [
+            "zoom"
+          ],
+          "",
+          17,
+          [
+            "get",
+            "name"
+          ]
+        ],
+        "text-font": [
+          "Open Sans Semibold"
+        ],
+        "text-size": [
+          "interpolate",
+          [
+            "linear"
+          ],
+          [
+            "zoom"
+          ],
+          11,
+          11,
+          18,
+          12
+        ],
+        "text-offset": [
+          0,
+          1.6
+        ],
+        "text-anchor": "top",
+        "text-padding": 8,
+        "text-optional": true
+      }
+    },
+    {
+      "id": "danger_rock-symbols",
+      "type": "symbol",
+      "source": "features",
+      "minzoom": 13,
+      "filter": [
+        "==",
+        [
+          "get",
+          "kind"
+        ],
+        "danger_rock"
       ],
       "paint": {
         "icon-opacity": [
@@ -2558,11 +2944,11 @@
             "zoom"
           ],
           13,
-          0.65,
+          0.85,
           18,
-          0.95
+          1.25
         ],
-        "icon-padding": 8,
+        "icon-padding": 4,
         "symbol-sort-key": [
           "coalesce",
           [
@@ -2666,11 +3052,11 @@
             "zoom"
           ],
           14,
-          0.55,
+          0.8,
           18,
-          0.8
+          1.1
         ],
-        "icon-padding": 8,
+        "icon-padding": 4,
         "symbol-sort-key": [
           "coalesce",
           [
@@ -2740,15 +3126,66 @@
             "zoom"
           ],
           4,
-          0,
+          0.55,
           6,
-          0.85,
+          0.7,
           11,
-          0.85,
+          0.7,
           13,
           0
         ],
         "text-halo-color": "#123F67",
+        "text-halo-width": 0.5
+      },
+      "layout": {
+        "text-field": [
+          "get",
+          "name"
+        ],
+        "text-font": [
+          "Open Sans Semibold"
+        ],
+        "text-size": 19,
+        "symbol-placement": "point",
+        "symbol-spacing": 240,
+        "text-padding": 10,
+        "text-offset": [
+          0,
+          0
+        ],
+        "text-letter-spacing": 0.18,
+        "text-allow-overlap": true
+      }
+    },
+    {
+      "id": "gulf_name",
+      "type": "symbol",
+      "source": "features",
+      "minzoom": 6,
+      "filter": [
+        "==",
+        [
+          "get",
+          "kind"
+        ],
+        "gulf_name"
+      ],
+      "paint": {
+        "text-color": "#E5F3FB",
+        "text-opacity": [
+          "interpolate",
+          [
+            "linear"
+          ],
+          [
+            "zoom"
+          ],
+          6,
+          0,
+          7.5,
+          1
+        ],
+        "text-halo-color": "#337FAF",
         "text-halo-width": 0.5
       },
       "layout": {
@@ -2767,10 +3204,71 @@
           [
             "zoom"
           ],
-          4,
-          15,
+          6,
+          14,
           18,
-          16
+          15
+        ],
+        "symbol-placement": "point",
+        "symbol-spacing": 240,
+        "text-padding": 10,
+        "text-offset": [
+          0,
+          1.5
+        ]
+      }
+    },
+    {
+      "id": "roadstead_name",
+      "type": "symbol",
+      "source": "features",
+      "minzoom": 9,
+      "filter": [
+        "==",
+        [
+          "get",
+          "kind"
+        ],
+        "roadstead_name"
+      ],
+      "paint": {
+        "text-color": "#E5F3FB",
+        "text-opacity": [
+          "interpolate",
+          [
+            "linear"
+          ],
+          [
+            "zoom"
+          ],
+          9,
+          0,
+          10.5,
+          1
+        ],
+        "text-halo-color": "#337FAF",
+        "text-halo-width": 0.5
+      },
+      "layout": {
+        "text-field": [
+          "get",
+          "name"
+        ],
+        "text-font": [
+          "Open Sans Semibold"
+        ],
+        "text-size": [
+          "interpolate",
+          [
+            "linear"
+          ],
+          [
+            "zoom"
+          ],
+          9,
+          13,
+          18,
+          14
         ],
         "symbol-placement": "point",
         "symbol-spacing": 240,
@@ -2968,7 +3466,7 @@
       "id": "cape_name",
       "type": "symbol",
       "source": "features",
-      "minzoom": 11,
+      "minzoom": 8,
       "filter": [
         "==",
         [
@@ -2987,9 +3485,9 @@
           [
             "zoom"
           ],
-          11,
+          8,
           0,
-          12.5,
+          9.5,
           1
         ],
         "text-halo-color": "#F4FBFF",
@@ -3011,7 +3509,7 @@
           [
             "zoom"
           ],
-          11,
+          8,
           12,
           18,
           13
@@ -3029,7 +3527,7 @@
       "id": "island_name",
       "type": "symbol",
       "source": "features",
-      "minzoom": 10,
+      "minzoom": 8,
       "filter": [
         "==",
         [
@@ -3048,9 +3546,9 @@
           [
             "zoom"
           ],
-          10,
+          8,
           0,
-          11.5,
+          9.5,
           1
         ],
         "text-halo-color": "#F4FBFF",
@@ -3072,7 +3570,7 @@
           [
             "zoom"
           ],
-          10,
+          8,
           12,
           18,
           13
@@ -3159,6 +3657,67 @@
           "kind"
         ],
         "cove_name"
+      ],
+      "paint": {
+        "text-color": "#697B86",
+        "text-opacity": [
+          "interpolate",
+          [
+            "linear"
+          ],
+          [
+            "zoom"
+          ],
+          15,
+          0,
+          16.5,
+          1
+        ],
+        "text-halo-color": "#F4FBFF",
+        "text-halo-width": 0.8
+      },
+      "layout": {
+        "text-field": [
+          "get",
+          "name"
+        ],
+        "text-font": [
+          "Open Sans Semibold"
+        ],
+        "text-size": [
+          "interpolate",
+          [
+            "linear"
+          ],
+          [
+            "zoom"
+          ],
+          15,
+          11,
+          18,
+          12
+        ],
+        "symbol-placement": "point",
+        "symbol-spacing": 240,
+        "text-padding": 10,
+        "text-offset": [
+          0,
+          1.5
+        ]
+      }
+    },
+    {
+      "id": "calanque_name",
+      "type": "symbol",
+      "source": "features",
+      "minzoom": 15,
+      "filter": [
+        "==",
+        [
+          "get",
+          "kind"
+        ],
+        "calanque_name"
       ],
       "paint": {
         "text-color": "#697B86",

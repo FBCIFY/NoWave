@@ -1,0 +1,207 @@
+{
+  "loader": "Flutter MapLibreJsSource.cdn(), unchanged",
+  "metadata": {
+    "nowave:data_mode": "CASSIS_REAL",
+    "nowave:schema": 1,
+    "nowave:relief_label": "réel Mapzen/AWS (externe)",
+    "nowave:coast_label": "réelle OSM",
+    "nowave:bathymetry_label": "réelle SHOM : levé 2007–2013 / HOMONIM PBMA",
+    "nowave:bathymetry_resolution": "grille 10 m sur sondes ; HOMONIM ≈111 m au large",
+    "nowave:missing_depth_label": "gris bleu = profondeur indisponible ; aucune extrapolation portuaire",
+    "nowave:port_label": "réels OSM",
+    "nowave:navigation_label": "feux OSM réels ; autres catégories absentes non affichées",
+    "nowave:warning": "Ne pas utiliser NoWave pour la navigation officielle."
+  },
+  "errors": [],
+  "mapErrors": [],
+  "dem": [
+    {
+      "url": "https://s3.amazonaws.com/elevation-tiles-prod/terrarium/15/16888/12014.png",
+      "status": 200
+    },
+    {
+      "url": "https://s3.amazonaws.com/elevation-tiles-prod/terrarium/15/16887/12013.png",
+      "status": 200
+    },
+    {
+      "url": "https://s3.amazonaws.com/elevation-tiles-prod/terrarium/15/16887/12015.png",
+      "status": 200
+    },
+    {
+      "url": "https://s3.amazonaws.com/elevation-tiles-prod/terrarium/15/16888/12013.png",
+      "status": 200
+    },
+    {
+      "url": "https://s3.amazonaws.com/elevation-tiles-prod/terrarium/15/16888/12015.png",
+      "status": 200
+    },
+    {
+      "url": "https://s3.amazonaws.com/elevation-tiles-prod/terrarium/15/16887/12014.png",
+      "status": 200
+    },
+    {
+      "url": "https://s3.amazonaws.com/elevation-tiles-prod/terrarium/15/16886/12014.png",
+      "status": 200
+    },
+    {
+      "url": "https://s3.amazonaws.com/elevation-tiles-prod/terrarium/15/16889/12014.png",
+      "status": 200
+    },
+    {
+      "url": "https://s3.amazonaws.com/elevation-tiles-prod/terrarium/15/16886/12013.png",
+      "status": 200
+    },
+    {
+      "url": "https://s3.amazonaws.com/elevation-tiles-prod/terrarium/15/16889/12013.png",
+      "status": 200
+    },
+    {
+      "url": "https://s3.amazonaws.com/elevation-tiles-prod/terrarium/15/16889/12015.png",
+      "status": 200
+    },
+    {
+      "url": "https://s3.amazonaws.com/elevation-tiles-prod/terrarium/15/16886/12015.png",
+      "status": 200
+    },
+    {
+      "url": "https://s3.amazonaws.com/elevation-tiles-prod/terrarium/15/16887/12014.png",
+      "status": 200
+    },
+    {
+      "url": "https://s3.amazonaws.com/elevation-tiles-prod/terrarium/15/16888/12014.png",
+      "status": 200
+    },
+    {
+      "url": "https://s3.amazonaws.com/elevation-tiles-prod/terrarium/15/16887/12013.png",
+      "status": 200
+    },
+    {
+      "url": "https://s3.amazonaws.com/elevation-tiles-prod/terrarium/15/16887/12015.png",
+      "status": 200
+    },
+    {
+      "url": "https://s3.amazonaws.com/elevation-tiles-prod/terrarium/15/16888/12013.png",
+      "status": 200
+    },
+    {
+      "url": "https://s3.amazonaws.com/elevation-tiles-prod/terrarium/15/16888/12015.png",
+      "status": 200
+    },
+    {
+      "url": "https://s3.amazonaws.com/elevation-tiles-prod/terrarium/15/16886/12014.png",
+      "status": 200
+    },
+    {
+      "url": "https://s3.amazonaws.com/elevation-tiles-prod/terrarium/15/16889/12014.png",
+      "status": 200
+    },
+    {
+      "url": "https://s3.amazonaws.com/elevation-tiles-prod/terrarium/15/16886/12013.png",
+      "status": 200
+    },
+    {
+      "url": "https://s3.amazonaws.com/elevation-tiles-prod/terrarium/15/16886/12015.png",
+      "status": 200
+    },
+    {
+      "url": "https://s3.amazonaws.com/elevation-tiles-prod/terrarium/15/16889/12013.png",
+      "status": 200
+    },
+    {
+      "url": "https://s3.amazonaws.com/elevation-tiles-prod/terrarium/15/16889/12015.png",
+      "status": 200
+    }
+  ],
+  "local": [
+    {
+      "url": "http://127.0.0.1:8765/assets/cassis-bathymetry.png",
+      "status": 200
+    },
+    {
+      "url": "http://127.0.0.1:8765/data/cassis/features.geojson",
+      "status": 200
+    },
+    {
+      "url": "http://127.0.0.1:8765/data/cassis/water.geojson",
+      "status": 200
+    }
+  ],
+  "pan": true,
+  "zoom": true,
+  "scenes": [
+    {
+      "name": "01-cassis-approach",
+      "center": [
+        5.536,
+        43.2085
+      ],
+      "zoom": 14.35,
+      "rendered": [
+        "light-symbols",
+        "port-symbols",
+        "pontoons",
+        "pontoon-casing",
+        "breakwaters",
+        "breakwater-casing",
+        "coast",
+        "coastal-urban",
+        "vegetation",
+        "contour-labels",
+        "contours",
+        "relief-sea-mask",
+        "relief-outside-scene",
+        "land"
+      ]
+    },
+    {
+      "name": "02-cassis-port",
+      "center": [
+        5.5362,
+        43.2134
+      ],
+      "zoom": 15.9,
+      "rendered": [
+        "light-symbols",
+        "port-symbols",
+        "pontoons",
+        "pontoon-casing",
+        "coast",
+        "coastal-urban",
+        "vegetation",
+        "contour-labels",
+        "contours",
+        "relief-sea-mask",
+        "relief-outside-scene",
+        "land"
+      ]
+    },
+    {
+      "name": "03-cassis-marina-detail",
+      "center": [
+        5.536,
+        43.214
+      ],
+      "zoom": 17.35,
+      "rendered": [
+        "light-symbols",
+        "port-symbols",
+        "pontoons",
+        "pontoon-casing",
+        "coast",
+        "coastal-urban",
+        "contour-labels",
+        "contours",
+        "relief-sea-mask",
+        "relief-outside-scene",
+        "land"
+      ]
+    }
+  ],
+  "pixelCheck": {
+    "sea_pixels_compared": 365901,
+    "sea_pixels_changed": 0,
+    "land_pixels_changed": 294642,
+    "coast_edge_excluded_px": 2,
+    "attribution_ui_excluded_px": 45
+  }
+}

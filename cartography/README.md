@@ -5,10 +5,13 @@ et sans backend métier. Il sert à choisir et tester le style. L'app métier
 `../mobile` reste sur son moteur actuel ; migrer son écran complet ferait
 intervenir GPS, cap, photo et signalements, hors du périmètre demandé.
 
-**Démo intégralement fictive**, île autour de 0°/0°. Le bandeau est permanent,
-chaque objet porte `demo=true`, les noms indiquent « démo » ou « fictive ».
-Le relief, les profondeurs, courbes, secteurs et autorisations de mouillage
-ne sont pas des données nautiques réelles.
+Le **relief terrestre est réel, fourni par Mapzen/Tilezen sur AWS Open Data**.
+L'île, la côte, la bathymétrie et les objets nautiques de la scène à 0°/0°
+restent fictifs. La passe graphique affine désormais la scène de démonstration. Le bandeau distingue ces sources explicitement.
+Le faux relief terrestre a été retiré. La scène fictive se trouve réellement
+au milieu de l'océan : son île reste plate pour ne pas présenter un relief
+sous-marin réel comme un relief terrestre. Un aperçu réel Marseille–Cassis
+permet d'évaluer le hillshade terrestre.
 
 ## Audit initial
 
@@ -27,7 +30,7 @@ ne sont pas des données nautiques réelles.
 
 ## Lancement par Vadim
 
-Prérequis : Flutter 3.47+ / Dart 3.13+, Python 3.10+, accès réseau local.
+Prérequis : Flutter 3.47+ / Dart 3.13+, Python 3.10+, accès réseau local et Internet pour le DEM.
 Android : JDK 21 et SDK Android. iOS : macOS/Xcode, cible générée iOS 15+.
 Web : navigateur avec WebGL2. Le POC a son propre identifiant d'application.
 
@@ -85,7 +88,8 @@ python3 -m http.server 8766 --directory build/web
 ```
 
 Ouvrir http://localhost:8766 ; garder le serveur cartographique actif.
-Les modules MapLibre GL JS 6.4.1 sont embarqués dans `web/vendor/maplibre`.
+Le chargement actif reste `MapLibreJsSource.cdn()` (MapLibre GL JS 6.4.1 sur unpkg).
+Les fichiers présents dans `web/vendor/maplibre` ne sont pas utilisés par ce chargement.
 
 ## Parcours visuel
 
@@ -110,30 +114,32 @@ que les courbes côtières ; toutes partagent le même tracé visuel.
 
 ## Architecture et évolution
 
-`style.json` est un style v8 produit par `tools/build_style.py`, avec 54 couches.
+`style.json` est un style v8 produit par `tools/build_style.py`, avec 61 couches dans la scène de démo.
 Interpolations de zoom sur opacité, tailles, largeurs et textes. Palette exacte
 et interpolation linéaire des profondeurs dans le générateur raster ; les pixels
 sont rééchantillonnés linéairement. Terre beige, textures légères, catégories de
 ports, balisage, réserves, chenaux, ouvrages et toponymie séparés.
 
 `server.py` ne nécessite aucune dépendance Python externe à l'exécution.
-Démo : GeoJSON et images locales. Données réelles : MBTiles vectoriel normalisé
-et raster bathymétrique, DEM terrestre optionnel. Aucun mélange automatique des
-sources fictives et réelles. Lire [DATA_CONTRACT.md](DATA_CONTRACT.md).
+Démo : GeoJSON et bathymétrie locaux, source DEM réelle externe explicitement
+identifiée. Données réelles complètes : MBTiles vectoriel normalisé et raster
+bathymétrique, DEM terrestre optionnel avec attribution dédiée. Lire [DATA_CONTRACT.md](DATA_CONTRACT.md).
 
 Régénérer les assets :
 
 ```bash
 python3 -m venv cartography/.venv
-cartography/.venv/bin/pip install -r cartography/requirements.txt
+cartography/.venv/bin/pip install -r cartography/requirements-cassis.txt
 cartography/.venv/bin/python cartography/tools/generate_demo.py
+# Optionnel : recalculer le masque réel de diagnostic (25 tuiles DEM, Internet).
+cartography/.venv/bin/python cartography/tools/prepare_relief_masks.py
 python3 cartography/tools/build_style.py
 ```
 
 Tests :
 
 ```bash
-python3 -m unittest discover -s cartography/tests -v
+cartography/.venv/bin/python -m unittest discover -s cartography/tests -v
 npm ci --prefix cartography
 npm test --prefix cartography
 cd map_poc
@@ -147,7 +153,7 @@ git status -sb
 ```
 
 Dépendances POC : `maplibre_gl 0.27.1`, `http ^1.6.0`, `flutter_lints ^6.0.0`.
-Outillage de génération : Pillow 12.3.0. Validation :
+Outillage de génération : Pillow 12.3.0 et NumPy 2.5.3 (calcul des profondeurs par tableaux). Validation :
 `@maplibre/maplibre-gl-style-spec 26.4.4`, Playwright 1.63.0 pour le test Web.
 Verrous versionnés.
 Sources techniques : [SDK Flutter officiel](https://pub.dev/packages/maplibre_gl),
@@ -155,10 +161,10 @@ Sources techniques : [SDK Flutter officiel](https://pub.dev/packages/maplibre_gl
 
 ## Limites
 
-- Aucune bathymétrie, côte ou aide à la navigation réelle livrée ; la scène
-  permet l'évaluation du style uniquement. Pas encore d'importeur GEBCO/OSM/ENC.
+- La scène DEMO reste fictive. Le pilote Cassis fournit désormais des données
+  OSM et SHOM séparées ; il ne constitue pas une carte de navigation officielle.
 - La démo couvre 0,6° × 0,6° ; au-delà le fond reste bleu profond et les
-  objets sont absents. Raster 1536 px, donc détails synthétiques limités à fort zoom.
+  objets sont absents. Raster 2048 px, donc détails synthétiques limités à fort zoom.
 - Sources réelles à acquérir/normaliser et licences à vérifier. Le contrat
   n'est pas compatible directement avec un schéma OpenMapTiles sans adaptateur.
 - Les grandes zones maritimes sont des labels horizontaux dans ce POC.
@@ -172,7 +178,7 @@ Sources techniques : [SDK Flutter officiel](https://pub.dev/packages/maplibre_gl
 - Build et rendu Web vérifiables ici ; essais Android/iOS physiques à faire
   par Vadim. Ce POC n'effectue pas la migration de l'app métier.
 
-## Validation effectuée le 3 octobre 2026
+## Validation initiale du POC (avant remplacement du relief)
 
 - Flutter 3.47.6 / Dart 3.13.5 : `pub get`, analyse sans erreur et 4 tests du POC réussis.
 - App métier : `pub get`, analyse sans erreur et 95 tests réussis.
@@ -180,7 +186,7 @@ Sources techniques : [SDK Flutter officiel](https://pub.dev/packages/maplibre_gl
 - Styles démo et vectoriel+DEM : validation MapLibre v8 réussie (54 couches).
 - Build Web réussi. Chromium, viewport 430×900 à densité 2 : rendu aux zooms
   10,5 / 14 / 16, déplacement par glisser et zoom par molette vérifiés,
-  aucune erreur JS/MapLibre ni requête externe.
+  aucune erreur JS/MapLibre ni requête externe à cette étape initiale.
 - Captures : [vue générale](previews/overview.png), [côte et port](previews/coast.png),
   [bouées](previews/buoys.png). Toutes les données visibles sont fictives.
 - Docker non testé : intégration Docker Desktop indisponible dans ce WSL.
@@ -199,3 +205,164 @@ Sous Linux minimal, installer aussi les bibliothèques système Chromium avec
 `npx playwright install-deps chromium` si elles manquent. Le test vérifie
 les symboles de bouées, le déplacement et le zoom, puis écrit des captures
 dans `test-results/map-poc` (ignoré par Git).
+
+## Relief Mapzen Terrain Tiles / AWS Open Data
+
+Source : [Terrain Tiles sur AWS Open Data](https://registry.opendata.aws/terrain-tiles/).
+URL utilisée, sans authentification :
+
+```text
+https://s3.amazonaws.com/elevation-tiles-prod/terrarium/{z}/{x}/{y}.png
+```
+
+MapLibre : `type=raster-dem`, `tileSize=256`, `encoding=terrarium`, `maxzoom=15`.
+Décodage en mètres : `R × 256 + G + B / 256 − 32768`.
+**Aucune clé API ni aucun compte AWS n'est nécessaire.** Le navigateur ou le
+SDK natif charge ces tuiles depuis Internet pendant le test. Les assets métier
+restent locaux. MapLibre Web est chargé par le CDN actuel. Le mode totalement hors ligne
+n'est plus disponible tant que le DEM et le chargement Web ne sont pas auto-hébergés ou mis en cache.
+Une connexion Internet absente peut laisser le relief indisponible ; la démo
+bathymétrique locale reste indépendante.
+
+### Attribution
+
+La source `relief.attribution` crédite Mapzen/Tilezen, AWS Open Data,
+EU-DEM/Copernicus, USGS et NOAA, avec un lien vers
+[les notices complètes des producteurs](assets/mapzen-attribution.html).
+Ces notices incluent également ArcticDEM, Geoscience Australia, Austria DGM,
+Canada, INEGI, LINZ, Kartverket et Environment Agency pour les zones concernées.
+Elles proviennent des [exigences Tilezen/Joerd](https://github.com/tilezen/joerd/blob/master/docs/attribution.md).
+Le registre AWS renvoie à ces exigences ; « AWS » seul n'est pas une attribution
+suffisante. Accès au jeu Terrain Tiles le 3 octobre 2026.
+
+La réponse HTTP d'une tuile Cassis testée porte
+`x-amz-meta-x-imagery-sources: eudem/eudem_dem_5deg_n40e005.tif`.
+Ce résultat concerne cette tuile ; le dataset mondial combine plusieurs sources.
+
+### Hillshade et protection de la mer
+
+Couche native `hillshade` ; aucune extrusion ni terrain 3D. Exagération :
+0 à z7, 0,15 à z10, 0,20 à z14, 0,22 à z18. Ombres gris/beige, contraste
+faible, palette terrestre préservée (dont le passage #F1EFE9 vers #E5E2D9).
+
+Le DEM contient aussi du relief sous-marin et des coutures de tuiles. Dans la
+scène fictive, un masque RGBA restitue exactement les couleurs du raster
+bathymétrique original au-dessus du hillshade. L'extérieur de la couverture
+est recouvert de la couleur marine d'origine. Les courbes et objets restent
+au-dessus du masque. Le remplissage opaque de l'île fictive couvre le DEM marin,
+car cette île n'existe pas dans la géographie réelle.
+
+Dans l'aperçu réel, le masque d'eau est préparé depuis 25 tuiles Mapzen à z12
+(eau : altitude ≤ 0 m). Une fermeture morphologique de 3 pixels élimine des
+anneaux côtiers dus au rééchantillonnage. Ce masque de diagnostic est local,
+limité à Marseille–Cassis, et **n'est pas un littoral officiel**. Il ne modifie
+pas les altitudes Mapzen. Une production devra utiliser un vrai masque marin
+aligné sur son littoral, en particulier pour les terres sous le niveau de la mer.
+
+### Test réel Marseille / Cassis
+
+Remplacer le serveur de démo par :
+
+```bash
+python3 cartography/server.py --host 0.0.0.0 --relief-preview \
+  --center 5.53 43.205 --zoom 12
+```
+
+Puis lancer le POC avec la même commande Flutter et la même URL `style.json`.
+Pour Marseille : `--center 5.37 43.30 --zoom 12`.
+L'aperçu conserve la source et les propriétés du hillshade, mais n'affiche
+pas la bathymétrie ou les objets de la démo à des coordonnées réelles.
+La mer y est une couleur unie, **sans signification de profondeur** ; la légende
+bathymétrique est masquée. La couverture du masque est publiée dans
+`assets/mapzen-preview-sea-mask.json`. Hors de cette emprise, la mer reste unie.
+
+### Remplacement ultérieur du DEM
+
+La source de vérité reste `tools/build_style.py`, fonction `relief_source`.
+Changer la source ne nécessite pas de réécrire les propriétés visuelles :
+
+```bash
+python3 cartography/server.py --relief-preview \
+  --relief-tiles 'http://localhost:8080/dem/{z}/{x}/{y}.png' \
+  --relief-attribution 'Producteur, licence, date du DEM fourni'
+```
+
+GLO-90 ou SRTM devront être convertis en tuiles XYZ Terrarium 256 px (ou prévoir
+un autre encodage dans la seule configuration source). Le masque d'eau de
+l'aperçu reste dérivé de Mapzen ; le remplacer aussi si le littoral/DEM change.
+En mode MBTiles complet, l'ancien contrat de DEM masqué aux terres reste requis.
+Le dossier non suivi `data/glo90/` préexistant n'a pas été modifié.
+
+### Validation du remplacement
+
+Génération et validation des styles démo, vectoriel+DEM et aperçu réel réussies.
+Tests serveur/masques : 7 réussis. Flutter : analyse sans erreur et 6 tests réussis.
+Build Web réussi. Chromium : tuiles AWS reçues en HTTP 200, aucun message d'erreur
+JS/MapLibre, gestes de déplacement et zoom vérifiés dans la démo.
+Captures avant/après de Marseille et Cassis : « avant » = même aperçu sans
+hillshade, « après » = hillshade Mapzen actif. Les anciennes captures de la scène
+fictive restent disponibles pour comparaison avec le POC précédent.
+
+Test automatisé du relief (démo sur 8765, aperçu réel sur 8767, Web sur 8766) :
+
+```bash
+python3 cartography/server.py --port 8767 --relief-preview
+# Autre terminal, avec les deux autres serveurs déjà actifs :
+npm run test:relief --prefix cartography
+```
+
+Les résultats détaillés et captures vont dans `test-results/mapzen`.
+Pour le contrôle pixel avec Pillow, définir `NOWAVE_PYTHON` si le Python par
+défaut ne possède pas Pillow, par exemple :
+
+```bash
+NOWAVE_PYTHON="$PWD/cartography/.venv/bin/python" npm run test:relief --prefix cartography
+```
+
+Captures conservées pour revue : [index avant/après](previews/mapzen/README.md),
+[Cassis avant](previews/mapzen/cassis-before.png), [Cassis après](previews/mapzen/cassis-after.png),
+[Marseille avant](previews/mapzen/marseille-before.png), [Marseille après](previews/mapzen/marseille-after.png),
+[démo après](previews/mapzen/demo-after.png). Contrôle pixel : 288 332 pixels marins
+opaques comparés, aucun changé par l'activation du hillshade.
+Android/iOS physiques non exécutés dans cet environnement. Aucun commit ni push
+créé pendant cette modification, en attente de revue du résultat.
+
+
+## Passe graphique vers la référence
+
+Référence inspectée : `reference/nowave-target.png.png` (double extension du fichier fourni).
+Les six captures, leurs positions reproductibles et la comparaison détaillée sont
+présentées dans [VISUAL_REVIEW.md](VISUAL_REVIEW.md). Cette passe ne certifie pas une carte de navigation.
+
+Le générateur de démo produit un champ de profondeur continu avec hauts-fonds,
+îlots et courbes issues du même modèle synthétique. Lissage limité des courbes
+puis simplification à environ 3 m, GeoJSON inférieur à 1 Mo. Le raster de 2048 px
+couvre 0,6° (environ 33 m/pixel à l'équateur). Le masque marin fictif est régénéré
+avec ces assets ; aucune nouvelle source géographique n'est utilisée.
+Les bassins, pontons à doigts, digues et feux d'entrée restent **DEMO**.
+Le parc éolien possède uniquement un contour, sans remplissage ni turbines.
+
+Les captures globales/régionales utilisent z10,8/z12 pour cette petite île fictive.
+La hiérarchie du style reste définie sur z4–18 : à z4–6 la scène est trop petite
+pour valider une composition continentale comme la référence.
+Le littoral réel du diagnostic DEM reste approximatif et doit être remplacé.
+Cassis, Marseille et La Ciotat vérifient uniquement le relief et le contraste terre/mer :
+leur bathymétrie, leurs infrastructures et leurs objets nautiques réels sont **MISSING**.
+
+Avec les serveurs démo 8765 et Web 8766 actifs :
+
+```bash
+npm run test:visual --prefix cartography
+```
+
+Le test observe l'instance créée par Flutter après son chargement CDN, sans injecter
+une bibliothèque locale. Il contrôle les couches visibles des six scènes, les erreurs,
+les réponses DEM et les gestes pan/zoom. `browser-result.json` conserve les résultats.
+
+## Port pilote Cassis réel
+
+Le scénario supplémentaire `CASSIS_REAL` reprend le style validé avec un littoral
+vectoriel et des objets OSM, une bathymétrie SHOM et le relief Mapzen inchangé.
+Lancement : `python3 cartography/server.py --real-cassis`. Les sources DEMO et
+leurs six captures restent disponibles. Voir [préparation, licences et limites](CASSIS_REAL.md).
+**Ne pas utiliser NoWave pour la navigation officielle.**

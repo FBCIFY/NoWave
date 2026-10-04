@@ -1,0 +1,6 @@
+-r requirements.txt
+shapely==2.1.2
+contourpy==1.4.0
+scipy==1.18.1
+rasterio==1.5.2
+py7zr==1.1.3

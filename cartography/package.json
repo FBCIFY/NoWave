@@ -3,7 +3,10 @@
   "private": true,
   "scripts": {
     "test": "node tools/validate_style.cjs",
-    "test:web": "node tools/browser_smoke.cjs"
+    "test:web": "node tools/browser_smoke.cjs",
+    "test:relief": "node tools/browser_relief.cjs",
+    "test:visual": "node tools/browser_final_style.cjs",
+    "test:cassis": "node tools/browser_cassis.cjs"
   },
   "devDependencies": {
     "@maplibre/maplibre-gl-style-spec": "26.4.4",

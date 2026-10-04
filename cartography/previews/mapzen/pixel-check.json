@@ -1,0 +1,17 @@
+{
+  "cassis": {
+    "opaque_sea_pixels": 204878,
+    "changed_sea_pixels": 0,
+    "changed_other_pixels": 325770
+  },
+  "la-ciotat": {
+    "opaque_sea_pixels": 366780,
+    "changed_sea_pixels": 0,
+    "changed_other_pixels": 200990
+  },
+  "marseille": {
+    "opaque_sea_pixels": 244102,
+    "changed_sea_pixels": 0,
+    "changed_other_pixels": 145662
+  }
+}

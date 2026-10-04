@@ -1,7 +1,7 @@
 # Contrat de données NoWave — v1
 
-Le style n'est pas un fournisseur de données. Démo livrée : **100 % fictive**,
-au point 0°/0°, avec des géométries et profondeurs synthétiques. Rien n'est une
+Le style n'est pas un fournisseur de données. Données nautiques de démo : **100 % fictives**,
+au point 0°/0°. Le DEM Mapzen/AWS est réel et externe ; la scène nautique est fictive, avec des géométries et profondeurs synthétiques. Rien n'est une
 observation nautique, y compris les secteurs, mouillages et caractéristiques de feux.
 
 ## Archives vectorielles réelles
@@ -27,11 +27,11 @@ sont en coordonnées géographiques avant encodage MVT (GeoJSON WGS84).
 | lighthouse, light | Point | `icon=lighthouse/light-red/green/yellow/white/black`, `name`, `characteristic`, `rank` |
 | buoy, beacon | Point | `icon`, `name`, `characteristic`, `virtual=false`, `rank` |
 | anchorage, ship_anchorage | Point | `identified=true`, `icon=anchor/anchor-ship`, `name` |
-| mooring, wreck, landmark | Point | `icon=mooring/wreck/landmark`, `name` |
+| mooring, wreck, danger_rock, landmark | Point | `icon=mooring/wreck/danger-rock/landmark/landmark-tower/landmark-monument/landmark-chimney/landmark-pylon`, `name` |
 | shoal, reef | Polygon | `name` facultatif |
 | restricted, military, reserve, windfarm | Polygon | zones permanentes identifiées, `name` pour réserve |
 | light_sector | Polygon | `color` ; géométrie dérivée des angles et de la portée réels |
-| sea_name, coastal_city, coastal_town, bay_name, cape_name, island_name, beach_name, cove_name | Point | `name`, noms géographiques seulement |
+| sea_name, gulf_name, roadstead_name, coastal_city, coastal_town, bay_name, cape_name, island_name, beach_name, cove_name, calanque_name | Point | `name`, noms géographiques seulement |
 
 Les types inconnus sont ignorés. Les exclusions demandées (sondes, AIS virtuelles,
 ZEE, eaux territoriales, zones temporaires, travaux, pêche, baignade, aquaculture,
@@ -67,13 +67,14 @@ référentiel vertical, résolution, date, couverture et licence documentés.
 `depth_area` est un fallback discret, pas un substitut exact au raster continu.
 
 `--relief-tiles` optionnel : raster DEM Terrarium **masqué aux terres**. Hillshade
-faible (exagération 0 à 8, 0,12 à 14). Ne pas envoyer un DEM marin non masqué.
+faible (exagération 0 à z7, 0,15 à z10, 0,20 à z14, 0,22 à z18).
+`--relief-attribution` est requis avec une source personnalisée. Ne pas envoyer un DEM marin non masqué.
 
-Aucune donnée réelle n'est téléchargée automatiquement. Sources à qualifier
-ensuite : modèle bathymétrique public (par exemple GEBCO/EMODnet), littoral OSM
-ou autre source compatible, objets nautiques et secteurs vérifiés auprès de
-leurs producteurs. Leur résolution, disponibilité, licences et exactitude
-ne sont pas présumées. Une source réelle manquante reste absente.
+Le DEM Mapzen/AWS est chargé depuis Internet dans le POC. Le pilote Cassis
+prépare explicitement ses sources OSM/SHOM avec un script séparé ; le serveur
+ne les télécharge pas à l'exécution. Pour d'autres jeux de données, résolution,
+couverture, licences et exactitude doivent être qualifiées auprès des producteurs.
+Une source réelle manquante reste absente.
 
 ## Secteurs
 
@@ -90,6 +91,7 @@ python3 cartography/server.py --host 0.0.0.0 \
   --mbtiles /chemin/nowave-reel.mbtiles \
   --bathymetry-tiles 'http://192.168.1.10:8080/bathy/{z}/{x}/{y}.png' \
   --relief-tiles 'http://192.168.1.10:8080/dem/{z}/{x}/{y}.png' \
+  --relief-attribution 'Producteur et licence du DEM Terrarium fourni' \
   --attribution 'Producteurs, licences et dates des données fournies' \
   --center 5.37 43.29
 ```
@@ -99,3 +101,15 @@ aux données fictives. L'app affiche « Données fournies » ; cela ne certifie
 pas la précision du fichier. Le backend métier et ses tuiles de signalement
 restent indépendants : le media type MVT contient « mapbox » par convention
 ouverte, sans dépendance au service Mapbox.
+
+## Pilote Cassis réel
+
+`CASSIS_REAL` utilise le même contrat de couches avec des sources locales
+GeoJSON/image découpées à Cassis. Voir [CASSIS_REAL.md](CASSIS_REAL.md).
+Chaque objet OSM conserve ses tags et son identifiant. La grille de profondeurs
+SHOM distingue les sondes interpolées à 10 m, le MNT HOMONIM à 0,001° et NoData ;
+aucune source DEMO n’intervient dans ce mode. `marina_extent` conserve la géométrie
+OSM de marina pour les contrôles de couverture et n’est pas une couche visuelle
+de profondeur. Le masque marin est vectoriel. Les futures sources tuilées
+pourront remplacer ces petites sources locales sans changer les règles visuelles.
+**Ne pas utiliser NoWave pour la navigation officielle.**

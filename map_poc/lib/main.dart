@@ -12,10 +12,7 @@ const styleUrl = String.fromEnvironment(
 );
 
 void main() {
-  MapLibreMap.webLibrarySource = const MapLibreJsSource.urls(
-    scriptUrl: 'vendor/maplibre/maplibre-gl.mjs',
-    styleUrl: 'vendor/maplibre/maplibre-gl.css',
-  );
+  MapLibreMap.webLibrarySource = const MapLibreJsSource.cdn();
   runApp(const NoWaveMapPoc());
 }
 
@@ -122,9 +119,7 @@ class _MapPocScreenState extends State<MapPocScreen> {
                   : const Color(0xFFDCEFFA),
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
               child: Text(
-                style.isDemo
-                    ? 'DÉMO FICTIVE — île, profondeurs et objets inventés.\nTest visuel uniquement.'
-                    : 'Données fournies — couverture et fiabilité à vérifier auprès des sources.',
+                style.bannerText,
                 style: const TextStyle(fontSize: 12, color: Color(0xFF20262C)),
               ),
             ),
@@ -176,12 +171,14 @@ class _MapPocScreenState extends State<MapPocScreen> {
                   )
                 else if (!_ready)
                   const Center(child: CircularProgressIndicator()),
-                if (_ready && _error == null)
-                  const Positioned(
+                if (_ready && _error == null && !style!.isReliefPreview)
+                  Positioned(
                     left: 12,
                     right: 12,
-                    bottom: 28,
-                    child: IgnorePointer(child: _DepthLegend()),
+                    bottom: 43,
+                    child: IgnorePointer(
+                      child: _DepthLegend(showUnknownDepth: style.isCassisReal),
+                    ),
                   ),
               ],
             ),
@@ -193,7 +190,9 @@ class _MapPocScreenState extends State<MapPocScreen> {
 }
 
 class _DepthLegend extends StatelessWidget {
-  const _DepthLegend();
+  const _DepthLegend({this.showUnknownDepth = false});
+
+  final bool showUnknownDepth;
 
   @override
   Widget build(BuildContext context) => Align(
@@ -240,6 +239,31 @@ class _DepthLegend extends StatelessWidget {
               Text('1000+'),
             ],
           ),
+          if (showUnknownDepth) ...[
+            const SizedBox(height: 8),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Container(
+                  width: 18,
+                  height: 10,
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFB8C5CC),
+                    border: Border.all(
+                      color: const Color(0xFF8FA1AA),
+                      width: 0.6,
+                    ),
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+                const SizedBox(width: 6),
+                const Text(
+                  'Profondeur inconnue',
+                  style: TextStyle(fontSize: 10),
+                ),
+              ],
+            ),
+          ],
         ],
       ),
     ),

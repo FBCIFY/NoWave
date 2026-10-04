@@ -7,18 +7,12 @@ const {chromium} = require('playwright');
 (async () => {
  const browser = await chromium.launch({headless:true,args:['--no-sandbox','--enable-unsafe-swiftshader']});
  const page = await browser.newPage({viewport:{width:430,height:900},deviceScaleFactor:2});
- const errors=[]; const requests=[];
+ const errors=[]; const requests=[]; const demResponses=[];
+ page.on('response',r=>{if(r.url().startsWith('https://s3.amazonaws.com/elevation-tiles-prod/terrarium/')) demResponses.push({url:r.url(),status:r.status()});});
  page.on('pageerror', e=>errors.push(String(e)));
  page.on('console',m=>{if(m.type()==='error') errors.push(m.text())});
  page.on('request',r=>requests.push(r.url()));
- await page.addInitScript(async () => {
-  const value = await import('/vendor/maplibre/maplibre-gl.mjs');
-  window.maplibregl = {...value, Map: new Proxy(value.Map,{construct(target,args){
-    const map = Reflect.construct(target,args); window.__testMap=map;
-    window.__mapErrors=[]; map.on('error',e=>window.__mapErrors.push(String(e.error)));
-    return map;
-  }})};
- });
+ await require('./browser_observe.cjs')(page, '__testMap');
  await page.goto('http://127.0.0.1:8766');
  try { await page.waitForFunction(()=>window.__testMap?.loaded(),null,{timeout:60000}); } catch(e) { console.log(errors); await page.screenshot({path:path.join(output,'failure.png')}); throw e; }
  await page.screenshot({path:path.join(output,'overview.png')});
@@ -27,7 +21,7 @@ const {chromium} = require('playwright');
  await page.waitForTimeout(1200);
  await page.screenshot({path:path.join(output,'coast.png')});
  console.log('Coast:',await page.evaluate(()=>({zoom:__testMap.getZoom(),features:__testMap.queryRenderedFeatures().length, errors:__mapErrors})));
- await page.evaluate(()=>__testMap.jumpTo({center:[.048,-.015],zoom:16}));
+ await page.evaluate(()=>__testMap.jumpTo({center:[.054,0],zoom:16}));
  await page.waitForTimeout(1200);
  await page.screenshot({path:path.join(output,'buoys.png')});
  if (!await page.evaluate(()=>__testMap.queryRenderedFeatures().some(f=>f.layer.id==='buoy-symbols'))) throw Error('Buoy symbols missing');
@@ -42,9 +36,12 @@ const {chromium} = require('playwright');
  if (zoom<=16) throw Error('Wheel did not zoom');
  console.log('Drag and wheel:',{before,after,zoom});
  console.log('Errors:',errors);
- const external=requests.filter(u=>!u.startsWith('http://127.0.0.1')&&!u.startsWith('blob:')&&!u.startsWith('data:'));
+ const external=requests.filter(u=>!u.startsWith('http://127.0.0.1')&&!u.startsWith('blob:')&&!u.startsWith('data:')&&!u.startsWith('https://s3.amazonaws.com/elevation-tiles-prod/terrarium/')&&!u.startsWith('https://unpkg.com/maplibre-gl@')&&!u.startsWith('https://www.gstatic.com/flutter-canvaskit/')&&!u.startsWith('https://fonts.gstatic.com/s/roboto/'));
+ console.log('Mapzen DEM responses:',{count:demResponses.length,statuses:[...new Set(demResponses.map(r=>r.status))]});
+ if(!demResponses.some(r=>r.status===200)||demResponses.some(r=>r.status!==200)) throw Error('DEM tiles not loaded successfully');
  const mapErrors=await page.evaluate(()=>__mapErrors);
  console.log('External requests:',external);
  if(errors.length||mapErrors.length||external.length) throw Error('Unexpected errors or external requests');
+ fs.writeFileSync(path.join(output,'browser-result.json'),JSON.stringify({errors,mapErrors,demResponses,external,pan:true,zoom:true,loader:'Flutter CDN without library injection'},null,2)+'\n');
  await browser.close();
 })().catch(e=>{console.error(e);process.exit(1)});
