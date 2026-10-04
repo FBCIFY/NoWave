@@ -27,8 +27,16 @@ from build_style import COLORS
 from region_config import load_region
 
 ROOT = Path(__file__).resolve().parents[1]
-REGION = load_region(ROOT / 'regions' / 'cassis.json')
+DEFAULT_REGION_PATH = ROOT / 'regions' / 'cassis.json'
+REGION = load_region(DEFAULT_REGION_PATH)
 BBOX = tuple(REGION['bbox'])
+
+
+def configure_region(path):
+    global REGION, BBOX
+    REGION = load_region(path)
+    BBOX = tuple(REGION['bbox'])
+    return REGION
 SURVEY = 'S201300200'
 SHOM = 'https://services.data.shom.fr'
 HOMONIM_URL = (SHOM+'/INSPIRE/telechargement/prepackageGroup/'
@@ -419,9 +427,23 @@ def make_bathymetry(cache, offline, land, marina):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument(
+        '--region',
+        type=Path,
+        default=DEFAULT_REGION_PATH,
+        help='NoWave region definition JSON',
+    )
     parser.add_argument('--cache', type=Path, default=Path.home()/'.cache/nowave-cassis')
     parser.add_argument('--offline', action='store_true')
     args = parser.parse_args()
+
+    region = configure_region(args.region)
+
+    if region['id'] != 'cassis':
+        parser.error(
+            'Only the cassis source profile is supported for now; '
+            'regional OSM/SHOM preparation is not generic yet'
+        )
     args.cache.mkdir(parents=True, exist_ok=True)
     output = ROOT/'data/cassis'
     output.mkdir(parents=True, exist_ok=True)
