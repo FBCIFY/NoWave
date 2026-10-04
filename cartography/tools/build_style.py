@@ -245,6 +245,14 @@ def build_cassis():
     mask['paint'] = {'fill-color': '#B9CDD7', 'fill-antialias': False}
     next(l for l in layers if l['id'] == 'relief-outside-scene')['paint']['fill-color'] = '#B9CDD7'
     bathymetry = next(l for l in layers if l['id'] == 'bathymetry')
+    # Cassis REAL: keep linear raster interpolation for a smooth nautical
+    # rendering while slightly reducing high-zoom contrast on sparse survey data.
+    bathymetry['paint']['raster-opacity'] = [
+        'interpolate', ['linear'], ['zoom'],
+        12, 1.0,
+        16, 0.96,
+        18, 0.90,
+    ]
     layers.remove(bathymetry)
     layers.insert(layers.index(mask)+1, bathymetry)
     return style

@@ -269,7 +269,21 @@
       "type": "raster",
       "source": "bathymetry",
       "paint": {
-        "raster-opacity": 1,
+        "raster-opacity": [
+          "interpolate",
+          [
+            "linear"
+          ],
+          [
+            "zoom"
+          ],
+          12,
+          1.0,
+          16,
+          0.96,
+          18,
+          0.9
+        ],
         "raster-fade-duration": 0
       }
     },

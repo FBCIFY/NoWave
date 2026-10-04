@@ -43,11 +43,9 @@ class MapPocScreen extends StatefulWidget {
 class _MapPocScreenState extends State<MapPocScreen> {
   late final http.Client _client = widget.client ?? http.Client();
   MapStyle? _style;
-  MapLibreMapController? _map;
   Timer? _loadTimer;
   String? _error;
   bool _ready = false;
-  double _zoom = 10.5;
   int _generation = 0;
 
   @override
@@ -63,14 +61,12 @@ class _MapPocScreenState extends State<MapPocScreen> {
       _style = null;
       _error = null;
       _ready = false;
-      _map = null;
     });
     try {
       final style = await MapStyle.load(_client, Uri.parse(styleUrl));
       if (!mounted || generation != _generation) return;
       setState(() {
         _style = style;
-        _zoom = style.zoom;
       });
       _loadTimer = Timer(const Duration(seconds: 30), () {
         if (mounted && !_ready) {
@@ -98,31 +94,8 @@ class _MapPocScreenState extends State<MapPocScreen> {
   Widget build(BuildContext context) {
     final style = _style;
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('NoWave'),
-        actions: [
-          Padding(
-            padding: const EdgeInsets.only(right: 16),
-            child: Center(
-              child: Text('JOUR  ·  z ${_zoom.toStringAsFixed(1)}'),
-            ),
-          ),
-        ],
-      ),
       body: Column(
         children: [
-          if (style != null)
-            Container(
-              width: double.infinity,
-              color: style.isDemo
-                  ? const Color(0xFFFFF1C9)
-                  : const Color(0xFFDCEFFA),
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-              child: Text(
-                style.bannerText,
-                style: const TextStyle(fontSize: 12, color: Color(0xFF20262C)),
-              ),
-            ),
           Expanded(
             child: Stack(
               children: [
@@ -139,15 +112,9 @@ class _MapPocScreenState extends State<MapPocScreen> {
                     compassEnabled: false,
                     tiltGesturesEnabled: false,
                     rotateGesturesEnabled: false,
-                    trackCameraPosition: true,
-                    onMapCreated: (controller) => _map = controller,
                     onStyleLoadedCallback: () {
                       _loadTimer?.cancel();
                       if (mounted) setState(() => _ready = true);
-                    },
-                    onCameraIdle: () {
-                      final zoom = _map?.cameraPosition?.zoom;
-                      if (mounted && zoom != null) setState(() => _zoom = zoom);
                     },
                   ),
                 if (_error != null)
@@ -171,15 +138,6 @@ class _MapPocScreenState extends State<MapPocScreen> {
                   )
                 else if (!_ready)
                   const Center(child: CircularProgressIndicator()),
-                if (_ready && _error == null && !style!.isReliefPreview)
-                  Positioned(
-                    left: 12,
-                    right: 12,
-                    bottom: 43,
-                    child: IgnorePointer(
-                      child: _DepthLegend(showUnknownDepth: style.isCassisReal),
-                    ),
-                  ),
               ],
             ),
           ),
@@ -187,85 +145,4 @@ class _MapPocScreenState extends State<MapPocScreen> {
       ),
     );
   }
-}
-
-class _DepthLegend extends StatelessWidget {
-  const _DepthLegend({this.showUnknownDepth = false});
-
-  final bool showUnknownDepth;
-
-  @override
-  Widget build(BuildContext context) => Align(
-    alignment: Alignment.bottomCenter,
-    child: Container(
-      constraints: const BoxConstraints(maxWidth: 360),
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: const Color(0xEEF4FBFF),
-        borderRadius: BorderRadius.circular(14),
-      ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          const Text('Profondeur · mètres', style: TextStyle(fontSize: 11)),
-          const SizedBox(height: 6),
-          Container(
-            height: 7,
-            decoration: const BoxDecoration(
-              borderRadius: BorderRadius.all(Radius.circular(4)),
-              gradient: LinearGradient(
-                colors: [
-                  Color(0xFFF4FBFF),
-                  Color(0xFFDCEFFA),
-                  Color(0xFFB9DFF2),
-                  Color(0xFF8FCBE7),
-                  Color(0xFF5AA9D0),
-                  Color(0xFF337FAF),
-                  Color(0xFF1E5D8A),
-                  Color(0xFF123F67),
-                  Color(0xFF0C2F50),
-                ],
-              ),
-            ),
-          ),
-          const SizedBox(height: 4),
-          const Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text('0–2'),
-              Text('10'),
-              Text('50'),
-              Text('200'),
-              Text('1000+'),
-            ],
-          ),
-          if (showUnknownDepth) ...[
-            const SizedBox(height: 8),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Container(
-                  width: 18,
-                  height: 10,
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFB8C5CC),
-                    border: Border.all(
-                      color: const Color(0xFF8FA1AA),
-                      width: 0.6,
-                    ),
-                    borderRadius: BorderRadius.circular(2),
-                  ),
-                ),
-                const SizedBox(width: 6),
-                const Text(
-                  'Profondeur inconnue',
-                  style: TextStyle(fontSize: 10),
-                ),
-              ],
-            ),
-          ],
-        ],
-      ),
-    ),
-  );
 }
