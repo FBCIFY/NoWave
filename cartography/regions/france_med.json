@@ -1,0 +1,26 @@
+{
+  "schema": 1,
+  "id": "france_med",
+  "name": "France Méditerranée continentale",
+  "bbox": [
+    2.95,
+    42.20,
+    7.75,
+    44.10
+  ],
+  "center": [
+    5.35,
+    43.15
+  ],
+  "zoom": 7,
+  "coverage": {
+    "mainland_france": true,
+    "corsica": false,
+    "sea_buffer_nm": 10
+  },
+  "sources": {
+    "vector": "OpenStreetMap",
+    "bathymetry": "SHOM",
+    "relief": "Mapzen/AWS"
+  }
+}
