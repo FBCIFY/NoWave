@@ -64,6 +64,19 @@ def cached(cache, name, url, offline):
     return target
 
 
+def overpass_bbox():
+    """Return the buffered Overpass bbox as south,west,north,east."""
+    west, south, east, north = BBOX
+
+    # Preserve the validated Cassis extraction margins for now.
+    return (
+        south - 0.01,
+        west - 0.015,
+        north,
+        east + 0.01,
+    )
+
+
 def fetch_osm(cache, offline):
     """Prefer Overpass meta+geom; preserve the returned source tags and IDs."""
     target = cache/'osm.json'
@@ -71,8 +84,11 @@ def fetch_osm(cache, offline):
         return json.loads(target.read_text())
     if offline:
         raise FileNotFoundError(target)
+
+    south, west, north, east = overpass_bbox()
+    b = f'{south:.3f},{west:.3f},{north:.3f},{east:.3f}'
+
     # Slight buffer supplies continuous coast ways through the clip rectangle.
-    b = '43.18,5.50,43.225,5.565'
     query = (f'[out:json][timeout:90];(nwr["leisure"="marina"]({b});'
         f'nwr["harbour"]({b});nwr["waterway"="dock"]({b});'
         f'nwr["man_made"~"^(pier|breakwater|groyne|quay)$"]({b});'
