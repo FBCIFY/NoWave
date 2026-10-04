@@ -30,6 +30,8 @@
 	<string>NoWave utilise la caméra pour photographier un objet ou un événement signalé en mer.</string>
 	<key>NSLocationWhenInUseUsageDescription</key>
 	<string>NoWave utilise votre position pour vous situer sur la carte maritime et afficher vos coordonnées.</string>
+	<key>NSMotionUsageDescription</key>
+	<string>NoWave utilise les capteurs de mouvement pour mesurer l’inclinaison de la caméra lors d’un signalement photo.</string>
 	<key>UIApplicationSceneManifest</key>
 	<dict>
 		<key>UIApplicationSupportsMultipleScenes</key>
