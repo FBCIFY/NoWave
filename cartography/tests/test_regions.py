@@ -107,7 +107,10 @@ class RegionTest(unittest.TestCase):
             region = resolve_region(name)
             self.assertEqual(region['id'], name)
             self.assertFalse(region['coverage']['corsica'])
-        self.assertEqual(resolve_region('france_med')['bbox'], [2.95,42.2,7.75,44.1])
+        france = resolve_region('france_med')
+        self.assertEqual(france['bbox'], [2.4,41.85,8.3,44.45])
+        self.assertEqual(france['center'], [5.35,43.15])
+        self.assertEqual(france['coverage']['sea_buffer_nm'], 30)
         with tempfile.TemporaryDirectory() as tmp:
             path = Path(tmp) / 'bad.json'
             for key, bad in [('id','../bad'),('id','BAD'),('bbox',[5,43,4,44]),('bbox',[0,-90,2,90]),

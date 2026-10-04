@@ -3,10 +3,10 @@
   "id": "france_med",
   "name": "France Méditerranée continentale",
   "bbox": [
-    2.95,
-    42.20,
-    7.75,
-    44.10
+    2.4,
+    41.85,
+    8.3,
+    44.45
   ],
   "center": [
     5.35,
@@ -16,7 +16,7 @@
   "coverage": {
     "mainland_france": true,
     "corsica": false,
-    "sea_buffer_nm": 10
+    "sea_buffer_nm": 30
   },
   "sources": {
     "vector": "OpenStreetMap",

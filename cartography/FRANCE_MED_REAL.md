@@ -66,7 +66,7 @@ cartography/tools/build_vector_tiles.sh \
 
 .venv/bin/python cartography/tools/build_bathymetry_tiles.py \
   --field-manifest "$NOWAVE_GENERATION/bathymetry.json" \
-  --bbox 2.95 42.20 7.75 44.10 \
+  --bbox 2.40 41.85 8.30 44.45 \
   --output cartography/tiles/bathymetry/france_med \
   --min-zoom 6 --max-zoom 11
 
@@ -118,9 +118,15 @@ cette implémentation ; la validation physique France Méditerranée reste à fa
 
 ## Géométrie et emprise métier
 
-Configuration : `regions/france_med.json`, bbox `[2.95,42.20,7.75,44.10]`,
-centre `[5.35,43.15]`, zoom 7, Corse exclue. La bbox est un espace de travail,
-pas une déclaration de côte ni de couverture bathymétrique.
+Configuration : `regions/france_med.json`, bbox `[2.40,41.85,8.30,44.45]`,
+centre `[5.35,43.15]`, zoom 7, Corse exclue. La couverture maritime cible
+est de **30 NM, soit 55 560 m**, depuis le littoral réel sélectionné. La bbox
+reste un espace de travail, pas une déclaration de côte, de frontière maritime
+ou de couverture bathymétrique.
+
+La diffusion prévue utilise le serveur cartographique NoWave comme source principale.
+Le cache local Flutter puis le téléchargement hors ligne par zone seront ajoutés
+ultérieurement. Ils ne sont pas encore implémentés dans ce pipeline.
 
 Trois entrées géographiques sont nécessaires :
 
@@ -137,7 +143,7 @@ Trois entrées géographiques sont nécessaires :
 
 Le littoral provient **uniquement** des ways OSM `natural=coastline`, intersectés
 avec `coast_scope`. On ne prend jamais la frontière d’un polygone découpé comme
-côte. Son buffer marin vaut **10 × 1852 = 18 520 m**, calculé en **EPSG:2154
+côte. Son buffer marin vaut **30 × 1852 = 55 560 m**, calculé en **EPSG:2154
 (RGF93 / Lambert-93)**, adapté à la France continentale, puis soustrait des
 terres. Une bande terrestre de 3 km conserve les objets côtiers utiles.
 Les opérations métriques arrondissent les coordonnées au centimètre pour
@@ -183,7 +189,7 @@ peut être préparé avec GDAL (outil optionnel pour cette conversion initiale) 
 ```bash
 ogr2ogr -f GeoJSON /data/nowave/sources/land-france-med.geojson \
   /data/nowave/sources/land-polygons-split-4326/land_polygons.shp \
-  -clipsrc 2.94 42.19 7.76 44.11 -t_srs EPSG:4326
+  -clipsrc 2.39 41.84 8.31 44.46 -t_srs EPSG:4326
 ```
 
 La marge évite que la découpe amont soit confondue avec le trait réel.
