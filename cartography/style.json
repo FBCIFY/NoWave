@@ -440,11 +440,11 @@
           10,
           0,
           11,
-          0,
+          0.25,
           12,
-          0.55,
+          0.85,
           18,
-          0.72
+          1
         ],
         "text-halo-color": [
           "step",
@@ -456,7 +456,7 @@
           10,
           "#337FAF"
         ],
-        "text-halo-width": 0.35
+        "text-halo-width": 0.8
       },
       "layout": {
         "text-field": [
@@ -478,12 +478,12 @@
             "zoom"
           ],
           10,
-          10,
+          12,
           18,
-          11
+          13
         ],
         "symbol-placement": "line",
-        "symbol-spacing": 580,
+        "symbol-spacing": 420,
         "text-padding": 10,
         "text-offset": [
           0,

@@ -71,12 +71,12 @@ def build():
           ['>=', ['zoom'], 13]])
     layers[-1]['paint']['line-opacity'] = zoom(6, 0, 10, .18, 13, .28, 17, .38)
     label('contour-labels', 'contour', 10, '#E5F3FB',
-          ['to-string', ['get', 'depth_m']], 'line', size=10)
+          ['to-string', ['get', 'depth_m']], 'line', size=12)
     layers[-1]['paint']['text-color'] = ['step', ['get', 'depth_m'], '#638A9E', 10, '#EAF7FD']
     layers[-1]['paint']['text-halo-color'] = ['step', ['get', 'depth_m'], '#F4FBFF', 10, '#337FAF']
-    layers[-1]['paint']['text-halo-width'] = .35
-    layers[-1]['paint']['text-opacity'] = zoom(10, 0, 11, 0, 12, .55, 18, .72)
-    layers[-1]['layout']['symbol-spacing'] = 580
+    layers[-1]['paint']['text-halo-width'] = .8
+    layers[-1]['paint']['text-opacity'] = zoom(10, 0, 11, .25, 12, .85, 18, 1)
+    layers[-1]['layout']['symbol-spacing'] = 420
     layers[-1]['filter'] = ['all', layers[-1]['filter'], ['any',
         ['in', ['get', 'depth_m'], ['literal', [5, 10, 20, 50, 100, 200, 500, 1000]]],
         ['>=', ['zoom'], 16]]]
