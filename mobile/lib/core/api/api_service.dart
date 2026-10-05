@@ -72,6 +72,26 @@ class ApiService {
     return _readResponse(response);
   }
 
+  Future<String> put(
+    String path, {
+    Map<String, String>? headers,
+    Object? body,
+  }) async {
+    final response = await _client
+        .put(_resolveUri(path), headers: headers, body: body)
+        .timeout(const Duration(seconds: 10));
+
+    return _readResponse(response);
+  }
+
+  Future<String> delete(String path, {Map<String, String>? headers}) async {
+    final response = await _client
+        .delete(_resolveUri(path), headers: headers)
+        .timeout(const Duration(seconds: 10));
+
+    return _readResponse(response);
+  }
+
   Uri _resolveUri(String path) {
     final baseUri = Uri.tryParse(_baseUrl);
 
