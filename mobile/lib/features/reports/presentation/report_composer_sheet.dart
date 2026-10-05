@@ -8,6 +8,7 @@ import 'package:flutter/material.dart';
 import '../../../core/api/api_exception.dart';
 import '../../../core/haptics/app_haptics.dart';
 import '../domain/manual_report.dart';
+import 'report_category_style.dart';
 import 'report_photo_viewer.dart';
 
 /// Panneau du bas en mode signalement : catégorie, commentaire facultatif
@@ -42,8 +43,8 @@ class ReportComposerSheet extends StatefulWidget {
   static double heightFor(MediaQueryData mediaQuery) =>
       math.min(_formHeight, _maxHeightFor(mediaQuery));
 
-  // En-tête 12 + 48, catégories 12 + 64, commentaire 12 + 48,
-  // bouton 12 + 48 + 16.
+  /// En-tête 12 + 48, catégories 12 + 64, commentaire 12 + 48,
+  /// bouton 12 + 48 + 16.
   static const _formHeight = 272.0;
 
   static double _maxHeightFor(MediaQueryData mediaQuery) => math.max(
@@ -186,7 +187,7 @@ class _ReportComposerSheetState extends State<ReportComposerSheet> {
     };
   }
 
-  // Le signalement est déjà publié : seul l'envoi de la photo a échoué.
+  /// Le signalement est déjà publié : seul l'envoi de la photo a échoué.
   String _messageForPhotoError(ApiException error) {
     return switch (error.statusCode) {
       401 => 'Photo non envoyée : session expirée. Reconnectez-vous.',
@@ -310,7 +311,7 @@ class _ReportComposerSheetState extends State<ReportComposerSheet> {
   static const _accentColor = Color(0xFF0DB8D5);
   static const _errorColor = Color(0xFFAF3942);
 
-  // Même arrondi que les champs et boutons du thème.
+  /// Même arrondi que les champs et boutons du thème.
   static const _controlRadius = BorderRadius.all(Radius.circular(14));
 
   static final _primaryButtonStyle = FilledButton.styleFrom(
@@ -320,13 +321,7 @@ class _ReportComposerSheetState extends State<ReportComposerSheet> {
     disabledForegroundColor: const Color(0xFF637888),
   );
 
-  static const _categories = [
-    (ReportCategory.marineAnimal, Icons.pets_outlined, 'Animal marin'),
-    (ReportCategory.obstruction, Icons.warning_amber_rounded, 'Obstacle'),
-    (ReportCategory.pollution, Icons.water_drop_outlined, 'Pollution'),
-  ];
-
-  // Le compteur n'apparaît qu'à l'approche de la limite de 250 caractères.
+  /// Le compteur n'apparaît qu'à l'approche de la limite de 250 caractères.
   static const _commentMaxLength = 250;
   static const _counterThreshold = 200;
 
@@ -385,7 +380,7 @@ class _ReportComposerSheetState extends State<ReportComposerSheet> {
     );
   }
 
-  // Le badge montre que la miniature s'ouvre : sans lui, rien ne l'indique.
+  /// Le badge montre que la miniature s'ouvre : sans lui, rien ne l'indique.
   Widget _photoThumbnail(Uint8List photo) {
     return Semantics(
       button: true,
@@ -428,17 +423,17 @@ class _ReportComposerSheetState extends State<ReportComposerSheet> {
   Widget _categoryPicker() {
     return Row(
       children: [
-        for (final (index, (category, icon, label)) in _categories.indexed) ...[
+        for (final (index, category) in ReportCategory.values.indexed) ...[
           if (index > 0) const SizedBox(width: 8),
-          Expanded(child: _categoryTile(category, icon, label)),
+          Expanded(child: _categoryTile(category)),
         ],
       ],
     );
   }
 
-  // Icône et nom visibles : une infobulle demande un appui long, que
-  // personne ne fait sur l'eau.
-  Widget _categoryTile(ReportCategory category, IconData icon, String label) {
+  /// Icône et nom visibles : une infobulle demande un appui long, que
+  /// personne ne fait sur l'eau.
+  Widget _categoryTile(ReportCategory category) {
     final selected = _category == category;
     final foreground = selected ? Colors.white : _textColor;
     return Semantics(
@@ -469,14 +464,14 @@ class _ReportComposerSheetState extends State<ReportComposerSheet> {
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  Icon(icon, color: foreground),
+                  Icon(category.icon, color: foreground),
                   const SizedBox(height: 4),
                   Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 4),
                     child: FittedBox(
                       fit: BoxFit.scaleDown,
                       child: Text(
-                        label,
+                        category.label,
                         maxLines: 1,
                         style: TextStyle(
                           color: foreground,
@@ -531,8 +526,8 @@ class _ReportComposerSheetState extends State<ReportComposerSheet> {
     );
   }
 
-  // Le signalement est en ligne quoi qu'il arrive à la photo : on le dit
-  // d'abord, puis l'état de l'envoi.
+  /// Le signalement est en ligne quoi qu'il arrive à la photo : on le dit
+  /// d'abord, puis l'état de l'envoi.
   Widget _publishedStatus() {
     final photoMessage = _errorMessage ?? 'Envoi de la photo…';
     return Column(
@@ -563,9 +558,9 @@ class _ReportComposerSheetState extends State<ReportComposerSheet> {
     );
   }
 
-  // Signalement publié mais photo non envoyée : réessayer, ou terminer en
-  // abandonnant la photo. L'un sous l'autre, les libellés tiennent sur une
-  // ligne.
+  /// Signalement publié mais photo non envoyée : réessayer, ou terminer en
+  /// abandonnant la photo. L'un sous l'autre, les libellés tiennent sur une
+  /// ligne.
   Widget _photoRetryActions() {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,

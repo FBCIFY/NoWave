@@ -141,8 +141,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
     await _askPhonePermission();
   }
 
-  // Préférence activée : on demande l'autorisation si iOS/Android peut encore
-  // l'afficher, sinon on ouvre les réglages du téléphone.
+  /// Préférence activée : on demande l'autorisation si iOS/Android peut encore
+  /// l'afficher, sinon on ouvre les réglages du téléphone.
   Future<void> _askPhonePermission() async {
     final permissions = widget.notificationPermissions;
     try {

@@ -8,6 +8,7 @@ import 'package:mapbox_maps_flutter/mapbox_maps_flutter.dart';
 import 'package:precise_compass/precise_compass.dart';
 import 'package:uuid/uuid.dart';
 
+import '../../../core/map/accuracy_halo.dart';
 import '../../../core/map/map_config.dart';
 import '../../../core/location/coordinate_formatter.dart';
 import '../../../core/location/location_service.dart';
@@ -15,8 +16,11 @@ import '../../../core/sensors/device_orientation_service.dart';
 import '../../../core/haptics/app_haptics.dart';
 import '../../camera/domain/photo_report_draft.dart';
 import '../../reports/presentation/report_composer_sheet.dart';
+import '../../reports/presentation/report_detail_sheet.dart';
+import '../../reports/data/report_detail_service.dart';
 import '../../reports/data/manual_report_service.dart';
 import '../../reports/domain/manual_report.dart';
+import '../data/report_tiles.dart';
 import 'widgets/map_notice_banner.dart';
 import 'widgets/report_marker.dart';
 
@@ -38,18 +42,26 @@ class MapScreen extends StatefulWidget {
   final Future<PhotoReportDraft?> Function()? onOpenCamera;
   final ManualReportService? reportService;
 
+  /// Couche des signalements publiés ; absente dans les tests.
+  final ReportTiles? reportTiles;
+
+  /// Charge la fiche d'un signalement touché sur la carte.
+  final ReportDetailService? reportDetailService;
+
   const MapScreen({
     super.key,
     this.onOpenProfile,
     this.onOpenCamera,
     this.reportService,
+    this.reportTiles,
+    this.reportDetailService,
   });
 
   @override
   State<MapScreen> createState() => _MapScreenState();
 }
 
-class _MapScreenState extends State<MapScreen> {
+class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
   final _locationService = LocationService();
   StreamSubscription<geo.Position>? _positionSubscription;
   StreamSubscription<CompassReading>? _headingSubscription;
@@ -76,7 +88,8 @@ class _MapScreenState extends State<MapScreen> {
   final Uuid _uuid = const Uuid();
   ManualReportRequest? _pendingReport;
   PhotoReportDraft? _photoDraft;
-  // Signalement photo publié dont le JPEG n'est pas encore envoyé.
+
+  /// Signalement photo publié dont le JPEG n'est pas encore envoyé.
   String? _publishedReportId;
   bool _isUploadingPhoto = false;
   Timer? _reportPointTimer;
@@ -88,9 +101,34 @@ class _MapScreenState extends State<MapScreen> {
   int _noticeId = 0;
   Timer? _noticeTimer;
 
+  /// Dernier zoom connu, pour relancer le battement de la heatmap au
+  /// retour au premier plan.
+  double? _cameraZoom;
+
+  /// Coupe le battement de la heatmap et le renouvellement du token des
+  /// tuiles quand l'app n'est plus visible.
+  AppLifecycleListener? _lifecycleListener;
+
+  /// Renouvellement périodique du token des tuiles ; arrêté en arrière-plan.
+  Timer? _reportTilesTokenTimer;
+
+  /// Halo de précision du GPS, sous le curseur et sous les signalements :
+  /// un danger reste lisible même quand la position est approximative.
+  final _accuracyHalo = AccuracyHalo(below: ReportTiles.heatmapLayerId);
+
+  /// Curseur affiché : point bleu de loin (true), flèche 3D de près (false),
+  /// null avant la première position.
+  bool? _puckZoomedOut;
+
   @override
   void initState() {
     super.initState();
+    _lifecycleListener = AppLifecycleListener(
+      onHide: _pauseMapUpdates,
+      onShow: _resumeMapUpdates,
+    );
+    _startReportTilesTokenRenewal();
+    WidgetsBinding.instance.addObserver(this);
     _headingSubscription = DeviceOrientationService().readings.listen(
       (reading) {
         if (!mounted) return;
@@ -105,8 +143,8 @@ class _MapScreenState extends State<MapScreen> {
     );
   }
 
-  // En haut de la carte plutôt qu'en SnackBar : le bas est pris par les
-  // boutons.
+  /// En haut de la carte plutôt qu'en SnackBar : le bas est pris par les
+  /// boutons.
   void _showNotice(String message, MapNoticeKind kind) {
     _noticeTimer?.cancel();
     setState(() {
@@ -129,9 +167,12 @@ class _MapScreenState extends State<MapScreen> {
     setState(() => _compassTurns += change / 360);
   }
 
-  // Un geste de l'utilisateur coupe le suivi GPS ; une rotation au doigt
-  // passe la boussole en mode manuel.
+  /// Un geste de l'utilisateur coupe le suivi GPS ; une rotation au doigt
+  /// passe la boussole en mode manuel.
   void _handleMapCameraChange(CameraChangedEventData event) {
+    _cameraZoom = event.cameraState.zoom;
+    _syncHeatmapPulse();
+    _syncLocationPuck().ignore();
     final bearing = event.cameraState.bearing;
     final bearingDelta = ((bearing - _cameraBearing + 540) % 360 - 180);
     final userMovedMap = _mapTouchActive && _isFollowing;
@@ -186,11 +227,11 @@ class _MapScreenState extends State<MapScreen> {
         ),
       ]);
     } catch (_) {
-      // Keep Mapbox's default placement if ornament settings are unavailable.
+      // Ornements non réglables : Mapbox garde sa disposition par défaut.
     }
   }
 
-  // Bascule entre nord en haut et cap du téléphone.
+  /// Bascule entre nord en haut et cap du téléphone.
   Future<void> _toggleCompass() async {
     final map = _mapboxMap;
     if (map == null) return;
@@ -213,7 +254,7 @@ class _MapScreenState extends State<MapScreen> {
       if (_isFollowing) {
         final camera = await map.getCameraState();
         if (!mounted) return;
-        // Mapbox marks this animated viewport helper as experimental.
+        // Mapbox marque cette animation du viewport comme expérimentale.
         // ignore: experimental_member_use
         setStateWithViewportAnimation(() {
           _orientationMode = nextMode;
@@ -244,17 +285,258 @@ class _MapScreenState extends State<MapScreen> {
     }
   }
 
+  /// Dernière relance de la couche des signalements après une tuile en
+  /// échec : en déplaçant la carte, les erreurs arrivent par dizaines.
+  DateTime? _lastReportTilesRetry;
+
+  /// Intervalle minimal entre deux relances de la couche des signalements.
+  static const _reportTilesRetryInterval = Duration(seconds: 30);
+
   void _handleMapLoadError(MapLoadingErrorEventData event) {
+    debugPrint(
+      'Chargement Mapbox en échec (${event.type.name}, '
+      'source ${event.sourceId ?? '-'}) : ${event.message}',
+    );
     if (!mounted) return;
+
+    // Une tuile de signalements en échec ne doit pas cacher le fond de
+    // carte, qui reste utilisable.
+    if (event.sourceId == ReportTiles.sourceId) {
+      // Refusée par la limite de débit : Mapbox réessaie seul, et ni un
+      // nouveau token ni le bandeau n'y changent rien.
+      if (ReportTiles.isThrottled(event.message)) return;
+      _handleReportTilesError();
+      return;
+    }
 
     setState(() {
       _mapError = 'Impossible de charger la carte. Vérifiez votre connexion et réessayez.';
     });
   }
 
+  /// Le token Firebase expire au bout d'une heure : on le redonne à Mapbox,
+  /// qui l'enverra avec les prochaines tuiles, et on prévient sans bloquer.
+  void _handleReportTilesError() {
+    final map = _mapboxMap;
+    final reportTiles = widget.reportTiles;
+    final now = DateTime.now();
+    final lastRetry = _lastReportTilesRetry;
+    if (map == null || reportTiles == null) return;
+    if (lastRetry != null &&
+        now.difference(lastRetry) < _reportTilesRetryInterval) {
+      return;
+    }
+    _lastReportTilesRetry = now;
+    unawaited(
+      reportTiles.authorize(map).catchError((Object error) {
+        debugPrint('Token des signalements non renouvelé : $error');
+      }),
+    );
+    _showNotice(
+      'Signalements momentanément indisponibles.',
+      MapNoticeKind.warning,
+    );
+  }
+
+  /// Intervalle entre deux renouvellements du token des tuiles. Firebase
+  /// ne donne un nouveau token qu'à moins de 5 min de l'expiration : en
+  /// repassant plus souvent, celui de Mapbox n'expire jamais, et les tuiles
+  /// redemandées toutes les 15 s ne tombent pas en 401.
+  static const _reportTilesTokenInterval = Duration(minutes: 4);
+
+  void _startReportTilesTokenRenewal() {
+    _reportTilesTokenTimer?.cancel();
+    _reportTilesTokenTimer = Timer.periodic(
+      _reportTilesTokenInterval,
+      (_) => _renewReportTilesToken(),
+    );
+  }
+
+  /// Redonne le token à Mapbox ; le même tant qu'il est encore valide.
+  void _renewReportTilesToken() {
+    final map = _mapboxMap;
+    final reportTiles = widget.reportTiles;
+    if (!mounted || map == null || reportTiles == null) return;
+    unawaited(
+      reportTiles.authorize(map).catchError((Object error) {
+        debugPrint('Token des signalements non renouvelé : $error');
+      }),
+    );
+  }
+
+  /// L'app n'est plus visible : ni battement ni renouvellement du token.
+  void _pauseMapUpdates() {
+    widget.reportTiles?.stopPulse();
+    _reportTilesTokenTimer?.cancel();
+  }
+
+  /// Retour dans l'app : le token a pu expirer entre-temps, on le renouvelle
+  /// avant que Mapbox ne redemande les tuiles.
+  void _resumeMapUpdates() {
+    _syncHeatmapPulse();
+    _renewReportTilesToken();
+    _startReportTilesTokenRenewal();
+  }
+
   void _handleMapLoaded(MapLoadedEventData event) {
     if (!mounted || _mapError == null) return;
     setState(() => _mapError = null);
+  }
+
+  /// Chaque chargement de style efface les couches ajoutées : on remet celle
+  /// des signalements. Une erreur ici ne doit pas bloquer la carte.
+  Future<void> _addReportTiles() async {
+    final map = _mapboxMap;
+    final reportTiles = widget.reportTiles;
+    if (map == null || reportTiles == null) return;
+
+    try {
+      await reportTiles.addTo(map);
+      _cameraZoom ??= (await map.getCameraState()).zoom;
+      _syncHeatmapPulse();
+    } catch (error) {
+      debugPrint('Couche des signalements indisponible : $error');
+    }
+  }
+
+  /// Marge autour du doigt pour toucher un badge, en pixels.
+  static const _badgeTapRadius = 8.0;
+
+  /// Marge autour du doigt pour toucher le nombre d'une zone : la zone
+  /// colorée est bien plus large que le nombre.
+  static const _clusterTapRadius = 32.0;
+
+  /// Niveaux de zoom gagnés en touchant une zone.
+  static const _clusterZoomStep = 2.0;
+
+  /// Toucher un badge ouvre sa fiche ; toucher le nombre d'une zone
+  /// rapproche la carte. Les interactions restent valables après un
+  /// changement de style, qui ne fait que recréer les couches.
+  void _addReportInteractions(MapboxMap map) {
+    if (widget.reportTiles == null) return;
+    map.addInteraction(
+      TapInteraction(
+        FeaturesetDescriptor(layerId: ReportTiles.pointsLayerId),
+        (feature, _) => _openReportDetail(feature),
+        radius: _badgeTapRadius,
+      ),
+    );
+    map.addInteraction(
+      TapInteraction(
+        FeaturesetDescriptor(layerId: ReportTiles.countLayerId),
+        (feature, context) =>
+            unawaited(_zoomIntoCluster(feature, context.point)),
+        radius: _clusterTapRadius,
+      ),
+    );
+  }
+
+  /// Ouvre la fiche du signalement touché, sauf pendant une création.
+  void _openReportDetail(FeaturesetFeature feature) {
+    final service = widget.reportDetailService;
+    final reportId = feature.properties['report_id'];
+    if (!mounted || _reportComposerOpen) return;
+    if (service == null || reportId is! String) return;
+    AppHaptics.selection();
+    final position = _position;
+    unawaited(
+      ReportDetailSheet.show(
+        context,
+        reportId: reportId,
+        loadReport: service.fetchReport,
+        userPosition: position == null
+            ? null
+            : (latitude: position.latitude, longitude: position.longitude),
+      ),
+    );
+  }
+
+  /// Rapproche la carte sur la zone touchée, jusqu'à voir ses badges.
+  Future<void> _zoomIntoCluster(FeaturesetFeature feature, Point tapped) async {
+    final map = _mapboxMap;
+    if (!mounted || map == null || _reportComposerOpen) return;
+    AppHaptics.selection();
+    final coordinates = feature.geometry['coordinates'];
+    final center = coordinates is List && coordinates.length >= 2
+        ? Point(
+            coordinates: Position(
+              (coordinates[0] as num).toDouble(),
+              (coordinates[1] as num).toDouble(),
+            ),
+          )
+        : tapped;
+    try {
+      final zoom = _cameraZoom ?? (await map.getCameraState()).zoom;
+      if (!mounted) return;
+      // Le suivi GPS reprendrait la caméra pendant l'animation.
+      setState(() {
+        _isFollowing = false;
+        _viewport = const IdleViewportState();
+      });
+      await WidgetsBinding.instance.endOfFrame;
+      await map.easeTo(
+        CameraOptions(center: center, zoom: zoom + _clusterZoomStep),
+        MapAnimationOptions(duration: 500),
+      );
+    } catch (_) {
+      // Carte en cours de rechargement : l'utilisateur peut zoomer au doigt.
+    }
+  }
+
+  /// Réglage d'accessibilité changé pendant que la carte est ouverte.
+  @override
+  void didChangeAccessibilityFeatures() => _syncHeatmapPulse();
+
+  /// L'utilisateur a demandé moins d'animations : « Supprimer les
+  /// animations » sur Android, « Réduire les animations » sur iOS, que
+  /// Flutter expose séparément.
+  bool get _reduceMotion =>
+      (MediaQuery.maybeDisableAnimationsOf(context) ?? false) ||
+      View.of(context).platformDispatcher.accessibilityFeatures.reduceMotion;
+
+  /// La heatmap bat tant qu'elle est visible, sauf si l'utilisateur a
+  /// demandé moins d'animations dans les réglages du téléphone.
+  void _syncHeatmapPulse() {
+    final map = _mapboxMap;
+    final zoom = _cameraZoom;
+    if (!mounted || map == null || zoom == null) return;
+    widget.reportTiles?.updatePulse(map, zoom: zoom, enabled: !_reduceMotion);
+  }
+
+  /// Point bleu de loin, flèche 3D de près. Mapbox ne change de curseur
+  /// que quand le zoom franchit le seuil.
+  Future<void> _syncLocationPuck() async {
+    final map = _mapboxMap;
+    if (map == null || _position == null) return;
+    final zoomedOut =
+        (_cameraZoom ?? _userZoom) < MapConfig.detailedPuckMinZoom;
+    if (zoomedOut == _puckZoomedOut) return;
+    _puckZoomedOut = zoomedOut;
+    try {
+      await map.location.updateSettings(
+        MapConfig.locationPuckSettings(zoomedOut: zoomedOut),
+      );
+    } catch (_) {
+      // Réessayé au prochain mouvement de la caméra.
+      _puckZoomedOut = null;
+      rethrow;
+    }
+  }
+
+  /// Place le halo de précision sur [position], ou sur la dernière position
+  /// connue après un chargement de style.
+  void _showAccuracyHalo([geo.Position? position]) {
+    final map = _mapboxMap;
+    final at = position ?? _position;
+    if (map == null || at == null) return;
+    unawaited(
+      _accuracyHalo.show(
+        map,
+        latitude: at.latitude,
+        longitude: at.longitude,
+        accuracy: at.accuracy,
+      ),
+    );
   }
 
   Future<void> _retryMapLoad() async {
@@ -284,9 +566,9 @@ class _MapScreenState extends State<MapScreen> {
   /// raccourcit l'animation quand la distance est faible.
   static const _recenterMaxDuration = Duration(milliseconds: 1200);
 
-  // Centre la carte sur l'utilisateur puis le suit à chaque nouvelle position.
-  // [animated] : vol jusqu'à l'utilisateur (bouton), sinon saut direct
-  // (lancement de la carte).
+  /// Centre la carte sur l'utilisateur puis le suit à chaque nouvelle position.
+  /// [animated] : vol jusqu'à l'utilisateur (bouton), sinon saut direct
+  /// (lancement de la carte).
   Future<void> _locate({bool animated = false}) async {
     setState(() {
       _isLocating = true;
@@ -301,10 +583,11 @@ class _MapScreenState extends State<MapScreen> {
       setState(() {
         _position = position;
       });
+      _showAccuracyHalo(position);
 
-      await _mapboxMap?.location.updateSettings(
-        MapConfig.locationPuckSettings(),
-      );
+      // Curseur remis à chaque recentrage, adapté au zoom actuel.
+      _puckZoomedOut = null;
+      await _syncLocationPuck();
 
       if (!mounted) return;
 
@@ -313,7 +596,7 @@ class _MapScreenState extends State<MapScreen> {
         try {
           previousCamera = await _mapboxMap?.getCameraState();
         } catch (_) {
-          // The default camera values below remain available.
+          // Pas de caméra précédente : valeurs par défaut ci-dessous.
         }
       }
 
@@ -342,7 +625,7 @@ class _MapScreenState extends State<MapScreen> {
       }
 
       if (animated) {
-        // Mapbox marks this animated viewport helper as experimental.
+        // Mapbox marque cette animation du viewport comme expérimentale.
         // ignore: experimental_member_use
         setStateWithViewportAnimation(
           followUser,
@@ -358,15 +641,24 @@ class _MapScreenState extends State<MapScreen> {
           geo.Geolocator.getPositionStream(
             locationSettings: const geo.LocationSettings(
               accuracy: geo.LocationAccuracy.high,
-              distanceFilter: 10,
+              // Chaque position, même immobile : le halo doit rétrécir
+              // quand la précision s'améliore.
+              distanceFilter: 0,
             ),
           ).listen(
             (position) {
               if (!mounted) return;
-              setState(() {
-                _position = position;
-                _locationError = null;
-              });
+              _showAccuracyHalo(position);
+              final previous = _position;
+              _position = position;
+              // L'écran ne se redessine que si les coordonnées affichées
+              // changent, soit environ tous les 30 m.
+              if (_locationError == null &&
+                  previous != null &&
+                  _sameDisplayedCoordinates(previous, position)) {
+                return;
+              }
+              setState(() => _locationError = null);
             },
             onError: (Object _) {
               if (!mounted) return;
@@ -405,6 +697,13 @@ class _MapScreenState extends State<MapScreen> {
     }
   }
 
+  /// Vrai si les deux positions s'affichent pareil, à la seconde d'arc.
+  static bool _sameDisplayedCoordinates(geo.Position a, geo.Position b) =>
+      formatDms(a.latitude, isLatitude: true) ==
+          formatDms(b.latitude, isLatitude: true) &&
+      formatDms(a.longitude, isLatitude: false) ==
+          formatDms(b.longitude, isLatitude: false);
+
   Future<void> _openCamera() async {
     final draft = await widget.onOpenCamera?.call();
     if (draft == null || !mounted) return;
@@ -413,8 +712,8 @@ class _MapScreenState extends State<MapScreen> {
     await _openReportComposer(photoDraft: draft);
   }
 
-  // Le résultat de la caméra arrive dès le début de sa fermeture : on attend
-  // que la carte soit de nouveau visible pour que l'animation se voie.
+  /// Le résultat de la caméra arrive dès le début de sa fermeture : on attend
+  /// que la carte soit de nouveau visible pour que l'animation se voie.
   Future<void> _waitForCoveringRouteToClose() async {
     final animation = ModalRoute.of(context)?.secondaryAnimation;
     if (animation == null || animation.isDismissed) return;
@@ -429,8 +728,8 @@ class _MapScreenState extends State<MapScreen> {
     await closed.future;
   }
 
-  // Ouvre le formulaire et mémorise la caméra pour la rétablir à la fermeture.
-  // Avec une photo, le point part de l'estimation plutôt que du GPS actuel.
+  /// Ouvre le formulaire et mémorise la caméra pour la rétablir à la fermeture.
+  /// Avec une photo, le point part de l'estimation plutôt que du GPS actuel.
   Future<void> _openReportComposer({PhotoReportDraft? photoDraft}) async {
     if (_reportComposerOpen) return;
     final position = _position;
@@ -473,7 +772,7 @@ class _MapScreenState extends State<MapScreen> {
     // Caméra déclarée plutôt qu'un easeTo : Mapbox la garde (carte à plat,
     // point sur l'estimation) jusqu'à ce que l'utilisateur touche la carte,
     // sans qu'une fin de suivi GPS puisse l'annuler en cours de route.
-    // Mapbox marks this animated viewport helper as experimental.
+    // Mapbox marque cette animation du viewport comme expérimentale.
     // ignore: experimental_member_use
     setStateWithViewportAnimation(
       () {
@@ -534,7 +833,7 @@ class _MapScreenState extends State<MapScreen> {
           MapAnimationOptions(duration: 350),
         );
       } catch (_) {
-        // Keep the existing camera if restoration is unavailable.
+        // Restauration impossible : la carte reste où elle est.
       }
     }
     if (!mounted || !resumeFollowing || _reportComposerOpen) return;
@@ -626,8 +925,8 @@ class _MapScreenState extends State<MapScreen> {
     _showNotice('Signalement publié avec sa photo.', MapNoticeKind.success);
   }
 
-  // Le JPEG n'est gardé que pendant ce parcours : fermer après la publication
-  // abandonne la photo, le signalement reste publié.
+  /// Le JPEG n'est gardé que pendant ce parcours : fermer après la publication
+  /// abandonne la photo, le signalement reste publié.
   void _leaveReportComposer() {
     if (_isUploadingPhoto) return;
     final publishedWithoutPhoto = _publishedReportId != null;
@@ -636,8 +935,8 @@ class _MapScreenState extends State<MapScreen> {
     _showNotice('Signalement publié sans photo.', MapNoticeKind.warning);
   }
 
-  // Sans photo, rien n'indique que le repère est fixe et que c'est la carte
-  // qui bouge dessous.
+  /// Sans photo, rien n'indique que le repère est fixe et que c'est la carte
+  /// qui bouge dessous.
   String _reportHint() {
     final draft = _photoDraft;
     if (draft == null) return 'Déplacez la carte pour placer le point';
@@ -650,8 +949,8 @@ class _MapScreenState extends State<MapScreen> {
     return 'Estimé à $distanceText · ajustez si besoin';
   }
 
-  // onMapIdle attend aussi le chargement des tuiles, lent en mer : le repère
-  // se pose dès que la caméra ne bouge plus depuis 200 ms.
+  /// onMapIdle attend aussi le chargement des tuiles, lent en mer : le repère
+  /// se pose dès que la caméra ne bouge plus depuis 200 ms.
   void _liftReportMarker() {
     _reportMarkerLifted.value = true;
     _reportMarkerDropTimer?.cancel();
@@ -669,15 +968,15 @@ class _MapScreenState extends State<MapScreen> {
     );
   }
 
-  // En signalement, la carte reste à plat : inclinée, elle déformerait les
-  // distances autour du point à placer.
+  /// En signalement, la carte reste à plat : inclinée, elle déformerait les
+  /// distances autour du point à placer.
   Future<void> _setMapTiltEnabled(MapboxMap map, bool enabled) async {
     try {
       await map.gestures.updateSettings(
         GesturesSettings(pitchEnabled: enabled),
       );
     } catch (_) {
-      // Tilt stays available if gesture settings are unavailable.
+      // Réglages des gestes indisponibles : l'inclinaison reste possible.
     }
   }
 
@@ -698,7 +997,7 @@ class _MapScreenState extends State<MapScreen> {
     );
   }
 
-  // Convertit la pointe du marqueur (pixels) en coordonnées sur la carte.
+  /// Convertit la pointe du marqueur (pixels) en coordonnées sur la carte.
   Future<void> _updateReportPoint() async {
     final map = _mapboxMap;
     final mapBox = _mapAreaKey.currentContext?.findRenderObject() as RenderBox?;
@@ -721,7 +1020,7 @@ class _MapScreenState extends State<MapScreen> {
       }
       _reportPoint.value = point;
     } catch (_) {
-      // Retain the last valid coordinates while the map animates.
+      // Pendant une animation, on garde les dernières coordonnées valides.
     }
   }
 
@@ -740,6 +1039,10 @@ class _MapScreenState extends State<MapScreen> {
 
   @override
   void dispose() {
+    widget.reportTiles?.stopPulse();
+    _lifecycleListener?.dispose();
+    WidgetsBinding.instance.removeObserver(this);
+    _reportTilesTokenTimer?.cancel();
     _reportPointTimer?.cancel();
     _reportMarkerDropTimer?.cancel();
     _noticeTimer?.cancel();
@@ -794,9 +1097,14 @@ class _MapScreenState extends State<MapScreen> {
                 onMapCreated: (map) {
                   setState(() => _mapboxMap = map);
                   unawaited(MapConfig.hideDefaultOrnaments(map));
+                  _addReportInteractions(map);
                   unawaited(_locate());
                 },
                 onMapLoadedListener: _handleMapLoaded,
+                onStyleLoadedListener: (_) {
+                  _showAccuracyHalo();
+                  unawaited(_addReportTiles());
+                },
                 onMapLoadErrorListener: _handleMapLoadError,
                 onCameraChangeListener: _handleMapCameraChange,
                 onScrollListener: _handleMapGesture,

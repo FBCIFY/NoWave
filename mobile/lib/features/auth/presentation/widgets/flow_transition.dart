@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
-/// Slides the next step in from the right while the previous step exits left.
+/// Fait entrer l'étape suivante par la droite pendant que la précédente sort
+/// par la gauche.
 class FlowTransition extends StatefulWidget {
   final int step;
   final Widget child;
