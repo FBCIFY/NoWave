@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 
+import '../../../core/device/device_position_reporter.dart';
 import '../../../core/device/device_registration.dart';
+import '../../../core/device/device_position_tracker.dart';
 import '../../../core/device/device_registrar.dart';
 import '../../../core/notifications/notification_permission.dart';
 import '../../auth/data/auth_service.dart';
@@ -28,6 +30,7 @@ class ProfileGate extends StatefulWidget {
   final ReportTiles reportTiles;
   final ReportDetailService reportDetailService;
   final DeviceRegistration deviceRegistration;
+  final DevicePositionReporter devicePositionReporter;
 
   const ProfileGate({
     super.key,
@@ -38,6 +41,7 @@ class ProfileGate extends StatefulWidget {
     required this.reportTiles,
     required this.reportDetailService,
     required this.deviceRegistration,
+    required this.devicePositionReporter,
   });
 
   @override
@@ -153,17 +157,21 @@ class _ProfileGateState extends State<ProfileGate> {
           );
         } else if (snapshot.data case final profile?) {
           step = 3;
-          // Le profil existe : le backend accepte l'enregistrement du téléphone.
+          // Le profil existe : le backend accepte l'enregistrement du téléphone
+          // et sa position.
           screen = DeviceRegistrar(
             registration: widget.deviceRegistration,
-            child: HomeScreen(
-              profile: _latestProfile ?? profile,
-              onSignOut: widget.authService.signOut,
-              onUpdatePreferences: _updatePreferences,
-              reportService: widget.reportService,
-              positionEstimateService: widget.positionEstimateService,
-              reportTiles: widget.reportTiles,
-              reportDetailService: widget.reportDetailService,
+            child: DevicePositionTracker(
+              reporter: widget.devicePositionReporter,
+              child: HomeScreen(
+                profile: _latestProfile ?? profile,
+                onSignOut: widget.authService.signOut,
+                onUpdatePreferences: _updatePreferences,
+                reportService: widget.reportService,
+                positionEstimateService: widget.positionEstimateService,
+                reportTiles: widget.reportTiles,
+                reportDetailService: widget.reportDetailService,
+              ),
             ),
           );
         } else {
