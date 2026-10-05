@@ -49,9 +49,17 @@ class ReportTiles {
   /// backend ne regroupe plus les signalements.
   static const _badgesMinZoom = 9.0;
 
-  /// Zoom où la zone colorée commence à s'effacer, pour une transition en
-  /// douceur jusqu'aux badges.
+  /// Zoom où la zone colorée et son nombre commencent à s'effacer : ils
+  /// sont partis quand les badges arrivent. La zone ne va pas au-delà : sur
+  /// les tuiles du zoom 9, chaque signalement chaufferait séparément et les
+  /// voisins s'additionneraient jusqu'au rouge.
   static const _fadeStartZoom = 8.5;
+
+  /// Zoom où les badges ont fini d'apparaître, en fondu et en grandissant.
+  static const _badgesFullZoom = 9.5;
+
+  /// Taille des badges au début du fondu, avant de grandir jusqu'à 1.
+  static const _badgeStartScale = 0.6;
 
   /// Bleu marine du nombre, détouré de blanc : lisible sur le jaune comme
   /// sur le rouge.
@@ -101,15 +109,21 @@ class ReportTiles {
     return 1 + _pulseAmplitude * (1 - math.cos(2 * math.pi * phase)) / 2;
   }
 
-  /// Opacité qui suit le zoom : pleine, puis nulle au zoom des badges.
-  static List<Object> _fadeOut(double opacity) => [
+  /// Valeur qui suit le zoom : [start] au zoom [from], [end] au zoom [to],
+  /// et entre les deux une transition régulière.
+  static List<Object> _zoomRamp(
+    double from,
+    double start,
+    double to,
+    double end,
+  ) => [
     'interpolate',
     ['linear'],
     ['zoom'],
-    _fadeStartZoom,
-    opacity,
-    _badgesMinZoom,
-    0,
+    from,
+    start,
+    to,
+    end,
   ];
 
   /// Badge d'une catégorie inconnue de cette version de l'app : le
@@ -280,7 +294,12 @@ class ReportTiles {
           1,
           'rgb(220, 38, 38)',
         ],
-        heatmapOpacityExpression: _fadeOut(0.85),
+        heatmapOpacityExpression: _zoomRamp(
+          _fadeStartZoom,
+          0.85,
+          _badgesMinZoom,
+          0,
+        ),
       ),
     );
     await map.style.addLayer(
@@ -294,7 +313,7 @@ class ReportTiles {
         textColor: _countColor,
         textHaloColor: _white,
         textHaloWidth: 1.5,
-        textOpacityExpression: _fadeOut(1),
+        textOpacityExpression: _zoomRamp(_fadeStartZoom, 1, _badgesMinZoom, 0),
         // Deux nombres qui se chevauchent seraient illisibles : le second
         // s'efface, la zone colorée montre quand même ses signalements. Le
         // fond de carte, lui, n'est pas masqué.
@@ -310,6 +329,13 @@ class ReportTiles {
         minZoom: _badgesMinZoom,
         filter: _isReport,
         iconImageExpression: markerImageExpression(),
+        iconOpacityExpression: _zoomRamp(_badgesMinZoom, 0, _badgesFullZoom, 1),
+        iconSizeExpression: _zoomRamp(
+          _badgesMinZoom,
+          _badgeStartScale,
+          _badgesFullZoom,
+          1,
+        ),
         // Tous les signalements restent visibles, même serrés : en masquer
         // un ferait disparaître un danger.
         iconAllowOverlap: true,
