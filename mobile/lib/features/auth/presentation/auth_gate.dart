@@ -1,6 +1,7 @@
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 
+import '../../../core/device/device_registration.dart';
 import '../../../core/notifications/push_notification_listener.dart';
 import '../../camera/data/position_estimate_service.dart';
 import '../../map/data/report_tiles.dart';
@@ -25,6 +26,7 @@ class AuthGate extends StatefulWidget {
   final PositionEstimateService positionEstimateService;
   final ReportTiles reportTiles;
   final ReportDetailService reportDetailService;
+  final DeviceRegistration deviceRegistration;
 
   const AuthGate({
     super.key,
@@ -34,6 +36,7 @@ class AuthGate extends StatefulWidget {
     required this.positionEstimateService,
     required this.reportTiles,
     required this.reportDetailService,
+    required this.deviceRegistration,
   });
 
   @override
@@ -84,6 +87,7 @@ class _AuthGateState extends State<AuthGate> {
                 positionEstimateService: widget.positionEstimateService,
                 reportTiles: widget.reportTiles,
                 reportDetailService: widget.reportDetailService,
+                deviceRegistration: widget.deviceRegistration,
               ),
             );
           }

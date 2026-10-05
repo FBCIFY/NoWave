@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../../../core/device/device_registration.dart';
+import '../../../core/device/device_registrar.dart';
 import '../../../core/notifications/notification_permission.dart';
 import '../../auth/data/auth_service.dart';
 import '../../auth/presentation/widgets/flow_transition.dart';
@@ -25,6 +27,7 @@ class ProfileGate extends StatefulWidget {
   final PositionEstimateService positionEstimateService;
   final ReportTiles reportTiles;
   final ReportDetailService reportDetailService;
+  final DeviceRegistration deviceRegistration;
 
   const ProfileGate({
     super.key,
@@ -34,6 +37,7 @@ class ProfileGate extends StatefulWidget {
     required this.positionEstimateService,
     required this.reportTiles,
     required this.reportDetailService,
+    required this.deviceRegistration,
   });
 
   @override
@@ -149,14 +153,18 @@ class _ProfileGateState extends State<ProfileGate> {
           );
         } else if (snapshot.data case final profile?) {
           step = 3;
-          screen = HomeScreen(
-            profile: _latestProfile ?? profile,
-            onSignOut: widget.authService.signOut,
-            onUpdatePreferences: _updatePreferences,
-            reportService: widget.reportService,
-            positionEstimateService: widget.positionEstimateService,
-            reportTiles: widget.reportTiles,
-            reportDetailService: widget.reportDetailService,
+          // Le profil existe : le backend accepte l'enregistrement du téléphone.
+          screen = DeviceRegistrar(
+            registration: widget.deviceRegistration,
+            child: HomeScreen(
+              profile: _latestProfile ?? profile,
+              onSignOut: widget.authService.signOut,
+              onUpdatePreferences: _updatePreferences,
+              reportService: widget.reportService,
+              positionEstimateService: widget.positionEstimateService,
+              reportTiles: widget.reportTiles,
+              reportDetailService: widget.reportDetailService,
+            ),
           );
         } else {
           step = 1;
