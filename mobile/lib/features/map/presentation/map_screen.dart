@@ -61,7 +61,7 @@ class MapScreen extends StatefulWidget {
   State<MapScreen> createState() => _MapScreenState();
 }
 
-class _MapScreenState extends State<MapScreen> {
+class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
   final _locationService = LocationService();
   StreamSubscription<geo.Position>? _positionSubscription;
   StreamSubscription<CompassReading>? _headingSubscription;
@@ -128,6 +128,7 @@ class _MapScreenState extends State<MapScreen> {
       onShow: _resumeMapUpdates,
     );
     _startReportTilesTokenRenewal();
+    WidgetsBinding.instance.addObserver(this);
     _headingSubscription = DeviceOrientationService().readings.listen(
       (reading) {
         if (!mounted) return;
@@ -479,17 +480,24 @@ class _MapScreenState extends State<MapScreen> {
     }
   }
 
+  /// Réglage d'accessibilité changé pendant que la carte est ouverte.
+  @override
+  void didChangeAccessibilityFeatures() => _syncHeatmapPulse();
+
+  /// L'utilisateur a demandé moins d'animations : « Supprimer les
+  /// animations » sur Android, « Réduire les animations » sur iOS, que
+  /// Flutter expose séparément.
+  bool get _reduceMotion =>
+      (MediaQuery.maybeDisableAnimationsOf(context) ?? false) ||
+      View.of(context).platformDispatcher.accessibilityFeatures.reduceMotion;
+
   /// La heatmap bat tant qu'elle est visible, sauf si l'utilisateur a
   /// demandé moins d'animations dans les réglages du téléphone.
   void _syncHeatmapPulse() {
     final map = _mapboxMap;
     final zoom = _cameraZoom;
     if (!mounted || map == null || zoom == null) return;
-    widget.reportTiles?.updatePulse(
-      map,
-      zoom: zoom,
-      enabled: !(MediaQuery.maybeDisableAnimationsOf(context) ?? false),
-    );
+    widget.reportTiles?.updatePulse(map, zoom: zoom, enabled: !_reduceMotion);
   }
 
   /// Point bleu de loin, flèche 3D de près. Mapbox ne change de curseur
@@ -1030,6 +1038,7 @@ class _MapScreenState extends State<MapScreen> {
   void dispose() {
     widget.reportTiles?.stopPulse();
     _lifecycleListener?.dispose();
+    WidgetsBinding.instance.removeObserver(this);
     _reportTilesTokenTimer?.cancel();
     _reportPointTimer?.cancel();
     _reportMarkerDropTimer?.cancel();
