@@ -105,8 +105,12 @@ class _MapScreenState extends State<MapScreen> {
   /// retour au premier plan.
   double? _cameraZoom;
 
-  /// Coupe le battement de la heatmap quand l'app n'est plus visible.
+  /// Coupe le battement de la heatmap et le renouvellement du token des
+  /// tuiles quand l'app n'est plus visible.
   AppLifecycleListener? _lifecycleListener;
+
+  /// Renouvellement périodique du token des tuiles ; arrêté en arrière-plan.
+  Timer? _reportTilesTokenTimer;
 
   /// Halo de précision du GPS, sous le curseur et sous les signalements :
   /// un danger reste lisible même quand la position est approximative.
@@ -120,9 +124,10 @@ class _MapScreenState extends State<MapScreen> {
   void initState() {
     super.initState();
     _lifecycleListener = AppLifecycleListener(
-      onHide: () => widget.reportTiles?.stopPulse(),
-      onShow: _syncHeatmapPulse,
+      onHide: _pauseMapUpdates,
+      onShow: _resumeMapUpdates,
     );
+    _startReportTilesTokenRenewal();
     _headingSubscription = DeviceOrientationService().readings.listen(
       (reading) {
         if (!mounted) return;
@@ -327,6 +332,46 @@ class _MapScreenState extends State<MapScreen> {
       'Signalements momentanément indisponibles.',
       MapNoticeKind.warning,
     );
+  }
+
+  /// Intervalle entre deux renouvellements du token des tuiles. Firebase
+  /// ne donne un nouveau token qu'à moins de 5 min de l'expiration : en
+  /// repassant plus souvent, celui de Mapbox n'expire jamais, et les tuiles
+  /// redemandées toutes les 15 s ne tombent pas en 401.
+  static const _reportTilesTokenInterval = Duration(minutes: 4);
+
+  void _startReportTilesTokenRenewal() {
+    _reportTilesTokenTimer?.cancel();
+    _reportTilesTokenTimer = Timer.periodic(
+      _reportTilesTokenInterval,
+      (_) => _renewReportTilesToken(),
+    );
+  }
+
+  /// Redonne le token à Mapbox ; le même tant qu'il est encore valide.
+  void _renewReportTilesToken() {
+    final map = _mapboxMap;
+    final reportTiles = widget.reportTiles;
+    if (!mounted || map == null || reportTiles == null) return;
+    unawaited(
+      reportTiles.authorize(map).catchError((Object error) {
+        debugPrint('Token des signalements non renouvelé : $error');
+      }),
+    );
+  }
+
+  /// L'app n'est plus visible : ni battement ni renouvellement du token.
+  void _pauseMapUpdates() {
+    widget.reportTiles?.stopPulse();
+    _reportTilesTokenTimer?.cancel();
+  }
+
+  /// Retour dans l'app : le token a pu expirer entre-temps, on le renouvelle
+  /// avant que Mapbox ne redemande les tuiles.
+  void _resumeMapUpdates() {
+    _syncHeatmapPulse();
+    _renewReportTilesToken();
+    _startReportTilesTokenRenewal();
   }
 
   void _handleMapLoaded(MapLoadedEventData event) {
@@ -985,6 +1030,7 @@ class _MapScreenState extends State<MapScreen> {
   void dispose() {
     widget.reportTiles?.stopPulse();
     _lifecycleListener?.dispose();
+    _reportTilesTokenTimer?.cancel();
     _reportPointTimer?.cancel();
     _reportMarkerDropTimer?.cancel();
     _noticeTimer?.cancel();

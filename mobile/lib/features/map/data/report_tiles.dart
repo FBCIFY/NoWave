@@ -249,6 +249,10 @@ class ReportTiles {
       );
     }
 
+    // Le backend sert les tuiles avec `max-age=15` : Mapbox redemande
+    // lui-même celles qui sont visibles une fois expirées, et les remplace
+    // sans effacer les badges. Les signalements publiés, expirés ou retirés
+    // apparaissent ou disparaissent donc en 15 s environ.
     await map.style.addSource(
       VectorSource(
         id: sourceId,
