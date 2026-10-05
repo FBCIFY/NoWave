@@ -114,7 +114,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
   Widget build(BuildContext context) {
     return AuthLayout(
       title: 'Créer un compte',
-      subtitle: 'Rejoindre la communauté NoWave',
+      subtitle: 'Rejoindre la communauté nowave',
       showBackButton: true,
       onBack: widget.onBack,
       centerContent: false,

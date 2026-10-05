@@ -98,3 +98,15 @@ class PhotoAlreadyUploadedError(DomainError):
 
 class PhotoStorageError(DomainError):
     pass
+
+
+class DeviceConflictError(DomainError):
+    pass
+
+
+class DeviceNotFoundError(DomainError):
+    pass
+
+
+class DevicePositionStaleError(DomainError):
+    pass

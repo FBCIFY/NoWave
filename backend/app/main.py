@@ -8,6 +8,9 @@ from app.api.photo_upload_limit import PhotoUploadLimitMiddleware
 
 from app.api.errors.handlers import (
     dependency_unavailable_handler,
+    device_conflict_handler,
+    device_not_found_handler,
+    device_position_stale_handler,
     http_exception_handler,
     boat_already_exists_handler,
     boat_not_found_handler,
@@ -30,6 +33,9 @@ from app.api.errors.handlers import (
 from app.api.router import router as api_router
 from app.api.routes.health import router as health_router
 from app.domain.errors import (
+    DeviceConflictError,
+    DeviceNotFoundError,
+    DevicePositionStaleError,
     BoatAlreadyExistsError,
     BoatNotFoundError,
     EmailNotVerifiedError,
@@ -175,4 +181,19 @@ app.add_exception_handler(
 app.add_exception_handler(
     PhotoStorageError,
     photo_storage_error_handler,
+)
+
+app.add_exception_handler(
+    DeviceConflictError,
+    device_conflict_handler,
+)
+
+app.add_exception_handler(
+    DeviceNotFoundError,
+    device_not_found_handler,
+)
+
+app.add_exception_handler(
+    DevicePositionStaleError,
+    device_position_stale_handler,
 )

@@ -12,9 +12,13 @@ import '../../../core/map/map_config.dart';
 import '../../../core/location/coordinate_formatter.dart';
 import '../../../core/location/location_service.dart';
 import '../../../core/sensors/device_orientation_service.dart';
+import '../../../core/haptics/app_haptics.dart';
+import '../../camera/domain/photo_report_draft.dart';
 import '../../reports/presentation/report_composer_sheet.dart';
 import '../../reports/data/manual_report_service.dart';
 import '../../reports/domain/manual_report.dart';
+import 'widgets/map_notice_banner.dart';
+import 'widgets/report_marker.dart';
 
 /// Nord en haut, carte tournée selon le cap du téléphone, ou rotation libre
 /// faite au doigt.
@@ -25,11 +29,21 @@ enum _MapOrientationMode { north, heading, manual }
 ///
 /// En mode signalement, le marqueur reste fixe à l'écran et c'est la carte
 /// qu'on déplace dessous ; le point visé est recalculé à chaque mouvement.
+/// Après une photo, le formulaire s'ouvre sur le point estimé, que
+/// l'utilisateur confirme ou corrige de la même façon.
 class MapScreen extends StatefulWidget {
   final VoidCallback? onOpenProfile;
+
+  /// Ouvre la caméra ; renvoie null si l'utilisateur la ferme sans photo.
+  final Future<PhotoReportDraft?> Function()? onOpenCamera;
   final ManualReportService? reportService;
 
-  const MapScreen({super.key, this.onOpenProfile, this.reportService});
+  const MapScreen({
+    super.key,
+    this.onOpenProfile,
+    this.onOpenCamera,
+    this.reportService,
+  });
 
   @override
   State<MapScreen> createState() => _MapScreenState();
@@ -57,13 +71,22 @@ class _MapScreenState extends State<MapScreen> {
   CameraState? _cameraBeforeReport;
   bool _restoreFollowAfterReport = false;
   final ValueNotifier<Point?> _reportPoint = ValueNotifier(null);
+  final ValueNotifier<bool> _reportMarkerLifted = ValueNotifier(false);
+  Timer? _reportMarkerDropTimer;
   final Uuid _uuid = const Uuid();
   ManualReportRequest? _pendingReport;
+  PhotoReportDraft? _photoDraft;
+  // Signalement photo publié dont le JPEG n'est pas encore envoyé.
+  String? _publishedReportId;
+  bool _isUploadingPhoto = false;
   Timer? _reportPointTimer;
   int _reportPointRequest = 0;
   final _mapAreaKey = GlobalKey();
   final _reportMarkerKey = GlobalKey();
   bool _wasKeyboardVisible = false;
+  MapNotice? _notice;
+  int _noticeId = 0;
+  Timer? _noticeTimer;
 
   @override
   void initState() {
@@ -80,6 +103,23 @@ class _MapScreenState extends State<MapScreen> {
         _deviceHeading = null;
       },
     );
+  }
+
+  // En haut de la carte plutôt qu'en SnackBar : le bas est pris par les
+  // boutons.
+  void _showNotice(String message, MapNoticeKind kind) {
+    _noticeTimer?.cancel();
+    setState(() {
+      _notice = MapNotice(message, kind);
+      _noticeId++;
+    });
+    _noticeTimer = Timer(const Duration(seconds: 4), _hideNotice);
+  }
+
+  void _hideNotice() {
+    _noticeTimer?.cancel();
+    if (!mounted || _notice == null) return;
+    setState(() => _notice = null);
   }
 
   void _setCompassTurnsForHeading(double heading) {
@@ -100,6 +140,7 @@ class _MapScreenState extends State<MapScreen> {
     final userRotatedMap = _mapTouchActive && touchBearingDelta.abs() > 2;
     if (bearingDelta.abs() >= 1) _cameraBearing = bearing;
     if (_reportComposerOpen) {
+      _liftReportMarker();
       _scheduleReportPointUpdate();
       return;
     }
@@ -160,11 +201,10 @@ class _MapScreenState extends State<MapScreen> {
         : _MapOrientationMode.north;
     final heading = _deviceHeading;
     if (nextMode == _MapOrientationMode.heading && heading == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Cap du téléphone indisponible.')),
-      );
+      _showNotice('Cap du téléphone indisponible.', MapNoticeKind.error);
       return;
     }
+    AppHaptics.selection();
     final targetBearing = nextMode == _MapOrientationMode.north
         ? 0.0
         : heading!;
@@ -200,9 +240,7 @@ class _MapScreenState extends State<MapScreen> {
         _orientationMode = previousMode;
         _selectedBearing = previousSelectedBearing;
       });
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Impossible de changer l’orientation.')),
-      );
+      _showNotice('Impossible de changer l’orientation.', MapNoticeKind.error);
     }
   }
 
@@ -239,8 +277,17 @@ class _MapScreenState extends State<MapScreen> {
     }
   }
 
+  /// Zoom sur l'utilisateur au lancement et à chaque recentrage.
+  static const _userZoom = 14.0;
+
+  /// Durée maximale du vol vers l'utilisateur au recentrage : Mapbox
+  /// raccourcit l'animation quand la distance est faible.
+  static const _recenterMaxDuration = Duration(milliseconds: 1200);
+
   // Centre la carte sur l'utilisateur puis le suit à chaque nouvelle position.
-  Future<void> _locate() async {
+  // [animated] : vol jusqu'à l'utilisateur (bouton), sinon saut direct
+  // (lancement de la carte).
+  Future<void> _locate({bool animated = false}) async {
     setState(() {
       _isLocating = true;
       _locationError = null;
@@ -256,7 +303,7 @@ class _MapScreenState extends State<MapScreen> {
       });
 
       await _mapboxMap?.location.updateSettings(
-        LocationComponentSettings(enabled: true),
+        MapConfig.locationPuckSettings(),
       );
 
       if (!mounted) return;
@@ -272,10 +319,12 @@ class _MapScreenState extends State<MapScreen> {
 
       if (!mounted) return;
 
-      setState(() {
+      void followUser() {
         _isFollowing = true;
         _viewport = FollowPuckViewportState(
-          zoom: previousCamera?.zoom ?? 14,
+          // Toujours le zoom du lancement : après un dézoom sur le globe,
+          // recentrer doit aussi ramener au niveau de la rue.
+          zoom: _userZoom,
           bearing: switch (_orientationMode) {
             _MapOrientationMode.north =>
               const FollowPuckViewportStateBearingConstant(0),
@@ -290,7 +339,20 @@ class _MapScreenState extends State<MapScreen> {
           },
           pitch: previousCamera?.pitch ?? 60,
         );
-      });
+      }
+
+      if (animated) {
+        // Mapbox marks this animated viewport helper as experimental.
+        // ignore: experimental_member_use
+        setStateWithViewportAnimation(
+          followUser,
+          transition: const DefaultViewportTransition(
+            maxDuration: _recenterMaxDuration,
+          ),
+        );
+      } else {
+        setState(followUser);
+      }
 
       _positionSubscription ??=
           geo.Geolocator.getPositionStream(
@@ -343,16 +405,45 @@ class _MapScreenState extends State<MapScreen> {
     }
   }
 
+  Future<void> _openCamera() async {
+    final draft = await widget.onOpenCamera?.call();
+    if (draft == null || !mounted) return;
+    await _waitForCoveringRouteToClose();
+    if (!mounted) return;
+    await _openReportComposer(photoDraft: draft);
+  }
+
+  // Le résultat de la caméra arrive dès le début de sa fermeture : on attend
+  // que la carte soit de nouveau visible pour que l'animation se voie.
+  Future<void> _waitForCoveringRouteToClose() async {
+    final animation = ModalRoute.of(context)?.secondaryAnimation;
+    if (animation == null || animation.isDismissed) return;
+    final closed = Completer<void>();
+    void listener(AnimationStatus status) {
+      if (status != AnimationStatus.dismissed) return;
+      animation.removeStatusListener(listener);
+      closed.complete();
+    }
+
+    animation.addStatusListener(listener);
+    await closed.future;
+  }
+
   // Ouvre le formulaire et mémorise la caméra pour la rétablir à la fermeture.
-  Future<void> _openReportComposer() async {
+  // Avec une photo, le point part de l'estimation plutôt que du GPS actuel.
+  Future<void> _openReportComposer({PhotoReportDraft? photoDraft}) async {
     if (_reportComposerOpen) return;
     final position = _position;
     final map = _mapboxMap;
-    if (position == null || map == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Attendez que votre position GPS soit disponible.'),
-        ),
+    final start = photoDraft != null
+        ? Position(photoDraft.initialLongitude, photoDraft.initialLatitude)
+        : position == null
+        ? null
+        : Position(position.longitude, position.latitude);
+    if (start == null || map == null) {
+      _showNotice(
+        'Attendez que votre position GPS soit disponible.',
+        MapNoticeKind.warning,
       );
       return;
     }
@@ -370,37 +461,36 @@ class _MapScreenState extends State<MapScreen> {
       _restoreFollowAfterReport = _isFollowing;
       _reportComposerOpen = true;
       _pendingReport = null;
+      _photoDraft = photoDraft;
       _isFollowing = false;
-      _reportPoint.value = Point(
-        coordinates: Position(position.longitude, position.latitude),
-      );
-      _viewport = CameraViewportState(
-        center: camera.center,
-        zoom: camera.zoom,
-        pitch: camera.pitch,
-        bearing: camera.bearing,
-      );
+      _reportPoint.value = Point(coordinates: start);
     });
     unawaited(_positionMapOrnaments(map, editing: true));
+    unawaited(_setMapTiltEnabled(map, false));
     await WidgetsBinding.instance.endOfFrame;
     if (!mounted || !_reportComposerOpen) return;
     final reportPadding = _reportCameraPadding();
-    try {
-      await map.easeTo(
-        CameraOptions(
-          center: Point(
-            coordinates: Position(position.longitude, position.latitude),
-          ),
-          zoom: 14,
+    // Caméra déclarée plutôt qu'un easeTo : Mapbox la garde (carte à plat,
+    // point sur l'estimation) jusqu'à ce que l'utilisateur touche la carte,
+    // sans qu'une fin de suivi GPS puisse l'annuler en cours de route.
+    // Mapbox marks this animated viewport helper as experimental.
+    // ignore: experimental_member_use
+    setStateWithViewportAnimation(
+      () {
+        _viewport = CameraViewportState(
+          center: Point(coordinates: start),
+          // Plus près en mode photo : l'objet est souvent à quelques
+          // dizaines de mètres, et le point doit être ajusté finement.
+          zoom: photoDraft == null ? 14 : 16,
           pitch: 0,
           bearing: 0,
           padding: reportPadding,
-        ),
-        MapAnimationOptions(duration: 350),
-      );
-    } catch (_) {
-      // The report can still be placed by moving the existing map.
-    }
+        );
+      },
+      transition: const EasingViewportTransition(
+        duration: Duration(milliseconds: 350),
+      ),
+    );
     _scheduleReportPointUpdate();
   }
 
@@ -409,6 +499,8 @@ class _MapScreenState extends State<MapScreen> {
     FocusManager.instance.primaryFocus?.unfocus();
     _reportPointTimer?.cancel();
     _reportPointRequest++;
+    _reportMarkerDropTimer?.cancel();
+    _reportMarkerLifted.value = false;
     final camera = _cameraBeforeReport;
     final map = _mapboxMap;
     final resumeFollowing = _restoreFollowAfterReport;
@@ -416,9 +508,18 @@ class _MapScreenState extends State<MapScreen> {
       _reportComposerOpen = false;
       _reportPoint.value = null;
       _pendingReport = null;
+      _photoDraft = null;
+      _publishedReportId = null;
       _restoreFollowAfterReport = false;
+      // Rend la main à easeTo : la caméra du signalement ne doit plus
+      // s'imposer pendant la restauration.
+      _viewport = const IdleViewportState();
     });
-    if (map != null) unawaited(_positionMapOrnaments(map, editing: false));
+    if (map != null) {
+      unawaited(_positionMapOrnaments(map, editing: false));
+      unawaited(_setMapTiltEnabled(map, true));
+    }
+    await WidgetsBinding.instance.endOfFrame;
 
     if (map != null && camera != null) {
       try {
@@ -440,7 +541,7 @@ class _MapScreenState extends State<MapScreen> {
     setState(() {
       _isFollowing = true;
       _viewport = FollowPuckViewportState(
-        zoom: camera?.zoom ?? 14,
+        zoom: camera?.zoom ?? _userZoom,
         pitch: camera?.pitch ?? 60,
         padding: camera?.padding,
         bearing: FollowPuckViewportStateBearingConstant(
@@ -466,6 +567,7 @@ class _MapScreenState extends State<MapScreen> {
     final latitude = double.parse(
       point.coordinates.lat.toDouble().toStringAsFixed(6),
     );
+    final positioning = _photoDraft?.capture.measurements;
     // Même contenu qu'un envoi raté : on garde le même `client_report_id` pour
     // que le backend ne crée pas de doublon.
     final previous = _pendingReport;
@@ -476,6 +578,7 @@ class _MapScreenState extends State<MapScreen> {
               longitude: longitude,
               latitude: latitude,
               description: description,
+              positioning: positioning,
             )
         ? previous
         : ManualReportRequest(
@@ -483,16 +586,79 @@ class _MapScreenState extends State<MapScreen> {
             category: category,
             longitude: longitude,
             latitude: latitude,
-            observedAt: DateTime.now().toUtc(),
+            // En mode photo, l'observation date de la prise de vue.
+            observedAt: (positioning?.capturedAt ?? DateTime.now()).toUtc(),
             description: description,
+            positioning: positioning,
           );
     _pendingReport = request;
 
-    await service.createReport(request);
+    final reportId = await service.createReport(request);
+    if (!mounted || !_reportComposerOpen) return;
+    if (_photoDraft != null) {
+      // Le formulaire reste ouvert : il enchaîne avec l'envoi de la photo.
+      _publishedReportId = reportId;
+      return;
+    }
+    unawaited(_closeReportComposer());
+    _showNotice('Signalement publié.', MapNoticeKind.success);
+  }
+
+  Future<void> _uploadReportPhoto() async {
+    final service = widget.reportService;
+    final reportId = _publishedReportId;
+    final draft = _photoDraft;
+    if (service == null || reportId == null || draft == null) {
+      throw StateError('Signalement photo introuvable.');
+    }
+
+    _isUploadingPhoto = true;
+    try {
+      await service.uploadPhoto(
+        reportId: reportId,
+        jpegBytes: draft.capture.jpegBytes,
+      );
+    } finally {
+      _isUploadingPhoto = false;
+    }
     if (!mounted || !_reportComposerOpen) return;
     unawaited(_closeReportComposer());
-    ScaffoldMessenger.of(context)
-        .showSnackBar(const SnackBar(content: Text('Signalement publié.')));
+    _showNotice('Signalement publié avec sa photo.', MapNoticeKind.success);
+  }
+
+  // Le JPEG n'est gardé que pendant ce parcours : fermer après la publication
+  // abandonne la photo, le signalement reste publié.
+  void _leaveReportComposer() {
+    if (_isUploadingPhoto) return;
+    final publishedWithoutPhoto = _publishedReportId != null;
+    unawaited(_closeReportComposer());
+    if (!publishedWithoutPhoto) return;
+    _showNotice('Signalement publié sans photo.', MapNoticeKind.warning);
+  }
+
+  // Sans photo, rien n'indique que le repère est fixe et que c'est la carte
+  // qui bouge dessous.
+  String _reportHint() {
+    final draft = _photoDraft;
+    if (draft == null) return 'Déplacez la carte pour placer le point';
+    final estimate = draft.estimate;
+    if (estimate == null) return 'Placez le point sur l’objet photographié';
+    final distance = estimate.distanceMeters;
+    final distanceText = distance < 1000
+        ? '${distance.round()} m'
+        : '${(distance / 1000).toStringAsFixed(1).replaceAll('.', ',')} km';
+    return 'Estimé à $distanceText · ajustez si besoin';
+  }
+
+  // onMapIdle attend aussi le chargement des tuiles, lent en mer : le repère
+  // se pose dès que la caméra ne bouge plus depuis 200 ms.
+  void _liftReportMarker() {
+    _reportMarkerLifted.value = true;
+    _reportMarkerDropTimer?.cancel();
+    _reportMarkerDropTimer = Timer(
+      const Duration(milliseconds: 200),
+      () => _reportMarkerLifted.value = false,
+    );
   }
 
   void _scheduleReportPointUpdate() {
@@ -503,20 +669,32 @@ class _MapScreenState extends State<MapScreen> {
     );
   }
 
-  MbxEdgeInsets _reportCameraPadding() {
+  // En signalement, la carte reste à plat : inclinée, elle déformerait les
+  // distances autour du point à placer.
+  Future<void> _setMapTiltEnabled(MapboxMap map, bool enabled) async {
+    try {
+      await map.gestures.updateSettings(
+        GesturesSettings(pitchEnabled: enabled),
+      );
+    } catch (_) {
+      // Tilt stays available if gesture settings are unavailable.
+    }
+  }
+
+  EdgeInsets _reportCameraPadding() {
     final mapBox = _mapAreaKey.currentContext?.findRenderObject() as RenderBox?;
     final markerBox =
         _reportMarkerKey.currentContext?.findRenderObject() as RenderBox?;
     if (mapBox == null || markerBox == null) {
-      return MbxEdgeInsets(top: 0, left: 0, bottom: 0, right: 0);
+      return EdgeInsets.zero;
     }
     final localCenter = mapBox.globalToLocal(_markerTipGlobal(markerBox));
     final delta = localCenter - mapBox.size.center(Offset.zero);
-    return MbxEdgeInsets(
-      top: math.max(0, delta.dy * 2),
-      left: math.max(0, delta.dx * 2),
-      bottom: math.max(0, -delta.dy * 2),
-      right: math.max(0, -delta.dx * 2),
+    return EdgeInsets.fromLTRB(
+      math.max(0, delta.dx * 2),
+      math.max(0, delta.dy * 2),
+      math.max(0, -delta.dx * 2),
+      math.max(0, -delta.dy * 2),
     );
   }
 
@@ -548,7 +726,10 @@ class _MapScreenState extends State<MapScreen> {
   }
 
   Offset _markerTipGlobal(RenderBox markerBox) => markerBox.localToGlobal(
-    Offset(markerBox.size.width / 2, markerBox.size.height - 4),
+    Offset(
+      markerBox.size.width / 2,
+      markerBox.size.height - ReportMarker.tipInset,
+    ),
   );
 
   ViewportState _viewport = CameraViewportState(
@@ -560,7 +741,10 @@ class _MapScreenState extends State<MapScreen> {
   @override
   void dispose() {
     _reportPointTimer?.cancel();
+    _reportMarkerDropTimer?.cancel();
+    _noticeTimer?.cancel();
     _reportPoint.dispose();
+    _reportMarkerLifted.dispose();
     final subscription = _positionSubscription;
     if (subscription != null) unawaited(subscription.cancel());
     final headingSubscription = _headingSubscription;
@@ -582,6 +766,7 @@ class _MapScreenState extends State<MapScreen> {
         ReportComposerSheet.heightFor(mediaQuery) +
         mediaQuery.viewInsets.bottom +
         12;
+    final notice = _notice;
     final gpsLabel = _isLocating
         ? 'Localisation…'
         : _locationError ??
@@ -590,271 +775,313 @@ class _MapScreenState extends State<MapScreen> {
                   : 'Lat. ${formatDms(_position!.latitude, isLatitude: true)}\n'
                         'Lon. ${formatDms(_position!.longitude, isLatitude: false)}');
 
-    return PopScope(
-      canPop: !_reportComposerOpen,
-      onPopInvokedWithResult: (didPop, _) {
-        if (!didPop && _reportComposerOpen) {
-          unawaited(_closeReportComposer());
-        }
-      },
-      child: Scaffold(
-        resizeToAvoidBottomInset: false,
-        body: Stack(
-          children: [
-            Positioned.fill(
-              child: Listener(
-                key: _mapAreaKey,
-                onPointerDown: (_) {
-                  _mapTouchActive = true;
-                  _touchStartBearing = _cameraBearing;
+    // Pendant un signalement, le retour arrière est géré par
+    // ReportComposerSheet : il passe par la même confirmation que la croix.
+    return Scaffold(
+      resizeToAvoidBottomInset: false,
+      body: Stack(
+        children: [
+          Positioned.fill(
+            child: Listener(
+              key: _mapAreaKey,
+              onPointerDown: (_) {
+                _mapTouchActive = true;
+                _touchStartBearing = _cameraBearing;
+              },
+              onPointerUp: (_) => _mapTouchActive = false,
+              onPointerCancel: (_) => _mapTouchActive = false,
+              child: MapWidget(
+                onMapCreated: (map) {
+                  setState(() => _mapboxMap = map);
+                  unawaited(MapConfig.hideDefaultOrnaments(map));
+                  unawaited(_locate());
                 },
-                onPointerUp: (_) => _mapTouchActive = false,
-                onPointerCancel: (_) => _mapTouchActive = false,
-                child: MapWidget(
-                  onMapCreated: (map) {
-                    setState(() => _mapboxMap = map);
-                    unawaited(MapConfig.hideDefaultOrnaments(map));
-                    unawaited(_locate());
-                  },
-                  onMapLoadedListener: _handleMapLoaded,
-                  onMapLoadErrorListener: _handleMapLoadError,
-                  onCameraChangeListener: _handleMapCameraChange,
-                  onScrollListener: _handleMapGesture,
-                  onZoomListener: _handleMapGesture,
-                  styleUri: MapConfig.styleUrl,
-                  viewport: _viewport,
-                ),
+                onMapLoadedListener: _handleMapLoaded,
+                onMapLoadErrorListener: _handleMapLoadError,
+                onCameraChangeListener: _handleMapCameraChange,
+                onScrollListener: _handleMapGesture,
+                onZoomListener: _handleMapGesture,
+                styleUri: MapConfig.styleUrl,
+                viewport: _viewport,
               ),
             ),
-            if (_mapError != null)
-              Positioned.fill(
-                child: ColoredBox(
-                  color: Theme.of(context).colorScheme.surface,
-                  child: Center(
-                    child: Padding(
-                      padding: const EdgeInsets.all(24),
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          const Icon(Icons.map_outlined, size: 48),
-                          const SizedBox(height: 16),
-                          Text(_mapError!, textAlign: TextAlign.center),
-                          const SizedBox(height: 16),
-                          FilledButton.icon(
-                            onPressed: _retryMapLoad,
-                            icon: const Icon(Icons.refresh),
-                            label: const Text('Réessayer'),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-            if (!_reportComposerOpen)
-              Positioned(
-                top: 0,
-                left: 0,
-                right: 0,
-                child: SafeArea(
-                  bottom: false,
+          ),
+          if (_mapError != null)
+            Positioned.fill(
+              child: ColoredBox(
+                color: Theme.of(context).colorScheme.surface,
+                child: Center(
                   child: Padding(
-                    padding: const EdgeInsets.all(16),
-                    child: Row(
+                    padding: const EdgeInsets.all(24),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
                       children: [
-                        Expanded(
-                          child: Align(
-                            alignment: Alignment.centerLeft,
-                            child: Container(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 12,
-                                vertical: 9,
-                              ),
-                              decoration: BoxDecoration(
-                                color: const Color(0xFFF6F8FA)
-                                    .withValues(alpha: 0.90),
-                                borderRadius: BorderRadius.circular(14),
-                              ),
-                              child: Text(
-                                gpsLabel,
-                                maxLines: 2,
-                                overflow: TextOverflow.ellipsis,
-                                style: const TextStyle(
-                                  color: Color(0xFF243243),
-                                  fontSize: 12,
-                                ),
-                              ),
-                            ),
-                          ),
+                        const Icon(Icons.map_outlined, size: 48),
+                        const SizedBox(height: 16),
+                        Text(_mapError!, textAlign: TextAlign.center),
+                        const SizedBox(height: 16),
+                        FilledButton.icon(
+                          onPressed: _retryMapLoad,
+                          icon: const Icon(Icons.refresh),
+                          label: const Text('Réessayer'),
                         ),
-                        if (widget.onOpenProfile != null) ...[
-                          const SizedBox(width: 12),
-                          _PoppingMapButton(
-                            tooltip: 'Mon profil',
-                            onPressed: widget.onOpenProfile,
-                            icon: const Icon(
-                              Icons.person_outline,
-                              color: Color(0xFF243243),
-                            ),
-                          ),
-                        ],
                       ],
                     ),
                   ),
                 ),
               ),
-            if (!_reportComposerOpen)
-              Positioned(
-                bottom: 16,
-                left: 0,
-                right: 0,
-                child: SafeArea(
-                  top: false,
-                  child: Center(
-                    child: _PoppingMapButton(
-                      tooltip: 'Créer un signalement',
-                      onPressed: _mapError == null ? _openReportComposer : null,
-                      icon: const Icon(Icons.add, size: 30),
-                    ),
-                  ),
-                ),
-              ),
-            if (!_reportComposerOpen)
-              Positioned(
-                right: 16,
-                bottom: 80,
-                child: SafeArea(
-                  top: false,
+            ),
+          if (!_reportComposerOpen)
+            Positioned(
+              top: 0,
+              left: 0,
+              right: 0,
+              child: SafeArea(
+                bottom: false,
+                child: Padding(
+                  padding: const EdgeInsets.all(16),
                   child: Column(
-                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
-                      _PoppingMapButton(
-                        tooltip: _orientationMode == _MapOrientationMode.north
-                            ? 'Aligner la carte sur le cap actuel'
-                            : 'Orienter la carte vers le nord',
-                        onPressed: _mapboxMap == null || _mapError != null
-                            ? null
-                            : () => unawaited(_toggleCompass()),
-                        icon: _CompassGlyph(headingTurns: _compassTurns),
-                      ),
-                      const SizedBox(height: 12),
-                      _PoppingMapButton(
-                        tooltip: 'Recentrer sur ma position',
-                        onPressed: _isLocating || _mapboxMap == null
-                            ? null
-                            : () => unawaited(_locate()),
-                        icon: _isLocating
-                            ? const SizedBox(
-                                width: 20,
-                                height: 20,
-                                child: CircularProgressIndicator(
-                                  strokeWidth: 2,
+                      Row(
+                        children: [
+                          Expanded(
+                            child: Align(
+                              alignment: Alignment.centerLeft,
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 12,
+                                  vertical: 9,
                                 ),
-                              )
-                            : Stack(
-                                alignment: Alignment.center,
-                                children: [
-                                  const Icon(
-                                    Icons.my_location,
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFFF6F8FA)
+                                      .withValues(alpha: 0.90),
+                                  borderRadius: BorderRadius.circular(14),
+                                ),
+                                child: Text(
+                                  gpsLabel,
+                                  maxLines: 2,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: const TextStyle(
                                     color: Color(0xFF243243),
+                                    fontSize: 12,
                                   ),
-                                  AnimatedContainer(
-                                    duration: const Duration(milliseconds: 220),
-                                    width: 7,
-                                    height: 7,
-                                    decoration: BoxDecoration(
-                                      color: _isFollowing
-                                          ? const Color(0xFF329CFF)
-                                          : const Color(0xFF243243),
-                                      shape: BoxShape.circle,
-                                    ),
-                                  ),
-                                ],
+                                ),
+                              ),
+                            ),
+                          ),
+                          if (widget.onOpenProfile != null) ...[
+                            const SizedBox(width: 12),
+                            _PoppingMapButton(
+                              tooltip: 'Mon profil',
+                              onPressed: widget.onOpenProfile,
+                              icon: const Icon(
+                                Icons.person_outline,
+                                color: Color(0xFF243243),
+                              ),
+                            ),
+                          ],
+                        ],
+                      ),
+                      AnimatedSwitcher(
+                        duration: const Duration(milliseconds: 220),
+                        // Pas de SizeTransition : son découpage rectangulaire
+                        // coupait l'ombre et laissait des coins gris.
+                        transitionBuilder: (child, animation) => FadeTransition(
+                          opacity: animation,
+                          child: SlideTransition(
+                            position: Tween(
+                              begin: const Offset(0, -0.25),
+                              end: Offset.zero,
+                            ).animate(animation),
+                            child: child,
+                          ),
+                        ),
+                        child: notice == null
+                            ? const SizedBox.shrink()
+                            : Padding(
+                                key: ValueKey(_noticeId),
+                                padding: const EdgeInsets.only(top: 12),
+                                child: MapNoticeBanner(
+                                  notice: notice,
+                                  onDismiss: _hideNotice,
+                                ),
                               ),
                       ),
                     ],
                   ),
                 ),
               ),
-            if (_reportComposerOpen) ...[
-              const Positioned.fill(
-                child: IgnorePointer(
-                  child: ColoredBox(color: Color(0x220D2238)),
-                ),
-              ),
-              if (!keyboardVisible)
-                Positioned(
-                  top: mediaQuery.padding.top,
-                  bottom: reportPanelBottom,
-                  left: 0,
-                  right: 0,
-                  child: IgnorePointer(
-                    child: Stack(
-                      alignment: Alignment.center,
-                      children: [
-                        Transform.translate(
-                          offset: const Offset(0, -18),
-                          child: SizedBox.square(
-                            key: _reportMarkerKey,
-                            dimension: 44,
-                            child: const Icon(
-                              Icons.place,
-                              color: Color(0xFF0DB8D5),
-                              size: 44,
-                              shadows: [
-                                Shadow(color: Colors.black87, blurRadius: 8),
-                              ],
-                            ),
+            ),
+          if (!_reportComposerOpen)
+            Positioned(
+              bottom: 16,
+              left: 0,
+              right: 0,
+              child: SafeArea(
+                top: false,
+                child: Center(
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      _PoppingMapButton(
+                        tooltip: 'Créer un signalement',
+                        onPressed: _mapError == null
+                            ? _openReportComposer
+                            : null,
+                        icon: const Icon(Icons.add, size: 30),
+                      ),
+                      if (widget.onOpenCamera != null) ...[
+                        const SizedBox(width: 16),
+                        _PoppingMapButton(
+                          tooltip: 'Signaler avec une photo',
+                          onPressed: _mapError == null
+                              ? () => unawaited(_openCamera())
+                              : null,
+                          icon: const Icon(
+                            Icons.photo_camera_outlined,
+                            color: Color(0xFF243243),
                           ),
                         ),
-                        Transform.translate(
-                          offset: const Offset(0, 46),
-                          child: DecoratedBox(
-                            decoration: BoxDecoration(
-                              color: const Color(0xFFF6F8FA)
-                                  .withValues(alpha: 0.94),
-                              borderRadius: BorderRadius.circular(18),
-                            ),
-                            child: Padding(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 10,
-                                vertical: 5,
-                              ),
-                              child: ValueListenableBuilder<Point?>(
-                                valueListenable: _reportPoint,
-                                builder: (context, point, _) => Text(
-                                  '${formatDms(point?.coordinates.lat.toDouble() ?? _position!.latitude, isLatitude: true)}\n'
-                                  '${formatDms(point?.coordinates.lng.toDouble() ?? _position!.longitude, isLatitude: false)}',
-                                  textAlign: TextAlign.center,
-                                  style: const TextStyle(
-                                    color: Color(0xFF243243),
-                                    fontSize: 11,
-                                    fontWeight: FontWeight.w600,
+                      ],
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          if (!_reportComposerOpen)
+            Positioned(
+              right: 16,
+              bottom: 80,
+              child: SafeArea(
+                top: false,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    _PoppingMapButton(
+                      tooltip: _orientationMode == _MapOrientationMode.north
+                          ? 'Aligner la carte sur le cap actuel'
+                          : 'Orienter la carte vers le nord',
+                      onPressed: _mapboxMap == null || _mapError != null
+                          ? null
+                          : () => unawaited(_toggleCompass()),
+                      icon: _CompassGlyph(headingTurns: _compassTurns),
+                    ),
+                    const SizedBox(height: 12),
+                    _PoppingMapButton(
+                      tooltip: 'Recentrer sur ma position',
+                      onPressed: _isLocating || _mapboxMap == null
+                          ? null
+                          : () {
+                              AppHaptics.selection();
+                              unawaited(_locate(animated: true));
+                            },
+                      icon: _isLocating
+                          ? const SizedBox(
+                              width: 20,
+                              height: 20,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            )
+                          : Stack(
+                              alignment: Alignment.center,
+                              children: [
+                                const Icon(
+                                  Icons.my_location,
+                                  color: Color(0xFF243243),
+                                ),
+                                AnimatedContainer(
+                                  duration: const Duration(milliseconds: 220),
+                                  width: 7,
+                                  height: 7,
+                                  decoration: BoxDecoration(
+                                    color: _isFollowing
+                                        ? const Color(0xFF329CFF)
+                                        : const Color(0xFF243243),
+                                    shape: BoxShape.circle,
                                   ),
+                                ),
+                              ],
+                            ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          if (_reportComposerOpen) ...[
+            const Positioned.fill(
+              child: IgnorePointer(child: ColoredBox(color: Color(0x220D2238))),
+            ),
+            if (!keyboardVisible)
+              Positioned(
+                top: mediaQuery.padding.top,
+                bottom: reportPanelBottom,
+                left: 0,
+                right: 0,
+                child: IgnorePointer(
+                  child: Stack(
+                    alignment: Alignment.center,
+                    children: [
+                      Transform.translate(
+                        offset: const Offset(0, -18),
+                        child: ValueListenableBuilder<bool>(
+                          valueListenable: _reportMarkerLifted,
+                          builder: (context, lifted, _) => ReportMarker(
+                            key: _reportMarkerKey,
+                            lifted: lifted,
+                          ),
+                        ),
+                      ),
+                      Transform.translate(
+                        offset: const Offset(0, 46),
+                        child: DecoratedBox(
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFF6F8FA)
+                                .withValues(alpha: 0.94),
+                            borderRadius: BorderRadius.circular(18),
+                          ),
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 10,
+                              vertical: 5,
+                            ),
+                            child: ValueListenableBuilder<Point?>(
+                              valueListenable: _reportPoint,
+                              builder: (context, point, _) => Text(
+                                '${formatDms(point?.coordinates.lat.toDouble() ?? _position!.latitude, isLatitude: true)}\n'
+                                '${formatDms(point?.coordinates.lng.toDouble() ?? _position!.longitude, isLatitude: false)}',
+                                textAlign: TextAlign.center,
+                                style: const TextStyle(
+                                  color: Color(0xFF243243),
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w600,
                                 ),
                               ),
                             ),
                           ),
                         ),
-                      ],
-                    ),
+                      ),
+                    ],
                   ),
                 ),
-              Positioned(
-                key: const ValueKey('report-composer'),
-                left: 0,
-                right: 0,
-                bottom: 0,
-                child: ReportComposerSheet(
-                  onClose: () => unawaited(_closeReportComposer()),
-                  onPublish: widget.reportService == null
-                      ? null
-                      : _publishReport,
-                ),
               ),
-            ],
+            Positioned(
+              key: const ValueKey('report-composer'),
+              left: 0,
+              right: 0,
+              bottom: 0,
+              child: ReportComposerSheet(
+                photo: _photoDraft?.capture.jpegBytes,
+                subtitle: _reportHint(),
+                onClose: _leaveReportComposer,
+                onPublish: widget.reportService == null ? null : _publishReport,
+                onUploadPhoto:
+                    widget.reportService == null || _photoDraft == null
+                    ? null
+                    : _uploadReportPhoto,
+              ),
+            ),
           ],
-        ),
+        ],
       ),
     );
   }

@@ -1,5 +1,7 @@
 import 'dart:convert';
+import 'dart:typed_data';
 
+import 'package:blueway/core/api/api_exception.dart';
 import 'package:blueway/core/api/api_service.dart';
 import 'package:blueway/features/reports/data/manual_report_service.dart';
 import 'package:blueway/features/reports/domain/manual_report.dart';
@@ -64,5 +66,79 @@ void main() {
       ),
       isFalse,
     );
+  });
+
+  group('uploadPhoto', () {
+    final jpegBytes = Uint8List.fromList([0xFF, 0xD8, 0xFF, 0xD9]);
+
+    ManualReportService serviceFor(MockClient client) => ManualReportService(
+      apiService: ApiService(
+        client: client,
+        baseUrl: 'https://api.blueway.test/',
+      ),
+      getIdToken: () async => 'firebase-token',
+    );
+
+    test('envoie le JPEG en multipart dans le champ file', () async {
+      final client = MockClient((httpRequest) async {
+        expect(httpRequest.method, 'POST');
+        expect(
+          httpRequest.url,
+          Uri.parse('https://api.blueway.test/api/v1/reports/report-id/photo'),
+        );
+        expect(httpRequest.headers['authorization'], 'Bearer firebase-token');
+        expect(
+          httpRequest.headers['content-type'],
+          startsWith('multipart/form-data; boundary='),
+        );
+        final body = latin1.decode(httpRequest.bodyBytes);
+        expect(body, contains('name="file"; filename="photo.jpg"'));
+        expect(body, contains('content-type: image/jpeg'));
+        expect(body, contains(latin1.decode(jpegBytes)));
+        return http.Response(
+          jsonEncode({
+            'report_id': 'report-id',
+            'upload_status': 'uploaded',
+            'size_bytes': jpegBytes.length,
+            'mime_type': 'image/jpeg',
+          }),
+          201,
+        );
+      });
+
+      await serviceFor(client)
+          .uploadPhoto(reportId: 'report-id', jpegBytes: jpegBytes);
+    });
+
+    test('refuse une réponse qui ne confirme pas l’envoi', () async {
+      final client = MockClient(
+        (_) async =>
+            http.Response(jsonEncode({'upload_status': 'pending'}), 201),
+      );
+
+      await expectLater(
+        serviceFor(client)
+            .uploadPhoto(reportId: 'report-id', jpegBytes: jpegBytes),
+        throwsFormatException,
+      );
+    });
+
+    test('remonte le 404 du backend en ApiException', () async {
+      final client = MockClient(
+        (_) async => http.Response(jsonEncode({'detail': 'Not Found'}), 404),
+      );
+
+      await expectLater(
+        serviceFor(client)
+            .uploadPhoto(reportId: 'report-id', jpegBytes: jpegBytes),
+        throwsA(
+          isA<ApiException>().having(
+            (error) => error.statusCode,
+            'statusCode',
+            404,
+          ),
+        ),
+      );
+    });
   });
 }

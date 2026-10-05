@@ -93,7 +93,7 @@ class _LoginScreenState extends State<LoginScreen> {
   @override
   Widget build(BuildContext context) {
     return AuthLayout(
-      title: 'NoWave',
+      title: 'nowave',
       child: AutofillGroup(
         child: Form(
           key: _formKey,
