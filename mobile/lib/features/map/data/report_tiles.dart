@@ -41,6 +41,14 @@ class ReportTiles {
   /// Nom de la couche à l'intérieur des tuiles, fixé par le backend.
   static const _sourceLayer = 'reports';
 
+  /// Dernier zoom demandé au backend : au zoom 12, une tuile place déjà
+  /// un badge à 2 m près ; au-delà, Mapbox agrandit celle-ci.
+  static const _tilesMaxZoom = 12.0;
+
+  /// Attente avant de demander les tuiles pendant un geste ou une
+  /// animation, en secondes.
+  static const _gestureTilesDelaySeconds = 0.5;
+
   /// Garde les couleurs vives quel que soit l'éclairage du style Mapbox
   /// Standard (aube, crépuscule, nuit).
   static const _fullBrightness = 1.0;
@@ -131,6 +139,12 @@ class ReportTiles {
   static const _unknownMarkerId = 'nowave-report-unknown';
   static const _unknownMarkerIcon = Icons.place_outlined;
   static const _unknownMarkerColor = Color(0xFF64748B);
+
+  /// Vrai si une tuile a été refusée par la limite de débit du serveur :
+  /// 429, ou 503 quand l'appareil a trop de connexions ouvertes. Mapbox la
+  /// redemande lui-même un peu plus tard.
+  static bool isThrottled(String message) =>
+      RegExp(r'status code (429|503)\b').hasMatch(message);
 
   static String _markerIdOf(ReportCategory category) =>
       'nowave-report-${category.apiValue}';
@@ -253,10 +267,20 @@ class ReportTiles {
     // lui-même celles qui sont visibles une fois expirées, et les remplace
     // sans effacer les badges. Les signalements publiés, expirés ou retirés
     // apparaissent ou disparaissent donc en 15 s environ.
+    //
+    // Le serveur limite chaque appareil à 10 requêtes/s (pointes à 30) et
+    // 30 connexions ; au-delà, il répond 429 ou 503 et les badges tardent
+    // d'une à deux minutes. On demande donc le moins de tuiles possible :
+    // aucune au-delà du zoom 12, agrandi ensuite par Mapbox ; pas de
+    // préchargement des zooms inférieurs ; et rien pendant un geste, où les
+    // zooms traversés ne restent pas affichés.
     await map.style.addSource(
       VectorSource(
         id: sourceId,
         tiles: ['${_apiBaseUrl}api/v1/map/tiles/{z}/{x}/{y}.mvt'],
+        maxzoom: _tilesMaxZoom,
+        prefetchZoomDelta: 0,
+        tileNetworkRequestsDelay: _gestureTilesDelaySeconds,
       ),
     );
     // Chaque couche a sa plage de zoom : même quand Mapbox garde une

@@ -302,6 +302,9 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
     // Une tuile de signalements en échec ne doit pas cacher le fond de
     // carte, qui reste utilisable.
     if (event.sourceId == ReportTiles.sourceId) {
+      // Refusée par la limite de débit : Mapbox réessaie seul, et ni un
+      // nouveau token ni le bandeau n'y changent rien.
+      if (ReportTiles.isThrottled(event.message)) return;
       _handleReportTilesError();
       return;
     }
