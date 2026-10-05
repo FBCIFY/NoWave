@@ -272,6 +272,16 @@ Si une tuile échoue (réseau, token), la carte reste utilisable et affiche
 « Signalements momentanément indisponibles. » La carte ne fonctionne pas hors
 ligne : les badges déjà affichés peuvent rester visibles sans être à jour.
 
+### Limite de débit du serveur
+
+nginx limite chaque appareil à 10 requêtes/s (pointes à 30) et à 30
+connexions. Pour rester en dessous, la source demande le moins de tuiles
+possible : aucune au-delà du zoom 12 (Mapbox agrandit celles du zoom 12, qui
+placent déjà un badge à 2 m près), pas de préchargement des zooms inférieurs,
+et rien pendant un geste. Une tuile refusée (429, ou 503 quand il y a trop de
+connexions) n'affiche pas le bandeau : Mapbox la redemande lui-même quelques
+secondes plus tard.
+
 ### Position de l'utilisateur
 
 De près, la flèche 3D (voir plus bas) ; de loin, un point bleu, plus lisible.
@@ -285,7 +295,13 @@ Un halo bleu sous les signalements montre la précision du GPS.
 - hors ligne, les badges déjà affichés restent visibles sans être à jour ;
   seul le message « momentanément indisponibles » le signale ;
 - l'état de la photo reste « Envoi en cours » tant que la route d'envoi de
-  NW-112 n'est pas déployée.
+  NW-112 n'est pas déployée ;
+- en zoomant ou dézoomant vite, nginx refuse encore des tuiles (429) : les
+  badges arrivent quelques secondes après la fin du geste, en attendant une
+  limite propre aux tuiles côté serveur ;
+- les regroupements sont calculés tuile par tuile, aux zooms entiers : en
+  dézoomant, ils fusionnent par sauts, et deux zones proches séparées par une
+  limite de tuile ne fusionnent qu'à un zoom plus bas.
 
 ## Signalement photo — NW-55, NW-115
 
