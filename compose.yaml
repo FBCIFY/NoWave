@@ -39,14 +39,30 @@ services:
     ports:
       - "8000:8000"
 
-    environment:
+    environment: &backend-environment
       DATABASE_URL: "postgresql://nowave:${NOWAVE_DB_PASSWORD}@database:5432/nowave"
+      PHOTO_STORAGE_BUCKET: ${PHOTO_STORAGE_BUCKET:-}
+      PHOTO_STORAGE_REGION: ${PHOTO_STORAGE_REGION:-fr-par}
+      SCW_ACCESS_KEY: ${SCW_ACCESS_KEY:-}
+      SCW_SECRET_KEY: ${SCW_SECRET_KEY:-}
 
     command: ["sh", "-c", "alembic -c alembic.ini upgrade head && exec uvicorn app.main:app --host 0.0.0.0 --port 8000"]
 
     depends_on:
       database:
         condition: service_healthy
+
+  photo-cleanup:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    profiles: [photos]
+    environment: *backend-environment
+    command: [python, -m, app.workers.photo_cleanup]
+    restart: unless-stopped
+    depends_on:
+      backend:
+        condition: service_started
 
 volumes:
   nowave_database:
