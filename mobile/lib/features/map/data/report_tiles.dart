@@ -1,3 +1,5 @@
+import 'dart:async';
+import 'dart:math' as math;
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
@@ -14,7 +16,9 @@ import '../presentation/report_marker.dart';
 ///
 /// Jusqu'au zoom 8, le backend regroupe les signalements proches : un
 /// regroupement porte `cluster` et `cluster_count`, sans `report_id` ni
-/// `category`.
+/// `category`. De loin, la carte montre donc une zone colorée selon le
+/// nombre de signalements, avec ce nombre écrit dessus ; de près, un badge
+/// par signalement.
 class ReportTiles {
   factory ReportTiles({
     required Future<String> Function() getIdToken,
@@ -28,11 +32,11 @@ class ReportTiles {
   /// Un badge par signalement, à l'icône et à la couleur de sa catégorie.
   static const pointsLayerId = 'nowave-reports-points';
 
-  /// Un rond par regroupement.
-  static const clustersLayerId = 'nowave-reports-clusters';
+  /// Zone colorée, plus chaude là où les signalements sont nombreux.
+  static const heatmapLayerId = 'nowave-reports-heatmap';
 
-  /// Nombre de signalements écrit sur chaque regroupement.
-  static const clusterCountLayerId = 'nowave-reports-cluster-count';
+  /// Nombre de signalements écrit sur chaque zone.
+  static const countLayerId = 'nowave-reports-count';
 
   /// Nom de la couche à l'intérieur des tuiles, fixé par le backend.
   static const _sourceLayer = 'reports';
@@ -41,8 +45,72 @@ class ReportTiles {
   /// Standard (aube, crépuscule, nuit).
   static const _fullBrightness = 1.0;
 
-  static const _clusterColor = 0xFF172554;
+  /// Zoom à partir duquel les badges remplacent la zone colorée : le
+  /// backend ne regroupe plus les signalements.
+  static const _badgesMinZoom = 9.0;
+
+  /// Zoom où la zone colorée commence à s'effacer, pour une transition en
+  /// douceur jusqu'aux badges.
+  static const _fadeStartZoom = 8.5;
+
+  /// Bleu marine du nombre, détouré de blanc : lisible sur le jaune comme
+  /// sur le rouge.
+  static const _countColor = 0xFF172554;
   static const _white = 0xFFFFFFFF;
+
+  /// Nombre de signalements d'une feature : 1 pour un signalement seul.
+  static const _count = [
+    'coalesce',
+    ['get', 'cluster_count'],
+    1,
+  ];
+
+  /// Rayon de la zone colorée en pixels, aux zooms 0, 6 et 9 : assez
+  /// large pour se lire comme une zone et pas comme un point.
+  static const _heatmapRadii = [
+    (0.0, 25.0),
+    (6.0, 50.0),
+    (_badgesMinZoom, 80.0),
+  ];
+
+  /// Durée d'un battement complet de la zone colorée.
+  static const _pulsePeriod = Duration(seconds: 2);
+
+  /// Agrandissement maximal du rayon au milieu d'un battement : +25 %.
+  static const _pulseAmplitude = 0.25;
+
+  /// Intervalle entre deux mises à jour du rayon, soit 20 images par
+  /// seconde : fluide sans surcharger la carte.
+  static const _pulseFrame = Duration(milliseconds: 50);
+
+  /// Rayon de la zone colorée selon le zoom, multiplié par [scale] pendant
+  /// le battement.
+  @visibleForTesting
+  static List<Object> heatmapRadiusExpression([double scale = 1]) => [
+    'interpolate',
+    ['linear'],
+    ['zoom'],
+    for (final (zoom, radius) in _heatmapRadii) ...[zoom, radius * scale],
+  ];
+
+  /// Facteur du rayon après [elapsed] : part de 1, monte à 1,25 à
+  /// mi-battement puis redescend, sans à-coup.
+  @visibleForTesting
+  static double pulseScale(Duration elapsed) {
+    final phase = elapsed.inMicroseconds / _pulsePeriod.inMicroseconds;
+    return 1 + _pulseAmplitude * (1 - math.cos(2 * math.pi * phase)) / 2;
+  }
+
+  /// Opacité qui suit le zoom : pleine, puis nulle au zoom des badges.
+  static List<Object> _fadeOut(double opacity) => [
+    'interpolate',
+    ['linear'],
+    ['zoom'],
+    _fadeStartZoom,
+    opacity,
+    _badgesMinZoom,
+    0,
+  ];
 
   /// Badge d'une catégorie inconnue de cette version de l'app : le
   /// signalement reste visible.
@@ -66,11 +134,6 @@ class ReportTiles {
   ];
 
   /// `cluster` vaut `true` sur un regroupement, `false` sur un signalement.
-  static const _isCluster = [
-    '==',
-    ['get', 'cluster'],
-    true,
-  ];
   static const _isReport = [
     '!=',
     ['get', 'cluster'],
@@ -83,6 +146,65 @@ class ReportTiles {
   /// Badges en PNG, dessinés au premier affichage puis réutilisés à chaque
   /// chargement de style.
   Future<Map<String, Uint8List>>? _markers;
+
+  /// Battement en cours ; null quand la zone colorée est fixe.
+  Timer? _pulseTimer;
+
+  /// Temps écoulé depuis le début du battement.
+  final _pulseClock = Stopwatch();
+
+  /// Mise à jour du rayon encore en cours : on saute l'image suivante
+  /// plutôt que d'empiler les appels.
+  bool _pulseUpdating = false;
+
+  /// Fait battre la zone colorée tant qu'elle est visible, c'est-à-dire
+  /// sous le zoom des badges, et que l'animation est permise.
+  void updatePulse(
+    MapboxMap map, {
+    required double zoom,
+    required bool enabled,
+  }) {
+    if (enabled && zoom < _badgesMinZoom) {
+      _startPulse(map);
+    } else {
+      stopPulse();
+    }
+  }
+
+  /// Arrête le battement ; à appeler quand l'app passe en arrière-plan ou
+  /// que la carte disparaît.
+  void stopPulse() {
+    _pulseTimer?.cancel();
+    _pulseTimer = null;
+    _pulseClock
+      ..stop()
+      ..reset();
+  }
+
+  /// Lance le battement s'il ne tourne pas déjà.
+  void _startPulse(MapboxMap map) {
+    if (_pulseTimer != null) return;
+    _pulseClock.start();
+    _pulseTimer = Timer.periodic(_pulseFrame, (_) => _pulseStep(map));
+  }
+
+  /// Une image du battement : applique le rayon du moment.
+  Future<void> _pulseStep(MapboxMap map) async {
+    if (_pulseUpdating) return;
+    _pulseUpdating = true;
+    try {
+      await map.style.setStyleLayerProperty(
+        heatmapLayerId,
+        'heatmap-radius',
+        heatmapRadiusExpression(pulseScale(_pulseClock.elapsed)),
+      );
+    } catch (_) {
+      // Couche absente le temps d'un rechargement du style : l'image
+      // suivante réessaiera.
+    } finally {
+      _pulseUpdating = false;
+    }
+  }
 
   /// Donne le token à Mapbox, pour les requêtes vers le backend seulement :
   /// le fond de carte, servi par Mapbox, ne doit pas le recevoir.
@@ -119,11 +241,73 @@ class ReportTiles {
         tiles: ['${_apiBaseUrl}api/v1/map/tiles/{z}/{x}/{y}.mvt'],
       ),
     );
+    // Chaque couche a sa plage de zoom : même quand Mapbox garde une
+    // tuile d'un autre zoom le temps d'en charger une nouvelle, on ne voit
+    // jamais la zone et les badges en même temps.
+    await map.style.addLayer(
+      HeatmapLayer(
+        id: heatmapLayerId,
+        sourceId: sourceId,
+        sourceLayer: _sourceLayer,
+        maxZoom: _badgesMinZoom,
+        // Sous les étiquettes du fond de carte, qui restent lisibles.
+        slot: LayerSlot.MIDDLE,
+        // Un signalement seul chauffe à moitié, dix ou plus à fond.
+        heatmapWeightExpression: [
+          'interpolate',
+          ['linear'],
+          _count,
+          1,
+          0.5,
+          10,
+          1,
+        ],
+        heatmapRadiusExpression: heatmapRadiusExpression(),
+        // Du jaune au rouge, sans vert : peu de signalements ne veut pas
+        // dire que la zone est sûre.
+        heatmapColorExpression: [
+          'interpolate',
+          ['linear'],
+          ['heatmap-density'],
+          0,
+          'rgba(250, 204, 21, 0)',
+          0.15,
+          'rgba(250, 204, 21, 0.55)',
+          0.4,
+          'rgb(250, 204, 21)',
+          0.7,
+          'rgb(249, 115, 22)',
+          1,
+          'rgb(220, 38, 38)',
+        ],
+        heatmapOpacityExpression: _fadeOut(0.85),
+      ),
+    );
+    await map.style.addLayer(
+      SymbolLayer(
+        id: countLayerId,
+        sourceId: sourceId,
+        sourceLayer: _sourceLayer,
+        maxZoom: _badgesMinZoom,
+        textFieldExpression: ['to-string', _count],
+        textSize: 14,
+        textColor: _countColor,
+        textHaloColor: _white,
+        textHaloWidth: 1.5,
+        textOpacityExpression: _fadeOut(1),
+        // Deux nombres qui se chevauchent seraient illisibles : le second
+        // s'efface, la zone colorée montre quand même ses signalements. Le
+        // fond de carte, lui, n'est pas masqué.
+        textIgnorePlacement: true,
+        textEmissiveStrength: _fullBrightness,
+      ),
+    );
     await map.style.addLayer(
       SymbolLayer(
         id: pointsLayerId,
         sourceId: sourceId,
         sourceLayer: _sourceLayer,
+        minZoom: _badgesMinZoom,
         filter: _isReport,
         iconImageExpression: markerImageExpression(),
         // Tous les signalements restent visibles, même serrés : en masquer
@@ -131,46 +315,6 @@ class ReportTiles {
         iconAllowOverlap: true,
         iconIgnorePlacement: true,
         iconEmissiveStrength: _fullBrightness,
-      ),
-    );
-    await map.style.addLayer(
-      CircleLayer(
-        id: clustersLayerId,
-        sourceId: sourceId,
-        sourceLayer: _sourceLayer,
-        filter: _isCluster,
-        // Le rond grossit avec le nombre de signalements regroupés.
-        circleRadiusExpression: [
-          'step',
-          ['get', 'cluster_count'],
-          14,
-          10,
-          18,
-          50,
-          22,
-        ],
-        circleColor: _clusterColor,
-        circleStrokeColor: _white,
-        circleStrokeWidth: 2,
-        circleEmissiveStrength: _fullBrightness,
-      ),
-    );
-    await map.style.addLayer(
-      SymbolLayer(
-        id: clusterCountLayerId,
-        sourceId: sourceId,
-        sourceLayer: _sourceLayer,
-        filter: _isCluster,
-        textFieldExpression: [
-          'to-string',
-          ['get', 'cluster_count'],
-        ],
-        textSize: 13,
-        textColor: _white,
-        // Le nombre reste affiché même s'il chevauche une étiquette du fond.
-        textAllowOverlap: true,
-        textIgnorePlacement: true,
-        textEmissiveStrength: _fullBrightness,
       ),
     );
   }

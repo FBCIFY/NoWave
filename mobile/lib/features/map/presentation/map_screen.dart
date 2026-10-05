@@ -94,9 +94,20 @@ class _MapScreenState extends State<MapScreen> {
   int _noticeId = 0;
   Timer? _noticeTimer;
 
+  /// Dernier zoom connu, pour relancer le battement de la heatmap au
+  /// retour au premier plan.
+  double? _cameraZoom;
+
+  /// Coupe le battement de la heatmap quand l'app n'est plus visible.
+  AppLifecycleListener? _lifecycleListener;
+
   @override
   void initState() {
     super.initState();
+    _lifecycleListener = AppLifecycleListener(
+      onHide: () => widget.reportTiles?.stopPulse(),
+      onShow: _syncHeatmapPulse,
+    );
     _headingSubscription = DeviceOrientationService().readings.listen(
       (reading) {
         if (!mounted) return;
@@ -138,6 +149,8 @@ class _MapScreenState extends State<MapScreen> {
   /// Un geste de l'utilisateur coupe le suivi GPS ; une rotation au doigt
   /// passe la boussole en mode manuel.
   void _handleMapCameraChange(CameraChangedEventData event) {
+    _cameraZoom = event.cameraState.zoom;
+    _syncHeatmapPulse();
     final bearing = event.cameraState.bearing;
     final bearingDelta = ((bearing - _cameraBearing + 540) % 360 - 180);
     final userMovedMap = _mapTouchActive && _isFollowing;
@@ -272,9 +285,24 @@ class _MapScreenState extends State<MapScreen> {
 
     try {
       await reportTiles.addTo(map);
+      _cameraZoom ??= (await map.getCameraState()).zoom;
+      _syncHeatmapPulse();
     } catch (error) {
       debugPrint('Couche des signalements indisponible : $error');
     }
+  }
+
+  /// La heatmap bat tant qu'elle est visible, sauf si l'utilisateur a
+  /// demandé moins d'animations dans les réglages du téléphone.
+  void _syncHeatmapPulse() {
+    final map = _mapboxMap;
+    final zoom = _cameraZoom;
+    if (!mounted || map == null || zoom == null) return;
+    widget.reportTiles?.updatePulse(
+      map,
+      zoom: zoom,
+      enabled: !(MediaQuery.maybeDisableAnimationsOf(context) ?? false),
+    );
   }
 
   Future<void> _retryMapLoad() async {
@@ -760,6 +788,8 @@ class _MapScreenState extends State<MapScreen> {
 
   @override
   void dispose() {
+    widget.reportTiles?.stopPulse();
+    _lifecycleListener?.dispose();
     _reportPointTimer?.cancel();
     _reportMarkerDropTimer?.cancel();
     _noticeTimer?.cancel();

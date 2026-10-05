@@ -20,4 +20,33 @@ void main() {
     expect(markers.values.toSet(), hasLength(ReportCategory.values.length));
     expect(markers.values, isNot(contains(expression.last)));
   });
+
+  test('la zone colorée bat de 1 à 1,25 fois sa taille', () {
+    expect(ReportTiles.pulseScale(Duration.zero), 1);
+    expect(
+      ReportTiles.pulseScale(const Duration(seconds: 1)),
+      closeTo(1.25, 1e-9),
+    );
+    expect(
+      ReportTiles.pulseScale(const Duration(seconds: 2)),
+      closeTo(1, 1e-9),
+    );
+    for (var ms = 0; ms <= 2000; ms += 50) {
+      final scale = ReportTiles.pulseScale(Duration(milliseconds: ms));
+      expect(scale, inInclusiveRange(1, 1.25));
+    }
+  });
+
+  test('le battement agrandit le rayon à chaque zoom', () {
+    // Après ['interpolate', ['linear'], ['zoom']] : des paires zoom/rayon.
+    List<num> radii(List<Object> expression) => [
+      for (var i = 4; i < expression.length; i += 2) expression[i] as num,
+    ];
+
+    final base = radii(ReportTiles.heatmapRadiusExpression());
+    final pulsed = radii(ReportTiles.heatmapRadiusExpression(1.25));
+
+    expect(base, [25, 50, 80]);
+    expect(pulsed, [for (final r in base) r * 1.25]);
+  });
 }
