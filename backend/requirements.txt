@@ -3,5 +3,8 @@ fastapi
 uvicorn[standard]
 httpx
 firebase-admin
+boto3
+Pillow
+python-multipart
 # Required by SQLAlchemy on the Linux x86_64 production host.
 greenlet
