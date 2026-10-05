@@ -12,12 +12,16 @@ from app.domain.errors import (
     GpsPrecisionInsufficientError,
     InactiveUserError,
     InvalidObservedAtError,
+    InvalidPhotoError,
     InvalidPositioningInputError,
     InvalidReportCategoryError,
     InvalidReportDescriptionError,
     InvalidReportPositionError,
     ReportClientIdConflictError,
     ReportNotFoundError,
+    PhotoAlreadyUploadedError,
+    PhotoStorageError,
+    PhotoUploadForbiddenError,
     UserAlreadyExistsError,
     UserNotFoundError,
     UsernameAlreadyExistsError,
@@ -255,6 +259,81 @@ def boat_already_exists_handler(
             "error": {
                 "code": "boat_already_exists",
                 "message": str(exc),
+                "details": None,
+            }
+        },
+    )
+
+
+def invalid_photo_handler(request, exc: InvalidPhotoError):
+    return JSONResponse(
+        status_code=422,
+        content={
+            "error": {
+                "code": "invalid_photo",
+                "message": str(exc),
+                "details": None,
+            }
+        },
+    )
+
+
+def photo_upload_forbidden_handler(
+    request,
+    exc: PhotoUploadForbiddenError,
+):
+    return JSONResponse(
+        status_code=403,
+        content={
+            "error": {
+                "code": "photo_upload_forbidden",
+                "message": str(exc),
+                "details": None,
+            }
+        },
+    )
+
+
+def photo_already_uploaded_handler(
+    request,
+    exc: PhotoAlreadyUploadedError,
+):
+    return JSONResponse(
+        status_code=409,
+        content={
+            "error": {
+                "code": "photo_already_uploaded",
+                "message": str(exc),
+                "details": None,
+            }
+        },
+    )
+
+
+def photo_storage_error_handler(
+    request,
+    exc: PhotoStorageError,
+):
+    return JSONResponse(
+        status_code=503,
+        content={
+            "error": {
+                "code": "photo_storage_unavailable",
+                "message": str(exc),
+                "details": None,
+            }
+        },
+    )
+
+
+def dependency_unavailable_handler(request, exc):
+    # Database and configuration exceptions can contain credentials or hostnames.
+    return JSONResponse(
+        status_code=503,
+        content={
+            "error": {
+                "code": "dependency_unavailable",
+                "message": "a required service is unavailable; please retry",
                 "details": None,
             }
         },

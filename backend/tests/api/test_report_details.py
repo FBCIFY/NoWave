@@ -70,8 +70,7 @@ def setup_repository(monkeypatch, report):
     repository = FakeReportDetailRepository(report)
 
     monkeypatch.setattr(
-        "app.api.routes.report_details."
-        "PostgreSQLReportDetailRepository",
+        "app.api.routes.report_details.PostgreSQLReportDetailRepository",
         lambda: repository,
     )
 
@@ -81,15 +80,11 @@ def test_get_report_detail_returns_200(monkeypatch):
 
     setup_repository(monkeypatch, report)
 
-    app.dependency_overrides[get_current_identity] = (
-        verified_identity
-    )
+    app.dependency_overrides[get_current_identity] = verified_identity
 
     client = TestClient(app)
 
-    response = client.get(
-        f"/api/v1/reports/{report.id}"
-    )
+    response = client.get(f"/api/v1/reports/{report.id}")
 
     app.dependency_overrides.clear()
 
@@ -116,9 +111,7 @@ def test_get_report_detail_returns_200(monkeypatch):
 def test_get_report_detail_requires_authentication():
     client = TestClient(app)
 
-    response = client.get(
-        f"/api/v1/reports/{uuid4()}"
-    )
+    response = client.get(f"/api/v1/reports/{uuid4()}")
 
     assert response.status_code == 401
 
@@ -129,23 +122,16 @@ def test_unknown_report_returns_404(monkeypatch):
         None,
     )
 
-    app.dependency_overrides[get_current_identity] = (
-        verified_identity
-    )
+    app.dependency_overrides[get_current_identity] = verified_identity
 
     client = TestClient(app)
 
-    response = client.get(
-        f"/api/v1/reports/{uuid4()}"
-    )
+    response = client.get(f"/api/v1/reports/{uuid4()}")
 
     app.dependency_overrides.clear()
 
     assert response.status_code == 404
-    assert (
-        response.json()["error"]["code"]
-        == "report_not_found"
-    )
+    assert response.json()["error"]["code"] == "report_not_found"
 
 
 def test_visible_author_is_returned(monkeypatch):
@@ -155,13 +141,9 @@ def test_visible_author_is_returned(monkeypatch):
 
     setup_repository(monkeypatch, report)
 
-    app.dependency_overrides[get_current_identity] = (
-        verified_identity
-    )
+    app.dependency_overrides[get_current_identity] = verified_identity
 
-    response = TestClient(app).get(
-        f"/api/v1/reports/{report.id}"
-    )
+    response = TestClient(app).get(f"/api/v1/reports/{report.id}")
 
     app.dependency_overrides.clear()
 
@@ -181,13 +163,9 @@ def test_hidden_author_is_not_returned(monkeypatch):
 
     setup_repository(monkeypatch, report)
 
-    app.dependency_overrides[get_current_identity] = (
-        verified_identity
-    )
+    app.dependency_overrides[get_current_identity] = verified_identity
 
-    response = TestClient(app).get(
-        f"/api/v1/reports/{report.id}"
-    )
+    response = TestClient(app).get(f"/api/v1/reports/{report.id}")
 
     app.dependency_overrides.clear()
 
@@ -203,13 +181,9 @@ def test_deleted_author_is_identified(monkeypatch):
 
     setup_repository(monkeypatch, report)
 
-    app.dependency_overrides[get_current_identity] = (
-        verified_identity
-    )
+    app.dependency_overrides[get_current_identity] = verified_identity
 
-    response = TestClient(app).get(
-        f"/api/v1/reports/{report.id}"
-    )
+    response = TestClient(app).get(f"/api/v1/reports/{report.id}")
 
     app.dependency_overrides.clear()
 
@@ -229,13 +203,9 @@ def test_visible_boat_is_returned(monkeypatch):
 
     setup_repository(monkeypatch, report)
 
-    app.dependency_overrides[get_current_identity] = (
-        verified_identity
-    )
+    app.dependency_overrides[get_current_identity] = verified_identity
 
-    response = TestClient(app).get(
-        f"/api/v1/reports/{report.id}"
-    )
+    response = TestClient(app).get(f"/api/v1/reports/{report.id}")
 
     app.dependency_overrides.clear()
 
@@ -252,13 +222,9 @@ def test_manual_report_has_no_photo(monkeypatch):
 
     setup_repository(monkeypatch, report)
 
-    app.dependency_overrides[get_current_identity] = (
-        verified_identity
-    )
+    app.dependency_overrides[get_current_identity] = verified_identity
 
-    response = TestClient(app).get(
-        f"/api/v1/reports/{report.id}"
-    )
+    response = TestClient(app).get(f"/api/v1/reports/{report.id}")
 
     app.dependency_overrides.clear()
 
@@ -274,13 +240,9 @@ def test_pending_photo_has_no_url(monkeypatch):
 
     setup_repository(monkeypatch, report)
 
-    app.dependency_overrides[get_current_identity] = (
-        verified_identity
-    )
+    app.dependency_overrides[get_current_identity] = verified_identity
 
-    response = TestClient(app).get(
-        f"/api/v1/reports/{report.id}"
-    )
+    response = TestClient(app).get(f"/api/v1/reports/{report.id}")
 
     app.dependency_overrides.clear()
 
@@ -302,13 +264,9 @@ def test_hidden_uploaded_photo_has_no_url(monkeypatch):
 
     setup_repository(monkeypatch, report)
 
-    app.dependency_overrides[get_current_identity] = (
-        verified_identity
-    )
+    app.dependency_overrides[get_current_identity] = verified_identity
 
-    response = TestClient(app).get(
-        f"/api/v1/reports/{report.id}"
-    )
+    response = TestClient(app).get(f"/api/v1/reports/{report.id}")
 
     app.dependency_overrides.clear()
 
@@ -318,3 +276,61 @@ def test_hidden_uploaded_photo_has_no_url(monkeypatch):
         "status": "uploaded",
         "url": None,
     }
+
+
+def test_visible_uploaded_photo_has_temporary_url(monkeypatch):
+    report = make_report_detail(
+        positioning_mode=ReportPositioningMode.PHOTO,
+        photo_status="uploaded",
+        photo_object_key="reports/photo.jpg",
+        photo_hidden_at=None,
+    )
+    setup_repository(monkeypatch, report)
+    monkeypatch.setenv("PHOTO_STORAGE_BUCKET", "photos.test")
+
+    class FakeStorage:
+        def create_read_url(self, object_key, expires_in):
+            assert object_key == "reports/photo.jpg"
+            assert expires_in.total_seconds() == 300
+            return "https://signed.test/reports/photo.jpg"
+
+    monkeypatch.setattr(
+        "app.api.routes.report_details.get_photo_storage",
+        FakeStorage,
+    )
+    app.dependency_overrides[get_current_identity] = verified_identity
+
+    response = TestClient(app).get(f"/api/v1/reports/{report.id}")
+    app.dependency_overrides.clear()
+
+    assert response.status_code == 200
+    assert response.json()["photo"] == {
+        "status": "uploaded",
+        "url": "https://signed.test/reports/photo.jpg",
+    }
+
+
+def test_signing_failure_returns_safe_503(monkeypatch):
+    from app.domain.errors import PhotoStorageError
+
+    report = make_report_detail(
+        photo_status="uploaded",
+        photo_object_key="reports/photo.jpg",
+        photo_hidden_at=None,
+    )
+    setup_repository(monkeypatch, report)
+
+    class UnavailableStorage:
+        def create_read_url(self, **kwargs):
+            raise PhotoStorageError("temporary photo URL generation failed")
+
+    monkeypatch.setattr(
+        "app.api.routes.report_details.get_photo_storage", UnavailableStorage
+    )
+    app.dependency_overrides[get_current_identity] = verified_identity
+    try:
+        response = TestClient(app).get(f"/api/v1/reports/{report.id}")
+        assert response.status_code == 503
+        assert response.json()["error"]["code"] == "photo_storage_unavailable"
+    finally:
+        app.dependency_overrides.clear()

@@ -18,9 +18,13 @@ def is_production() -> bool:
 def configure_production(app: FastAPI) -> None:
     if not is_production():
         return
-    get_settings().require_database_url()
+    settings = get_settings()
+    settings.require_database_url()
+    settings.require_photo_storage()
     try:
-        credentials = json.loads(Path(os.environ["GOOGLE_APPLICATION_CREDENTIALS"]).read_text())
+        credentials = json.loads(
+            Path(os.environ["GOOGLE_APPLICATION_CREDENTIALS"]).read_text()
+        )
         valid = (
             credentials.get("type") == "service_account"
             and credentials.get("project_id") == os.environ["GOOGLE_CLOUD_PROJECT"]
@@ -29,17 +33,31 @@ def configure_production(app: FastAPI) -> None:
     except (KeyError, OSError, ValueError):
         valid = False
     if not valid:
-        raise ConfigurationError("A matching Firebase service account is required in production")
+        raise ConfigurationError(
+            "A matching Firebase service account is required in production"
+        )
 
     app.add_middleware(
         TrustedHostMiddleware,
-        allowed_hosts=["no-wave.fr", "www.no-wave.fr", "api.no-wave.fr", "127.0.0.1", "localhost"],
+        allowed_hosts=[
+            "no-wave.fr",
+            "www.no-wave.fr",
+            "api.no-wave.fr",
+            "127.0.0.1",
+            "localhost",
+        ],
         www_redirect=False,
     )
 
     @app.middleware("http")
     async def reject_foreign_origin(request: Request, call_next):
         origin = request.headers.get("origin")
-        if origin and origin not in {"https://no-wave.fr", "https://www.no-wave.fr", "https://api.no-wave.fr"}:
-            return JSONResponse(status_code=403, content={"detail": "Origin not allowed"})
+        if origin and origin not in {
+            "https://no-wave.fr",
+            "https://www.no-wave.fr",
+            "https://api.no-wave.fr",
+        }:
+            return JSONResponse(
+                status_code=403, content={"detail": "Origin not allowed"}
+            )
         return await call_next(request)
