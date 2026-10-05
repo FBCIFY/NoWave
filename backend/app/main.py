@@ -1,9 +1,13 @@
+import psycopg
 from fastapi import FastAPI
 from fastapi.exceptions import RequestValidationError
 from starlette.exceptions import HTTPException as StarletteHTTPException
 from app.config.production import configure_production, is_production
+from app.config.settings import ConfigurationError
+from app.api.photo_upload_limit import PhotoUploadLimitMiddleware
 
 from app.api.errors.handlers import (
+    dependency_unavailable_handler,
     http_exception_handler,
     boat_already_exists_handler,
     boat_not_found_handler,
@@ -11,6 +15,10 @@ from app.api.errors.handlers import (
     gps_precision_insufficient_handler,
     inactive_user_handler,
     invalid_positioning_input_handler,
+    invalid_photo_handler,
+    photo_already_uploaded_handler,
+    photo_storage_error_handler,
+    photo_upload_forbidden_handler,
     report_client_id_conflict_handler,
     report_not_found_handler,
     request_validation_error_handler,
@@ -29,11 +37,15 @@ from app.domain.errors import (
     InactiveUserError,
     InvalidObservedAtError,
     InvalidPositioningInputError,
+    InvalidPhotoError,
     InvalidReportCategoryError,
     InvalidReportDescriptionError,
     InvalidReportPositionError,
     ReportClientIdConflictError,
     ReportNotFoundError,
+    PhotoAlreadyUploadedError,
+    PhotoStorageError,
+    PhotoUploadForbiddenError,
     UserAlreadyExistsError,
     UserNotFoundError,
     UsernameAlreadyExistsError,
@@ -46,6 +58,13 @@ app = FastAPI(
     openapi_url=None if is_production() else "/openapi.json",
 )
 configure_production(app)
+app.add_middleware(PhotoUploadLimitMiddleware)
+for error_type in (
+    psycopg.OperationalError,
+    psycopg.InterfaceError,
+    ConfigurationError,
+):
+    app.add_exception_handler(error_type, dependency_unavailable_handler)
 
 app.include_router(health_router)
 app.include_router(api_router)
@@ -136,4 +155,24 @@ app.add_exception_handler(
 app.add_exception_handler(
     BoatAlreadyExistsError,
     boat_already_exists_handler,
+)
+
+app.add_exception_handler(
+    InvalidPhotoError,
+    invalid_photo_handler,
+)
+
+app.add_exception_handler(
+    PhotoUploadForbiddenError,
+    photo_upload_forbidden_handler,
+)
+
+app.add_exception_handler(
+    PhotoAlreadyUploadedError,
+    photo_already_uploaded_handler,
+)
+
+app.add_exception_handler(
+    PhotoStorageError,
+    photo_storage_error_handler,
 )
