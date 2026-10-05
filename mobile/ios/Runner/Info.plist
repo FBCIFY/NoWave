@@ -32,6 +32,13 @@
 	<string>NoWave utilise votre position pour vous situer sur la carte maritime et afficher vos coordonnées.</string>
 	<key>NSMotionUsageDescription</key>
 	<string>NoWave utilise les capteurs de mouvement pour mesurer l’inclinaison de la caméra lors d’un signalement photo.</string>
+	<key>NSLocalNetworkUsageDescription</key>
+	<string>NoWave utilise le réseau local pour charger la cartographie de développement depuis le Mac.</string>
+	<key>NSAppTransportSecurity</key>
+	<dict>
+		<key>NSAllowsLocalNetworking</key>
+		<true/>
+	</dict>
 	<key>UIApplicationSceneManifest</key>
 	<dict>
 		<key>UIApplicationSupportsMultipleScenes</key>
