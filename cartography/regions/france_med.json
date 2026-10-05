@@ -22,5 +22,12 @@
     "vector": "OpenStreetMap",
     "bathymetry": "SHOM",
     "relief": "Mapzen/AWS"
+  },
+  "country_label": {
+    "name": "FRANCE",
+    "coordinates": [
+      4.8,
+      44.1
+    ]
   }
 }

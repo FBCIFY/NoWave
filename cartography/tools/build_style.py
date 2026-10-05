@@ -3,6 +3,9 @@ import json
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
+# MapLibre minzoom is inclusive and maxzoom exclusive; preserve z6 country labels.
+COUNTRY_CITY_SWITCH_ZOOM = 6.01
+
 MAPZEN_TILES = 'https://s3.amazonaws.com/elevation-tiles-prod/terrarium/{z}/{x}/{y}.png'
 RELIEF_ATTRIBUTION = ('Terrain: Mapzen/Tilezen · AWS Open Data · EU-DEM/Copernicus · USGS · NOAA · '
     '<a href="{base}/assets/mapzen-attribution.html">Terrain data credits</a>')
@@ -34,9 +37,11 @@ def build():
               {'id': 'bathymetry', 'type': 'raster', 'source': 'bathymetry',
                'paint': {'raster-opacity': 1, 'raster-fade-duration': 0}}]
 
-    def layer(id_, type_, kind, paint, layout=None, minzoom=0, extra=None):
+    def layer(id_, type_, kind, paint, layout=None, minzoom=0, extra=None, maxzoom=None):
         value = {'id': id_, 'type': type_, 'source': 'features', 'minzoom': minzoom,
                  'filter': ['==', ['get', 'kind'], kind], 'paint': paint}
+        if maxzoom is not None:
+            value['maxzoom'] = maxzoom
         if extra:
             value['filter'] = ['all', value['filter'], extra]
         if layout:
@@ -53,14 +58,14 @@ def build():
               'line-opacity': zoom(start, 0, start+2, opacity)},
               {'line-cap': 'round', 'line-join': 'round'}, start, extra)
 
-    def label(id_, kind, start, color='#4F7187', field=None, placement='point', extra=None, size=12):
+    def label(id_, kind, start, color='#4F7187', field=None, placement='point', extra=None, size=12, maxzoom=None):
         layer(id_, 'symbol', kind, {'text-color': color,
               'text-opacity': zoom(start, 0, start+1.5, 1),
               'text-halo-color': '#F4FBFF', 'text-halo-width': .8},
               {'text-field': field or ['get', 'name'], 'text-font': ['Open Sans Semibold'],
                'text-size': zoom(start, size, 18, size+1), 'symbol-placement': placement,
                'symbol-spacing': 240, 'text-padding': 10,
-               'text-offset': [0, 1.5] if placement == 'point' else [0, 0]}, start, extra)
+               'text-offset': [0, 1.5] if placement == 'point' else [0, 0]}, start, extra, maxzoom)
 
     # Optional polygon depths for vector datasets; raster is preferred for smooth gradients.
     fill('depth-polygons', 'depth_area', ['interpolate', ['linear'], ['get', 'depth_m'],
@@ -174,11 +179,14 @@ def build():
                'text-optional': True}, start, valid)
         if kind == 'lighthouse':
             layers[-1]['layout']['icon-allow-overlap'] = True
-    for kind, start, size in [('sea_name', 4, 15), ('gulf_name', 6, 14), ('roadstead_name', 9, 13), ('coastal_city', 7, 11),
+    for kind, start, size in [('sea_name', 4, 15), ('gulf_name', 6, 14), ('roadstead_name', 9, 13), ('coastal_city', COUNTRY_CITY_SWITCH_ZOOM, 11),
                               ('coastal_town', 12, 10), ('bay_name', 9, 13),
                               ('cape_name', 8, 12), ('island_name', 8, 12),
                               ('beach_name', 15, 11), ('cove_name', 15, 11), ('calanque_name', 15, 11)]:
-        label(kind, kind, start, '#E5F3FB' if kind in ('sea_name', 'gulf_name', 'bay_name', 'roadstead_name') else '#697B86', size=size)
+        label(kind, kind, start, '#E5F3FB' if kind in ('sea_name', 'gulf_name', 'bay_name', 'roadstead_name') else '#697B86', size=size,
+              maxzoom=12 if kind == 'coastal_city' else None)
+        if kind == 'coastal_city':
+            layers[-1]['paint']['text-opacity'] = 1
         if kind in ('sea_name', 'gulf_name', 'bay_name', 'roadstead_name'):
             layers[-1]['paint']['text-halo-color'] = '#337FAF'
             layers[-1]['paint']['text-halo-width'] = .5
@@ -189,6 +197,9 @@ def build():
             layers[-1]['layout']['text-offset'] = [0, 0]
             layers[-1]['layout']['text-allow-overlap'] = True
             layers[-1]['paint']['text-halo-color'] = '#123F67'
+    label('country', 'country', 0, '#697B86', size=18, maxzoom=COUNTRY_CITY_SWITCH_ZOOM)
+    layers[-1]['paint']['text-opacity'] = 1
+    layers[-1]['layout'].update({'text-offset': [0, 0], 'text-letter-spacing': .15})
     return {'version': 8, 'name': 'NoWave · Jour',
             'metadata': {'nowave:data_mode': 'DEMO_FICTIVE', 'nowave:schema': 1, 'nowave:relief_label': 'réel Mapzen/AWS (externe)'},
             'center': [.015, 0], 'zoom': 10.5,
@@ -281,6 +292,16 @@ def build_real_area(profile):
         if layer.get('source') == 'features':
             layer['source-layer'] = 'nowave'
 
+    # Inline country label is independent of coastal MVT coverage and its minzoom.
+    if profile.get('country_label'):
+        country = profile['country_label']
+        style['sources']['country'] = {'type': 'geojson', 'data': {
+            'type': 'Feature', 'properties': {'kind': 'country', 'name': country['name']},
+            'geometry': {'type': 'Point', 'coordinates': country['coordinates']}}}
+        country_layer = next(l for l in style['layers'] if l['id'] == 'country')
+        country_layer['source'] = 'country'
+        country_layer.pop('source-layer', None)
+
     # Image sources do not support attribution in the v8 specification.
     style['sources']['features']['attribution'] += profile['bathymetry_attribution']
 
@@ -363,6 +384,7 @@ def region_profile(region, manifest=None, tiles_metadata=None):
             raise ValueError('Vector MBTiles does not match prepared features; rebuild it')
         vector_min, vector_max = int(vector_metadata['minzoom']), int(vector_metadata['maxzoom'])
     return {
+        'country_label': config.get('country_label'),
         'name': 'NoWave · ' + config['name'], 'manifest_data': manifest,
         'features_tiles': '{base}/tiles/vector/' + id_ + '/{z}/{x}/{y}.pbf',
         'features_minzoom': vector_min, 'features_maxzoom': vector_max,

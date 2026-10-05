@@ -86,7 +86,10 @@ def fixture(directory):
         for id_, (lon, lat) in enumerate(points, 1):
             writer.add_node(osmium.osm.mutable.Node(id=id_, location=(lon, lat), version=1))
         writer.add_node(osmium.osm.mutable.Node(id=3, location=TO_WGS84(x, y-100),
-                        tags={'seamark:type': 'buoy_cardinal', 'seamark:buoy_cardinal:category': 'north'}, version=1))
+                        tags={'seamark:type': 'buoy_cardinal', 'seamark:buoy_cardinal:category': 'north',
+                              'seamark:buoy_cardinal:colour': 'black;yellow',
+                              'seamark:buoy_cardinal:colour_pattern': 'horizontal',
+                              'seamark:buoy_cardinal:shape': 'pillar'}, version=1))
         writer.add_node(osmium.osm.mutable.Node(id=4, location=TO_WGS84(x, y-200),
                         tags={'seamark:type': 'not_a_known_type'}, version=1))
         # Closed marina way, represented by area callback only.

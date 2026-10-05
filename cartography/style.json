@@ -3283,7 +3283,7 @@
       "id": "coastal_city",
       "type": "symbol",
       "source": "features",
-      "minzoom": 7,
+      "minzoom": 6.01,
       "filter": [
         "==",
         [
@@ -3294,22 +3294,11 @@
       ],
       "paint": {
         "text-color": "#697B86",
-        "text-opacity": [
-          "interpolate",
-          [
-            "linear"
-          ],
-          [
-            "zoom"
-          ],
-          7,
-          0,
-          8.5,
-          1
-        ],
+        "text-opacity": 1,
         "text-halo-color": "#F4FBFF",
         "text-halo-width": 0.8
       },
+      "maxzoom": 12,
       "layout": {
         "text-field": [
           "get",
@@ -3326,7 +3315,7 @@
           [
             "zoom"
           ],
-          7,
+          6.01,
           11,
           18,
           12
@@ -3765,6 +3754,57 @@
           0,
           1.5
         ]
+      }
+    },
+    {
+      "id": "country",
+      "type": "symbol",
+      "source": "features",
+      "minzoom": 0,
+      "filter": [
+        "==",
+        [
+          "get",
+          "kind"
+        ],
+        "country"
+      ],
+      "paint": {
+        "text-color": "#697B86",
+        "text-opacity": 1,
+        "text-halo-color": "#F4FBFF",
+        "text-halo-width": 0.8
+      },
+      "maxzoom": 6.01,
+      "layout": {
+        "text-field": [
+          "get",
+          "name"
+        ],
+        "text-font": [
+          "Open Sans Semibold"
+        ],
+        "text-size": [
+          "interpolate",
+          [
+            "linear"
+          ],
+          [
+            "zoom"
+          ],
+          0,
+          18,
+          18,
+          19
+        ],
+        "symbol-placement": "point",
+        "symbol-spacing": 240,
+        "text-padding": 10,
+        "text-offset": [
+          0,
+          0
+        ],
+        "text-letter-spacing": 0.15
       }
     }
   ]

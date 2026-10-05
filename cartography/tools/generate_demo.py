@@ -274,13 +274,21 @@ def sprites():
              'anchor', 'anchor-ship', 'mooring', 'wreck', 'landmark',
              'landmark-tower', 'landmark-monument', 'landmark-chimney', 'landmark-pylon', 'danger-rock',
              'foreshore-pattern', 'shoal-pattern', 'reef-pattern']
-    names += [scheme+'~'+shape for scheme in ['lateral-port', 'lateral-starboard', 'cardinal-n', 'cardinal-e', 'cardinal-s', 'cardinal-w', 'safe-water', 'special', 'isolated-danger'] for shape in ['cone', 'can', 'sphere', 'spar']]
+    from regional_osm import SEAMARK_SCHEMES, SEAMARK_SHAPES
+    schemes = list(dict.fromkeys(value[0] for value in SEAMARK_SCHEMES.values()))
+    names += [scheme for scheme in schemes if scheme not in names]
+    names += [scheme+'~'+shape for scheme in schemes for shape in SEAMARK_SHAPES.values()]
+    # Bare/shape sprites never claim a topmark. Only explicit validated OSM tags opt in.
+    names += [name+'~topmark' for name in list(names) if name.split('~')[0] in schemes]
     for ratio in [1, 2]:
         size = 40*ratio
         atlas = Image.new('RGBA', (size*8, size*math.ceil(len(names)/8)))
         metadata = {}
         for index, sprite_name in enumerate(names):
-            name, _, shape = sprite_name.partition('~')
+            parts = sprite_name.split('~')
+            name = parts[0]
+            shape = parts[1] if len(parts) > 1 and parts[1] != 'topmark' else None
+            topmark = parts[-1] == 'topmark'
             tile = Image.new('RGBA', (80, 80))
             d = ImageDraw.Draw(tile)
             navy, white = '#4F7187', '#F4FBFF'
@@ -387,54 +395,72 @@ def sprites():
                     d.arc((23, 33, 57, 61), 0, 180, fill=navy, width=3)
                     d.line((27, 37, 53, 37), fill=navy, width=3)
                 else:
-                    c = '#D9B64C' if name in ['special', 'cardinal-n', 'cardinal-e', 'cardinal-s', 'cardinal-w'] else navy
-                    if name == 'lateral-port': c = colors['red']
-                    if name == 'lateral-starboard': c = colors['green']
-                    if name in ['safe-water', 'isolated-danger']: c = colors['red']
+                    # Flat chart symbols: no pedestal, shadow or decorative flotation ring.
+                    black, yellow = colors['black'], colors['yellow']
+                    port_hand = name in ('lateral-port', 'preferred-channel-starboard')
+                    starboard_hand = name in ('lateral-starboard', 'preferred-channel-port')
+                    c = colors['red'] if port_hand or name == 'safe-water' else colors['green'] if starboard_hand else yellow if name == 'special' else black
                     body = Image.new('L', (80, 80))
                     bd = ImageDraw.Draw(body)
-                    shape = shape or ('cone' if name == 'lateral-starboard' else 'sphere' if name in ['buoy-sphere', 'safe-water'] else 'spar' if name in ['buoy-spar', 'beacon'] else 'can')
-                    if shape == 'cone': bd.polygon([(40, 32), (27, 57), (53, 57)], fill=255)
-                    elif shape == 'sphere': bd.ellipse((27, 32, 53, 58), fill=255)
-                    elif shape == 'spar': bd.rectangle((36, 28, 44, 60), fill=255)
-                    else: bd.polygon([(32, 32), (48, 32), (53, 58), (27, 58)], fill=255)
+                    shape = shape or ('sphere' if name == 'buoy-sphere' else 'spar' if name in ('buoy-spar', 'beacon') else 'generic')
+                    if shape == 'cone': bd.polygon([(40, 36), (27, 62), (53, 62)], fill=255)
+                    elif shape == 'sphere': bd.ellipse((27, 36, 53, 62), fill=255)
+                    elif shape == 'spar': bd.rectangle((35, 36, 45, 62), fill=255)
+                    elif shape == 'pillar': bd.polygon([(36, 36), (44, 36), (47, 57), (53, 62), (27, 62), (33, 57)], fill=255)
+                    elif shape == 'can': bd.rectangle((28, 36, 52, 62), fill=255)
+                    else: bd.rectangle((29, 42, 51, 58), fill=255)  # abstract legacy category swatch
                     tile.paste(c, (0, 0, 80, 80), body)
-                    def band(y0, y1, color):
+                    def band(x0, y0, x1, y1, color):
                         stripe = Image.new('L', (80, 80))
-                        ImageDraw.Draw(stripe).rectangle((0, y0, 80, y1), fill=255)
+                        ImageDraw.Draw(stripe).rectangle((x0, y0, x1, y1), fill=255)
                         tile.paste(color, (0, 0, 80, 80), ImageChops.multiply(body, stripe))
+                    # All paint spans the entire clipped body, including spars and pillars.
                     if name.startswith('cardinal-'):
                         direction = name[-1]
-                        # IALA topmarks: N up/up, E up/down, S down/down, W down/up.
-                        for y, up in [(18, direction in 'ne'), (29, direction in 'nw')]:
-                            pts = [(40, y-9), (32, y+1), (48, y+1)] if up else [(32, y-9), (48, y-9), (40, y+1)]
-                            d.polygon(pts, fill='#20262C')
-                        if direction == 'n': band(33, 44, '#20262C')
-                        if direction == 's': band(46, 59, '#20262C')
+                        band(0, 0, 79, 79, yellow)
+                        if direction == 'n': band(0, 0, 79, 48, black)
+                        if direction == 's': band(0, 50, 79, 79, black)
                         if direction == 'e':
-                            band(33, 39, '#20262C'); band(51, 59, '#20262C')
-                        if direction == 'w': band(41, 49, '#20262C')
-                    elif name in ('lateral-port', 'lateral-starboard'):
-                        d.line((40,27,40,33),fill=navy,width=2)
-                        if name == 'lateral-port':
-                            d.rectangle((35,19,45,27),fill=c,outline=navy,width=1)
-                        else:
-                            d.polygon([(40,17),(34,27),(46,27)],fill=c,outline=navy,width=1)
-                    elif name == 'special':
-                        d.line((33, 18, 47, 30), fill=c, width=4); d.line((47, 18, 33, 30), fill=c, width=4)
+                            band(0, 0, 79, 43, black)
+                            band(0, 54, 79, 79, black)
+                        if direction == 'w': band(0, 44, 79, 53, black)
                     elif name == 'isolated-danger':
-                        band(33, 40, '#20262C'); band(51, 59, '#20262C')
-                        for y in [15, 25]: d.ellipse((36, y, 44, y+8), fill='#20262C')
+                        band(0, 44, 79, 53, colors['red'])
+                    elif name.startswith('preferred-channel-'):
+                        band(0, 44, 79, 53, colors['green'] if port_hand else colors['red'])
                     elif name == 'safe-water':
-                        d.rectangle((37, 33, 43, 56), fill=white); d.ellipse((36, 20, 44, 28), fill=c)
-                    d.ellipse((25,57,55,65),fill=navy,outline=white,width=2)
-                    # Thin body edge keeps conventional colors intact and readable.
-                    edge = body.filter(ImageFilter.MaxFilter(3))
-                    edge = ImageChops.subtract(edge, body)
-                    outline = Image.new('RGBA',(80,80),navy); outline.putalpha(edge)
+                        # Four alternating vertical bands, clipped to every physical form.
+                        width = 3 if shape == 'spar' else 2 if shape == 'pillar' else 6
+                        left = 35 if shape == 'spar' else 36 if shape == 'pillar' else 28
+                        for x in range(left + width, 54, width * 2):
+                            band(x, 0, x + width - 1, 79, colors['white'])
+                    edge = ImageChops.subtract(body.filter(ImageFilter.MaxFilter(3)), body)
+                    outline = Image.new('RGBA', (80, 80), navy)
+                    outline.putalpha(edge)
                     tile.alpha_composite(outline)
                     d = ImageDraw.Draw(tile)
-                    d.line((26, 62, 54, 62), fill=white, width=2)
+                    if topmark:
+                        d.line((40, 30, 40, 35), fill=navy, width=2)
+                        if name.startswith('cardinal-'):
+                            direction = name[-1]
+                            # N up/up; E up/down (bases together); S down/down; W down/up.
+                            for y, up in [(15, direction in 'ne'), (27, direction in 'nw')]:
+                                points = [(40, y-8), (33, y+1), (47, y+1)] if up else [(33, y-8), (47, y-8), (40, y+1)]
+                                d.polygon(points, fill=black)
+                        elif port_hand:
+                            d.rectangle((35, 20, 45, 29), fill=c, outline=navy, width=1)
+                        elif starboard_hand:
+                            d.polygon([(40, 18), (34, 29), (46, 29)], fill=c, outline=navy, width=1)
+                        elif name == 'special':
+                            d.line((34, 19, 46, 29), fill=c, width=4)
+                            d.line((46, 19, 34, 29), fill=c, width=4)
+                        elif name == 'isolated-danger':
+                            for y in [10, 23]: d.ellipse((36, y, 44, y+8), fill=black)
+                        elif name == 'safe-water':
+                            d.ellipse((35, 19, 45, 29), fill=colors['red'], outline=navy, width=1)
+                    # Position tick and pale casing retain contrast over bathymetry.
+                    d.line((23, 65, 57, 65), fill=white, width=4)
+                    d.line((23, 65, 57, 65), fill=navy, width=2)
             tile = tile.resize((size, size), Image.Resampling.LANCZOS)
             x, y = index%8*size, index//8*size
             atlas.paste(tile, (x, y))

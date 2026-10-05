@@ -4,12 +4,19 @@ const fs = require('node:fs');
 const path = require('node:path');
 const output = path.resolve(__dirname, '../../test-results/france-med-real');
 const scenes = [
+  ['00-country-z6', [5.35, 43.15], 6],
+  ['00-city-switch', [5.35, 43.15], 6.01],
+  ['00-city-before-z12', [5.365, 43.293], 11.99],
+  ['00-city-at-z12', [5.365, 43.293], 12],
   ['01-region', [5.35, 43.15], 7],
   ['02-marseille', [5.365, 43.293], 15.3],
   ['03-sete', [3.697, 43.399], 15.3],
   ['04-port-vendres', [3.107, 42.517], 15.3],
   ['05-nice', [7.286, 43.695], 15.3],
   ['06-nodata-east', [8.05, 43.75], 11],
+  // Existing acquired OSM nodes 1420666201 and 1360781696, never synthetic marks.
+  ['07-safe-water-pillar', [5.95885, 43.0834833], 16],
+  ['08-port-pillar', [5.3278246, 43.3445279], 16],
 ];
 
 (async () => {
@@ -40,18 +47,36 @@ const scenes = [
       await page.waitForFunction(() => __map.loaded(), null, {timeout: 60000});
       await page.waitForTimeout(1000);
       const rendered = await page.evaluate(() => [...new Set(__map.queryRenderedFeatures().map(f => f.layer.id))]);
-      if (!name.includes('nodata') && !rendered.includes('coast')) throw Error(`${name}: coastline missing`);
+      if (name === '00-country-z6' && (!rendered.includes('country') || rendered.includes('coastal_city'))) {
+        throw Error('z6: FRANCE must render and major cities must be absent');
+      }
+      if (['00-city-switch', '00-city-before-z12'].includes(name) &&
+          (rendered.includes('country') || !rendered.includes('coastal_city'))) {
+        throw Error(`${zoom}: major cities must render and FRANCE must be absent`);
+      }
+      if (name === '00-city-at-z12' && (rendered.includes('country') || rendered.includes('coastal_city'))) {
+        throw Error('z12: country and major cities must be absent');
+      }
+      // The safe-water scene is offshore at z16; its viewport contains no coastline.
+      if (!name.includes('nodata') && name !== '07-safe-water-pillar' && !rendered.includes('coast')) throw Error(`${name}: coastline missing`);
+      if (name === '07-safe-water-pillar' || name === '08-port-pillar') {
+        const expectedIcon = name === '07-safe-water-pillar' ? 'safe-water~pillar~topmark' : 'lateral-port~pillar~topmark';
+        const visible = await page.evaluate(icon => __map.queryRenderedFeatures({layers: ['buoy-symbols']})
+          .some(f => f.properties.icon === icon), expectedIcon);
+        if (!visible) throw Error(`${name}: expected real buoy sprite ${expectedIcon}`);
+      }
       await page.screenshot({path: path.join(output, name + '.png')});
       results.push({name, center, zoom, rendered});
     }
     const before = await page.evaluate(() => __map.getCenter().toArray());
+    const beforeZoom = await page.evaluate(() => __map.getZoom());
     await page.mouse.move(550, 500); await page.mouse.down();
     await page.mouse.move(650, 500, {steps: 12}); await page.mouse.up();
     await page.waitForTimeout(300);
     const after = await page.evaluate(() => __map.getCenter().toArray());
     await page.mouse.wheel(0, -180); await page.waitForTimeout(600);
     const zoom = await page.evaluate(() => __map.getZoom());
-    if (before[0] === after[0] || zoom <= 11) throw Error('Pan/zoom failed');
+    if (before[0] === after[0] || zoom <= beforeZoom) throw Error('Pan/zoom failed');
     if (requests.some(url => /\/data\/demo|demo-bathymetry|mapbox\.com|maptiler\.com|maps\.google/.test(url))) {
       throw Error('Unexpected demo or proprietary map request');
     }

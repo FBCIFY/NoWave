@@ -11,7 +11,7 @@ from region_config import resolve_region
 ROOT = Path(__file__).resolve().parents[1]
 
 
-def prepare(region, sources_path, catalog_path, output, cache, resolution=100, block_size=512):
+def prepare(region, sources_path, catalog_path, output, cache, resolution=100, block_size=512, osm_only=False):
     if region['id'] == 'cassis':
         raise ValueError('Cassis must always use prepare_cassis.py')
     # Also reject aliases/symlinks and another region targeting the Cassis tree.
@@ -19,14 +19,27 @@ def prepare(region, sources_path, catalog_path, output, cache, resolution=100, b
     for path in (output, cache):
         if path.resolve().is_relative_to(protected) or protected.is_relative_to(path.resolve()):
             raise ValueError('Regional output/cache must not overlap cartography/data/cassis')
-    from pipeline_io import staged_generation, publish_generation
+    from pipeline_io import staged_generation, publish_generation, current_generation, digest
+    previous = None
+    if osm_only:
+        previous = current_generation(output)
+        manifest = json.loads((previous / 'manifest.json').read_text())
+        if (manifest['region'] != region['id'] or manifest['bbox'] != region['bbox']
+                or any(manifest['coverage'].get(k) != v for k, v in region['coverage'].items())
+                or manifest['sources'] != json.loads(sources_path.read_text())
+                or manifest['bathymetry']['resolution_m'] != resolution
+                or manifest['bathymetry']['block_size'] != block_size):
+            raise ValueError('OSM-only rebuild requires unchanged region, sources and depth grid')
+        for name, checksum in manifest['files_sha256'].items():
+            if digest(previous / name) != checksum:
+                raise ValueError('OSM-only rebuild refuses a damaged published generation: ' + name)
     with staged_generation(output) as staging:
         manifest = _prepare_generation(region, sources_path, catalog_path, staging, cache,
-                                       resolution, block_size)
+                                       resolution, block_size, previous)
         return publish_generation(output, staging, manifest)
 
 
-def _prepare_generation(region, sources_path, catalog_path, output, cache, resolution, block_size):
+def _prepare_generation(region, sources_path, catalog_path, output, cache, resolution, block_size, previous=None):
     from shapely.geometry import box
     from pipeline_io import atomic_json, checked_asset, geometry_file, feature, write_collection, digest
     from coastal_geometry import coastal_zone, polygonal
@@ -55,17 +68,48 @@ def _prepare_generation(region, sources_path, catalog_path, output, cache, resol
     with closing(ingest(extracted, cache / 'inventory.sqlite', region['bbox'],
                 {'source_sha256': sources['osm']['sha256'], 'retrieved_at': sources['osm']['date']}, cache)) as db:
         coast = coast_from_inventory(db, scope)
-        sea, useful = coastal_zone(coast, land, region['bbox'], region['coverage']['sea_buffer_nm'])
-        if sea.is_empty:
-            raise ValueError('Empty marine coverage')
-        atomic_json(output / 'coverage.geojson', feature('coverage', sea, source='OSM coastline metric buffer'))
-        atomic_json(output / 'water.geojson', feature('water', polygonal(extent.difference(land)),
-                    source=sources['land']['source'], license=sources['land']['license']))
-        bathymetry = build_field(catalog_path, output / 'coverage.geojson', cache / 'bathymetry', resolution, block_size)
-        write_collection(output / 'features.geojson', chain(
-            [feature('land', land, source=sources['land']['source'], license=sources['land']['license'],
-                     source_sha256=sources['land']['sha256'], date=sources['land']['date'])],
-            features_in_zone(db, useful, land, coast), contours(bathymetry)))
+        if previous is None:
+            sea, useful = coastal_zone(coast, land, region['bbox'], region['coverage']['sea_buffer_nm'])
+            if sea.is_empty:
+                raise ValueError('Empty marine coverage')
+            atomic_json(output / 'coverage.geojson', feature('coverage', sea, source='OSM coastline metric buffer'))
+            atomic_json(output / 'water.geojson', feature('water', polygonal(extent.difference(land)),
+                        source=sources['land']['source'], license=sources['land']['license']))
+            bathymetry = build_field(catalog_path, output / 'coverage.geojson', cache / 'bathymetry', resolution, block_size)
+            vector_features = chain(
+                [feature('land', land, source=sources['land']['source'], license=sources['land']['license'],
+                         source_sha256=sources['land']['sha256'], date=sources['land']['date'])],
+                features_in_zone(db, useful, land, coast), contours(bathymetry))
+        else:
+            # A sprite mapping change needs neither a new coastal buffer nor a SHOM field.
+            # Preserve every non-buoy feature and both coverage geometries exactly.
+            import shutil
+            from shapely import set_precision
+            from shapely.geometry import shape
+            from shapely.ops import transform
+            from coastal_geometry import TO_METRIC
+            from pipeline_io import iter_collection
+            for name in ('coverage.geojson', 'water.geojson'):
+                shutil.copyfile(previous / name, output / name)
+            bathymetry = json.loads((previous / 'bathymetry.json').read_text())
+            sea = geometry_file(previous / 'coverage.geojson')
+            metric_coast = set_precision(transform(TO_METRIC, coast), .01)
+            def seamarks_in_zone():
+                # Point distance is the same coast-buffer predicate without a GEOS
+                # union of thousands of buffers. The original 3km land rule is retained.
+                for payload, in db.execute("SELECT payload FROM features WHERE kind IN ('buoy','beacon') ORDER BY id,kind"):
+                    value = json.loads(payload)
+                    point = shape(value['geometry'])
+                    if not extent.covers(point):
+                        continue
+                    if sea.covers(point) or (land.covers(point) and
+                            metric_coast.distance(transform(TO_METRIC, point)) <= 3000):
+                        yield value
+            vector_features = chain(
+                (f for f in iter_collection(previous / 'features.geojson')
+                 if f['properties']['kind'] not in ('buoy', 'beacon')),
+                seamarks_in_zone())
+        write_collection(output / 'features.geojson', vector_features)
         # Audit is streamed too: unsupported objects never acquire guessed types.
         audit = ({'type': 'Feature', 'geometry': None, 'properties': {'osm_id': i, 'osm_tags': json.loads(t), 'reason': r}}
                  for i, t, r in db.execute('SELECT id,tags,reason FROM skipped ORDER BY id'))
@@ -93,6 +137,7 @@ def main():
     parser.add_argument('--output', type=Path)
     parser.add_argument('--resolution', type=float, default=None)
     parser.add_argument('--block-size', type=int, default=None)
+    parser.add_argument('--osm-only', action='store_true', help='Re-normalize pinned OSM; reuse published SHOM field and contours')
     parser.add_argument('--offline', action='store_true', help='Cassis cached acquisition; regional ingest is always local')
     args = parser.parse_args()
     region = resolve_region(args.region)
@@ -103,6 +148,8 @@ def main():
             ('--sources', args.sources), ('--bathymetry-catalog', args.bathymetry_catalog),
             ('--output', args.output), ('--resolution', args.resolution),
             ('--block-size', args.block_size)) if value is not None]
+        if args.osm_only:
+            forbidden.append('--osm-only')
         if forbidden:
             parser.error('Cassis refuses regional options: ' + ', '.join(forbidden))
         import prepare_cassis
@@ -114,12 +161,12 @@ def main():
         sys.argv = command
         prepare_cassis.main()
         return
-    if not args.sources or not args.bathymetry_catalog:
-        parser.error('Regional pipeline requires --sources and --bathymetry-catalog; see FRANCE_MED_REAL.md')
+    if not args.sources or (not args.osm_only and not args.bathymetry_catalog):
+        parser.error('Regional pipeline requires --sources and, without --osm-only, --bathymetry-catalog; see FRANCE_MED_REAL.md')
     prepare(region, args.sources, args.bathymetry_catalog, args.output or ROOT / 'data' / region['id'],
             args.cache or Path.home() / '.cache' / 'nowave' / region['id'],
             100 if args.resolution is None else args.resolution,
-            512 if args.block_size is None else args.block_size)
+            512 if args.block_size is None else args.block_size, osm_only=args.osm_only)
 
 
 if __name__ == '__main__':

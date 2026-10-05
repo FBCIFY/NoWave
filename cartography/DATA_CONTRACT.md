@@ -31,6 +31,7 @@ sont en coordonnées géographiques avant encodage MVT (GeoJSON WGS84).
 | shoal, reef | Polygon | `name` facultatif |
 | restricted, military, reserve, windfarm | Polygon | zones permanentes identifiées, `name` pour réserve |
 | light_sector | Polygon | `color` ; géométrie dérivée des angles et de la portée réels |
+| country | Point | `name` ; label pays issu de `country_label` régional, source GeoJSON embarquée indépendante du MVT côtier |
 | sea_name, gulf_name, roadstead_name, coastal_city, coastal_town, bay_name, cape_name, island_name, beach_name, cove_name, calanque_name | Point | `name`, noms géographiques seulement |
 
 Les types inconnus sont ignorés. Les exclusions demandées (sondes, AIS virtuelles,
@@ -45,15 +46,45 @@ certifie `coastal=true`, les villes côtières et les amers visibles depuis la m
 ### Bouées
 
 Sprites disponibles : `lateral-port`, `lateral-starboard`, `cardinal-n/e/s/w`
-(Ouest = `w`), `safe-water`, `special`, `isolated-danger`, `buoy-sphere`,
-`buoy-spar`, `beacon`. Les neuf premières familles acceptent `~cone`, `~can`,
-`~sphere`, `~spar`, par exemple `cardinal-e~spar`. Préserver la forme réelle
-et le type lors de la normalisation ; ne pas déduire une forme d'une donnée absente.
-Les cardinales utilisent deux cônes orientés et bandes noir/jaune ; les marques
-spéciales une croix ; eaux saines sphère rouge et bandes verticales rouge/blanc ;
-danger isolé deux sphères noires et bandes noir/rouge. Les variantes latérales
-rouge/vert correspondent à la région IALA A. **Une région IALA B nécessite une
-normalisation adaptée aux couleurs réelles**, ne pas supposer les couleurs.
+(Ouest = `w`), `safe-water`, `special`, `isolated-danger`,
+`preferred-channel-port`, `preferred-channel-starboard`, `buoy-sphere`,
+`buoy-spar`, `beacon`. Les onze familles conventionnelles acceptent `~cone`,
+`~can`, `~sphere`, `~spar`, `~pillar` (ex. `cardinal-e~pillar`).
+Le suffixe `~topmark` ajoute exclusivement le topmark déclaré et validé
+(ex. `lateral-port~pillar~topmark`). Les sprites sans ce suffixe n'en affichent aucun.
+Les noms historiques sont conservés ; les sprites nus sont des symboles de
+catégorie abstraits et ne sont pas utilisés comme forme physique de secours OSM.
+
+La normalisation régionale requiert une forme prise en charge, des couleurs
+explicites et, pour les bandes, le motif explicite approprié. Une forme absente
+ou inconnue reste auditée. Une latérale bâbord conique ou tribord cylindrique,
+une latérale sphérique, des couleurs/motifs contradictoires ou un système IALA B
+explicite restent non rendus. Aucune correction silencieuse de forme n'est faite.
+`seamark:topmark:shape` et `seamark:topmark:colour` doivent être tous deux présents
+et cohérents pour afficher un topmark ; un topmark incomplet/contradictoire laisse
+l'objet dans l'audit. Une balise ayant une forme non prise en charge (`pile`,
+`tower`, etc.) n'est pas transformée en bouée.
+
+| Famille IALA A | Couleurs explicites du corps | Motif | Topmark si déclaré (forme ; couleur) |
+|---|---|---|---|
+| latérale bâbord | `red` | uni | `cylinder` ; `red` |
+| latérale tribord | `green` | uni | `cone, point up` ; `green` |
+| chenal préféré à tribord | `red;green;red` | `horizontal` | `cylinder` ; `red` |
+| chenal préféré à bâbord | `green;red;green` | `horizontal` | `cone, point up` ; `green` |
+| cardinale N | `black;yellow` | `horizontal` | `2 cones up` ; `black` |
+| cardinale E | `black;yellow;black` | `horizontal` | `2 cones base together` ; `black` |
+| cardinale S | `yellow;black` | `horizontal` | `2 cones down` ; `black` |
+| cardinale W | `yellow;black;yellow` | `horizontal` | `2 cones point together` ; `black` |
+| eaux saines | `red;white` | `vertical` | `sphere` ; `red` |
+| danger isolé | `black;red;black` | `horizontal` | `2 spheres` ; `black` |
+| spéciale | `yellow` | uni | `x-shape` ; `yellow` |
+
+Les catégories `preferred_channel_port` et `preferred_channel_starboard` sont
+lues dans `seamark:buoy_lateral:category` ou `seamark:beacon_lateral:category`.
+La couleur seule ne permet jamais de déduire un chenal préféré. Références :
+[OSM Buoys](https://wiki.openstreetmap.org/wiki/Seamarks/Buoys),
+[OSM Beacons](https://wiki.openstreetmap.org/wiki/Seamarks/Beacons).
+**Une région IALA B nécessite une normalisation distincte.**
 Aucune portée de bouée ni hauteur de feu n'est affichée.
 
 ## Bathymétrie continue réelle
@@ -173,3 +204,15 @@ Le relief terrestre est protégé par un masque marin global dérivé des terres
 réelles, indépendant des limites des blocs. La bbox n’est jamais une côte.
 
 **NoWave n’est pas une carte officielle de navigation.**
+
+### Hiérarchie des labels régionaux
+
+`country_label: {"name": "FRANCE", "coordinates": [4.8, 44.1]}` dans
+`regions/france_med.json` place le pays sur les terres continentales françaises,
+sans réseau ni ajout de la Corse. Sa source GeoJSON embarquée reste disponible
+sous le minzoom 6 des tuiles vectorielles. La couche `country` est visible de z0
+à z6 inclus, avec `maxzoom=COUNTRY_CITY_SWITCH_ZOOM=6.01` (exclusif).
+`coastal_city` a `minzoom=6.01` (inclusif) et `maxzoom=12` (exclusif).
+L'epsilon 0.01 laisse donc le pays jusqu'à z6.009… ; il évite un trou à z6.
+Les deux couches ont une opacité 1 dans leur plage, sans fondu retardant les villes.
+`coastal_town` garde son minzoom 12 ; les autres noms géographiques sont inchangés.

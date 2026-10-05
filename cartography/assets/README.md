@@ -8,10 +8,12 @@ Sprites : créations géométriques originales NoWave, générées par le même 
 Les couleurs des balises et marques de sommet suivent les conventions demandées.
 Les textures sont volontairement discrètes. Atlases 1× et 2×.
 
-Police : Open Sans Semibold, glyphes 0–255 précompilés issus de
-https://demotiles.maplibre.org/font/Open%20Sans%20Semibold/0-255.pbf
-(licence SIL OFL, copie dans `font/OFL.txt`). Les textes de démo restent dans
-cette plage Unicode. Pour d'autres langues, fournir les plages PBF nécessaires
+Police : Open Sans Semibold, glyphes 0–255, 256–511 et 8192–8447
+précompilés issus de
+`https://demotiles.maplibre.org/font/Open%20Sans%20Semibold/{range}.pbf`
+(licence SIL OFL, copie dans `font/OFL.txt`). Les deux plages supplémentaires
+couvrent les noms géographiques régionaux et leur ponctuation ; toutes sont
+servies localement, sans nouvelle dépendance réseau au rendu. Pour d'autres langues, fournir les plages PBF nécessaires
 avec les licences correspondantes sur le même serveur.
 
 Relief : tuiles réelles externes Mapzen/AWS, chargées depuis Internet.

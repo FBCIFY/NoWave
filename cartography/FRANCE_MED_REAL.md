@@ -399,3 +399,57 @@ restent NoData. Aucun complément externe d’un autre référentiel n’est mé
 Les mesures de couverture, tailles, temps et contrôles HTTP figurent dans
 [FRANCE_MED_VALIDATION.md](FRANCE_MED_VALIDATION.md). Les essais physiques
 Android et iOS restent dépendants d’un appareil et, pour iOS, de macOS/Xcode.
+
+## Régénération après modification des icônes OSM
+
+Les sprites 1x/2x et le style seuls ne demandent aucune reconstruction SHOM.
+Après un changement du mapping `icon`, régénérer les objets vectoriels et MBTiles
+à partir des mêmes sources locales. Le mode `--osm-only` conserve le champ,
+les contours, les signatures et les PNG SHOM existants. Il vérifie les empreintes
+publiées et refuse des sources, une configuration de couverture ou une grille différentes ; la
+publication par génération reste atomique. Les objets non concernés, les contours
+et les masques de couverture sont conservés. Aucun téléchargement n'est effectué.
+
+```bash
+.venv/bin/python -c "import sys; sys.path.insert(0,'cartography/tools'); from generate_demo import sprites; sprites()"
+.venv/bin/python cartography/tools/build_style.py
+
+.venv/bin/python cartography/tools/prepare_region.py \
+  --region france_med \
+  --sources cartography/regions/france_med.sources.local.json \
+  --cache "$HOME/.cache/nowave/france_med" \
+  --resolution 100 --block-size 512 --offline --osm-only
+
+NOWAVE_GENERATION="$(readlink -f cartography/data/france_med/current)"
+cartography/tools/build_vector_tiles.sh \
+  "$NOWAVE_GENERATION/features.geojson" \
+  cartography/tiles/vector/france_med.mbtiles nowave regional
+
+.venv/bin/python cartography/tools/build_style.py --region france_med \
+  --output cartography/france-med-regional-style.json
+```
+
+Ne pas relancer `build_bathymetry_tiles.py` pour ce changement : la signature
+bathymétrique est conservée. Arrêter le serveur pendant préparation + reconstruction
+MBTiles, puis le relancer pour éviter une incohérence transitoire entre les étapes.
+Le serveur vérifie toujours l'empreinte du GeoJSON vectoriel.
+
+L'inventaire local acquis contient des formes `pillar`, mais aucune catégorie
+`preferred_channel_port/starboard` ; leur support est vérifié par fixtures,
+sans ajout d'objet réel. Les formes absentes/non supportées et les topmarks
+incomplets restent dans `osm-not-rendered.geojson`. Les atlas contiennent
+les noms historiques et les variantes avec topmark explicite.
+
+Validation navigateur régionale (avec le serveur cartographique sur 8765 et
+le client Flutter Web existant sur 8766) :
+
+```bash
+node cartography/tools/browser_region.cjs
+```
+
+Le test vérifie aussi les labels à z6, z6.01, z11.99 et z12.
+
+Le mode complet a rencontré un segfault GEOS dans l'union des buffers côtiers
+sur ce jeu réel. Le mode `--osm-only` évite ce calcul : il réutilise la couverture
+marine validée et conserve le seuil terrestre de 3 km depuis la côte réelle.
+Il ne corrige pas le problème natif d'une reconstruction complète de couverture.

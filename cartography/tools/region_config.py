@@ -41,6 +41,17 @@ def load_region(path: Path) -> dict:
     if not west <= lon <= east or not south <= lat <= north:
         raise ValueError("center must be inside bbox")
 
+    country = region.get("country_label")
+    if country is not None:
+        if not isinstance(country, dict) or not isinstance(country.get("name"), str) or not country["name"].strip():
+            raise ValueError("country_label requires a name")
+        coordinates = country.get("coordinates")
+        if not isinstance(coordinates, list) or len(coordinates) != 2:
+            raise ValueError("country_label requires [longitude, latitude]")
+        country_lon, country_lat = map(float, coordinates)
+        if not west <= country_lon <= east or not south <= country_lat <= north:
+            raise ValueError("country_label must be inside bbox")
+
     zoom = float(region["zoom"])
     if not 4 <= zoom <= 18:
         raise ValueError("zoom must be between 4 and 18")

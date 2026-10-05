@@ -15,6 +15,61 @@ RELEVANT_KEYS = ('natural', 'landuse', 'leisure', 'harbour', 'waterway',
                  'man_made', 'place', 'highway', 'seamark:type')
 
 
+# Explicit OSM conventions, IALA A. No characteristic is inferred from colour alone.
+# https://wiki.openstreetmap.org/wiki/Seamarks/Buoys (also applies to beacons).
+SEAMARK_SCHEMES = {
+    ('lateral', 'port'): ('lateral-port', 'red', None, 'cylinder', 'red'),
+    ('lateral', 'starboard'): ('lateral-starboard', 'green', None, 'cone, point up', 'green'),
+    ('lateral', 'preferred_channel_starboard'): (
+        'preferred-channel-starboard', 'red;green;red', 'horizontal', 'cylinder', 'red'),
+    ('lateral', 'preferred_channel_port'): (
+        'preferred-channel-port', 'green;red;green', 'horizontal', 'cone, point up', 'green'),
+    ('cardinal', 'north'): ('cardinal-n', 'black;yellow', 'horizontal', '2 cones up', 'black'),
+    ('cardinal', 'east'): ('cardinal-e', 'black;yellow;black', 'horizontal', '2 cones base together', 'black'),
+    ('cardinal', 'south'): ('cardinal-s', 'yellow;black', 'horizontal', '2 cones down', 'black'),
+    ('cardinal', 'west'): ('cardinal-w', 'yellow;black;yellow', 'horizontal', '2 cones point together', 'black'),
+    ('safe_water', None): ('safe-water', 'red;white', 'vertical', 'sphere', 'red'),
+    ('isolated_danger', None): ('isolated-danger', 'black;red;black', 'horizontal', '2 spheres', 'black'),
+    ('special_purpose', None): ('special', 'yellow', None, 'x-shape', 'yellow'),
+}
+SEAMARK_SHAPES = {'conical': 'cone', 'can': 'can', 'spherical': 'sphere', 'spar': 'spar', 'pillar': 'pillar'}
+
+
+def seamark_icon(tags, seamark):
+    family = seamark.split('_', 1)[1]
+    prefix = 'seamark:' + seamark + ':'
+    category = tags.get(prefix + 'category') if family in ('lateral', 'cardinal') else None
+    scheme = SEAMARK_SCHEMES.get((family, category))
+    if scheme is None or tags.get('seamark:virtual') not in (None, 'no'):
+        return None
+    icon, colour, pattern, topmark, topmark_colour = scheme
+    if tags.get(prefix + 'system') not in (None, 'iala-a'):
+        return None
+    if tags.get(prefix + 'colour') != colour:
+        return None
+    actual_pattern = tags.get(prefix + 'colour_pattern')
+    if pattern is not None and actual_pattern != pattern:
+        return None
+    if pattern is None and actual_pattern not in (None, 'horizontal'):
+        return None
+    form = tags.get(prefix + 'shape')
+    # Missing/unsupported physical forms remain audited rather than becoming a can.
+    if form not in SEAMARK_SHAPES:
+        return None
+    if family == 'lateral':
+        port_hand = category in ('port', 'preferred_channel_starboard')
+        if form == ('conical' if port_hand else 'can') or form == 'spherical':
+            return None
+    icon += '~' + SEAMARK_SHAPES[form]
+    actual_topmark = tags.get('seamark:topmark:shape')
+    actual_topmark_colour = tags.get('seamark:topmark:colour')
+    if actual_topmark is not None or actual_topmark_colour is not None:
+        if actual_topmark != topmark or actual_topmark_colour != topmark_colour:
+            return None
+        icon += '~topmark'
+    return icon
+
+
 def same_dimension(geometry, original_type):
     """Discard point/line remnants from clipping a line/polygon at a boundary."""
     family = ('Polygon', 'MultiPolygon') if 'Polygon' in original_type else (
@@ -123,23 +178,9 @@ def normalize(tags, geom):
         extra['characteristic'] = ' '.join(v for v in characteristic if v)
         geom = geom.representative_point()
     elif seamark.startswith(('buoy_', 'beacon_')):
-        if tags.get('seamark:virtual') == 'yes':
-            return []
-        family = seamark.split('_', 1)[1]
-        category = tags.get('seamark:' + seamark + ':category')
-        icon = {'safe_water': 'safe-water', 'special_purpose': 'special',
-                'isolated_danger': 'isolated-danger'}.get(family)
-        if family == 'lateral':
-            # Only explicitly mapped IALA A port/starboard marks; no assumed colour.
-            color = tags.get('seamark:' + seamark + ':colour')
-            icon = {('port', 'red'): 'lateral-port', ('starboard', 'green'): 'lateral-starboard'}.get((category, color))
-        elif family == 'cardinal':
-            icon = {'north': 'cardinal-n', 'east': 'cardinal-e', 'south': 'cardinal-s', 'west': 'cardinal-w'}.get(category)
+        icon = seamark_icon(tags, seamark)
         if not icon:
             return []
-        form = tags.get('seamark:' + seamark + ':shape')
-        if form in ('conical', 'can', 'spherical', 'spar'):
-            icon += '~' + {'conical': 'cone', 'spherical': 'sphere'}.get(form, form)
         kind = 'beacon' if seamark.startswith('beacon_') else 'buoy'
         extra['virtual'] = False
         geom = geom.representative_point()
