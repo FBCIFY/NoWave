@@ -53,6 +53,7 @@ class _ProfileGateState extends State<ProfileGate> {
   bool _profileWasJustCreated = false;
   UserProfile? _latestProfile;
   bool _showAlertsOnboarding = false;
+  Future<void>? _signingOut;
 
   @override
   void initState() {
@@ -93,6 +94,19 @@ class _ProfileGateState extends State<ProfileGate> {
     return profile;
   }
 
+  /// Déconnexion : arrête le suivi du téléphone et le désactive côté backend
+  /// tant que la session permet encore de l'appeler, puis la ferme. Un second
+  /// appui pendant ce temps réutilise la déconnexion en cours.
+  Future<void> _signOut() {
+    return _signingOut ??= _runSignOut().whenComplete(() => _signingOut = null);
+  }
+
+  Future<void> _runSignOut() async {
+    await widget.devicePositionReporter.stop();
+    await widget.deviceRegistration.unregister();
+    await widget.authService.signOut();
+  }
+
   @override
   Widget build(BuildContext context) {
     return FutureBuilder<UserProfile?>(
@@ -107,7 +121,7 @@ class _ProfileGateState extends State<ProfileGate> {
             screen = ProfileSetupScreen(
               profileService: widget.profileService,
               onProfileCreated: _onProfileCreated,
-              onSignOut: widget.authService.signOut,
+              onSignOut: _signOut,
             );
           } else {
             step = 0;
@@ -122,7 +136,7 @@ class _ProfileGateState extends State<ProfileGate> {
               title: const Text('NoWave'),
               actions: [
                 TextButton(
-                  onPressed: widget.authService.signOut,
+                  onPressed: _signOut,
                   child: const Text('Déconnexion'),
                 ),
               ],
@@ -165,7 +179,7 @@ class _ProfileGateState extends State<ProfileGate> {
               reporter: widget.devicePositionReporter,
               child: HomeScreen(
                 profile: _latestProfile ?? profile,
-                onSignOut: widget.authService.signOut,
+                onSignOut: _signOut,
                 onUpdatePreferences: _updatePreferences,
                 reportService: widget.reportService,
                 positionEstimateService: widget.positionEstimateService,
@@ -179,7 +193,7 @@ class _ProfileGateState extends State<ProfileGate> {
           screen = ProfileSetupScreen(
             profileService: widget.profileService,
             onProfileCreated: _onProfileCreated,
-            onSignOut: widget.authService.signOut,
+            onSignOut: _signOut,
           );
         }
 

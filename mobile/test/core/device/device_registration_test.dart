@@ -20,6 +20,13 @@ class _FakeDeviceService implements DeviceService {
   final List<Object> errors;
   final List<({String installationId, String? fcmToken})> registrations = [];
 
+  /// Identifiants désactivés, et ordre des appels (`register` / `deactivate`).
+  final List<String> deactivations = [];
+  final List<String> calls = [];
+
+  /// Si défini, [register] ne répond qu'une fois ce futur terminé.
+  Future<void>? response;
+
   _FakeDeviceService(this.installationIds, [List<Object>? errors])
     : errors = errors ?? [];
 
@@ -27,6 +34,8 @@ class _FakeDeviceService implements DeviceService {
   Future<void> register({String? fcmToken}) async {
     final installationId = await installationIds.read();
     registrations.add((installationId: installationId, fcmToken: fcmToken));
+    calls.add('register');
+    if (response case final response?) await response;
     if (errors.isNotEmpty) throw errors.removeAt(0);
   }
 
@@ -35,7 +44,11 @@ class _FakeDeviceService implements DeviceService {
       throw UnimplementedError();
 
   @override
-  Future<void> deactivate() => throw UnimplementedError();
+  Future<void> deactivate() async {
+    deactivations.add(await installationIds.read());
+    calls.add('deactivate');
+    if (errors.isNotEmpty) throw errors.removeAt(0);
+  }
 }
 
 /// Faux Firebase : chaque [deleteToken] fait passer au token suivant.
@@ -227,5 +240,78 @@ void main() {
       (installationId: 'installation-1', fcmToken: null),
       (installationId: 'installation-2', fcmToken: null),
     ]);
+  });
+
+  test(
+    'unregister désactive le téléphone, son token et son identifiant',
+    () async {
+      final devices = _FakeDeviceService(installationIds);
+      final registration = createRegistration(devices);
+      await registration.start();
+
+      await registration.unregister();
+
+      expect(devices.deactivations, ['installation-1']);
+      expect(pushTokens.deleteCalls, 1);
+      expect(await installationIds.read(), 'installation-2');
+    },
+  );
+
+  test('unregister continue même si le DELETE échoue (hors ligne)', () async {
+    final devices = _FakeDeviceService(installationIds, [
+      TimeoutException('pas de réseau'),
+    ]);
+
+    await createRegistration(devices).unregister();
+
+    expect(devices.deactivations, ['installation-1']);
+    expect(pushTokens.deleteCalls, 1);
+    expect(await installationIds.read(), 'installation-2');
+  });
+
+  test('unregister attend la fin de l’enregistrement en cours', () async {
+    final response = Completer<void>();
+    final devices = _FakeDeviceService(installationIds)
+      ..response = response.future;
+    final registration = createRegistration(devices);
+
+    final registering = registration.register();
+    await pumpEventQueue();
+    final unregistering = registration.unregister();
+    await pumpEventQueue();
+    expect(devices.calls, ['register']);
+
+    response.complete();
+    await Future.wait([registering, unregistering]);
+
+    expect(devices.calls, ['register', 'deactivate']);
+  });
+
+  test('unregister annule un enregistrement pas encore parti', () async {
+    final devices = _FakeDeviceService(installationIds);
+    final registration = createRegistration(devices);
+
+    await Future.wait([registration.register(), registration.unregister()]);
+
+    expect(devices.calls, ['deactivate']);
+  });
+
+  test('après unregister, plus rien ne part jusqu’au prochain start', () async {
+    final devices = _FakeDeviceService(installationIds);
+    final registration = createRegistration(devices);
+    await registration.start();
+    await registration.unregister();
+
+    pushTokens.refreshes.add('fcm-ignoré');
+    await pumpEventQueue();
+    await registration.register();
+    expect(devices.registrations, hasLength(1));
+
+    await registration.start();
+
+    expect(devices.registrations.last, (
+      installationId: 'installation-2',
+      fcmToken: 'fcm-2',
+    ));
   });
 }

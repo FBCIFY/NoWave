@@ -24,6 +24,10 @@ class DeviceRegistration {
 
   StreamSubscription<String>? _tokenSubscription;
 
+  /// Vrai entre [unregister] et le prochain [start] : plus aucun
+  /// enregistrement ne part pour le compte qui se déconnecte.
+  bool _unregistered = false;
+
   /// Dernier enregistrement demandé. Les demandes s'enchaînent pour que le
   /// dernier token envoyé soit toujours le plus récent.
   Future<void> _queue = Future.value();
@@ -51,6 +55,7 @@ class DeviceRegistration {
 
   /// Enregistre le téléphone, puis le réenregistre à chaque nouveau token FCM.
   Future<void> start() {
+    _unregistered = false;
     _tokenSubscription ??= _pushTokens.onTokenRefresh.listen(
       (token) => unawaited(register(refreshedToken: token)),
     );
@@ -70,7 +75,40 @@ class DeviceRegistration {
     return _queue = _queue.then((_) => _register(refreshedToken));
   }
 
+  /// Déconnexion : désactive le téléphone côté backend, invalide son token
+  /// FCM et prépare un nouvel identifiant pour le prochain compte.
+  ///
+  /// À appeler avant `signOut`, qui coupe l'accès au backend. Chaque étape
+  /// est tentée même si la précédente échoue (hors ligne) : la déconnexion ne
+  /// doit jamais rester bloquée. Ne lève jamais d'erreur.
+  Future<void> unregister() {
+    _unregistered = true;
+    // Après l'enregistrement en cours, pour que le DELETE passe en dernier.
+    return _queue = _queue.then((_) => _unregister());
+  }
+
+  Future<void> _unregister() async {
+    await stop();
+    await _attempt('Désactivation du téléphone', _devices.deactivate);
+    // Sans ça, le compte suivant recevrait les alertes de l'ancien si le
+    // DELETE a échoué.
+    await _attempt('Suppression du token FCM', _pushTokens.deleteToken);
+    await _attempt('Nouvel identifiant d’installation', _installationIds.reset);
+  }
+
+  static Future<void> _attempt(
+    String label,
+    Future<void> Function() step,
+  ) async {
+    try {
+      await step().timeout(const Duration(seconds: 10));
+    } catch (error) {
+      debugPrint('$label impossible : $error');
+    }
+  }
+
   Future<void> _register(String? refreshedToken) async {
+    if (_unregistered) return;
     try {
       final allowed =
           await _permissions.getStatus() == NotificationPermission.granted;

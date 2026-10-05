@@ -40,6 +40,9 @@ class _FakeDeviceRegistration implements DeviceRegistration {
 
   @override
   Future<void> stop() => throw UnimplementedError();
+
+  @override
+  Future<void> unregister() => throw UnimplementedError();
 }
 
 /// Faux GPS : [canWatch] simule l'autorisation, [positions] le flux.
