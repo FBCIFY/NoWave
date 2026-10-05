@@ -8,6 +8,7 @@ import 'package:mapbox_maps_flutter/mapbox_maps_flutter.dart';
 import 'package:precise_compass/precise_compass.dart';
 import 'package:uuid/uuid.dart';
 
+import '../../../core/map/accuracy_halo.dart';
 import '../../../core/map/map_config.dart';
 import '../../../core/location/coordinate_formatter.dart';
 import '../../../core/location/location_service.dart';
@@ -101,6 +102,14 @@ class _MapScreenState extends State<MapScreen> {
   /// Coupe le battement de la heatmap quand l'app n'est plus visible.
   AppLifecycleListener? _lifecycleListener;
 
+  /// Halo de précision du GPS, sous le curseur et sous les signalements :
+  /// un danger reste lisible même quand la position est approximative.
+  final _accuracyHalo = AccuracyHalo(below: ReportTiles.heatmapLayerId);
+
+  /// Curseur affiché : point bleu de loin (true), flèche 3D de près (false),
+  /// null avant la première position.
+  bool? _puckZoomedOut;
+
   @override
   void initState() {
     super.initState();
@@ -151,6 +160,7 @@ class _MapScreenState extends State<MapScreen> {
   void _handleMapCameraChange(CameraChangedEventData event) {
     _cameraZoom = event.cameraState.zoom;
     _syncHeatmapPulse();
+    _syncLocationPuck().ignore();
     final bearing = event.cameraState.bearing;
     final bearingDelta = ((bearing - _cameraBearing + 540) % 360 - 180);
     final userMovedMap = _mapTouchActive && _isFollowing;
@@ -263,12 +273,54 @@ class _MapScreenState extends State<MapScreen> {
     }
   }
 
+  /// Dernière relance de la couche des signalements après une tuile en
+  /// échec : en déplaçant la carte, les erreurs arrivent par dizaines.
+  DateTime? _lastReportTilesRetry;
+
+  /// Intervalle minimal entre deux relances de la couche des signalements.
+  static const _reportTilesRetryInterval = Duration(seconds: 30);
+
   void _handleMapLoadError(MapLoadingErrorEventData event) {
+    debugPrint(
+      'Chargement Mapbox en échec (${event.type.name}, '
+      'source ${event.sourceId ?? '-'}) : ${event.message}',
+    );
     if (!mounted) return;
+
+    // Une tuile de signalements en échec ne doit pas cacher le fond de
+    // carte, qui reste utilisable.
+    if (event.sourceId == ReportTiles.sourceId) {
+      _handleReportTilesError();
+      return;
+    }
 
     setState(() {
       _mapError = 'Impossible de charger la carte. Vérifiez votre connexion et réessayez.';
     });
+  }
+
+  /// Le token Firebase expire au bout d'une heure : on le redonne à Mapbox,
+  /// qui l'enverra avec les prochaines tuiles, et on prévient sans bloquer.
+  void _handleReportTilesError() {
+    final map = _mapboxMap;
+    final reportTiles = widget.reportTiles;
+    final now = DateTime.now();
+    final lastRetry = _lastReportTilesRetry;
+    if (map == null || reportTiles == null) return;
+    if (lastRetry != null &&
+        now.difference(lastRetry) < _reportTilesRetryInterval) {
+      return;
+    }
+    _lastReportTilesRetry = now;
+    unawaited(
+      reportTiles.authorize(map).catchError((Object error) {
+        debugPrint('Token des signalements non renouvelé : $error');
+      }),
+    );
+    _showNotice(
+      'Signalements momentanément indisponibles.',
+      MapNoticeKind.warning,
+    );
   }
 
   void _handleMapLoaded(MapLoadedEventData event) {
@@ -302,6 +354,42 @@ class _MapScreenState extends State<MapScreen> {
       map,
       zoom: zoom,
       enabled: !(MediaQuery.maybeDisableAnimationsOf(context) ?? false),
+    );
+  }
+
+  /// Point bleu de loin, flèche 3D de près. Mapbox ne change de curseur
+  /// que quand le zoom franchit le seuil.
+  Future<void> _syncLocationPuck() async {
+    final map = _mapboxMap;
+    if (map == null || _position == null) return;
+    final zoomedOut =
+        (_cameraZoom ?? _userZoom) < MapConfig.detailedPuckMinZoom;
+    if (zoomedOut == _puckZoomedOut) return;
+    _puckZoomedOut = zoomedOut;
+    try {
+      await map.location.updateSettings(
+        MapConfig.locationPuckSettings(zoomedOut: zoomedOut),
+      );
+    } catch (_) {
+      // Réessayé au prochain mouvement de la caméra.
+      _puckZoomedOut = null;
+      rethrow;
+    }
+  }
+
+  /// Place le halo de précision sur [position], ou sur la dernière position
+  /// connue après un chargement de style.
+  void _showAccuracyHalo([geo.Position? position]) {
+    final map = _mapboxMap;
+    final at = position ?? _position;
+    if (map == null || at == null) return;
+    unawaited(
+      _accuracyHalo.show(
+        map,
+        latitude: at.latitude,
+        longitude: at.longitude,
+        accuracy: at.accuracy,
+      ),
     );
   }
 
@@ -349,10 +437,11 @@ class _MapScreenState extends State<MapScreen> {
       setState(() {
         _position = position;
       });
+      _showAccuracyHalo(position);
 
-      await _mapboxMap?.location.updateSettings(
-        MapConfig.locationPuckSettings(),
-      );
+      // Curseur remis à chaque recentrage, adapté au zoom actuel.
+      _puckZoomedOut = null;
+      await _syncLocationPuck();
 
       if (!mounted) return;
 
@@ -406,15 +495,24 @@ class _MapScreenState extends State<MapScreen> {
           geo.Geolocator.getPositionStream(
             locationSettings: const geo.LocationSettings(
               accuracy: geo.LocationAccuracy.high,
-              distanceFilter: 10,
+              // Chaque position, même immobile : le halo doit rétrécir
+              // quand la précision s'améliore.
+              distanceFilter: 0,
             ),
           ).listen(
             (position) {
               if (!mounted) return;
-              setState(() {
-                _position = position;
-                _locationError = null;
-              });
+              _showAccuracyHalo(position);
+              final previous = _position;
+              _position = position;
+              // L'écran ne se redessine que si les coordonnées affichées
+              // changent, soit environ tous les 30 m.
+              if (_locationError == null &&
+                  previous != null &&
+                  _sameDisplayedCoordinates(previous, position)) {
+                return;
+              }
+              setState(() => _locationError = null);
             },
             onError: (Object _) {
               if (!mounted) return;
@@ -452,6 +550,13 @@ class _MapScreenState extends State<MapScreen> {
       }
     }
   }
+
+  /// Vrai si les deux positions s'affichent pareil, à la seconde d'arc.
+  static bool _sameDisplayedCoordinates(geo.Position a, geo.Position b) =>
+      formatDms(a.latitude, isLatitude: true) ==
+          formatDms(b.latitude, isLatitude: true) &&
+      formatDms(a.longitude, isLatitude: false) ==
+          formatDms(b.longitude, isLatitude: false);
 
   Future<void> _openCamera() async {
     final draft = await widget.onOpenCamera?.call();
@@ -847,7 +952,10 @@ class _MapScreenState extends State<MapScreen> {
                   unawaited(_locate());
                 },
                 onMapLoadedListener: _handleMapLoaded,
-                onStyleLoadedListener: (_) => unawaited(_addReportTiles()),
+                onStyleLoadedListener: (_) {
+                  _showAccuracyHalo();
+                  unawaited(_addReportTiles());
+                },
                 onMapLoadErrorListener: _handleMapLoadError,
                 onCameraChangeListener: _handleMapCameraChange,
                 onScrollListener: _handleMapGesture,
