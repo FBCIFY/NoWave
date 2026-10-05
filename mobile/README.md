@@ -236,6 +236,57 @@ au lancement suivant et seulement affiché dans les logs.
 - `ProfileGate` n’a pas de test automatisé : le parcours a été vérifié à la
   main sur iPhone.
 
+## Couche des signalements — NW-114
+
+Les signalements actifs sont affichés par-dessus le fond Mapbox, dans une
+couche à part (`ReportTiles`). Les tuiles MVT viennent du backend,
+`GET /api/v1/map/tiles/{z}/{x}/{y}.mvt`, avec le token Firebase.
+
+- **De loin (zoom < 9)** : le backend regroupe les signalements proches. La
+  carte montre une zone colorée qui bat doucement, du jaune au rouge selon le
+  nombre de signalements, avec ce nombre écrit dessus. Toucher le nombre
+  rapproche la carte de deux niveaux. Le battement s'arrête en arrière-plan et
+  quand l'option « Réduire les animations » du téléphone est active.
+- **De près (zoom ≥ 9)** : un badge par signalement, à l'icône et à la couleur
+  de sa catégorie. Les badges ne se masquent jamais entre eux. Entre 8,5 et
+  9,5, la zone s'efface pendant que les badges apparaissent.
+
+Toucher un badge ouvre la fiche du signalement (`ReportDetailSheet`),
+chargée par `GET /api/v1/reports/{id}` : catégorie, date d'observation,
+position en degrés/minutes/secondes, distance et direction depuis
+l'utilisateur en milles nautiques, auteur et bateau s'ils sont rendus
+publics, état de la photo et fin du signalement. Un signalement expiré ou
+retiré entre-temps affiche « n'est plus disponible » ; les autres erreurs
+proposent de réessayer.
+
+### Rafraîchissement
+
+Le backend sert les tuiles avec `Cache-Control: max-age=15`. Mapbox redemande
+lui-même les tuiles visibles une fois expirées et les remplace sans effacer
+les badges : un signalement publié, retiré ou expiré apparaît ou disparaît en
+15 s environ, sans code côté application. Comme les tuiles sont redemandées
+en continu, l'application redonne le token Firebase à Mapbox toutes les
+4 minutes et au retour au premier plan, pour qu'il n'expire jamais.
+
+Si une tuile échoue (réseau, token), la carte reste utilisable et affiche
+« Signalements momentanément indisponibles. » La carte ne fonctionne pas hors
+ligne : les badges déjà affichés peuvent rester visibles sans être à jour.
+
+### Position de l'utilisateur
+
+De près, la flèche 3D (voir plus bas) ; de loin, un point bleu, plus lisible.
+Un halo bleu sous les signalements montre la précision du GPS.
+
+### Limites connues
+
+- vérifié à la main sur iPhone uniquement, pas encore sur Android ;
+- le rafraîchissement dépend de l'en-tête `Cache-Control` du backend : si
+  `max-age` change, la fréquence de mise à jour de la carte change aussi ;
+- hors ligne, les badges déjà affichés restent visibles sans être à jour ;
+  seul le message « momentanément indisponibles » le signale ;
+- l'état de la photo reste « Envoi en cours » tant que la route d'envoi de
+  NW-112 n'est pas déployée.
+
 ## Signalement photo — NW-55, NW-115
 
 Le bouton appareil photo de la carte ouvre `CameraScreen` en plein écran.
