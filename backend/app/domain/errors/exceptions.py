@@ -69,9 +69,7 @@ class GpsPrecisionInsufficientError(DomainError):
     ):
         self.accuracy_m = accuracy_m
 
-        super().__init__(
-            "La précision GPS doit être de 50 mètres ou meilleure."
-        )
+        super().__init__("La précision GPS doit être de 50 mètres ou meilleure.")
 
 
 class InvalidPositioningInputError(DomainError):
@@ -83,6 +81,22 @@ class BoatAlreadyExistsError(DomainError):
 
 
 class BoatNotFoundError(DomainError):
+    pass
+
+
+class InvalidPhotoError(DomainError):
+    pass
+
+
+class PhotoUploadForbiddenError(DomainError):
+    pass
+
+
+class PhotoAlreadyUploadedError(DomainError):
+    pass
+
+
+class PhotoStorageError(DomainError):
     pass
 
 

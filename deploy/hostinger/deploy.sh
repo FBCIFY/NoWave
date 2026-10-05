@@ -22,6 +22,12 @@ if s.get('type') != 'service_account' or s.get('project_id') != 'blueway-dev' or
 PY
 chown root:10001 "$root/secrets/firebase_service_account.json"
 chmod 0440 "$root/secrets/firebase_service_account.json"
+# Storage settings live outside release.env so deployments never overwrite them.
+for required in "$root/config/photo-storage.env" "$root/secrets/scaleway_access_key" "$root/secrets/scaleway_secret_key"; do
+  [[ -s "$required" ]] || { echo 'Scaleway photo configuration is missing; deployment was not activated.' >&2; exit 1; }
+done
+chown root:10001 "$root/secrets/scaleway_access_key" "$root/secrets/scaleway_secret_key"
+chmod 0440 "$root/secrets/scaleway_access_key" "$root/secrets/scaleway_secret_key"
 for component in api web postgres; do
   image="nowave-$component:$revision"
   [[ $(docker image inspect --format '{{ index .Config.Labels "org.opencontainers.image.revision" }}' "$image") == "$revision" ]]
@@ -41,16 +47,20 @@ rollback() {
   trap - ERR
   echo 'Deployment failed. Database backup is preserved; no automatic data restore.' >&2
   if [[ -f "$root/config/release.rollback.env" ]]; then
+    "${compose[@]}" stop photo-cleanup || true
     cp "$root/config/release.rollback.env" "$root/config/release.env"
     cp "$root/config/compose.rollback.yaml" "$root/config/compose.yaml"
     "${compose[@]}" up -d --wait api web || true
+    if "${compose[@]}" config --services | grep -qx photo-cleanup; then
+      "${compose[@]}" up -d --wait photo-cleanup || true
+    fi
   fi
   exit "$status"
 }
 trap rollback ERR
 "${compose[@]}" up -d --wait --wait-timeout 120 database
 "${compose[@]}" run --rm --no-deps migrate
-"${compose[@]}" up -d --wait --wait-timeout 90 api web
+"${compose[@]}" up -d --wait --wait-timeout 90 api web photo-cleanup
 bash "$source_root/deploy/hostinger/verify.sh" http://127.0.0.1:18080 "$revision"
 printf '%s\n' "$revision" > "$root/current-revision"
 install -m 0700 "$source_root/deploy/hostinger/backup.sh" "$root/config/backup.sh"

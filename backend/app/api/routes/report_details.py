@@ -1,3 +1,4 @@
+from datetime import timedelta
 from uuid import UUID
 
 from fastapi import APIRouter, Depends
@@ -13,6 +14,8 @@ from app.api.schemas.report_detail import (
 from app.application.services.get_report_detail import (
     GetReportDetail,
 )
+from app.dependencies.photo_storage import get_photo_storage
+from app.domain.report_photo import UploadStatus
 from app.infrastructure.repositories.postgresql_report_detail_repository import (
     PostgreSQLReportDetailRepository,
 )
@@ -30,9 +33,7 @@ router = APIRouter(
 )
 def get_report_detail(
     report_id: UUID,
-    identity: dict = Depends(
-        get_current_identity
-    ),
+    identity: dict = Depends(get_current_identity),
 ):
     del identity
 
@@ -70,9 +71,21 @@ def get_report_detail(
     photo = None
 
     if report.photo_status is not None:
+        photo_url = None
+
+        if (
+            report.photo_status == UploadStatus.UPLOADED
+            and report.photo_object_key is not None
+            and report.photo_hidden_at is None
+        ):
+            photo_url = get_photo_storage().create_read_url(
+                object_key=report.photo_object_key,
+                expires_in=timedelta(minutes=5),
+            )
+
         photo = ReportDetailPhotoResponse(
             status=report.photo_status,
-            url=None,
+            url=photo_url,
         )
 
     return ReportDetailResponse(

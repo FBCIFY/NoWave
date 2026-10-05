@@ -48,13 +48,17 @@ services:
     <<: *runtime
     image: nowave-api:${NOWAVE_VERSION:?}
     profiles: [api]
+    env_file: &photo-config
+      - ${NOWAVE_CONFIG_DIR:-/opt/nowave/config}/photo-storage.env
     environment:
       NOWAVE_ENV: production
       NOWAVE_VERSION: ${NOWAVE_VERSION:?}
       DATABASE_URL_FILE: /run/secrets/database_url
       GOOGLE_CLOUD_PROJECT: blueway-dev
       GOOGLE_APPLICATION_CREDENTIALS: /run/secrets/firebase_service_account
-    secrets: [database_url, firebase_service_account]
+      SCW_ACCESS_KEY_FILE: /run/secrets/scaleway_access_key
+      SCW_SECRET_KEY_FILE: /run/secrets/scaleway_secret_key
+    secrets: [database_url, firebase_service_account, scaleway_access_key, scaleway_secret_key]
     networks:
       backend:
       frontend:
@@ -64,6 +68,25 @@ services:
     mem_limit: 384m
     cpus: 0.75
     pids_limit: 120
+    depends_on:
+      database: {condition: service_healthy}
+  photo-cleanup:
+    <<: *runtime
+    image: nowave-api:${NOWAVE_VERSION:?}
+    profiles: [api]
+    command: [python, -m, app.workers.photo_cleanup]
+    env_file: *photo-config
+    environment:
+      DATABASE_URL_FILE: /run/secrets/database_url
+      SCW_ACCESS_KEY_FILE: /run/secrets/scaleway_access_key
+      SCW_SECRET_KEY_FILE: /run/secrets/scaleway_secret_key
+    secrets: [database_url, scaleway_access_key, scaleway_secret_key]
+    networks: [backend, egress]
+    tmpfs: ['/tmp:rw,noexec,nosuid,size=32m']
+    mem_limit: 128m
+    cpus: 0.25
+    pids_limit: 40
+    healthcheck: {disable: true}
     depends_on:
       database: {condition: service_healthy}
   web:
@@ -101,3 +124,7 @@ secrets:
     file: ${NOWAVE_SECRETS_DIR:-/opt/nowave/secrets}/database_url
   firebase_service_account:
     file: ${NOWAVE_SECRETS_DIR:-/opt/nowave/secrets}/firebase_service_account.json
+  scaleway_access_key:
+    file: ${NOWAVE_SECRETS_DIR:-/opt/nowave/secrets}/scaleway_access_key
+  scaleway_secret_key:
+    file: ${NOWAVE_SECRETS_DIR:-/opt/nowave/secrets}/scaleway_secret_key

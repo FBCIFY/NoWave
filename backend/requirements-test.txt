@@ -15,6 +15,12 @@ anyio==4.15.1
     #   httpx
     #   starlette
     #   watchfiles
+boto3==1.43.108
+    # via -r backend/requirements.txt
+botocore==1.43.108
+    # via
+    #   boto3
+    #   s3transfer
 cachecontrol==0.14.4
     # via firebase-admin
 certifi==2026.7.22
@@ -102,6 +108,10 @@ idna==3.20
     #   requests
 iniconfig==2.3.0
     # via pytest
+jmespath==1.1.0
+    # via
+    #   boto3
+    #   botocore
 mako==1.4.3
     # via alembic
 markupsafe==3.0.3
@@ -112,6 +122,8 @@ opentelemetry-api==1.44.0
     # via google-api-core
 packaging==26.3
     # via pytest
+pillow==12.3.0
+    # via -r backend/requirements.txt
 pluggy==1.6.0
     # via pytest
 proto-plus==1.28.4
@@ -145,8 +157,12 @@ pyjwt[crypto]==2.15.0
     # via firebase-admin
 pytest==9.0.3
     # via -r backend/requirements-test.in
+python-dateutil==2.9.0.post0
+    # via botocore
 python-dotenv==1.2.3
     # via uvicorn
+python-multipart==0.0.32
+    # via -r backend/requirements.txt
 pyyaml==6.0.3
     # via uvicorn
 requests==2.34.2
@@ -156,6 +172,10 @@ requests==2.34.2
     #   google-cloud-storage
 ruff==0.16.8
     # via -r backend/requirements-test.in
+s3transfer==0.19.2
+    # via boto3
+six==1.17.0
+    # via python-dateutil
 sqlalchemy==2.0.54
     # via
     #   -r backend/app/infrastructure/database/requirements.txt
@@ -180,7 +200,9 @@ typing-inspection==0.4.4
     #   fastapi
     #   pydantic
 urllib3==2.8.0
-    # via requests
+    # via
+    #   botocore
+    #   requests
 uvicorn[standard]==0.53.0
     # via -r backend/requirements.txt
 uvloop==0.22.1

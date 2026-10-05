@@ -17,12 +17,11 @@ from app.domain.report import (
     ReportPositioningMode,
     ReportStatus,
 )
+from app.domain.report_photo import UploadStatus
 
 
 class GeoJSONPoint(BaseModel):
-    model_config = ConfigDict(
-        extra="forbid"
-    )
+    model_config = ConfigDict(extra="forbid")
 
     type: Literal["Point"]
 
@@ -33,16 +32,12 @@ class GeoJSONPoint(BaseModel):
 
 
 class ReportCreateRequest(BaseModel):
-    model_config = ConfigDict(
-        extra="forbid"
-    )
+    model_config = ConfigDict(extra="forbid")
 
     client_report_id: UUID
     category: ReportCategory
 
-    positioning_mode: ReportPositioningMode = (
-        ReportPositioningMode.MANUAL
-    )
+    positioning_mode: ReportPositioningMode = ReportPositioningMode.MANUAL
 
     description: str | None = Field(
         default=None,
@@ -60,29 +55,30 @@ class ReportCreateRequest(BaseModel):
         self,
     ):
         if (
-            self.positioning_mode
-            == ReportPositioningMode.PHOTO
+            self.positioning_mode == ReportPositioningMode.PHOTO
             and self.positioning is None
         ):
-            raise ValueError(
-                "photo mode requires positioning data"
-            )
+            raise ValueError("photo mode requires positioning data")
 
         if (
-            self.positioning_mode
-            == ReportPositioningMode.MANUAL
+            self.positioning_mode == ReportPositioningMode.MANUAL
             and self.positioning is not None
         ):
-            raise ValueError(
-                "manual mode cannot contain positioning data"
-            )
+            raise ValueError("manual mode cannot contain positioning data")
 
         return self
 
 
 class ReportPhotoResponse(BaseModel):
-    status: str
+    status: UploadStatus
     url: str | None = None
+
+
+class PhotoMetadataResponse(BaseModel):
+    report_id: UUID
+    upload_status: UploadStatus
+    size_bytes: int
+    mime_type: str
 
 
 class ReportResponse(BaseModel):
