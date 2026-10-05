@@ -16,6 +16,8 @@ import '../../../core/sensors/device_orientation_service.dart';
 import '../../../core/haptics/app_haptics.dart';
 import '../../camera/domain/photo_report_draft.dart';
 import '../../reports/presentation/report_composer_sheet.dart';
+import '../../reports/presentation/report_detail_sheet.dart';
+import '../../reports/data/report_detail_service.dart';
 import '../../reports/data/manual_report_service.dart';
 import '../../reports/domain/manual_report.dart';
 import '../data/report_tiles.dart';
@@ -43,12 +45,16 @@ class MapScreen extends StatefulWidget {
   /// Couche des signalements publiés ; absente dans les tests.
   final ReportTiles? reportTiles;
 
+  /// Charge la fiche d'un signalement touché sur la carte.
+  final ReportDetailService? reportDetailService;
+
   const MapScreen({
     super.key,
     this.onOpenProfile,
     this.onOpenCamera,
     this.reportService,
     this.reportTiles,
+    this.reportDetailService,
   });
 
   @override
@@ -341,6 +347,90 @@ class _MapScreenState extends State<MapScreen> {
       _syncHeatmapPulse();
     } catch (error) {
       debugPrint('Couche des signalements indisponible : $error');
+    }
+  }
+
+  /// Marge autour du doigt pour toucher un badge, en pixels.
+  static const _badgeTapRadius = 8.0;
+
+  /// Marge autour du doigt pour toucher le nombre d'une zone : la zone
+  /// colorée est bien plus large que le nombre.
+  static const _clusterTapRadius = 32.0;
+
+  /// Niveaux de zoom gagnés en touchant une zone.
+  static const _clusterZoomStep = 2.0;
+
+  /// Toucher un badge ouvre sa fiche ; toucher le nombre d'une zone
+  /// rapproche la carte. Les interactions restent valables après un
+  /// changement de style, qui ne fait que recréer les couches.
+  void _addReportInteractions(MapboxMap map) {
+    if (widget.reportTiles == null) return;
+    map.addInteraction(
+      TapInteraction(
+        FeaturesetDescriptor(layerId: ReportTiles.pointsLayerId),
+        (feature, _) => _openReportDetail(feature),
+        radius: _badgeTapRadius,
+      ),
+    );
+    map.addInteraction(
+      TapInteraction(
+        FeaturesetDescriptor(layerId: ReportTiles.countLayerId),
+        (feature, context) =>
+            unawaited(_zoomIntoCluster(feature, context.point)),
+        radius: _clusterTapRadius,
+      ),
+    );
+  }
+
+  /// Ouvre la fiche du signalement touché, sauf pendant une création.
+  void _openReportDetail(FeaturesetFeature feature) {
+    final service = widget.reportDetailService;
+    final reportId = feature.properties['report_id'];
+    if (!mounted || _reportComposerOpen) return;
+    if (service == null || reportId is! String) return;
+    AppHaptics.selection();
+    final position = _position;
+    unawaited(
+      ReportDetailSheet.show(
+        context,
+        reportId: reportId,
+        loadReport: service.fetchReport,
+        userPosition: position == null
+            ? null
+            : (latitude: position.latitude, longitude: position.longitude),
+      ),
+    );
+  }
+
+  /// Rapproche la carte sur la zone touchée, jusqu'à voir ses badges.
+  Future<void> _zoomIntoCluster(FeaturesetFeature feature, Point tapped) async {
+    final map = _mapboxMap;
+    if (!mounted || map == null || _reportComposerOpen) return;
+    AppHaptics.selection();
+    final coordinates = feature.geometry['coordinates'];
+    final center = coordinates is List && coordinates.length >= 2
+        ? Point(
+            coordinates: Position(
+              (coordinates[0] as num).toDouble(),
+              (coordinates[1] as num).toDouble(),
+            ),
+          )
+        : tapped;
+    try {
+      final zoom = _cameraZoom ?? (await map.getCameraState()).zoom;
+      if (!mounted) return;
+      // Le suivi GPS reprendrait la caméra pendant l'animation.
+      setState(() {
+        _isFollowing = false;
+        _viewport = const IdleViewportState();
+      });
+      await WidgetsBinding.instance.endOfFrame;
+      await map.easeTo(
+        CameraOptions(center: center, zoom: zoom + _clusterZoomStep),
+        MapAnimationOptions(duration: 500),
+      );
+    } catch (_) {
+      // Carte en cours de rechargement : l'utilisateur peut zoomer au doigt.
     }
   }
 
@@ -949,6 +1039,7 @@ class _MapScreenState extends State<MapScreen> {
                 onMapCreated: (map) {
                   setState(() => _mapboxMap = map);
                   unawaited(MapConfig.hideDefaultOrnaments(map));
+                  _addReportInteractions(map);
                   unawaited(_locate());
                 },
                 onMapLoadedListener: _handleMapLoaded,

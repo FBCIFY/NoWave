@@ -12,6 +12,7 @@ import 'features/camera/data/position_estimate_service.dart';
 import 'features/map/data/report_tiles.dart';
 import 'features/profile/data/profile_service.dart';
 import 'features/reports/data/manual_report_service.dart';
+import 'features/reports/data/report_detail_service.dart';
 import 'firebase_options.dart';
 
 /// Point d'entrée : initialise Firebase et Mapbox, crée les services partagés,
@@ -39,6 +40,10 @@ Future<void> main() async {
     getIdToken: authService.getIdToken,
   );
   final reportTiles = ReportTiles(getIdToken: authService.getIdToken);
+  final reportDetailService = ReportDetailService(
+    apiService: apiService,
+    getIdToken: authService.getIdToken,
+  );
 
   runApp(
     MyApp(
@@ -48,6 +53,7 @@ Future<void> main() async {
         reportService: reportService,
         positionEstimateService: positionEstimateService,
         reportTiles: reportTiles,
+        reportDetailService: reportDetailService,
       ),
     ),
   );
