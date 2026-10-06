@@ -20,3 +20,24 @@ def grant_runtime_table_permissions(connection, role_name="nowave_runtime"):
     connection.execute(
         sql.SQL("GRANT SELECT, INSERT ON nowave.report_positioning TO {}").format(role)
     )
+
+    connection.execute(
+        sql.SQL(
+            "GRANT SELECT, INSERT, UPDATE "
+            "ON nowave.devices TO {}"
+        ).format(role)
+    )
+
+    connection.execute(
+        sql.SQL(
+            "GRANT SELECT, INSERT, UPDATE, DELETE "
+            "ON nowave.device_positions TO {}"
+        ).format(role)
+    )
+
+    connection.execute(
+        sql.SQL(
+            "GRANT SELECT, UPDATE, DELETE "
+            "ON nowave.notifications TO {}"
+        ).format(role)
+    )
