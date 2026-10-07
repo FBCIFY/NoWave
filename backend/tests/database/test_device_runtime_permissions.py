@@ -6,7 +6,10 @@ import psycopg
 from psycopg import sql
 from psycopg.conninfo import make_conninfo
 
-from app.api.dependencies.auth import get_current_identity
+from app.api.dependencies.auth import (
+    get_authenticated_identity,
+    get_current_identity,
+)
 from app.infrastructure.database.runtime_permissions import (
     grant_runtime_table_permissions,
 )
@@ -63,6 +66,11 @@ def test_device_routes_work_with_runtime_role(
 
             app.dependency_overrides[
                 get_current_identity
+            ] = lambda: {
+                "uid": firebase_uid,
+            }
+            app.dependency_overrides[
+                get_authenticated_identity
             ] = lambda: {
                 "uid": firebase_uid,
             }
