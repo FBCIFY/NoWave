@@ -451,6 +451,7 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
         context,
         reportId: reportId,
         loadReport: service.fetchReport,
+        loadPhoto: service.fetchPhoto,
         userPosition: position == null
             ? null
             : (latitude: position.latitude, longitude: position.longitude),
