@@ -311,7 +311,7 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
       if (ReportTiles.isForbidden(event.message)) {
         widget.onUserInactive?.call();
       }
-      _reportLayer.tileError(event.message);
+      _reportLayer.tileError(event.message, tile: _tileKey(event.tileId));
       return;
     }
 
@@ -324,8 +324,11 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
   void _handleSourceDataLoaded(SourceDataLoadedEventData event) {
     if (event.id != ReportTiles.sourceId) return;
     if (event.type != SourceDataType.TILE) return;
-    _reportLayer.tileLoaded();
+    _reportLayer.tileLoaded(tile: _tileKey(event.tileID));
   }
+
+  static String? _tileKey(TileID? tile) =>
+      tile == null ? null : '${tile.z}/${tile.x}/${tile.y}';
 
   /// Bandeau tant que la couche manque ou que ses tuiles échouent. Fermé
   /// d'un appui, il revient au prochain changement d'état.

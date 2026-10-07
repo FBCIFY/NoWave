@@ -288,9 +288,14 @@ de carte reste utilisable dans tous les cas.
   existe déjà : pas de source en double.
 - Une tuile en échec (hors 429) rend la couche indisponible. Le bandeau
   « Signalements indisponibles. Nouvel essai automatique. » reste affiché
-  jusqu'à ce qu'une tuile se charge sans nouvelle erreur pendant 2 s (Mapbox
-  signale aussi comme chargée une tuile qui vient d'échouer). Un appui le
-  ferme jusqu'au prochain changement d'état.
+  jusqu'à ce qu'une tuile se charge sans nouvelle erreur pendant 2 s. Mapbox
+  signale aussi comme chargée une tuile qui vient d'échouer : seule une autre
+  tuile (identifiée par `z/x/y`) compte comme preuve de retour, même si elle
+  arrive dans les 2 s qui suivent l'erreur. Un appui ferme le bandeau jusqu'au
+  prochain changement d'état.
+- Seul un 401 fait redonner le token à Mapbox (au plus toutes les 30 s). Un
+  403 fait revalider le profil (compte peut-être suspendu) ; un 503 ne
+  déclenche que le bandeau.
 
 La carte ne fonctionne pas hors ligne : les badges déjà affichés peuvent
 rester visibles sans être à jour.

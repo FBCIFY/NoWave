@@ -29,6 +29,7 @@ enum ReportLayerStatus {
 /// - Un refus pour limite de débit (429) est ignoré, Mapbox redemande la
 ///   tuile. Toute autre erreur, 503 compris, rend la couche indisponible
 ///   jusqu'à ce qu'une tuile se charge sans erreur.
+/// - Seul un 401 (token expiré) fait redonner le token.
 class ReportLayerController {
   ReportLayerController({required this._install, required this._authorize});
 
@@ -78,6 +79,14 @@ class ReportLayerController {
   /// Tuile en échec il y a moins de [recoveryQuietPeriod].
   Timer? _recentTileError;
 
+  /// Tuiles en échec pendant [_recentTileError] : Mapbox les signale aussi
+  /// comme chargées, ce qui ne prouve rien.
+  final _recentlyFailedTiles = <String>{};
+
+  /// Une autre tuile s'est chargée pendant [_recentTileError] : la
+  /// confirmation du retour démarre à la fin de cette période.
+  bool _tileLoadedDuringRecentError = false;
+
   Timer? _recoveryTimer;
 
   /// Nouveau style : ses couches sont vides, on installe la nôtre.
@@ -121,31 +130,34 @@ class ReportLayerController {
     }
   }
 
-  /// Une tuile des signalements a échoué ; [message] est celui de Mapbox.
-  void tileError(String message) {
+  /// Une tuile des signalements a échoué ; [message] est celui de Mapbox,
+  /// [tile] identifie la tuile (`z/x/y`) quand Mapbox la donne.
+  void tileError(String message, {String? tile}) {
     if (isRateLimited(message)) return;
+    if (tile != null) _recentlyFailedTiles.add(tile);
     _recentTileError?.cancel();
-    _recentTileError = Timer(recoveryQuietPeriod, () {
-      _recentTileError = null;
-    });
+    _recentTileError = Timer(recoveryQuietPeriod, _endRecentTileError);
     _cancelRecovery();
     if (_status.value == ReportLayerStatus.installed) {
       _setStatus(ReportLayerStatus.unavailable);
     }
-    // Un 401 vient d'un token expiré : on le redonne, sans insister.
-    if (_authorizeCooldown == null) _sendToken();
+    // Un 401 vient d'un token expiré : on le redonne, sans insister. Un
+    // nouveau token ne change rien à un 403 ou à une panne.
+    if (isUnauthorized(message) && _authorizeCooldown == null) _sendToken();
   }
 
-  /// Une tuile des signalements s'est chargée.
-  void tileLoaded() {
+  /// Une tuile des signalements s'est chargée ; [tile] comme pour
+  /// [tileError].
+  void tileLoaded({String? tile}) {
     if (_status.value != ReportLayerStatus.unavailable) return;
-    if (_recoveryTimer != null || _recentTileError != null) return;
-    _recoveryTimer = Timer(recoveryQuietPeriod, () {
-      _recoveryTimer = null;
-      if (_status.value == ReportLayerStatus.unavailable) {
-        _setStatus(ReportLayerStatus.installed);
+    if (_recentTileError != null) {
+      // Seule une tuile qui n'a pas échoué prouve que le serveur répond.
+      if (tile != null && !_recentlyFailedTiles.contains(tile)) {
+        _tileLoadedDuringRecentError = true;
       }
-    });
+      return;
+    }
+    _startRecovery();
   }
 
   void dispose() {
@@ -162,6 +174,10 @@ class ReportLayerController {
   /// le code HTTP, pas le corps de la réponse.
   static bool isRateLimited(String message) =>
       RegExp(r'status code 429\b').hasMatch(message);
+
+  /// Vrai si la tuile a été refusée faute de token valide.
+  static bool isUnauthorized(String message) =>
+      RegExp(r'status code 401\b').hasMatch(message);
 
   void _retryNow() {
     _retryTimer?.cancel();
@@ -223,9 +239,31 @@ class ReportLayerController {
     );
   }
 
+  void _endRecentTileError() {
+    _recentTileError = null;
+    _recentlyFailedTiles.clear();
+    if (_tileLoadedDuringRecentError) {
+      _tileLoadedDuringRecentError = false;
+      _startRecovery();
+    }
+  }
+
+  /// Rétablit la couche si aucune erreur n'arrive d'ici
+  /// [recoveryQuietPeriod].
+  void _startRecovery() {
+    if (_recoveryTimer != null) return;
+    _recoveryTimer = Timer(recoveryQuietPeriod, () {
+      _recoveryTimer = null;
+      if (_status.value == ReportLayerStatus.unavailable) {
+        _setStatus(ReportLayerStatus.installed);
+      }
+    });
+  }
+
   void _cancelRecovery() {
     _recoveryTimer?.cancel();
     _recoveryTimer = null;
+    _tileLoadedDuringRecentError = false;
   }
 
   void _setStatus(ReportLayerStatus status) {

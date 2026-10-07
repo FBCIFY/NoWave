@@ -220,6 +220,33 @@ void main() {
       expect(map.status, ReportLayerStatus.installed);
     });
 
+    testLayer('autre tuile chargée juste après l’erreur : couche rétablie', (
+      tester,
+    ) async {
+      await install(tester);
+      map.controller.tileError(_tileError503, tile: '12/1/1');
+      await tester.pump(const Duration(milliseconds: 200));
+
+      map.controller.tileLoaded(tile: '12/1/2');
+      await tester.pump(ReportLayerController.recoveryQuietPeriod);
+      expect(map.status, ReportLayerStatus.unavailable);
+
+      await tester.pump(ReportLayerController.recoveryQuietPeriod);
+      expect(map.status, ReportLayerStatus.installed);
+    });
+
+    testLayer('la tuile en échec signalée chargée ne rétablit rien', (
+      tester,
+    ) async {
+      await install(tester);
+      map.controller.tileError(_tileError503, tile: '12/1/1');
+      map.controller.tileLoaded(tile: '12/1/1');
+
+      await tester.pump(ReportLayerController.recoveryQuietPeriod * 3);
+
+      expect(map.status, ReportLayerStatus.unavailable);
+    });
+
     testLayer('une erreur juste après le chargement annule le retour', (
       tester,
     ) async {
@@ -250,6 +277,19 @@ void main() {
       expect(map.authorizations, 2);
     });
 
+    testLayer('seul un 401 redonne le token', (tester) async {
+      await install(tester);
+      await tester.pump(ReportLayerController.authorizeInterval);
+
+      map.controller.tileError('Failed to load tile: HTTP status code 403');
+      map.controller.tileError(_tileError503);
+      map.controller.tileError(_tileError429);
+      expect(map.authorizations, 0);
+
+      map.controller.tileError('Failed to load tile: HTTP status code 401');
+      expect(map.authorizations, 1);
+    });
+
     testLayer('un nouveau style repart d’un état propre', (tester) async {
       await install(tester);
       map.controller.tileError(_tileError503);
@@ -270,5 +310,13 @@ void main() {
     expect(ReportLayerController.isRateLimited('$prefix 503'), isFalse);
     expect(ReportLayerController.isRateLimited('$prefix 401'), isFalse);
     expect(ReportLayerController.isRateLimited('$prefix 4290'), isFalse);
+  });
+
+  test('reconnaît un token refusé', () {
+    const prefix = 'Failed to load tile: HTTP status code';
+
+    expect(ReportLayerController.isUnauthorized('$prefix 401'), isTrue);
+    expect(ReportLayerController.isUnauthorized('$prefix 403'), isFalse);
+    expect(ReportLayerController.isUnauthorized('$prefix 4010'), isFalse);
   });
 }
