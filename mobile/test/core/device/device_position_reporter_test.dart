@@ -31,9 +31,25 @@ class _FakeDeviceService implements DeviceService {
 
 class _FakeDeviceRegistration implements DeviceRegistration {
   int registerCalls = 0;
+  Future<void>? response;
 
   @override
-  Future<void> register({String? refreshedToken}) async => registerCalls++;
+  bool isSigningOut = false;
+
+  @override
+  void beginSignOut() => isSigningOut = true;
+
+  @override
+  void cancelSignOut() => isSigningOut = false;
+
+  @override
+  void completeSignOut() => throw UnimplementedError();
+
+  @override
+  Future<void> register({String? refreshedToken}) async {
+    registerCalls++;
+    await response;
+  }
 
   @override
   Future<void> start() => throw UnimplementedError();
@@ -223,6 +239,47 @@ void main() {
 
     expect(location.positions.hasListener, isFalse);
     expect(devices.positions, isEmpty);
+  });
+
+  test('une reprise pendant la déconnexion ne relance pas le GPS', () async {
+    await reporter.start();
+    registration.beginSignOut();
+    await reporter.stop();
+
+    await reporter.start();
+    await reporter.tick();
+    await emit(_position());
+
+    expect(location.positions.hasListener, isFalse);
+    expect(devices.positions, isEmpty);
+  });
+
+  test('une mesure en attente est abandonnée pendant la déconnexion', () async {
+    await reporter.start();
+    await emit(_position());
+    await emit(_position(second: 10));
+    registration.beginSignOut();
+    await emit(_position(second: 20));
+    await reporter.tick();
+
+    expect(devices.positions, hasLength(1));
+  });
+
+  test('un 404 ne renvoie pas le GPS si la déconnexion commence pendant '
+      'le réenregistrement', () async {
+    final response = Completer<void>();
+    registration.response = response.future;
+    devices.errors.add(_error(404));
+    await reporter.start();
+    await emit(_position());
+    expect(registration.registerCalls, 1);
+
+    registration.beginSignOut();
+    final stopped = reporter.stop();
+    response.complete();
+    await stopped;
+
+    expect(devices.positions, hasLength(1));
   });
 
   test(

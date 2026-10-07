@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 import '../../../core/device/device_position_reporter.dart';
@@ -16,6 +18,7 @@ import '../../reports/data/manual_report_service.dart';
 import '../../reports/data/report_detail_service.dart';
 import 'alerts_onboarding_screen.dart';
 import 'profile_setup_screen.dart';
+import 'sign_out_dialog.dart';
 
 /// Second aiguillage, une fois l'e-mail vérifié : charge le profil puis
 /// affiche la création du profil, l'écran d'alertes (une seule fois, juste
@@ -97,14 +100,35 @@ class _ProfileGateState extends State<ProfileGate> {
   /// Déconnexion : arrête le suivi du téléphone et le désactive côté backend
   /// tant que la session permet encore de l'appeler, puis la ferme. Un second
   /// appui pendant ce temps réutilise la déconnexion en cours.
-  Future<void> _signOut() {
-    return _signingOut ??= _runSignOut().whenComplete(() => _signingOut = null);
+  ///
+  /// [resumeDevices] : la déconnexion part de l'accueil, où l'enregistrement
+  /// et le GPS tournent et doivent reprendre si l'utilisateur annule.
+  Future<void> _signOut({bool resumeDevices = false}) {
+    return _signingOut ??= showDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => SignOutDialog(
+        onSignOut: _runSignOut,
+        onCancel: () => _cancelSignOut(resumeDevices: resumeDevices),
+      ),
+    ).whenComplete(() => _signingOut = null);
+  }
+
+  /// Échec puis « Annuler » : on reste sur ce compte. Hors de l'accueil, rien
+  /// ne tourne encore : `DeviceRegistrar` démarrera à l'arrivée sur l'accueil.
+  void _cancelSignOut({required bool resumeDevices}) {
+    widget.deviceRegistration.cancelSignOut();
+    if (!resumeDevices) return;
+    unawaited(widget.deviceRegistration.start());
+    unawaited(widget.devicePositionReporter.start());
   }
 
   Future<void> _runSignOut() async {
+    widget.deviceRegistration.beginSignOut();
     await widget.devicePositionReporter.stop();
     await widget.deviceRegistration.unregister();
     await widget.authService.signOut();
+    widget.deviceRegistration.completeSignOut();
   }
 
   @override
@@ -179,7 +203,7 @@ class _ProfileGateState extends State<ProfileGate> {
               reporter: widget.devicePositionReporter,
               child: HomeScreen(
                 profile: _latestProfile ?? profile,
-                onSignOut: _signOut,
+                onSignOut: () => _signOut(resumeDevices: true),
                 onUpdatePreferences: _updatePreferences,
                 reportService: widget.reportService,
                 positionEstimateService: widget.positionEstimateService,

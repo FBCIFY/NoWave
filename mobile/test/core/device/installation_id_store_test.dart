@@ -1,7 +1,32 @@
+import 'dart:async';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:blueway/core/device/installation_id_store.dart';
+
+class _Preferences extends Fake implements SharedPreferences {
+  String? value = 'installation-1';
+  bool refuseRemove = false;
+  Future<void>? removeResponse;
+
+  @override
+  String? getString(String key) => value;
+
+  @override
+  Future<bool> setString(String key, String value) async {
+    this.value = value;
+    return true;
+  }
+
+  @override
+  Future<bool> remove(String key) async {
+    await removeResponse;
+    if (refuseRemove) return false;
+    value = null;
+    return true;
+  }
+}
 
 void main() {
   late int created;
@@ -61,5 +86,47 @@ void main() {
 
     await expectLater(store.read(), throwsStateError);
     expect(await store.read(), 'installation-1');
+  });
+
+  test(
+    'une suppression refusée conserve l’identifiant et peut être réessayée',
+    () async {
+      final preferences = _Preferences()..refuseRemove = true;
+      final store = InstallationIdStore(
+        preferences: () async => preferences,
+        newId: () => 'installation-2',
+      );
+      await store.read();
+
+      await expectLater(store.reset(), throwsStateError);
+      expect(await store.read(), 'installation-1');
+      expect(preferences.value, 'installation-1');
+
+      preferences.refuseRemove = false;
+      await store.reset();
+      expect(await store.read(), 'installation-2');
+      expect(preferences.value, 'installation-2');
+    },
+  );
+
+  test('une lecture pendant reset attend la suppression avant de créer '
+      'l’identifiant suivant', () async {
+    final response = Completer<void>();
+    final preferences = _Preferences()..removeResponse = response.future;
+    final store = InstallationIdStore(
+      preferences: () async => preferences,
+      newId: () => 'installation-2',
+    );
+    await store.read();
+
+    final resetting = store.reset();
+    final nextId = store.read();
+    await pumpEventQueue();
+    expect(preferences.value, 'installation-1');
+    response.complete();
+    await resetting;
+
+    expect(await nextId, 'installation-2');
+    expect(preferences.value, 'installation-2');
   });
 }

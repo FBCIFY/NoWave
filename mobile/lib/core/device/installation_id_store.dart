@@ -5,7 +5,8 @@ import 'package:uuid/uuid.dart';
 /// backend), gardé sur le téléphone d'un lancement à l'autre.
 ///
 /// Le backend lie cet identifiant au premier compte qui l'enregistre : il est
-/// donc oublié à la déconnexion, et le compte suivant en reçoit un nouveau.
+/// donc oublié après confirmation du nettoyage serveur à la déconnexion,
+/// et le compte suivant en reçoit un nouveau.
 class InstallationIdStore {
   static const String _key = 'installation_id';
 
@@ -15,6 +16,7 @@ class InstallationIdStore {
   /// Lecture en cours ou terminée, partagée par les appels simultanés pour
   /// ne jamais créer deux identifiants.
   Future<String>? _current;
+  Future<void>? _resetting;
 
   InstallationIdStore({
     Future<SharedPreferences> Function()? preferences,
@@ -24,6 +26,7 @@ class InstallationIdStore {
 
   /// Renvoie l'identifiant actuel, ou en crée un au premier appel.
   Future<String> read() async {
+    if (_resetting case final resetting?) await resetting;
     final pending = _current ??= _readOrCreate();
     try {
       return await pending;
@@ -35,15 +38,21 @@ class InstallationIdStore {
   }
 
   /// Oublie l'identifiant : le prochain [read] en crée un nouveau.
-  Future<void> reset() async {
+  Future<void> reset() {
+    return _resetting ??= _reset().whenComplete(() => _resetting = null);
+  }
+
+  Future<void> _reset() async {
     final pending = _current;
-    _current = null;
     // Une lecture en cours pourrait réécrire l'ancien identifiant après nous.
     try {
       await pending;
     } catch (_) {}
     final preferences = await _preferences();
-    await preferences.remove(_key);
+    if (!await preferences.remove(_key)) {
+      throw StateError('Impossible d’effacer l’identifiant d’installation.');
+    }
+    _current = null;
   }
 
   Future<String> _readOrCreate() async {
