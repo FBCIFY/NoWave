@@ -288,7 +288,7 @@ void main() {
       expect(find.text('Continuer'), findsOneWidget);
     });
 
-    testWidgets('une ouverture en retard n’écrase pas la caméra rouverte', (
+    testWidgets('ouverture lente : la nouvelle caméra attend l’ancienne', (
       tester,
     ) async {
       final slowOpening = Completer<void>();
@@ -313,13 +313,78 @@ void main() {
       _sendToBackground(tester);
       await tester.pump();
       _bringToForeground(tester);
-      await tester.pumpAndSettle();
-      expect(find.byKey(_previewKey), findsOneWidget);
+      await tester.pump(const Duration(seconds: 1));
+      // La première caméra s'ouvre encore : pas de seconde caméra.
+      expect(cameras, hasLength(1));
+      expect(find.byType(CircularProgressIndicator), findsOneWidget);
 
-      // La première ouverture finit après coup : sans effet sur l'écran.
+      // Fin de l'ouverture, puis libération : la seconde peut s'ouvrir.
       slowOpening.complete();
       await tester.pumpAndSettle();
-      expect(cameras.first.isDisposed, isTrue);
+      expect(cameras, hasLength(2));
+      expect(cameras.first.isReleased, isTrue);
+      expect(cameras.last.isDisposed, isFalse);
+      expect(find.byKey(_previewKey), findsOneWidget);
+    });
+
+    testWidgets('libération lente : pas de nouvelle caméra avant la fin', (
+      tester,
+    ) async {
+      final slowRelease = Completer<void>();
+      final cameras = <_FakeCamera>[];
+      await _openCameraScreen(
+        tester,
+        createCamera: () {
+          // Seule la première caméra met du temps à être rendue.
+          final camera = _FakeCamera(
+            release: cameras.isEmpty ? slowRelease.future : null,
+          );
+          cameras.add(camera);
+          return camera;
+        },
+      );
+
+      _sendToBackground(tester);
+      await tester.pump();
+      _bringToForeground(tester);
+      await tester.pump(const Duration(seconds: 1));
+      expect(cameras.single.isDisposed, isTrue);
+      expect(cameras.single.isReleased, isFalse);
+      expect(find.byType(CircularProgressIndicator), findsOneWidget);
+
+      slowRelease.complete();
+      await tester.pumpAndSettle();
+      expect(cameras, hasLength(2));
+      expect(find.byKey(_previewKey), findsOneWidget);
+    });
+
+    testWidgets('masquée de nouveau avant la libération : une seule caméra', (
+      tester,
+    ) async {
+      final slowRelease = Completer<void>();
+      final cameras = <_FakeCamera>[];
+      await _openCameraScreen(
+        tester,
+        createCamera: () {
+          final camera = _FakeCamera(
+            release: cameras.isEmpty ? slowRelease.future : null,
+          );
+          cameras.add(camera);
+          return camera;
+        },
+      );
+
+      // Deux allers-retours pendant que la première caméra se libère.
+      for (var i = 0; i < 2; i++) {
+        _sendToBackground(tester);
+        await tester.pump();
+        _bringToForeground(tester);
+        await tester.pump();
+      }
+
+      slowRelease.complete();
+      await tester.pumpAndSettle();
+      expect(cameras, hasLength(2));
       expect(cameras.last.isDisposed, isFalse);
       expect(find.byKey(_previewKey), findsOneWidget);
     });
@@ -535,12 +600,20 @@ http.Response _error(int statusCode, String code) {
 }
 
 class _FakeCamera implements ReportCamera {
-  _FakeCamera({this.opening});
+  _FakeCamera({this.opening, this.release});
 
   /// Fin de l'ouverture ; immédiate par défaut.
   final Future<void>? opening;
+
+  /// Fin de la libération par le système ; immédiate par défaut.
+  final Future<void>? release;
   int pictures = 0;
+
+  /// Libération demandée.
   bool isDisposed = false;
+
+  /// Caméra rendue au système.
+  bool isReleased = false;
 
   @override
   Future<void> initialize() async => opening;
@@ -558,9 +631,13 @@ class _FakeCamera implements ReportCamera {
     return img.encodeJpg(photo);
   }
 
+  /// Comme DeviceReportCamera : la libération attend la fin de l'ouverture.
   @override
   Future<void> dispose() async {
     isDisposed = true;
+    await opening;
+    await release;
+    isReleased = true;
   }
 }
 

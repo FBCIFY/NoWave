@@ -50,16 +50,17 @@ void main() {
       );
 
       final opening = camera.initialize();
-      await camera.dispose();
+      final closing = camera.dispose();
       search.complete([_backCamera]);
       await opening;
+      await closing;
 
       expect(created, 0);
     },
   );
 
   test(
-    'écran fermé pendant l’ouverture : le contrôleur est libéré ensuite',
+    'écran fermé pendant l’ouverture : dispose() attend la libération',
     () async {
       final controller = _FakeController();
       final camera = DeviceReportCamera(
@@ -69,12 +70,18 @@ void main() {
 
       final opening = camera.initialize();
       await pumpEventQueue();
-      await camera.dispose();
+      var isClosed = false;
+      final closing = camera.dispose().then((_) => isClosed = true);
+      await pumpEventQueue();
+      // Contrôleur encore en ouverture : la caméra n'est pas rendue.
+      expect(isClosed, isFalse);
       expect(controller.disposals, 0);
 
       controller.opening.complete();
       await opening;
+      await closing;
 
+      expect(isClosed, isTrue);
       expect(controller.disposals, 1);
       expect(controller.isLocked, isFalse);
     },
@@ -91,12 +98,13 @@ void main() {
 
       final opening = camera.initialize();
       await pumpEventQueue();
-      await camera.dispose();
+      final closing = camera.dispose();
       controller.opening.completeError(
         CameraException('CameraAccessDenied', null),
       );
 
       await expectLater(opening, completes);
+      await expectLater(closing, completes);
       expect(controller.disposals, 1);
     },
   );

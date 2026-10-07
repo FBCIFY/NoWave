@@ -45,6 +45,11 @@ class DeviceReportCamera implements ReportCamera {
   CameraController? _controller;
   bool _isDisposed = false;
 
+  /// Ouverture en cours ou terminée : [dispose] l'attend avant de rendre la
+  /// main, pour que la caméra soit vraiment libérée.
+  Future<void>? _initialization;
+  Future<void>? _disposal;
+
   static CameraController _createDefaultController(CameraDescription camera) =>
       CameraController(
         camera,
@@ -53,10 +58,12 @@ class DeviceReportCamera implements ReportCamera {
         enableAudio: false,
       );
 
-  /// À n'appeler qu'une fois : après [dispose], il faut une nouvelle caméra.
-  /// Si l'écran se ferme entre-temps, le contrôleur créé est libéré ici.
+  /// Après [dispose], il faut une nouvelle caméra. Si l'écran se ferme
+  /// pendant l'ouverture, le contrôleur créé est libéré ici.
   @override
-  Future<void> initialize() async {
+  Future<void> initialize() => _initialization ??= _initialize();
+
+  Future<void> _initialize() async {
     final cameras = await _findCameras();
 
     // Écran fermé pendant la recherche : pas de contrôleur à créer.
@@ -137,9 +144,22 @@ class DeviceReportCamera implements ReportCamera {
     }
   }
 
+  /// Ne se termine qu'une fois la caméra rendue au système : une nouvelle
+  /// caméra peut alors s'ouvrir sans conflit.
   @override
-  Future<void> dispose() async {
+  Future<void> dispose() => _disposal ??= _dispose();
+
+  Future<void> _dispose() async {
     _isDisposed = true;
+
+    // Ouverture en cours : elle voit _isDisposed et libère elle-même son
+    // contrôleur ; on attend qu'elle ait fini.
+    try {
+      await _initialization;
+    } catch (_) {
+      // Ouverture ratée : son contrôleur est déjà libéré.
+    }
+
     final controller = _controller;
     _controller = null;
     if (controller != null) await _disposeQuietly(controller);

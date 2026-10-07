@@ -363,6 +363,10 @@ au nord vrai :
   application), la caméra est libérée ; elle est rouverte au retour. Une photo
   déjà prise est conservée. Une ouverture encore en cours quand l’écran se
   ferme est annulée et le contrôleur libéré (`DeviceReportCamera`) ;
+- deux caméras ne sont jamais ouvertes en même temps : `dispose()` ne se
+  termine qu’une fois la caméra rendue au système (après la fin d’une
+  ouverture en cours), et `CameraScreen` attend cette libération avant d’en
+  ouvrir une nouvelle ;
 - hauteur de caméra : 2,5 ± 0,5 m (source `default`), une valeur moyenne non
   calibrée, gardée comme compromis pour le MVP plutôt que demandée à
   l’utilisateur. Si le téléphone est tenu à 1 m ou à 6 m, la distance estimée peut

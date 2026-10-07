@@ -68,6 +68,12 @@ class CameraScreen extends StatefulWidget {
 class _CameraScreenState extends State<CameraScreen> {
   /// Null quand la caméra est libérée (écran masqué).
   ReportCamera? _camera;
+
+  /// L'écran est visible et veut une caméra.
+  bool _isCameraWanted = false;
+
+  /// Libération de la dernière caméra fermée.
+  Future<void> _cameraRelease = Future.value();
   late final _locationService = widget.locationService ?? LocationService();
   late final _orientationService =
       widget.orientationService ?? DeviceOrientationService();
@@ -294,8 +300,16 @@ class _CameraScreenState extends State<CameraScreen> {
     );
   }
 
-  void _openCamera() {
-    if (_camera != null) return;
+  Future<void> _openCamera() async {
+    if (_isCameraWanted) return;
+    _isCameraWanted = true;
+
+    // Le système refuse deux caméras ouvertes : la nouvelle attend que la
+    // précédente soit rendue.
+    await _cameraRelease;
+
+    // Masqué de nouveau entre-temps, ou une autre ouverture est passée avant.
+    if (!mounted || !_isCameraWanted || _camera != null) return;
 
     final camera = (widget.createCamera ?? DeviceReportCamera.new)();
     _camera = camera;
@@ -303,11 +317,15 @@ class _CameraScreenState extends State<CameraScreen> {
   }
 
   void _closeCamera() {
+    _isCameraWanted = false;
     final camera = _camera;
     if (camera == null) return;
 
     _camera = null;
-    camera.dispose();
+    _cameraRelease = camera.dispose().catchError((Object _) {
+      // Libération ratée : rien de plus à faire, la suivante tentera sa
+      // chance.
+    });
     setState(() {
       _isCameraReady = false;
       _cameraError = null;
@@ -410,7 +428,7 @@ class _CameraScreenState extends State<CameraScreen> {
       cameraHeightSource: defaultCameraHeightSource,
       cameraHeightUncertaintyMeters: defaultCameraHeightUncertaintyMeters,
       capturedAt: DateTime.now(),
-      // L'app ne zoome jamais : l'aperçu reste à l'objectif principal.
+      // Aucun zoom numérique n'est appliqué par l'application.
       zoomRatio: 1,
     );
 
