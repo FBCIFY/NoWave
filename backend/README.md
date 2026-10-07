@@ -86,6 +86,21 @@ Les deux clés acceptent aussi les variantes `SCW_ACCESS_KEY_FILE` et
 - `PATCH /api/v1/users/me` modifie le profil.
 - `DELETE /api/v1/users/me` supprime le profil.
 
+### Suppression de compte
+
+La suppression conserve l'ordre SQL puis Firebase. Si la suppression SQL a
+déjà réussi mais que la suppression Firebase échoue, une nouvelle requête
+reprend directement à l'étape Firebase. L'absence de la ligne SQL ne bloque
+donc pas la reprise.
+
+Une identité Firebase déjà absente est considérée comme supprimée afin de
+rendre l'opération idempotente.
+
+Pour le MVP, la vérification d'authentification conserve le contrôle standard
+du jeton Firebase sans contrôle systématique de révocation à chaque requête.
+Cette option sera réévaluée si le besoin de révocation immédiate justifie le
+coût et la dépendance supplémentaires.
+
 ### Upload d'une photo de signalement
 
 `POST /api/v1/reports/{report_id}/photo` attend un champ multipart `file` de type

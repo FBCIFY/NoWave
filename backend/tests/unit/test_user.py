@@ -156,3 +156,24 @@ def test_invalid_nationality_raises_error():
             email="jonathan@example.com",
             nationality="FRA",
         )
+
+@pytest.mark.parametrize(
+    "nationality",
+    [
+        "12",
+        "F!",
+        "éé",
+    ],
+)
+def test_nationality_requires_iso_alpha2_format(
+    nationality,
+):
+    with pytest.raises(
+        InvalidNationalityError
+    ):
+        User(
+            firebase_uid="firebase_123",
+            username="Jonathan Cahoreau",
+            email="jonathan@example.com",
+            nationality=nationality,
+        )

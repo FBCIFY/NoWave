@@ -20,6 +20,28 @@ class UserStatus(str, Enum):
     SUSPENDED = "suspended"
 
 
+def normalize_nationality(
+    nationality: str,
+) -> str:
+    if not isinstance(nationality, str):
+        raise InvalidNationalityError(
+            "nationality must be a string"
+        )
+
+    nationality = nationality.strip()
+
+    if (
+        len(nationality) != 2
+        or not nationality.isascii()
+        or not nationality.isalpha()
+    ):
+        raise InvalidNationalityError(
+            "nationality must use ISO alpha-2 format"
+        )
+
+    return nationality.upper()
+
+
 class User:
     def __init__(
         self,
@@ -65,12 +87,9 @@ class User:
             )
 
         if nationality is not None:
-            nationality = nationality.strip()
-
-            if len(nationality) != 2:
-                raise InvalidNationalityError(
-                    "nationality must contain exactly 2 characters"
-                )
+            nationality = normalize_nationality(
+                nationality
+            )
 
         self.id = id if id is not None else uuid4()
 
@@ -80,10 +99,7 @@ class User:
 
         self.date_of_birth = date_of_birth
 
-        if nationality is not None:
-            self.nationality = nationality.upper()
-        else:
-            self.nationality = None
+        self.nationality = nationality
 
         self.role = role
         self.status = status
@@ -127,14 +143,9 @@ class User:
             if nationality is None:
                 self.nationality = None
             else:
-                nationality = nationality.strip()
-
-                if len(nationality) != 2:
-                    raise InvalidNationalityError(
-                        "nationality must contain exactly 2 characters"
-                    )
-
-                self.nationality = nationality.upper()
+                self.nationality = normalize_nationality(
+                    nationality
+                )
 
         if "show_user_name" in changes:
             self.show_user_name = changes["show_user_name"]
