@@ -7,6 +7,7 @@ from app.domain.errors import (
     BoatNotFoundError,
     DeviceConflictError,
     DeviceNotFoundError,
+    DevicePositionFutureError,
     DevicePositionStaleError,
     EmailNotVerifiedError,
     GpsPrecisionInsufficientError,
@@ -367,6 +368,26 @@ def device_not_found_handler(
                 "code": "device_not_found",
                 "message": str(exc),
                 "details": None,
+            }
+        },
+    )
+
+
+def device_position_future_handler(
+    request,
+    exc: DevicePositionFutureError,
+):
+    return JSONResponse(
+        status_code=422,
+        content={
+            "error": {
+                "code": "device_position_future",
+                "message": str(exc),
+                "details": {
+                    "maximum_future_seconds": (
+                        exc.maximum_future_seconds
+                    ),
+                },
             }
         },
     )

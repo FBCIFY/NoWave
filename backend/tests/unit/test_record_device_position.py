@@ -12,6 +12,7 @@ from app.domain.device import Device, DevicePlatform
 from app.domain.device_position import DevicePosition
 from app.domain.errors import (
     DeviceNotFoundError,
+    DevicePositionFutureError,
     DevicePositionStaleError,
     UserNotFoundError,
 )
@@ -186,3 +187,97 @@ def test_record_device_position_rejects_bad_accuracy():
             heading_deg=90.0,
             measured_at=datetime.now(UTC),
         )
+
+def test_record_device_position_accepts_small_future_clock_skew():
+    user = create_user()
+    device = create_device(user)
+
+    device_repository = FakeDeviceRepository(device)
+
+    service = RecordDevicePosition(
+        user_repository=FakeUserRepository(user),
+        device_repository=device_repository,
+    )
+
+    measured_at = (
+        datetime.now(UTC)
+        + timedelta(minutes=4)
+    )
+
+    result = service.execute(
+        firebase_uid=user.firebase_uid,
+        installation_id=device.installation_id,
+        longitude=5.37,
+        latitude=43.29,
+        accuracy_m=18.0,
+        heading_deg=90.0,
+        measured_at=measured_at,
+    )
+
+    assert result.measured_at == measured_at
+    assert device_repository.saved_position is not None
+
+
+def test_record_device_position_rejects_measurement_too_far_in_future():
+    user = create_user()
+    device = create_device(user)
+
+    device_repository = FakeDeviceRepository(device)
+
+    service = RecordDevicePosition(
+        user_repository=FakeUserRepository(user),
+        device_repository=device_repository,
+    )
+
+    measured_at = (
+        datetime.now(UTC)
+        + timedelta(minutes=6)
+    )
+
+    with pytest.raises(
+        DevicePositionFutureError
+    ) as exc_info:
+        service.execute(
+            firebase_uid=user.firebase_uid,
+            installation_id=device.installation_id,
+            longitude=5.37,
+            latitude=43.29,
+            accuracy_m=18.0,
+            heading_deg=90.0,
+            measured_at=measured_at,
+        )
+
+    assert (
+        exc_info.value.maximum_future_seconds
+        == 300
+    )
+    assert device_repository.saved_position is None
+
+
+def test_record_device_position_does_not_reject_old_measurement_by_age():
+    user = create_user()
+    device = create_device(user)
+
+    device_repository = FakeDeviceRepository(device)
+
+    service = RecordDevicePosition(
+        user_repository=FakeUserRepository(user),
+        device_repository=device_repository,
+    )
+
+    measured_at = (
+        datetime.now(UTC)
+        - timedelta(days=30)
+    )
+
+    result = service.execute(
+        firebase_uid=user.firebase_uid,
+        installation_id=device.installation_id,
+        longitude=5.37,
+        latitude=43.29,
+        accuracy_m=18.0,
+        heading_deg=90.0,
+        measured_at=measured_at,
+    )
+
+    assert result.measured_at == measured_at

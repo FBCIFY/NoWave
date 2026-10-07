@@ -1,4 +1,4 @@
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from uuid import uuid4
 
 import pytest
@@ -304,3 +304,47 @@ def test_position_rejects_stale_measurement(
         response.json()["error"]["code"]
         == "device_position_stale"
     )
+
+def test_position_rejects_measurement_too_far_in_future(
+    monkeypatch,
+):
+    user = create_user()
+    device = create_device(user)
+
+    repository = configure_repositories(
+        monkeypatch,
+        user,
+        device,
+    )
+
+    payload = valid_payload()
+    payload["measured_at"] = (
+        datetime.now(UTC)
+        + timedelta(minutes=6)
+    ).isoformat()
+
+    response = client.put(
+        "/api/v1/devices/current/position",
+        headers={
+            "X-Installation-ID": str(
+                device.installation_id
+            ),
+        },
+        json=payload,
+    )
+
+    assert response.status_code == 422
+
+    body = response.json()
+
+    assert (
+        body["error"]["code"]
+        == "device_position_future"
+    )
+    assert (
+        body["error"]["details"][
+            "maximum_future_seconds"
+        ]
+        == 300
+    )
+    assert repository.saved_position is None

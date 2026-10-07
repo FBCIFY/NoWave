@@ -1,8 +1,36 @@
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from math import isfinite
 from uuid import UUID
 
-from app.domain.errors import GpsPrecisionInsufficientError
+from app.domain.errors import (
+    DevicePositionFutureError,
+    GpsPrecisionInsufficientError,
+)
+
+
+MAX_FUTURE_CLOCK_SKEW = timedelta(minutes=5)
+
+
+def validate_device_measurement_time(
+    measured_at: datetime,
+    server_time: datetime,
+) -> None:
+    if measured_at.tzinfo is None:
+        raise ValueError(
+            "measured_at must include a timezone"
+        )
+
+    if server_time.tzinfo is None:
+        raise ValueError(
+            "server_time must include a timezone"
+        )
+
+    if measured_at > server_time + MAX_FUTURE_CLOCK_SKEW:
+        raise DevicePositionFutureError(
+            maximum_future_seconds=int(
+                MAX_FUTURE_CLOCK_SKEW.total_seconds()
+            )
+        )
 
 
 class DevicePosition:
