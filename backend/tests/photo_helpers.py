@@ -19,13 +19,23 @@ from app.domain.user import User
 from app.infrastructure.adapters.jpeg_validator import JpegValidator
 
 
-def jpeg_bytes(color="blue", *, exif=False, size=None):
+def jpeg_bytes(
+    color="blue",
+    *,
+    exif=False,
+    size=None,
+    dimensions=(8, 8),
+):
     output = BytesIO()
     metadata = Image.Exif()
     if exif:
         metadata[0x010F] = "Private camera metadata"
     options = {"exif": metadata} if exif else {}
-    Image.new("RGB", (8, 8), color).save(output, "JPEG", **options)
+    Image.new("RGB", dimensions, color).save(
+        output,
+        "JPEG",
+        **options,
+    )
     content = output.getvalue()
     if size is not None:
         padding = bytearray()
@@ -38,6 +48,33 @@ def jpeg_bytes(color="blue", *, exif=False, size=None):
             )
             remaining -= length
         content = content[:2] + padding + content[2:]
+    return bytes(content)
+
+
+def jpeg_with_claimed_dimensions(
+    width: int,
+    height: int,
+) -> bytes:
+    """Change only the JPEG SOF dimensions without allocating the raster."""
+
+    content = bytearray(jpeg_bytes())
+
+    marker = content.find(b"\xff\xc0")
+
+    if marker < 0:
+        raise AssertionError(
+            "baseline JPEG fixture has no SOF0 marker"
+        )
+
+    content[marker + 5 : marker + 7] = height.to_bytes(
+        2,
+        "big",
+    )
+    content[marker + 7 : marker + 9] = width.to_bytes(
+        2,
+        "big",
+    )
+
     return bytes(content)
 
 
