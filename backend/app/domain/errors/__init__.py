@@ -3,6 +3,7 @@ from app.domain.errors.exceptions import (
     BoatNotFoundError,
     DeviceConflictError,
     DeviceNotFoundError,
+    DevicePositionFutureError,
     DevicePositionStaleError,
     DomainError,
     EmailNotVerifiedError,
