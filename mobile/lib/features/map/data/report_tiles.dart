@@ -146,6 +146,12 @@ class ReportTiles {
   static bool isThrottled(String message) =>
       RegExp(r'status code (429|503)\b').hasMatch(message);
 
+  /// Un 403 sur les tuiles indique un refus d'accès. Comme l'erreur
+  /// Mapbox n'expose pas le code métier NoWave, le profil doit ensuite
+  /// être revalidé avant de conclure que le compte est suspendu.
+  static bool isForbidden(String message) =>
+      RegExp(r'status code 403\b').hasMatch(message);
+
   static String _markerIdOf(ReportCategory category) =>
       'nowave-report-${category.apiValue}';
 

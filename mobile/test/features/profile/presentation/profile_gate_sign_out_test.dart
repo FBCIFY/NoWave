@@ -84,6 +84,7 @@ void main() {
   late List<http.Request> requests;
   late bool failDelete;
   Completer<void>? deleteResponse;
+  String? profileBody;
 
   void setUpServices() {
     SharedPreferences.setMockInitialValues({});
@@ -97,10 +98,17 @@ void main() {
     requests = [];
     failDelete = false;
     deleteResponse = null;
+    profileBody = null;
     final client = MockClient((request) async {
       requests.add(request);
       // Le parcours de déconnexion reste disponible si le profil ne charge pas.
-      if (request.method == 'GET') return http.Response('', 503);
+      if (request.method == 'GET') {
+        final body = profileBody;
+        if (body != null) {
+          return http.Response(body, 200);
+        }
+        return http.Response('', 503);
+      }
       if (request.method == 'DELETE') {
         await deleteResponse?.future;
         if (failDelete) return http.Response('', 503);
@@ -159,6 +167,43 @@ void main() {
     );
     await tester.pumpAndSettle();
   }
+
+  testWidgets(
+    'un compte suspendu ne monte pas l application et peut se déconnecter',
+    (tester) async {
+      setUpServices();
+
+      profileBody = jsonEncode({
+        'id': '7a620167-c8d7-4e72-9bd5-09cf39b822c9',
+        'username': 'Jonathan',
+        'date_of_birth': null,
+        'nationality': 'FR',
+        'role': 'user',
+        'status': 'suspended',
+        'show_user_name': false,
+        'show_boat_info': false,
+        'notifications_enabled': false,
+        'created_at': '2026-09-22T00:00:00Z',
+        'updated_at': '2026-10-07T00:00:00Z',
+      });
+
+      await openGate(tester);
+
+      expect(find.text('Votre compte est suspendu.'), findsOneWidget);
+
+      expect(requests.where((request) => request.method == 'PUT'), isEmpty);
+
+      await tester.tap(find.text('Déconnexion'));
+      await tester.pumpAndSettle();
+
+      expect(auth.account, isNull);
+      expect(auth.signOutCalls, 1);
+      expect(
+        requests.where((request) => request.method == 'DELETE'),
+        hasLength(1),
+      );
+    },
+  );
 
   testWidgets('double échec : garde la session A, réessaie avec son token '
       'puis autorise l’enregistrement du compte B', (tester) async {

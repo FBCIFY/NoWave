@@ -33,7 +33,13 @@ Future<void> main() async {
 
   // Services créés une seule fois, puis transmis aux écrans qui en ont besoin.
   final authService = AuthService();
-  final apiService = ApiService(client: http.Client());
+  final inactiveUserEvents = ValueNotifier<int>(0);
+  final apiService = ApiService(
+    client: http.Client(),
+    onUserInactive: () {
+      inactiveUserEvents.value++;
+    },
+  );
   final profileService = ProfileService(
     apiService: apiService,
     getIdToken: authService.getIdToken,
@@ -73,6 +79,7 @@ Future<void> main() async {
     MyApp(
       home: AuthGate(
         authService: authService,
+        inactiveUserEvents: inactiveUserEvents,
         profileService: profileService,
         reportService: reportService,
         positionEstimateService: positionEstimateService,

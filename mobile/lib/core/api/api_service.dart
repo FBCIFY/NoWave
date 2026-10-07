@@ -11,15 +11,17 @@ import 'api_exception.dart';
 class ApiService {
   final http.Client _client;
   final String _baseUrl;
+  final void Function()? _onUserInactive;
 
   factory ApiService({
     required http.Client client,
     String baseUrl = ApiConfig.baseUrl,
+    void Function()? onUserInactive,
   }) {
-    return ApiService._(client, baseUrl);
+    return ApiService._(client, baseUrl, onUserInactive);
   }
 
-  ApiService._(this._client, this._baseUrl);
+  ApiService._(this._client, this._baseUrl, this._onUserInactive);
 
   Future<String> get(String path, {Map<String, String>? headers}) async {
     final response = await _client
@@ -112,6 +114,15 @@ class ApiService {
       return response.body;
     }
 
-    throw ApiException(statusCode: response.statusCode, body: response.body);
+    final error = ApiException(
+      statusCode: response.statusCode,
+      body: response.body,
+    );
+
+    if (error.statusCode == 403 && error.code == 'user_inactive') {
+      _onUserInactive?.call();
+    }
+
+    throw error;
   }
 }

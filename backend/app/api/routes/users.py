@@ -1,6 +1,9 @@
 from fastapi import APIRouter, Depends, status
 
-from app.api.dependencies.auth import get_current_identity
+from app.api.dependencies.auth import (
+    get_authenticated_identity,
+    get_current_identity,
+)
 from app.api.schemas.user import UserCreateRequest, UserProfileResponse, UserUpdateRequest
 from app.application.services.create_user import CreateUser
 from app.application.services.get_user import GetUser
@@ -25,7 +28,7 @@ router = APIRouter(
 )
 def create_my_profile(
     request: UserCreateRequest,
-    identity: dict = Depends(get_current_identity),
+    identity: dict = Depends(get_authenticated_identity),
 ):
     repository = PostgreSQLUserRepository()
     create_user = CreateUser(repository)
@@ -45,7 +48,7 @@ def create_my_profile(
     response_model=UserProfileResponse,
 )
 def get_my_profile(
-    identity: dict = Depends(get_current_identity),
+    identity: dict = Depends(get_authenticated_identity),
 ):
     repository = PostgreSQLUserRepository()
     get_user = GetUser(repository)
@@ -85,7 +88,7 @@ def update_my_profile(
     status_code=status.HTTP_204_NO_CONTENT,
 )
 def delete_my_profile(
-    identity: dict = Depends(get_current_identity),
+    identity: dict = Depends(get_authenticated_identity),
 ):
     repository = PostgreSQLUserRepository()
     auth_provider = FirebaseAuthAdapter()

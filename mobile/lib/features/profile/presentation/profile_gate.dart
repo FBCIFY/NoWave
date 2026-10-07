@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 import '../../../core/device/device_position_reporter.dart';
@@ -19,6 +20,7 @@ import '../../reports/data/report_detail_service.dart';
 import 'alerts_onboarding_screen.dart';
 import 'profile_setup_screen.dart';
 import 'sign_out_dialog.dart';
+import 'suspended_account_screen.dart';
 
 /// Second aiguillage, une fois l'e-mail vérifié : charge le profil puis
 /// affiche la création du profil, l'écran d'alertes (une seule fois, juste
@@ -34,6 +36,7 @@ class ProfileGate extends StatefulWidget {
   final ReportDetailService reportDetailService;
   final DeviceRegistration deviceRegistration;
   final DevicePositionReporter devicePositionReporter;
+  final ValueListenable<int>? inactiveUserEvents;
 
   const ProfileGate({
     super.key,
@@ -45,23 +48,84 @@ class ProfileGate extends StatefulWidget {
     required this.reportDetailService,
     required this.deviceRegistration,
     required this.devicePositionReporter,
+    this.inactiveUserEvents,
   });
 
   @override
   State<ProfileGate> createState() => _ProfileGateState();
 }
 
-class _ProfileGateState extends State<ProfileGate> {
+class _ProfileGateState extends State<ProfileGate> with WidgetsBindingObserver {
   late Future<UserProfile?> _profileFuture;
   bool _profileWasJustCreated = false;
   UserProfile? _latestProfile;
   bool _showAlertsOnboarding = false;
   Future<void>? _signingOut;
+  bool _accessRevoked = false;
+  bool _refreshingAccess = false;
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    widget.inactiveUserEvents?.addListener(_markAccessRevoked);
     _profileFuture = widget.profileService.getCurrentProfile();
+  }
+
+  @override
+  void didUpdateWidget(covariant ProfileGate oldWidget) {
+    super.didUpdateWidget(oldWidget);
+
+    if (oldWidget.inactiveUserEvents != widget.inactiveUserEvents) {
+      oldWidget.inactiveUserEvents?.removeListener(_markAccessRevoked);
+      widget.inactiveUserEvents?.addListener(_markAccessRevoked);
+    }
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      unawaited(_refreshAccessStatus());
+    }
+  }
+
+  @override
+  void dispose() {
+    widget.inactiveUserEvents?.removeListener(_markAccessRevoked);
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  void _markAccessRevoked() {
+    if (!mounted) return;
+
+    Navigator.of(context).popUntil((route) => route.isFirst);
+
+    setState(() {
+      _accessRevoked = true;
+    });
+  }
+
+  Future<void> _refreshAccessStatus() async {
+    if (_refreshingAccess) return;
+
+    _refreshingAccess = true;
+
+    try {
+      final profile = await widget.profileService.getCurrentProfile();
+
+      if (!mounted) return;
+
+      setState(() {
+        _accessRevoked = profile?.status == 'suspended';
+        _latestProfile = profile;
+        _profileFuture = Future<UserProfile?>.value(profile);
+      });
+    } catch (_) {
+      // En cas de panne réseau, conserver l'état courant.
+    } finally {
+      _refreshingAccess = false;
+    }
   }
 
   void _reloadProfile() {
@@ -139,7 +203,12 @@ class _ProfileGateState extends State<ProfileGate> {
         late final int step;
         late final Widget screen;
 
-        if (snapshot.connectionState == ConnectionState.waiting) {
+        if (_accessRevoked || snapshot.data?.status == 'suspended') {
+          step = 4;
+          screen = SuspendedAccountScreen(
+            onSignOut: () => unawaited(_signOut()),
+          );
+        } else if (snapshot.connectionState == ConnectionState.waiting) {
           if (_profileWasJustCreated) {
             step = 1;
             screen = ProfileSetupScreen(
@@ -203,6 +272,7 @@ class _ProfileGateState extends State<ProfileGate> {
               reporter: widget.devicePositionReporter,
               child: HomeScreen(
                 profile: _latestProfile ?? profile,
+                onUserInactive: () => unawaited(_refreshAccessStatus()),
                 onSignOut: () => _signOut(resumeDevices: true),
                 onUpdatePreferences: _updatePreferences,
                 reportService: widget.reportService,
