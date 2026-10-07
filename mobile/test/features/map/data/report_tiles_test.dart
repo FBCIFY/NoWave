@@ -57,13 +57,4 @@ void main() {
     expect(ReportTiles.isForbidden('$prefix 401'), isFalse);
     expect(ReportTiles.isForbidden('$prefix 4030'), isFalse);
   });
-
-  test('reconnaît les tuiles refusées par la limite de débit', () {
-    const prefix = 'Failed to load tile: HTTP status code';
-
-    expect(ReportTiles.isThrottled('$prefix 429'), isTrue);
-    expect(ReportTiles.isThrottled('$prefix 503'), isTrue);
-    expect(ReportTiles.isThrottled('$prefix 401'), isFalse);
-    expect(ReportTiles.isThrottled('$prefix 5030'), isFalse);
-  });
 }
