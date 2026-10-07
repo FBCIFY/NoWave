@@ -27,7 +27,7 @@ class FakeUserRepository:
         self.users.append(user)
         return user
 
-    def update(self, user):
+    def update(self, user, fields=None):
         return user
 
     def delete(self, user):
@@ -286,7 +286,7 @@ def test_update_my_profile(monkeypatch):
     response = client.patch(
         "/api/v1/users/me",
         json={
-            "username": "John",
+            "username": "John Doe",
             "nationality": "fr",
             "show_user_name": True,
         },
@@ -298,7 +298,7 @@ def test_update_my_profile(monkeypatch):
 
     data = response.json()
 
-    assert data["username"] == "John"
+    assert data["username"] == "John Doe"
     assert data["nationality"] == "FR"
     assert data["show_user_name"] is True
 

@@ -49,6 +49,16 @@ def test_username_is_trimmed():
     assert user.username == "Jonathan"
 
 
+def test_username_with_internal_spaces_is_allowed():
+    user = User(
+        firebase_uid="firebase_123",
+        username="Jonathan Cahoreau",
+        email="jonathan@example.com",
+    )
+
+    assert user.username == "Jonathan Cahoreau"
+
+
 def test_firebase_uid_is_trimmed():
     user = User(
         firebase_uid="  firebase_123  ",
