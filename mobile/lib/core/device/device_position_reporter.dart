@@ -49,7 +49,7 @@ class DevicePositionReporter {
 
   /// Démarre le suivi. Sans effet s'il tourne déjà.
   Future<void> start() {
-    if (_running) return Future.value();
+    if (_running || _registration.isSigningOut) return Future.value();
     _running = true;
     _sendNextNow = true;
     _timer = Timer.periodic(interval, (_) => unawaited(tick()));
@@ -78,10 +78,19 @@ class DevicePositionReporter {
   }
 
   Future<void> _listen() async {
-    if (_subscription != null || _subscribing) return;
+    if (!_running ||
+        _registration.isSigningOut ||
+        _subscription != null ||
+        _subscribing) {
+      return;
+    }
     _subscribing = true;
     try {
-      if (!await _location.canWatchPosition() || !_running) return;
+      if (!await _location.canWatchPosition() ||
+          !_running ||
+          _registration.isSigningOut) {
+        return;
+      }
       _subscription = _location.watchPosition().listen(
         _onPosition,
         // Flux coupé (GPS désactivé, autorisation retirée) : on se réabonne
@@ -101,6 +110,7 @@ class DevicePositionReporter {
   }
 
   void _onPosition(Position position) {
+    if (!_running || _registration.isSigningOut) return;
     final measurement = _toDevicePosition(position);
     // Mesure trop imprécise : le backend garde la dernière position valide.
     if (!measurement.isUsable) return;
@@ -113,7 +123,10 @@ class DevicePositionReporter {
   }
 
   Future<void> _flush() {
-    if (_sending != null || _pending == null || !_running) {
+    if (_sending != null ||
+        _pending == null ||
+        !_running ||
+        _registration.isSigningOut) {
       return Future.value();
     }
     final measurement = _pending!;
@@ -128,8 +141,13 @@ class DevicePositionReporter {
       } on ApiException catch (error) {
         // 404 : téléphone pas (ou plus) enregistré. On l'enregistre, puis on
         // réessaie une fois. Pas après [stop] : la déconnexion le désactive.
-        if (error.statusCode != 404 || !_running) rethrow;
+        if (error.statusCode != 404 ||
+            !_running ||
+            _registration.isSigningOut) {
+          rethrow;
+        }
         await _registration.register();
+        if (!_running || _registration.isSigningOut) return;
         await _devices.sendPosition(measurement);
       }
     } on ApiException catch (error) {
@@ -139,7 +157,7 @@ class DevicePositionReporter {
     } catch (error) {
       // Réseau : on la garde pour le prochain tick, sauf si plus récente.
       debugPrint('Envoi de la position impossible : $error');
-      if (_running) _pending ??= measurement;
+      if (_running && !_registration.isSigningOut) _pending ??= measurement;
     }
   }
 

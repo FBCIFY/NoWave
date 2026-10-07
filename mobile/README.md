@@ -395,24 +395,40 @@ historique.
 
 Avant `signOut`, l'application :
 
-1. arrête le suivi ;
+1. bloque les reprises GPS/FCM et attend la fin des envois en cours ;
 2. désactive le téléphone (`DELETE /api/v1/devices/current`, avec l'en-tête
    `X-Installation-ID`) ;
-3. supprime le token FCM ;
-4. oublie l'identifiant d'installation : le compte suivant en reçoit un
-   nouveau.
+3. tente de supprimer le token FCM, même si le serveur n'a pas répondu ;
+4. oublie l'identifiant d'installation seulement après confirmation du
+   nettoyage serveur, puis ferme la session Firebase. Le compte suivant
+   reçoit un nouvel identifiant.
 
-Chaque étape est tentée même si la précédente échoue, pour que la déconnexion
-ne reste jamais bloquée.
+Si le `DELETE` échoue, une fenêtre explique que la déconnexion reste à terminer
+et propose de réessayer ou d'annuler. L'identifiant et la session de l'ancien
+compte sont conservés : la nouvelle tentative utilise toujours ses droits. Un
+retour au premier plan ne relance pas les envois GPS/FCM pendant cette
+transition. « Annuler » garde l'utilisateur sur son compte et relance
+l'enregistrement du téléphone et le suivi GPS.
+
+Seuls un succès du `DELETE` ou un 404 métier `device_not_found` / `user_not_found`
+confirment qu'il ne reste rien à nettoyer pour ce compte. Un 404 de proxy ou une
+erreur d'authentification ne permettent pas de poursuivre. Si le serveur a
+confirmé le nettoyage, une erreur d'invalidation FCM est journalisée mais ne
+bloque pas la fermeture de session : l'ancien appareil n'a plus de token côté
+backend. Si seule la fermeture Firebase échoue, le prochain essai ne recrée
+pas d'appareil et ne répète pas un nettoyage déjà terminé.
+
+Après fermeture forcée de l'application pendant un échec serveur, la session
+Firebase et l'ancien identifiant restent conservés. L'utilisateur peut reprendre
+la déconnexion depuis ce même compte. Les tests automatisés couvrent la
+conservation de l'identifiant et les requêtes authentifiées ; les essais sur
+deux comptes réels et après relancement sont à consigner dans NW-128.
 
 ### Limites connues
 
-- déconnexion hors ligne : le `DELETE` et la suppression du token FCM
-  échouent. L'appareil reste alors actif côté backend avec son token, et
-  l'ancien compte peut encore recevoir des alertes sur ce téléphone. Au
-  prochain enregistrement en ligne, le token déjà pris déclenche un 409 et
-  l'application en demande un nouveau. Tant que personne ne se reconnecte, le
-  problème reste ;
+- hors ligne, la déconnexion et le changement de compte attendent le retour
+  du réseau. Tant que le nettoyage n'est pas confirmé, l'appareil peut rester
+  actif côté backend, mais le mobile conserve sa référence et la session ;
 - un enregistrement raté n'est pas réessayé tout de suite : il est refait au
   prochain retour dans l'application, ou au prochain envoi de position (404) ;
 - sur le simulateur iOS, il n'y a pas de token APNs : le téléphone est
