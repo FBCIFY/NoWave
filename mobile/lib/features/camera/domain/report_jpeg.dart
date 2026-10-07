@@ -75,3 +75,19 @@ img.Image _fitWithin(img.Image image, int maxDimension) {
           interpolation: img.Interpolation.average,
         );
 }
+
+/// Focale de l'objectif en millimètres, lue dans les EXIF de la photo
+/// d'origine, avant leur suppression par [prepareReportJpeg]. Null si le
+/// téléphone ne l'indique pas. Lecture rapide : seuls les en-têtes sont lus.
+double? readFocalLengthMm(Uint8List bytes) {
+  try {
+    final value = img.decodeJpgExif(bytes)?.exifIfd['FocalLength'];
+    if (value == null) return null;
+
+    final focalLength = value.toDouble();
+    return focalLength.isFinite && focalLength > 0 ? focalLength : null;
+  } catch (_) {
+    // EXIF illisibles : la focale est facultative.
+    return null;
+  }
+}

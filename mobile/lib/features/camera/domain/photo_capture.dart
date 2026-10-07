@@ -13,6 +13,8 @@ class PhotoCaptureMeasurements {
     required this.cameraHeightSource,
     required this.cameraHeightUncertaintyMeters,
     required this.capturedAt,
+    this.focalLengthMm,
+    this.zoomRatio,
   });
 
   final double observerLongitude;
@@ -29,6 +31,29 @@ class PhotoCaptureMeasurements {
   final double cameraHeightUncertaintyMeters;
   final DateTime capturedAt;
 
+  /// Focale réelle de l'objectif, lue dans les EXIF de la photo (null si
+  /// le téléphone ne la donne pas).
+  final double? focalLengthMm;
+
+  /// Zoom appliqué par l'app ; envoyé seulement s'il est connu.
+  final double? zoomRatio;
+
+  /// Mêmes mesures, complétées par la focale lue après la prise.
+  PhotoCaptureMeasurements withFocalLength(double? focalLengthMm) =>
+      PhotoCaptureMeasurements(
+        observerLongitude: observerLongitude,
+        observerLatitude: observerLatitude,
+        gpsAccuracyMeters: gpsAccuracyMeters,
+        azimuthDegrees: azimuthDegrees,
+        inclinationDegrees: inclinationDegrees,
+        cameraHeightMeters: cameraHeightMeters,
+        cameraHeightSource: cameraHeightSource,
+        cameraHeightUncertaintyMeters: cameraHeightUncertaintyMeters,
+        capturedAt: capturedAt,
+        focalLengthMm: focalLengthMm,
+        zoomRatio: zoomRatio,
+      );
+
   Map<String, Object?> toJson() => {
     'observer_position': {
       'type': 'Point',
@@ -41,6 +66,8 @@ class PhotoCaptureMeasurements {
     'camera_height_m': cameraHeightMeters,
     'camera_height_source': cameraHeightSource,
     'camera_height_uncertainty_m': cameraHeightUncertaintyMeters,
+    'focal_length_mm': ?focalLengthMm,
+    'zoom_ratio': ?zoomRatio,
     'captured_at': capturedAt.toUtc().toIso8601String(),
   };
 }

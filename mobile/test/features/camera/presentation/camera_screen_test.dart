@@ -88,6 +88,8 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(requests, hasLength(1));
+    expect(requests.single['focal_length_mm'], closeTo(4.25, 1e-9));
+    expect(requests.single['zoom_ratio'], 1);
     expect(find.byType(CameraScreen), findsNothing);
     expect(camera.isDisposed, isTrue);
 
@@ -101,6 +103,8 @@ void main() {
     expect(measurements.gpsAccuracyMeters, 8);
     expect(measurements.azimuthDegrees, closeTo(245, 1e-6));
     expect(measurements.inclinationDegrees, closeTo(-10, 0.1));
+    expect(measurements.focalLengthMm, closeTo(4.25, 1e-9));
+    expect(measurements.zoomRatio, 1);
   });
 
   testWidgets('bloque « Reprendre » et « Continuer » pendant l’estimation', (
@@ -129,31 +133,46 @@ void main() {
   });
 
   group('affiche l’erreur d’estimation', () {
-    final cases = <String, (http.Response, String)>{
+    // Réponse, message, et si le point manuel est proposé (panne seulement).
+    final cases = <String, (http.Response, String, bool)>{
       '422 précision GPS': (
         _error(422, 'gps_precision_insufficient'),
         'Précision GPS insuffisante. Reprenez la photo.',
+        false,
       ),
       '422 autre code': (
         _error(422, 'request_validation_error'),
         'Mesures refusées. Reprenez la photo.',
+        false,
       ),
       '401': (
         _error(401, 'unauthorized'),
         'Votre session a expiré. Reconnectez-vous.',
+        false,
       ),
       '403': (
         _error(403, 'forbidden'),
         'Votre compte ne peut pas publier de signalement.',
+        false,
       ),
       '404': (
         http.Response('Not Found', 404),
         'Estimation indisponible sur ce serveur.',
+        true,
       ),
-      '503': (http.Response('', 503), 'Estimation impossible. Réessayez.'),
+      '429': (
+        _error(429, 'rate_limited'),
+        'Estimation impossible. Réessayez.',
+        true,
+      ),
+      '503': (
+        http.Response('', 503),
+        'Estimation impossible. Réessayez.',
+        true,
+      ),
     };
 
-    for (final MapEntry(key: name, value: (response, message))
+    for (final MapEntry(key: name, value: (response, message, manual))
         in cases.entries) {
       testWidgets(name, (tester) async {
         await _openCameraScreen(tester, estimate: (_) async => response);
@@ -167,6 +186,10 @@ void main() {
         expect(find.byType(CameraScreen), findsOneWidget);
         expect(find.text('Continuer'), findsOneWidget);
         expect(find.text('Reprendre'), findsOneWidget);
+        expect(
+          find.text('Placer le point moi-même'),
+          manual ? findsOneWidget : findsNothing,
+        );
       });
     }
 
@@ -182,11 +205,208 @@ void main() {
 
       const message = 'Estimation impossible. Vérifiez votre connexion.';
       expect(find.text(message), findsOneWidget);
+      expect(find.text('Placer le point moi-même'), findsOneWidget);
 
-      // Reprendre la photo efface l'erreur.
+      // Reprendre la photo efface l'erreur et le repli.
       await tester.tap(find.text('Reprendre'));
       await tester.pump();
       expect(find.text(message), findsNothing);
+      expect(find.text('Placer le point moi-même'), findsNothing);
+    });
+  });
+
+  testWidgets('estimation en panne : la photo part sans estimation (NW-156)', (
+    tester,
+  ) async {
+    var requests = 0;
+    final result = await _openCameraScreen(
+      tester,
+      estimate: (_) async {
+        requests++;
+        return http.Response('', 503);
+      },
+    );
+
+    await _takePhoto(tester);
+    await tester.tap(find.text('Continuer'));
+    await tester.pump();
+    final shownPhoto = tester.widget<Image>(find.byType(Image)).image;
+
+    await tester.tap(find.text('Placer le point moi-même'));
+    await tester.pumpAndSettle();
+
+    expect(requests, 1);
+    expect(find.byType(CameraScreen), findsNothing);
+    final draft = await result;
+    expect(draft, isNotNull);
+    expect(draft!.estimate, isNull);
+    // Même photo, mêmes mesures : rien n'est perdu.
+    expect((shownPhoto as MemoryImage).bytes, draft.capture.jpegBytes);
+    expect(draft.initialLongitude, -4.4861);
+    expect(draft.initialLatitude, 48.3904);
+  });
+
+  group('arrière-plan (NW-156)', () {
+    testWidgets('libère la caméra puis en rouvre une neuve au retour', (
+      tester,
+    ) async {
+      final cameras = <_FakeCamera>[];
+      await _openCameraScreen(
+        tester,
+        createCamera: () {
+          final camera = _FakeCamera();
+          cameras.add(camera);
+          return camera;
+        },
+      );
+      expect(cameras, hasLength(1));
+
+      // Masquée, l'app ne dessine plus : on ne vérifie que la caméra.
+      _sendToBackground(tester);
+      await tester.pump();
+      expect(cameras.single.isDisposed, isTrue);
+
+      _bringToForeground(tester);
+      await tester.pump();
+      expect(cameras, hasLength(2));
+      expect(cameras.last.isDisposed, isFalse);
+      expect(find.byKey(_previewKey), findsOneWidget);
+
+      await _takePhoto(tester);
+      expect(cameras.last.pictures, 1);
+    });
+
+    testWidgets('garde la photo prise pendant l’arrière-plan', (tester) async {
+      await _openCameraScreen(tester);
+      await _takePhoto(tester);
+
+      _sendToBackground(tester);
+      await tester.pump();
+      _bringToForeground(tester);
+      await tester.pump();
+      expect(find.byType(Image), findsOneWidget);
+      expect(find.text('Continuer'), findsOneWidget);
+    });
+
+    testWidgets('ouverture lente : la nouvelle caméra attend l’ancienne', (
+      tester,
+    ) async {
+      final slowOpening = Completer<void>();
+      final cameras = <_FakeCamera>[];
+      await _openCameraScreen(
+        tester,
+        createCamera: () {
+          // Seule la première ouverture traîne.
+          final camera = _FakeCamera(
+            opening: cameras.isEmpty ? slowOpening.future : null,
+          );
+          cameras.add(camera);
+          return camera;
+        },
+        settle: false,
+      );
+      // Première image hors écran, puis animation d'ouverture.
+      await tester.pump();
+      await tester.pump(const Duration(seconds: 1));
+      expect(find.byType(CircularProgressIndicator), findsOneWidget);
+
+      _sendToBackground(tester);
+      await tester.pump();
+      _bringToForeground(tester);
+      await tester.pump(const Duration(seconds: 1));
+      // La première caméra s'ouvre encore : pas de seconde caméra.
+      expect(cameras, hasLength(1));
+      expect(find.byType(CircularProgressIndicator), findsOneWidget);
+
+      // Fin de l'ouverture, puis libération : la seconde peut s'ouvrir.
+      slowOpening.complete();
+      await tester.pumpAndSettle();
+      expect(cameras, hasLength(2));
+      expect(cameras.first.isReleased, isTrue);
+      expect(cameras.last.isDisposed, isFalse);
+      expect(find.byKey(_previewKey), findsOneWidget);
+    });
+
+    testWidgets('libération lente : pas de nouvelle caméra avant la fin', (
+      tester,
+    ) async {
+      final slowRelease = Completer<void>();
+      final cameras = <_FakeCamera>[];
+      await _openCameraScreen(
+        tester,
+        createCamera: () {
+          // Seule la première caméra met du temps à être rendue.
+          final camera = _FakeCamera(
+            release: cameras.isEmpty ? slowRelease.future : null,
+          );
+          cameras.add(camera);
+          return camera;
+        },
+      );
+
+      _sendToBackground(tester);
+      await tester.pump();
+      _bringToForeground(tester);
+      await tester.pump(const Duration(seconds: 1));
+      expect(cameras.single.isDisposed, isTrue);
+      expect(cameras.single.isReleased, isFalse);
+      expect(find.byType(CircularProgressIndicator), findsOneWidget);
+
+      slowRelease.complete();
+      await tester.pumpAndSettle();
+      expect(cameras, hasLength(2));
+      expect(find.byKey(_previewKey), findsOneWidget);
+    });
+
+    testWidgets('masquée de nouveau avant la libération : une seule caméra', (
+      tester,
+    ) async {
+      final slowRelease = Completer<void>();
+      final cameras = <_FakeCamera>[];
+      await _openCameraScreen(
+        tester,
+        createCamera: () {
+          final camera = _FakeCamera(
+            release: cameras.isEmpty ? slowRelease.future : null,
+          );
+          cameras.add(camera);
+          return camera;
+        },
+      );
+
+      // Deux allers-retours pendant que la première caméra se libère.
+      for (var i = 0; i < 2; i++) {
+        _sendToBackground(tester);
+        await tester.pump();
+        _bringToForeground(tester);
+        await tester.pump();
+      }
+
+      slowRelease.complete();
+      await tester.pumpAndSettle();
+      expect(cameras, hasLength(2));
+      expect(cameras.last.isDisposed, isFalse);
+      expect(find.byKey(_previewKey), findsOneWidget);
+    });
+
+    testWidgets('fermeture pendant l’ouverture : caméra libérée', (
+      tester,
+    ) async {
+      final slowOpening = Completer<void>();
+      final camera = _FakeCamera(opening: slowOpening.future);
+      await _openCameraScreen(tester, camera: camera, settle: false);
+      // Première image hors écran, puis animation d'ouverture.
+      await tester.pump();
+      await tester.pump(const Duration(seconds: 1));
+
+      await tester.tap(find.byTooltip('Fermer'));
+      await tester.pumpAndSettle();
+      expect(find.byType(CameraScreen), findsNothing);
+      expect(camera.isDisposed, isTrue);
+
+      slowOpening.complete();
+      await tester.pump();
+      expect(tester.takeException(), isNull);
     });
   });
 
@@ -279,14 +499,17 @@ CameraAxisService _cameraAimingAt({
 Future<Future<PhotoReportDraft?>> _openCameraScreen(
   WidgetTester tester, {
   _FakeCamera? camera,
+  ReportCamera Function()? createCamera,
   MockClientHandler? estimate,
   CameraAxisService? cameraAxisService,
+  bool settle = true,
 }) async {
   tester.view.physicalSize = const Size(390, 844);
   tester.view.devicePixelRatio = 1;
   addTearDown(tester.view.resetPhysicalSize);
   addTearDown(tester.view.resetDevicePixelRatio);
 
+  tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
   await tester.pumpWidget(const MaterialApp(home: Scaffold()));
 
   final result = tester
@@ -303,7 +526,7 @@ Future<Future<PhotoReportDraft?>> _openCameraScreen(
               ),
               getIdToken: () async => 'firebase-token',
             ),
-            camera: camera ?? _FakeCamera(),
+            createCamera: createCamera ?? () => camera ?? _FakeCamera(),
             locationService: _FakeLocationService(),
             orientationService: _FakeOrientationService(),
             // Par défaut, caméra qui vise 245° vrais (243° magnétiques + 2°).
@@ -324,9 +547,20 @@ Future<Future<PhotoReportDraft?>> _openCameraScreen(
           ),
         ),
       );
-  await tester.pumpAndSettle();
+  if (settle) await tester.pumpAndSettle();
 
   return result;
+}
+
+/// Écran verrouillé ou autre application, dans l'ordre des états réels.
+void _sendToBackground(WidgetTester tester) {
+  tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.inactive);
+  tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.hidden);
+}
+
+void _bringToForeground(WidgetTester tester) {
+  tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.inactive);
+  tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
 }
 
 /// Le JPEG est préparé par compute(), dans un vrai isolate : on laisse passer
@@ -366,11 +600,23 @@ http.Response _error(int statusCode, String code) {
 }
 
 class _FakeCamera implements ReportCamera {
+  _FakeCamera({this.opening, this.release});
+
+  /// Fin de l'ouverture ; immédiate par défaut.
+  final Future<void>? opening;
+
+  /// Fin de la libération par le système ; immédiate par défaut.
+  final Future<void>? release;
   int pictures = 0;
+
+  /// Libération demandée.
   bool isDisposed = false;
 
+  /// Caméra rendue au système.
+  bool isReleased = false;
+
   @override
-  Future<void> initialize() async {}
+  Future<void> initialize() async => opening;
 
   @override
   Widget buildPreview() =>
@@ -379,12 +625,19 @@ class _FakeCamera implements ReportCamera {
   @override
   Future<Uint8List> takePicture() async {
     pictures++;
-    return img.encodeJpg(img.Image(width: 64, height: 48));
+    // Focale de 4,25 mm dans les EXIF, comme un objectif principal.
+    final photo = img.Image(width: 64, height: 48);
+    photo.exif.exifIfd['FocalLength'] = img.IfdValueRational(425, 100);
+    return img.encodeJpg(photo);
   }
 
+  /// Comme DeviceReportCamera : la libération attend la fin de l'ouverture.
   @override
   Future<void> dispose() async {
     isDisposed = true;
+    await opening;
+    await release;
+    isReleased = true;
   }
 }
 
