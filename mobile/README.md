@@ -350,6 +350,25 @@ au nord vrai :
 - caméra presque verticale (sol ou ciel), l’azimut n’a pas de sens : la photo
   est bloquée avec « Relevez le téléphone vers l’horizon. ».
 
+### Estimation, caméra et arrière-plan — NW-156
+
+- si l’estimation est indisponible (pas de réseau, 404, 429 ou 5xx), le
+  bouton « Placer le point moi-même » garde la photo et ouvre la carte sans
+  estimation : l’utilisateur place le point sur l’objet photographié. Les
+  refus (401, 403, 422) n’affichent pas ce bouton ;
+- la requête d’estimation envoie aussi la focale lue dans les EXIF de la photo
+  (`focal_length_mm`, omise si absente) et `zoom_ratio: 1`, car l’application
+  ne zoome jamais ;
+- quand l’application passe en arrière-plan (écran verrouillé, autre
+  application), la caméra est libérée ; elle est rouverte au retour. Une photo
+  déjà prise est conservée. Une ouverture encore en cours quand l’écran se
+  ferme est annulée et le contrôleur libéré (`DeviceReportCamera`) ;
+- hauteur de caméra : 2,5 ± 0,5 m (source `default`), une valeur moyenne non
+  calibrée, gardée comme compromis pour le MVP plutôt que demandée à
+  l’utilisateur. Si le téléphone est tenu à 1 m ou à 6 m, la distance estimée peut
+  être fausse d’un facteur 2 environ ; l’utilisateur confirme toujours le
+  point sur la carte.
+
 ### Flèche de position
 
 La position de l’utilisateur est affichée par une flèche 3D qui suit le cap
@@ -369,7 +388,10 @@ python3 tool/make_location_puck.py assets/models/location_puck.glb
 - l’inclinaison n’a pas été vérifiée avec un support d’angle étalonné ;
 - les conventions des capteurs doivent encore être validées sur Android réel,
   avec une cible connue ;
-- la hauteur de caméra est fixée à 2,5 m pour le MVP.
+- la hauteur de caméra est fixée à 2,5 m pour le MVP ;
+- le plugin caméra ne permet pas de choisir l’objectif ni de forcer la mise
+  au point à l’infini : l’application ouvre la première caméra arrière, ce
+  qu’il faut vérifier sur chaque téléphone.
 
 ## Appareil et position — NW-116
 

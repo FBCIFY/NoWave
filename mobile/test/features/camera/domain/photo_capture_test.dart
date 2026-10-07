@@ -44,4 +44,28 @@ void main() {
   test('ramène un azimut de 360° à 0°', () {
     expect(_measurements(azimuthDegrees: 360).toJson()['azimuth_deg'], 0);
   });
+
+  test('ajoute focale et zoom seulement s’ils sont connus (NW-156)', () {
+    final measurements = PhotoCaptureMeasurements(
+      observerLongitude: -4.4861,
+      observerLatitude: 48.3904,
+      gpsAccuracyMeters: 8.2,
+      azimuthDegrees: 245.5,
+      inclinationDegrees: -12.4,
+      cameraHeightMeters: 2.5,
+      cameraHeightSource: 'default',
+      cameraHeightUncertaintyMeters: 0.5,
+      capturedAt: DateTime.utc(2026, 9, 30, 14, 5, 12),
+      zoomRatio: 1,
+    );
+
+    expect(measurements.toJson(), isNot(contains('focal_length_mm')));
+    expect(measurements.toJson()['zoom_ratio'], 1);
+
+    final withFocal = measurements.withFocalLength(4.25);
+    expect(withFocal.toJson(), {
+      ...measurements.toJson(),
+      'focal_length_mm': 4.25,
+    });
+  });
 }

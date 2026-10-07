@@ -30,15 +30,18 @@ import 'report_camera.dart';
 /// moment de l'appui ; la photo reste en mémoire tant que l'écran est ouvert.
 ///
 /// « Continuer » demande l'estimation au backend puis ferme l'écran en
-/// renvoyant un [PhotoReportDraft] à la carte.
+/// renvoyant un [PhotoReportDraft] à la carte. Si le service d'estimation est
+/// en panne, « Placer le point moi-même » renvoie la photo sans estimation :
+/// la carte demande alors le point (NW-156).
 ///
 /// Caméra, GPS et capteurs sont injectables pour les tests ; par défaut,
-/// ceux du téléphone. L'écran libère la caméra en se fermant.
+/// ceux du téléphone. L'écran libère la caméra en se fermant et quand
+/// l'application passe en arrière-plan, puis la rouvre au retour.
 class CameraScreen extends StatefulWidget {
   const CameraScreen({
     super.key,
     required this.positionEstimateService,
-    this.camera,
+    this.createCamera,
     this.locationService,
     this.orientationService,
     this.inclinationService,
@@ -46,7 +49,10 @@ class CameraScreen extends StatefulWidget {
   });
 
   final PositionEstimateService positionEstimateService;
-  final ReportCamera? camera;
+
+  /// Crée une caméra neuve à chaque ouverture : une caméra libérée ne se
+  /// rouvre pas.
+  final ReportCamera Function()? createCamera;
   final LocationService? locationService;
   final DeviceOrientationService? orientationService;
   final CameraInclinationService? inclinationService;
@@ -60,7 +66,8 @@ class CameraScreen extends StatefulWidget {
 }
 
 class _CameraScreenState extends State<CameraScreen> {
-  late final _camera = widget.camera ?? DeviceReportCamera();
+  /// Null quand la caméra est libérée (écran masqué).
+  ReportCamera? _camera;
   late final _locationService = widget.locationService ?? LocationService();
   late final _orientationService =
       widget.orientationService ?? DeviceOrientationService();
@@ -83,6 +90,9 @@ class _CameraScreenState extends State<CameraScreen> {
   String? _captureError;
   PhotoCapture? _capture;
   bool _isEstimating = false;
+
+  /// L'estimation est en panne : la photo peut partir sans elle.
+  bool _canPlacePointManually = false;
   StreamSubscription<CompassReading>? _orientationSubscription;
   CompassReading? _orientation;
   String? _orientationError;
@@ -99,13 +109,17 @@ class _CameraScreenState extends State<CameraScreen> {
     super.initState();
     // L'aperçu plein écran suppose le portrait.
     SystemChrome.setPreferredOrientations([DeviceOrientation.portraitUp]);
-    _initializeCamera();
+    _openCamera();
     _listenToPosition();
     _listenToOrientation();
     _listenToInclination();
     _listenToCameraAxis();
     _lifecycleListener = AppLifecycleListener(
       onResume: _retryLocationIfBlocked,
+      // Écran verrouillé ou autre application : le système peut reprendre
+      // la caméra, on la libère et on en rouvre une au retour.
+      onHide: _closeCamera,
+      onShow: _openCamera,
     );
   }
 
@@ -280,17 +294,38 @@ class _CameraScreenState extends State<CameraScreen> {
     );
   }
 
-  Future<void> _initializeCamera() async {
-    try {
-      await _camera.initialize();
+  void _openCamera() {
+    if (_camera != null) return;
 
-      if (!mounted) return;
+    final camera = (widget.createCamera ?? DeviceReportCamera.new)();
+    _camera = camera;
+    _initializeCamera(camera);
+  }
+
+  void _closeCamera() {
+    final camera = _camera;
+    if (camera == null) return;
+
+    _camera = null;
+    camera.dispose();
+    setState(() {
+      _isCameraReady = false;
+      _cameraError = null;
+    });
+  }
+
+  Future<void> _initializeCamera(ReportCamera camera) async {
+    try {
+      await camera.initialize();
+
+      // Écran fermé ou masqué entre-temps : cette caméra est déjà libérée.
+      if (!mounted || camera != _camera) return;
 
       setState(() {
         _isCameraReady = true;
       });
     } on CameraException catch (error) {
-      if (!mounted) return;
+      if (!mounted || camera != _camera) return;
 
       setState(() {
         _cameraError = _cameraErrorMessage(error);
@@ -351,11 +386,13 @@ class _CameraScreenState extends State<CameraScreen> {
   }
 
   Future<void> _capturePhoto() async {
+    final camera = _camera;
     final position = _position;
     final heading = _cameraHeading;
     final inclination = _inclinationDegrees;
 
     if (!_canCapture ||
+        camera == null ||
         position == null ||
         heading == null ||
         inclination == null) {
@@ -373,6 +410,8 @@ class _CameraScreenState extends State<CameraScreen> {
       cameraHeightSource: defaultCameraHeightSource,
       cameraHeightUncertaintyMeters: defaultCameraHeightUncertaintyMeters,
       capturedAt: DateTime.now(),
+      // L'app ne zoome jamais : l'aperçu reste à l'objectif principal.
+      zoomRatio: 1,
     );
 
     AppHaptics.capture();
@@ -382,7 +421,8 @@ class _CameraScreenState extends State<CameraScreen> {
     });
 
     try {
-      final originalBytes = await _camera.takePicture();
+      final originalBytes = await camera.takePicture();
+      final focalLengthMm = readFocalLengthMm(originalBytes);
       // compute avec une fonction de haut niveau : une closure créée ici
       // emporterait l'écran (this) vers l'autre isolate, ce qui est interdit.
       final jpegBytes = await compute(prepareReportJpeg, originalBytes);
@@ -392,7 +432,7 @@ class _CameraScreenState extends State<CameraScreen> {
       setState(() {
         _capture = PhotoCapture(
           jpegBytes: jpegBytes,
-          measurements: measurements,
+          measurements: measurements.withFocalLength(focalLengthMm),
         );
       });
     } on CameraException {
@@ -422,6 +462,7 @@ class _CameraScreenState extends State<CameraScreen> {
     setState(() {
       _capture = null;
       _captureError = null;
+      _canPlacePointManually = false;
     });
   }
 
@@ -433,6 +474,7 @@ class _CameraScreenState extends State<CameraScreen> {
     setState(() {
       _isEstimating = true;
       _captureError = null;
+      _canPlacePointManually = false;
     });
 
     try {
@@ -449,12 +491,15 @@ class _CameraScreenState extends State<CameraScreen> {
 
       setState(() {
         _captureError = _estimateErrorMessage(error);
+        _canPlacePointManually = _isEstimateOutage(error);
       });
     } catch (_) {
+      // Pas de réseau, délai dépassé ou réponse illisible.
       if (!mounted) return;
 
       setState(() {
         _captureError = 'Estimation impossible. Vérifiez votre connexion.';
+        _canPlacePointManually = true;
       });
     } finally {
       if (mounted) {
@@ -463,6 +508,23 @@ class _CameraScreenState extends State<CameraScreen> {
         });
       }
     }
+  }
+
+  /// Le service est en panne ou absent : le point manuel reste possible.
+  /// Session expirée, compte bloqué ou mesures refusées ne s'arrangent pas
+  /// en plaçant le point soi-même.
+  bool _isEstimateOutage(ApiException error) {
+    final status = error.statusCode;
+    return status == 404 || status == 429 || status >= 500;
+  }
+
+  /// Renvoie la photo sans estimation : la carte demande le point.
+  void _placePointManually() {
+    final capture = _capture;
+    if (capture == null || _isEstimating) return;
+
+    Navigator.of(context)
+        .pop(PhotoReportDraft(capture: capture, estimate: null));
   }
 
   String _estimateErrorMessage(ApiException error) {
@@ -560,7 +622,7 @@ class _CameraScreenState extends State<CameraScreen> {
     _orientationSubscription?.cancel();
     _inclinationSubscription?.cancel();
     _cameraAxisSubscription?.cancel();
-    _camera.dispose();
+    _camera?.dispose();
     super.dispose();
   }
 
@@ -582,7 +644,17 @@ class _CameraScreenState extends State<CameraScreen> {
         body: Stack(
           fit: StackFit.expand,
           children: [
-            if (_cameraError != null)
+            // Photo prise : on la montre figée à la place de l'aperçu, pour
+            // vérifier ce qui a été visé avant de continuer. Elle reste
+            // affichée pendant que la caméra se rouvre après l'arrière-plan.
+            if (capture != null) ...[
+              Image.memory(
+                capture.jpegBytes,
+                fit: BoxFit.cover,
+                gaplessPlayback: true,
+              ),
+              const _Reticle(),
+            ] else if (_cameraError != null)
               Center(
                 child: Padding(
                   padding: const EdgeInsets.all(24),
@@ -598,16 +670,7 @@ class _CameraScreenState extends State<CameraScreen> {
                 child: CircularProgressIndicator(color: Colors.white),
               )
             else ...[
-              // Photo prise : on la montre figée à la place de l'aperçu, pour
-              // vérifier ce qui a été visé avant de continuer.
-              if (capture != null)
-                Image.memory(
-                  capture.jpegBytes,
-                  fit: BoxFit.cover,
-                  gaplessPlayback: true,
-                )
-              else
-                _camera.buildPreview(),
+              _camera!.buildPreview(),
               const _Reticle(),
             ],
             Positioned(
@@ -662,6 +725,16 @@ class _CameraScreenState extends State<CameraScreen> {
                           ),
                         ),
                       ),
+                      if (capture != null && _canPlacePointManually) ...[
+                        const SizedBox(height: 8),
+                        TextButton(
+                          onPressed: _isEstimating ? null : _placePointManually,
+                          style: TextButton.styleFrom(
+                            foregroundColor: Colors.white,
+                          ),
+                          child: const Text('Placer le point moi-même'),
+                        ),
+                      ],
                       if (_locationNeedsSettings) ...[
                         const SizedBox(height: 8),
                         TextButton(

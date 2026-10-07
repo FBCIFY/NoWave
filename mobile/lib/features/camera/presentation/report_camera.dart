@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import 'package:camera/camera.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
 
@@ -15,6 +16,9 @@ abstract interface class ReportCamera {
   /// Code de [CameraException] quand l'appareil n'a pas de caméra arrière.
   static const noBackCameraCode = 'NoBackCamera';
 
+  /// Code de [CameraException] quand la caméra a déjà été libérée.
+  static const closedCode = 'CameraClosed';
+
   Future<void> initialize();
 
   /// Aperçu plein écran, une fois [initialize] terminé.
@@ -27,12 +31,36 @@ abstract interface class ReportCamera {
 }
 
 class DeviceReportCamera implements ReportCamera {
+  DeviceReportCamera({
+    @visibleForTesting Future<List<CameraDescription>> Function()? findCameras,
+    @visibleForTesting
+    CameraController Function(CameraDescription camera)? createController,
+  }) : _findCameras = findCameras ?? availableCameras,
+       _createController = createController ?? _createDefaultController;
+
+  final Future<List<CameraDescription>> Function() _findCameras;
+  final CameraController Function(CameraDescription camera) _createController;
+
+  /// Renseigné une fois la caméra prête, jamais après [dispose].
   CameraController? _controller;
   bool _isDisposed = false;
 
+  static CameraController _createDefaultController(CameraDescription camera) =>
+      CameraController(
+        camera,
+        // 1920 × 1080 : assez net pour reconnaître l'objet une fois réduit.
+        ResolutionPreset.veryHigh,
+        enableAudio: false,
+      );
+
+  /// À n'appeler qu'une fois : après [dispose], il faut une nouvelle caméra.
+  /// Si l'écran se ferme entre-temps, le contrôleur créé est libéré ici.
   @override
   Future<void> initialize() async {
-    final cameras = await availableCameras();
+    final cameras = await _findCameras();
+
+    // Écran fermé pendant la recherche : pas de contrôleur à créer.
+    if (_isDisposed) return;
 
     if (cameras.isEmpty) {
       throw CameraException(ReportCamera.noCameraCode, null);
@@ -46,22 +74,40 @@ class DeviceReportCamera implements ReportCamera {
       throw CameraException(ReportCamera.noBackCameraCode, null);
     }
 
-    final controller = CameraController(
-      backCamera,
-      // 1920 × 1080 : assez net pour reconnaître l'objet une fois réduit.
-      ResolutionPreset.veryHigh,
-      enableAudio: false,
-    );
+    final controller = _createController(backCamera);
+
+    try {
+      await controller.initialize();
+
+      // L'interface reste en portrait : sans ce verrou, le plugin tourne
+      // l'aperçu quand on met le téléphone à l'horizontale.
+      if (!_isDisposed) {
+        await controller.lockCaptureOrientation(DeviceOrientation.portraitUp);
+      }
+    } catch (_) {
+      await _disposeQuietly(controller);
+      // L'écran fermé n'a plus d'erreur à afficher.
+      if (_isDisposed) return;
+      rethrow;
+    }
+
+    // Écran fermé pendant l'ouverture : dispose() n'a pas vu ce contrôleur.
+    if (_isDisposed) {
+      await _disposeQuietly(controller);
+      return;
+    }
 
     _controller = controller;
-    await controller.initialize();
+  }
 
-    // Écran fermé pendant l'ouverture : dispose() a déjà libéré la caméra.
-    if (_isDisposed) return;
-
-    // L'interface reste en portrait : sans ce verrou, le plugin tourne
-    // l'aperçu quand on met le téléphone à l'horizontale.
-    await controller.lockCaptureOrientation(DeviceOrientation.portraitUp);
+  /// Une ouverture ratée fait aussi échouer dispose() du plugin, qui attend
+  /// la fin de l'ouverture.
+  static Future<void> _disposeQuietly(CameraController controller) async {
+    try {
+      await controller.dispose();
+    } catch (_) {
+      // Rien à libérer de plus.
+    }
   }
 
   @override
@@ -69,7 +115,13 @@ class DeviceReportCamera implements ReportCamera {
 
   @override
   Future<Uint8List> takePicture() async {
-    final photo = await _controller!.takePicture();
+    final controller = _controller;
+    // Caméra libérée (application passée en arrière-plan) : même erreur
+    // qu'un échec du plugin.
+    if (controller == null) {
+      throw CameraException(ReportCamera.closedCode, null);
+    }
+    final photo = await controller.takePicture();
     final bytes = await photo.readAsBytes();
     await _deleteOriginalPhoto(photo.path);
     return bytes;
@@ -88,7 +140,9 @@ class DeviceReportCamera implements ReportCamera {
   @override
   Future<void> dispose() async {
     _isDisposed = true;
-    await _controller?.dispose();
+    final controller = _controller;
+    _controller = null;
+    if (controller != null) await _disposeQuietly(controller);
   }
 }
 
