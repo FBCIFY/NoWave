@@ -11,6 +11,8 @@ import 'package:precise_compass/precise_compass.dart';
 import '../../../core/api/api_exception.dart';
 import '../../../core/haptics/app_haptics.dart';
 import '../../../core/location/location_service.dart';
+import '../../../core/sensors/camera_axis_service.dart';
+import '../../../core/sensors/camera_azimuth.dart';
 import '../../../core/sensors/camera_inclination_service.dart';
 import '../../../core/sensors/device_orientation_service.dart';
 import '../data/position_estimate_service.dart';
@@ -40,6 +42,7 @@ class CameraScreen extends StatefulWidget {
     this.locationService,
     this.orientationService,
     this.inclinationService,
+    this.cameraAxisService,
   });
 
   final PositionEstimateService positionEstimateService;
@@ -47,6 +50,10 @@ class CameraScreen extends StatefulWidget {
   final LocationService? locationService;
   final DeviceOrientationService? orientationService;
   final CameraInclinationService? inclinationService;
+
+  /// Axe de visée, sur Android uniquement. Par défaut, le capteur du
+  /// téléphone sur Android et rien sur iOS.
+  final CameraAxisService? cameraAxisService;
 
   @override
   State<CameraScreen> createState() => _CameraScreenState();
@@ -59,6 +66,11 @@ class _CameraScreenState extends State<CameraScreen> {
       widget.orientationService ?? DeviceOrientationService();
   late final _inclinationService =
       widget.inclinationService ?? CameraInclinationService();
+  late final _cameraAxisService =
+      widget.cameraAxisService ??
+      (defaultTargetPlatform == TargetPlatform.android
+          ? CameraAxisService()
+          : null);
 
   geo.Position? _position;
   bool _isLocating = false;
@@ -77,6 +89,9 @@ class _CameraScreenState extends State<CameraScreen> {
   StreamSubscription<double>? _inclinationSubscription;
   double? _inclinationDegrees;
   String? _inclinationError;
+  StreamSubscription<CameraAxis>? _cameraAxisSubscription;
+  CameraAxis? _cameraAxis;
+  String? _cameraAxisError;
   late final AppLifecycleListener _lifecycleListener;
 
   @override
@@ -88,6 +103,7 @@ class _CameraScreenState extends State<CameraScreen> {
     _listenToPosition();
     _listenToOrientation();
     _listenToInclination();
+    _listenToCameraAxis();
     _lifecycleListener = AppLifecycleListener(
       onResume: _retryLocationIfBlocked,
     );
@@ -186,6 +202,56 @@ class _CameraScreenState extends State<CameraScreen> {
     );
   }
 
+  /// Azimut vrai de la caméra. Sur Android, le cap de `precise_compass` suit
+  /// le haut du téléphone et non la caméra : on le recalcule depuis l'axe de
+  /// visée (NW-150). Sur iOS, on garde le cap de CoreLocation.
+  double? get _cameraHeading {
+    final orientation = _orientation;
+    if (orientation == null) return null;
+    if (_cameraAxisService == null) return orientation.headingTrue;
+    final axis = _cameraAxis;
+    if (axis == null) return null;
+    return cameraTrueAzimuthDegrees(
+      axis: axis,
+      headingMagnetic: orientation.headingMagnetic,
+      headingTrue: orientation.headingTrue,
+    );
+  }
+
+  bool get _isAimingVertically {
+    final axis = _cameraAxis;
+    return axis != null && cameraAzimuthDegrees(axis) == null;
+  }
+
+  void _listenToCameraAxis() {
+    final service = _cameraAxisService;
+    if (service == null) return;
+
+    _cameraAxisSubscription = service.axis.listen(
+      (axis) {
+        if (!mounted) return;
+
+        // ~50 mesures par seconde : on ne redessine que si le degré affiché
+        // ou le message change.
+        final before = (_cameraHeading?.round(), _isAimingVertically);
+        _cameraAxis = axis;
+        if (_cameraAxisError == null &&
+            before == (_cameraHeading?.round(), _isAimingVertically)) {
+          return;
+        }
+
+        setState(() => _cameraAxisError = null);
+      },
+      onError: (Object error) {
+        if (!mounted) return;
+
+        setState(() {
+          _cameraAxisError = 'Capteurs d’orientation indisponibles.';
+        });
+      },
+    );
+  }
+
   void _listenToInclination() {
     _inclinationSubscription = _inclinationService.inclinationDegrees.listen(
       (inclination) {
@@ -262,7 +328,15 @@ class _CameraScreenState extends State<CameraScreen> {
       return _inclinationError;
     }
 
-    if (_orientation?.headingTrue == null || _inclinationDegrees == null) {
+    if (_cameraAxisError != null) {
+      return _cameraAxisError;
+    }
+
+    if (_isAimingVertically) {
+      return 'Relevez le téléphone vers l’horizon.';
+    }
+
+    if (_cameraHeading == null || _inclinationDegrees == null) {
       return 'Recherche de l’orientation…';
     }
 
@@ -278,7 +352,7 @@ class _CameraScreenState extends State<CameraScreen> {
 
   Future<void> _capturePhoto() async {
     final position = _position;
-    final heading = _orientation?.headingTrue;
+    final heading = _cameraHeading;
     final inclination = _inclinationDegrees;
 
     if (!_canCapture ||
@@ -443,7 +517,7 @@ class _CameraScreenState extends State<CameraScreen> {
     final orientation = _orientation!;
     final measures = _measuresText(
       accuracyMeters: position.accuracy,
-      headingDegrees: orientation.headingTrue!,
+      headingDegrees: _cameraHeading!,
       inclinationDegrees: _inclinationDegrees!,
     );
 
@@ -485,6 +559,7 @@ class _CameraScreenState extends State<CameraScreen> {
     _positionSubscription?.cancel();
     _orientationSubscription?.cancel();
     _inclinationSubscription?.cancel();
+    _cameraAxisSubscription?.cancel();
     _camera.dispose();
     super.dispose();
   }
