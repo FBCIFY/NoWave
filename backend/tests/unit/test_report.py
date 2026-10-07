@@ -1,7 +1,12 @@
 from datetime import UTC, datetime, timedelta
 from uuid import UUID, uuid4
 
+import pytest
+
+import app.domain.report as report_module
+from app.domain.errors import InvalidObservedAtError
 from app.domain.report import (
+    REPORT_LIFETIME,
     Report,
     ReportCategory,
     ReportPositioningMode,
@@ -46,3 +51,131 @@ def test_create_manual_report():
     assert isinstance(report.updated_at, datetime)
 
     assert report.removed_at is None
+
+SERVER_TIME = datetime(
+    2026,
+    10,
+    7,
+    12,
+    0,
+    0,
+    tzinfo=UTC,
+)
+
+
+def create_boundary_report(
+    factory_name,
+    observed_at,
+):
+    factory = getattr(
+        Report,
+        factory_name,
+    )
+
+    return factory(
+        author_id=uuid4(),
+        client_report_id=uuid4(),
+        category=ReportCategory.POLLUTION,
+        longitude=5.37,
+        latitude=43.29,
+        observed_at=observed_at,
+        description="Boundary test",
+    )
+
+
+@pytest.mark.parametrize(
+    "factory_name",
+    [
+        "create_manual",
+        "create_photo",
+    ],
+)
+def test_creation_accepts_just_before_24h_boundary(
+    monkeypatch,
+    factory_name,
+):
+    monkeypatch.setattr(
+        report_module,
+        "utc_now",
+        lambda: SERVER_TIME,
+    )
+
+    observed_at = (
+        SERVER_TIME
+        - REPORT_LIFETIME
+        + timedelta(microseconds=1)
+    )
+
+    report = create_boundary_report(
+        factory_name,
+        observed_at,
+    )
+
+    assert report.status == ReportStatus.ACTIVE
+    assert report.expires_at > SERVER_TIME
+    assert (
+        report.expires_at
+        == SERVER_TIME + timedelta(microseconds=1)
+    )
+
+
+@pytest.mark.parametrize(
+    "factory_name",
+    [
+        "create_manual",
+        "create_photo",
+    ],
+)
+def test_creation_rejects_exact_24h_boundary(
+    monkeypatch,
+    factory_name,
+):
+    monkeypatch.setattr(
+        report_module,
+        "utc_now",
+        lambda: SERVER_TIME,
+    )
+
+    observed_at = (
+        SERVER_TIME - REPORT_LIFETIME
+    )
+
+    with pytest.raises(
+        InvalidObservedAtError
+    ):
+        create_boundary_report(
+            factory_name,
+            observed_at,
+        )
+
+
+@pytest.mark.parametrize(
+    "factory_name",
+    [
+        "create_manual",
+        "create_photo",
+    ],
+)
+def test_creation_rejects_after_24h_boundary(
+    monkeypatch,
+    factory_name,
+):
+    monkeypatch.setattr(
+        report_module,
+        "utc_now",
+        lambda: SERVER_TIME,
+    )
+
+    observed_at = (
+        SERVER_TIME
+        - REPORT_LIFETIME
+        - timedelta(microseconds=1)
+    )
+
+    with pytest.raises(
+        InvalidObservedAtError
+    ):
+        create_boundary_report(
+            factory_name,
+            observed_at,
+        )

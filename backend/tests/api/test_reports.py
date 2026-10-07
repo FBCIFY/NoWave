@@ -227,3 +227,175 @@ def test_same_client_report_id_with_different_data_returns_409(
     )
 
     assert len(report_repository.reports) == 1
+
+EXPECTED_REPORT_RESPONSE_FIELDS = {
+    "id",
+    "author_id",
+    "client_report_id",
+    "category",
+    "positioning_mode",
+    "description",
+    "final_position",
+    "observed_at",
+    "expires_at",
+    "status",
+    "version",
+    "created_at",
+    "updated_at",
+    "photo",
+}
+
+
+def test_repeated_report_returns_same_response_contract(
+    monkeypatch,
+):
+    report_repository = setup_repositories(
+        monkeypatch
+    )
+
+    app.dependency_overrides[
+        get_current_identity
+    ] = verified_identity
+
+    client = TestClient(app)
+
+    client_report_id = UUID(
+        "550e8400-e29b-41d4-a716-446655440010"
+    )
+
+    observed_at = (
+        datetime.now(UTC)
+        - timedelta(minutes=5)
+    )
+
+    payload = build_payload(
+        client_report_id,
+        observed_at,
+    )
+
+    try:
+        first = client.post(
+            "/api/v1/reports",
+            json=payload,
+        )
+
+        retry = client.post(
+            "/api/v1/reports",
+            json=payload,
+        )
+    finally:
+        app.dependency_overrides.clear()
+
+    assert first.status_code == 201
+    assert retry.status_code == 200
+
+    first_data = first.json()
+    retry_data = retry.json()
+
+    assert (
+        set(first_data)
+        == EXPECTED_REPORT_RESPONSE_FIELDS
+    )
+
+    assert retry_data == first_data
+    assert len(report_repository.reports) == 1
+
+
+def test_invalid_report_position_returns_422(
+    monkeypatch,
+):
+    setup_repositories(monkeypatch)
+
+    app.dependency_overrides[
+        get_current_identity
+    ] = verified_identity
+
+    payload = build_payload(
+        UUID(
+            "550e8400-e29b-41d4-a716-446655440011"
+        ),
+        datetime.now(UTC) - timedelta(minutes=5),
+    )
+
+    payload["final_position"]["coordinates"] = [
+        181.0,
+        43.29,
+    ]
+
+    try:
+        response = TestClient(app).post(
+            "/api/v1/reports",
+            json=payload,
+        )
+    finally:
+        app.dependency_overrides.clear()
+
+    assert response.status_code == 422
+    assert (
+        response.json()["error"]["code"]
+        == "invalid_report_position"
+    )
+
+
+def test_old_observed_at_returns_422(
+    monkeypatch,
+):
+    setup_repositories(monkeypatch)
+
+    app.dependency_overrides[
+        get_current_identity
+    ] = verified_identity
+
+    payload = build_payload(
+        UUID(
+            "550e8400-e29b-41d4-a716-446655440012"
+        ),
+        datetime.now(UTC) - timedelta(hours=25),
+    )
+
+    try:
+        response = TestClient(app).post(
+            "/api/v1/reports",
+            json=payload,
+        )
+    finally:
+        app.dependency_overrides.clear()
+
+    assert response.status_code == 422
+    assert (
+        response.json()["error"]["code"]
+        == "invalid_observed_at"
+    )
+
+
+def test_description_250_character_limit_is_preserved(
+    monkeypatch,
+):
+    setup_repositories(monkeypatch)
+
+    app.dependency_overrides[
+        get_current_identity
+    ] = verified_identity
+
+    payload = build_payload(
+        UUID(
+            "550e8400-e29b-41d4-a716-446655440013"
+        ),
+        datetime.now(UTC) - timedelta(minutes=5),
+    )
+
+    payload["description"] = "a" * 251
+
+    try:
+        response = TestClient(app).post(
+            "/api/v1/reports",
+            json=payload,
+        )
+    finally:
+        app.dependency_overrides.clear()
+
+    assert response.status_code == 422
+    assert (
+        response.json()["error"]["code"]
+        == "request_validation_error"
+    )

@@ -197,3 +197,8 @@ un cluster porte `cluster=true` et `cluster_count`. Seuls les signalements de
 statut `active` dont `expires_at` est futur sont inclus. La réponse a un cache
 privé de 15 secondes. Les retraits et les expirations sont pris en compte à
 chaque nouvelle requête de tuile.
+
+Décision T10 : le MVP accepte une latence visuelle maximale de 15 secondes liée
+au cache privé des tuiles. À chaque nouvelle requête serveur, un signalement
+dont `expires_at <= now()` est exclu immédiatement. Aucun job d'expiration
+n'est ajouté.

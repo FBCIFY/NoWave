@@ -86,7 +86,7 @@ def report_validation_handler(request, exc):
     error_code = REPORT_VALIDATION_CODES[type(exc)]
 
     return JSONResponse(
-        status_code=400,
+        status_code=422,
         content={
             "error": {
                 "code": error_code,
