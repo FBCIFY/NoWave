@@ -42,7 +42,7 @@ def test_spatial_indexes_and_distance(db):
     assert conn.execute("SELECT ST_DWithin('POINT(0 0)'::geography, ST_Project('POINT(0 0)'::geography,18519,0),18520), ST_DWithin('POINT(0 0)'::geography, ST_Project('POINT(0 0)'::geography,18521,0),18520)").fetchone()==(True,False)
 
 
-INVALID=[('users','role','owner'),('users','status','deleted'),('boats','boat_type','yacht'),('devices','platform','web'),
+INVALID=[('users','role','owner'),('users','status','deleted'),('users','nationality','F1'),('boats','boat_type','yacht'),('devices','platform','web'),
  ('reports','category','fish'),('reports','positioning_mode','gps'),('reports','status','draft'),('reports','version',0),
  ('report_photos','upload_status','done'),('report_photos','size_bytes',0),('report_photos','size_bytes',500001),
  ('report_photos','mime_type','image/png'),('notifications','status','queued'),('notifications','report_version',0),
@@ -177,7 +177,7 @@ def test_historical_versions_are_not_foreign_keys(db):
 def test_migration_replay(dsn):
     upgrade_database(dsn)
     with psycopg.connect(dsn) as conn:
-        assert conn.execute('SELECT version_num FROM alembic_version').fetchone()==('20260917_0001',)
+        assert conn.execute('SELECT version_num FROM alembic_version').fetchone()==('20261007_0002',)
 
 
 def test_migrations_roundtrip(dsn):
@@ -245,3 +245,73 @@ def test_concurrent_migrations_apply_once(dsn):
     with psycopg.connect(dsn) as conn:
         assert conn.execute('SELECT count(*) FROM alembic_version').fetchone()==(1,)
         assert conn.execute("SELECT to_regclass('nowave.users') IS NOT NULL").fetchone()==(True,)
+
+
+def test_nationality_legacy_values_are_cleaned_and_constrained(dsn):
+    # Recreate the database at the state that existed before this fix.
+    downgrade_database(dsn)
+    upgrade_database(dsn, "20260917_0001")
+
+    users = [
+        ("legacy-ascii", "fr"),
+        ("legacy-digits", "12"),
+        ("legacy-unicode", "ÉÉ"),
+    ]
+
+    with psycopg.connect(dsn, autocommit=True) as conn:
+        for username, nationality in users:
+            user_id = uuid.uuid4()
+            conn.execute(
+                """
+                INSERT INTO nowave.users (
+                    id,
+                    firebase_uid,
+                    username,
+                    email,
+                    nationality,
+                    role,
+                    status,
+                    created_at,
+                    updated_at
+                )
+                VALUES (
+                    %s, %s, %s, %s, %s,
+                    'user', 'active', now(), now()
+                )
+                """,
+                (
+                    user_id,
+                    f"firebase-{user_id}",
+                    username,
+                    f"{username}@nowave.test",
+                    nationality,
+                ),
+            )
+
+    # Apply the new migration.
+    upgrade_database(dsn)
+
+    with psycopg.connect(dsn, autocommit=True) as conn:
+        rows = conn.execute(
+            """
+            SELECT username, nationality
+            FROM nowave.users
+            WHERE username LIKE 'legacy-%'
+            ORDER BY username
+            """
+        ).fetchall()
+
+        assert rows == [
+            ("legacy-ascii", "FR"),
+            ("legacy-digits", None),
+            ("legacy-unicode", None),
+        ]
+
+        with pytest.raises(psycopg.errors.CheckViolation):
+            conn.execute(
+                """
+                UPDATE nowave.users
+                SET nationality = 'F1'
+                WHERE username = 'legacy-ascii'
+                """
+            )
