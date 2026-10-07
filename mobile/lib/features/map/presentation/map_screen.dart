@@ -48,6 +48,7 @@ class MapScreen extends StatefulWidget {
 
   /// Charge la fiche d'un signalement touché sur la carte.
   final ReportDetailService? reportDetailService;
+  final VoidCallback? onUserInactive;
 
   const MapScreen({
     super.key,
@@ -56,6 +57,7 @@ class MapScreen extends StatefulWidget {
     this.reportService,
     this.reportTiles,
     this.reportDetailService,
+    this.onUserInactive,
   });
 
   @override
@@ -303,6 +305,12 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
     // Une tuile de signalements en échec ne doit pas cacher le fond de
     // carte, qui reste utilisable.
     if (event.sourceId == ReportTiles.sourceId) {
+      // Refus d'accès : le compte est peut-être suspendu, le profil
+      // est revalidé. En attendant, la couche passe indisponible comme pour
+      // toute autre erreur.
+      if (ReportTiles.isForbidden(event.message)) {
+        widget.onUserInactive?.call();
+      }
       _reportLayer.tileError(event.message);
       return;
     }
@@ -442,6 +450,7 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
         context,
         reportId: reportId,
         loadReport: service.fetchReport,
+        loadPhoto: service.fetchPhoto,
         userPosition: position == null
             ? null
             : (latitude: position.latitude, longitude: position.longitude),

@@ -255,9 +255,16 @@ Toucher un badge ouvre la fiche du signalement (`ReportDetailSheet`),
 chargée par `GET /api/v1/reports/{id}` : catégorie, date d'observation,
 position en degrés/minutes/secondes, distance et direction depuis
 l'utilisateur en milles nautiques, auteur et bateau s'ils sont rendus
-publics, état de la photo et fin du signalement. Un signalement expiré ou
+publics, photo et fin du signalement. Un signalement expiré ou
 retiré entre-temps affiche « n'est plus disponible » ; les autres erreurs
 proposent de réessayer.
+
+La photo publiée (NW-151) est téléchargée depuis l'URL signée de la fiche,
+valable cinq minutes, sans token Firebase ; un appui l'ouvre en plein écran.
+Le stockage répond 403 aussi bien pour une URL expirée que pour un refus :
+sur un 403, la fiche est relue une fois pour une URL neuve, et un second
+refus s'affiche comme tel. « Réessayer » repart aussi d'une URL neuve. Une
+photo en cours d'envoi, en échec ou masquée reste affichée en texte.
 
 ### Rafraîchissement
 

@@ -49,4 +49,12 @@ void main() {
     expect(base, [25, 50, 80]);
     expect(pulsed, [for (final r in base) r * 1.25]);
   });
+
+  test('reconnaît un refus d’accès aux tuiles', () {
+    const prefix = 'Failed to load tile: HTTP status code';
+
+    expect(ReportTiles.isForbidden('$prefix 403'), isTrue);
+    expect(ReportTiles.isForbidden('$prefix 401'), isFalse);
+    expect(ReportTiles.isForbidden('$prefix 4030'), isFalse);
+  });
 }

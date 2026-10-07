@@ -2,7 +2,10 @@ from uuid import UUID
 
 from fastapi import APIRouter, Depends, Header, Response, status
 
-from app.api.dependencies.auth import get_current_identity
+from app.api.dependencies.auth import (
+    get_authenticated_identity,
+    get_current_identity,
+)
 from app.api.schemas.device import (
     DevicePositionRequest,
     DevicePositionResponse,
@@ -117,7 +120,7 @@ def deactivate_current_device(
     installation_id: UUID = Header(
         alias="X-Installation-ID",
     ),
-    identity: dict = Depends(get_current_identity),
+    identity: dict = Depends(get_authenticated_identity),
 ):
     user_repository, device_repository = repositories()
 

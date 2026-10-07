@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart' as geo;
 
@@ -7,14 +8,16 @@ import '../data/report_detail_service.dart';
 import '../domain/report_detail.dart';
 import 'report_category_style.dart';
 import 'report_detail_format.dart';
+import 'report_photo_viewer.dart';
 
 /// Fiche d'un signalement touché sur la carte (US-11) : catégorie, date,
-/// position, distance, auteur, bateau et état de la photo.
+/// position, distance, auteur, bateau et photo.
 class ReportDetailSheet extends StatefulWidget {
   const ReportDetailSheet({
     super.key,
     required this.reportId,
     required this.loadReport,
+    required this.loadPhoto,
     this.userPosition,
     this.now = DateTime.now,
   });
@@ -23,6 +26,9 @@ class ReportDetailSheet extends StatefulWidget {
 
   /// Charge la fiche, en général `ReportDetailService.fetchReport`.
   final Future<ReportDetail> Function(String reportId) loadReport;
+
+  /// Télécharge la photo, en général `ReportDetailService.fetchPhoto`.
+  final Future<Uint8List> Function(String url) loadPhoto;
 
   /// Position de l'utilisateur pour la distance ; null si elle est inconnue.
   final ({double latitude, double longitude})? userPosition;
@@ -35,6 +41,7 @@ class ReportDetailSheet extends StatefulWidget {
     BuildContext context, {
     required String reportId,
     required Future<ReportDetail> Function(String reportId) loadReport,
+    required Future<Uint8List> Function(String url) loadPhoto,
     ({double latitude, double longitude})? userPosition,
   }) => showModalBottomSheet<void>(
     context: context,
@@ -43,6 +50,7 @@ class ReportDetailSheet extends StatefulWidget {
     builder: (_) => ReportDetailSheet(
       reportId: reportId,
       loadReport: loadReport,
+      loadPhoto: loadPhoto,
       userPosition: userPosition,
     ),
   );
@@ -62,6 +70,11 @@ class _ReportDetailSheetState extends State<ReportDetailSheet> {
     });
   }
 
+  /// Relit la fiche pour une URL de photo neuve : l'URL signée ne vaut que
+  /// cinq minutes. Null si la photo n'est plus servie (masquée).
+  Future<String?> _refreshPhotoUrl() async =>
+      (await widget.loadReport(widget.reportId)).photo?.url;
+
   @override
   Widget build(BuildContext context) {
     return SafeArea(
@@ -76,6 +89,8 @@ class _ReportDetailSheetState extends State<ReportDetailSheet> {
                 report: snapshot.requireData,
                 userPosition: widget.userPosition,
                 now: widget.now(),
+                loadPhoto: widget.loadPhoto,
+                refreshPhotoUrl: _refreshPhotoUrl,
               );
             }
             if (snapshot.hasError) {
@@ -101,11 +116,15 @@ class _ReportDetailContent extends StatelessWidget {
     required this.report,
     required this.userPosition,
     required this.now,
+    required this.loadPhoto,
+    required this.refreshPhotoUrl,
   });
 
   final ReportDetail report;
   final ({double latitude, double longitude})? userPosition;
   final DateTime now;
+  final Future<Uint8List> Function(String url) loadPhoto;
+  final Future<String?> Function() refreshPhotoUrl;
 
   /// Distance et direction depuis l'utilisateur, ex. `2,4 NM au NE`.
   String get _distance {
@@ -141,6 +160,7 @@ class _ReportDetailContent extends StatelessWidget {
     final description = report.description;
     final boat = report.boat;
     final photo = report.photo;
+    final photoUrl = photo?.url;
 
     return SingleChildScrollView(
       child: Column(
@@ -205,9 +225,19 @@ class _ReportDetailContent extends StatelessWidget {
               label: 'Photo',
               value: switch (photo.status) {
                 ReportPhotoStatus.pending => 'Envoi en cours',
-                ReportPhotoStatus.uploaded => 'Envoyée',
+                // Sans URL, le backend ne la sert plus (masquée).
+                ReportPhotoStatus.uploaded when photoUrl == null =>
+                  'Indisponible',
+                ReportPhotoStatus.uploaded => null,
                 ReportPhotoStatus.failed => 'Envoi échoué',
               },
+              child: photoUrl == null
+                  ? null
+                  : _ReportPhoto(
+                      url: photoUrl,
+                      loadPhoto: loadPhoto,
+                      refreshUrl: refreshPhotoUrl,
+                    ),
             ),
           _DetailRow(
             icon: Icons.schedule,
@@ -220,17 +250,20 @@ class _ReportDetailContent extends StatelessWidget {
   }
 }
 
-/// Une information de la fiche : icône, intitulé et valeur.
+/// Une information de la fiche : icône, intitulé et valeur (texte, ou
+/// [child] comme la photo).
 class _DetailRow extends StatelessWidget {
   const _DetailRow({
     required this.icon,
     required this.label,
     required this.value,
+    this.child,
   });
 
   final IconData icon;
   final String label;
-  final String value;
+  final String? value;
+  final Widget? child;
 
   @override
   Widget build(BuildContext context) {
@@ -252,10 +285,169 @@ class _DetailRow extends StatelessWidget {
                     color: theme.colorScheme.onSurfaceVariant,
                   ),
                 ),
-                Text(value, style: theme.textTheme.bodyLarge),
+                if (value case final value?)
+                  Text(value, style: theme.textTheme.bodyLarge),
+                if (child case final child?) ...[
+                  const SizedBox(height: 8),
+                  child,
+                ],
               ],
             ),
           ),
+        ],
+      ),
+    );
+  }
+}
+
+/// La photo n'est plus servie : masquée depuis l'ouverture de la fiche.
+class _PhotoHiddenException implements Exception {
+  const _PhotoHiddenException();
+}
+
+/// Photo publiée, téléchargée depuis son URL signée ; un appui l'ouvre en
+/// plein écran.
+///
+/// L'URL expire au bout de cinq minutes et le stockage répond alors 403,
+/// comme pour un refus d'accès. Sur un 403, on relit donc la fiche une fois
+/// pour une URL neuve ; si elle est refusée à son tour, c'est un vrai refus.
+class _ReportPhoto extends StatefulWidget {
+  const _ReportPhoto({
+    required this.url,
+    required this.loadPhoto,
+    required this.refreshUrl,
+  });
+
+  final String url;
+  final Future<Uint8List> Function(String url) loadPhoto;
+  final Future<String?> Function() refreshUrl;
+
+  @override
+  State<_ReportPhoto> createState() => _ReportPhotoState();
+}
+
+class _ReportPhotoState extends State<_ReportPhoto> {
+  late Future<Uint8List> _photo = _load();
+
+  Future<Uint8List> _load() async {
+    try {
+      return await widget.loadPhoto(widget.url);
+    } on ApiException catch (error) {
+      if (error.statusCode != 403) rethrow;
+      return _loadFromFreshUrl();
+    }
+  }
+
+  /// Une URL neuve : un 403 n'est plus une expiration.
+  Future<Uint8List> _loadFromFreshUrl() async {
+    final url = await widget.refreshUrl();
+    if (url == null) throw const _PhotoHiddenException();
+    return widget.loadPhoto(url);
+  }
+
+  /// L'URL a pu expirer depuis l'ouverture : on repart d'une URL neuve.
+  void _retry() {
+    final photo = _loadFromFreshUrl();
+    setState(() {
+      _photo = photo;
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(12),
+      child: AspectRatio(
+        aspectRatio: 4 / 3,
+        child: ColoredBox(
+          color: Theme.of(context).colorScheme.surfaceContainerHighest,
+          child: FutureBuilder<Uint8List>(
+            future: _photo,
+            builder: (context, snapshot) {
+              if (snapshot.hasData) {
+                final bytes = snapshot.requireData;
+                return Semantics(
+                  button: true,
+                  label: 'Agrandir la photo',
+                  child: GestureDetector(
+                    onTap: () => ReportPhotoViewer.show(context, bytes),
+                    child: Image.memory(
+                      bytes,
+                      fit: BoxFit.cover,
+                      errorBuilder: (_, _, _) =>
+                          const _PhotoError(message: 'Photo illisible.'),
+                    ),
+                  ),
+                );
+              }
+              if (snapshot.hasError) {
+                return _photoError(snapshot.error!);
+              }
+              return const Center(
+                child: CircularProgressIndicator(
+                  semanticsLabel: 'Chargement de la photo',
+                ),
+              );
+            },
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _photoError(Object error) {
+    return switch (error) {
+      _PhotoHiddenException() => const _PhotoError(
+        message: 'Cette photo n’est plus disponible.',
+      ),
+      ReportNotFoundException() => const _PhotoError(
+        message: 'Ce signalement n’est plus disponible.',
+      ),
+      ApiException(statusCode: 401) => _PhotoError(
+        message: 'Votre session a expiré. Reconnectez-vous.',
+        onRetry: _retry,
+      ),
+      ApiException(statusCode: 403) => _PhotoError(
+        message: 'Accès à la photo refusé.',
+        onRetry: _retry,
+      ),
+      ApiException() => _PhotoError(
+        message: 'Photo indisponible. Réessayez.',
+        onRetry: _retry,
+      ),
+      // Délai dépassé, pas de réseau.
+      _ => _PhotoError(
+        message: 'Photo indisponible. Vérifiez votre connexion.',
+        onRetry: _retry,
+      ),
+    };
+  }
+}
+
+/// Message à la place de la photo, avec « Réessayer » si cela peut aider.
+class _PhotoError extends StatelessWidget {
+  const _PhotoError({required this.message, this.onRetry});
+
+  final String message;
+  final VoidCallback? onRetry;
+
+  @override
+  Widget build(BuildContext context) {
+    final onRetry = this.onRetry;
+    return Padding(
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          const Icon(Icons.broken_image_outlined, size: 32),
+          const SizedBox(height: 8),
+          Text(message, textAlign: TextAlign.center),
+          if (onRetry != null)
+            TextButton.icon(
+              onPressed: onRetry,
+              icon: const Icon(Icons.refresh),
+              label: const Text('Réessayer'),
+            ),
         ],
       ),
     );
