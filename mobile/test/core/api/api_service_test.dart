@@ -79,6 +79,60 @@ void main() {
     expect(result, '{"notifications_enabled":true}');
   });
 
+  test('put transmet le jeton et le contenu JSON', () async {
+    final client = MockClient((request) async {
+      expect(request.method, 'PUT');
+      expect(
+        request.url,
+        Uri.parse('https://example.com/api/v1/devices/current'),
+      );
+      expect(request.headers['authorization'], 'Bearer firebase-token');
+      expect(request.headers['content-type'], 'application/json');
+      expect(request.body, '{"platform":"ios"}');
+
+      return http.Response('{"platform":"ios"}', 200);
+    });
+
+    addTearDown(client.close);
+
+    final api = ApiService(client: client, baseUrl: 'https://example.com/');
+
+    final result = await api.put(
+      'api/v1/devices/current',
+      headers: {
+        'Authorization': 'Bearer firebase-token',
+        'Content-Type': 'application/json',
+      },
+      body: '{"platform":"ios"}',
+    );
+
+    expect(result, '{"platform":"ios"}');
+  });
+
+  test('delete accepte une réponse 204 sans contenu', () async {
+    final client = MockClient((request) async {
+      expect(request.method, 'DELETE');
+      expect(
+        request.url,
+        Uri.parse('https://example.com/api/v1/devices/current'),
+      );
+      expect(request.headers['authorization'], 'Bearer firebase-token');
+
+      return http.Response('', 204);
+    });
+
+    addTearDown(client.close);
+
+    final api = ApiService(client: client, baseUrl: 'https://example.com/');
+
+    final result = await api.delete(
+      'api/v1/devices/current',
+      headers: {'Authorization': 'Bearer firebase-token'},
+    );
+
+    expect(result, isEmpty);
+  });
+
   test('get lève une exception pour une réponse HTTP 500', () async {
     final client = MockClient((request) async {
       return http.Response('Erreur serveur', 500);

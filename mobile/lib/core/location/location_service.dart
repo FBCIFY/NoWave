@@ -39,6 +39,16 @@ class LocationService {
     );
   }
 
+  /// Vrai si le suivi peut démarrer sans rien demander à l'utilisateur :
+  /// localisation activée et déjà autorisée.
+  Future<bool> canWatchPosition() async {
+    if (!await Geolocator.isLocationServiceEnabled()) return false;
+
+    final permission = await Geolocator.checkPermission();
+    return permission == LocationPermission.whileInUse ||
+        permission == LocationPermission.always;
+  }
+
   /// Suivi continu, une fois l'autorisation obtenue par [getCurrentPosition].
   Stream<Position> watchPosition() {
     return Geolocator.getPositionStream(

@@ -6,6 +6,13 @@ import 'package:http/http.dart' as http;
 import 'app/app.dart';
 import 'core/map/map_config.dart';
 import 'core/api/api_service.dart';
+import 'core/device/device_position_reporter.dart';
+import 'core/device/device_registration.dart';
+import 'core/device/device_service.dart';
+import 'core/device/installation_id_store.dart';
+import 'core/location/location_service.dart';
+import 'core/notifications/notification_permission.dart';
+import 'core/notifications/push_tokens.dart';
 import 'features/auth/data/auth_service.dart';
 import 'features/auth/presentation/auth_gate.dart';
 import 'features/camera/data/position_estimate_service.dart';
@@ -44,6 +51,23 @@ Future<void> main() async {
     apiService: apiService,
     getIdToken: authService.getIdToken,
   );
+  final installationIds = InstallationIdStore();
+  final deviceService = DeviceService(
+    apiService: apiService,
+    getIdToken: authService.getIdToken,
+    installationIds: installationIds,
+  );
+  final deviceRegistration = DeviceRegistration(
+    devices: deviceService,
+    pushTokens: const PushTokens(),
+    permissions: const NotificationPermissionService(),
+    installationIds: installationIds,
+  );
+  final devicePositionReporter = DevicePositionReporter(
+    devices: deviceService,
+    registration: deviceRegistration,
+    location: LocationService(),
+  );
 
   runApp(
     MyApp(
@@ -54,6 +78,8 @@ Future<void> main() async {
         positionEstimateService: positionEstimateService,
         reportTiles: reportTiles,
         reportDetailService: reportDetailService,
+        deviceRegistration: deviceRegistration,
+        devicePositionReporter: devicePositionReporter,
       ),
     ),
   );
