@@ -223,8 +223,8 @@ retour dans l’application. En activant les alertes :
 
 Juste après la création du profil, un écran explique les alertes avec deux
 choix : « Activer les alertes » (préférence + demande système) ou « Plus tard ».
-L’application ne demande plus l’autorisation au lancement. Le token FCM est lu
-au lancement suivant et seulement affiché dans les logs.
+L’application ne demande plus l’autorisation au lancement. Le token FCM est
+envoyé au backend avec l’enregistrement du téléphone (voir NW-116).
 
 ### Limites connues
 
@@ -353,3 +353,69 @@ python3 tool/make_location_puck.py assets/models/location_puck.glb
 - l’inclinaison n’a pas été vérifiée avec un support d’angle étalonné ;
 - les conventions des capteurs doivent encore être validées sur Android réel ;
 - la hauteur de caméra est fixée à 2,5 m pour le MVP.
+
+## Appareil et position — NW-116
+
+Une fois le profil créé, le téléphone s'enregistre auprès du backend pour
+recevoir les alertes à proximité (`DeviceRegistration`) :
+
+- `PUT /api/v1/devices/current` envoie l'identifiant d'installation, la
+  plateforme et le token FCM. L'envoi a lieu à l'ouverture, à chaque retour
+  dans l'application et à chaque nouveau token ;
+- si les notifications ne sont pas autorisées, le token envoyé est `null`. Le
+  backend efface alors l'ancien token, et le téléphone reste enregistré pour
+  sa position ;
+- si le backend répond 409 (token ou identifiant déjà pris par un autre
+  appareil), l'application demande un nouveau token, puis, si ça ne suffit
+  pas, un nouvel identifiant.
+
+L'identifiant d'installation est un UUID gardé sur le téléphone avec
+`shared_preferences` (`InstallationIdStore`). Le backend le lie au premier
+compte qui l'enregistre.
+
+### Position GPS
+
+Tant que l'application est visible, `DevicePositionReporter` envoie la
+dernière mesure GPS à `PUT /api/v1/devices/current/position`, avec l'en-tête
+`X-Installation-ID`, au plus une fois toutes les 60 s. La première mesure part
+dès qu'elle arrive. Le serveur ne garde que la dernière position, sans
+historique.
+
+- une mesure dont la précision dépasse 50 m n'est pas envoyée ;
+- en dessous de 1 m/s (environ 2 nœuds), le cap est envoyé à `null` ;
+- la position vient du GPS : déplacer la carte ne la change pas ;
+- l'application ne demande pas la localisation pour ce suivi : sans
+  autorisation, rien n'est envoyé ;
+- en arrière-plan, le suivi s'arrête ; il reprend au retour ;
+- sans réseau, la mesure est gardée pour l'envoi suivant ;
+- un 404 (appareil inactif) relance l'enregistrement, puis l'envoi ;
+- un 409 (mesure plus ancienne que celle du serveur) abandonne la mesure.
+
+### Déconnexion
+
+Avant `signOut`, l'application :
+
+1. arrête le suivi ;
+2. désactive le téléphone (`DELETE /api/v1/devices/current`, avec l'en-tête
+   `X-Installation-ID`) ;
+3. supprime le token FCM ;
+4. oublie l'identifiant d'installation : le compte suivant en reçoit un
+   nouveau.
+
+Chaque étape est tentée même si la précédente échoue, pour que la déconnexion
+ne reste jamais bloquée.
+
+### Limites connues
+
+- déconnexion hors ligne : le `DELETE` et la suppression du token FCM
+  échouent. L'appareil reste alors actif côté backend avec son token, et
+  l'ancien compte peut encore recevoir des alertes sur ce téléphone. Au
+  prochain enregistrement en ligne, le token déjà pris déclenche un 409 et
+  l'application en demande un nouveau. Tant que personne ne se reconnecte, le
+  problème reste ;
+- un enregistrement raté n'est pas réessayé tout de suite : il est refait au
+  prochain retour dans l'application, ou au prochain envoi de position (404) ;
+- sur le simulateur iOS, il n'y a pas de token APNs : le téléphone est
+  enregistré avec un token `null` ;
+- aucune position n'est envoyée en arrière-plan ;
+- tests sur iPhone et Android en cours.
