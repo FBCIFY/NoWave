@@ -50,3 +50,36 @@ def test_delete_identity_calls_firebase(monkeypatch):
     adapter.delete_identity("firebase-user-123")
 
     assert deleted_uids == ["firebase-user-123"]
+
+def test_delete_identity_accepts_already_missing_user(
+    monkeypatch,
+):
+    monkeypatch.setattr(
+        firebase_admin,
+        "get_app",
+        lambda: object(),
+    )
+
+    class FakeUserNotFoundError(Exception):
+        pass
+
+    monkeypatch.setattr(
+        auth,
+        "UserNotFoundError",
+        FakeUserNotFoundError,
+    )
+
+    def delete_missing_user(firebase_uid):
+        raise FakeUserNotFoundError()
+
+    monkeypatch.setattr(
+        auth,
+        "delete_user",
+        delete_missing_user,
+    )
+
+    adapter = FirebaseAuthAdapter()
+
+    adapter.delete_identity(
+        "firebase-user-123"
+    )

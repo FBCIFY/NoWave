@@ -15,4 +15,9 @@ class FirebaseAuthAdapter(AuthProvider):
         return auth.verify_id_token(token)
 
     def delete_identity(self, firebase_uid: str) -> None:
-        auth.delete_user(firebase_uid)
+        try:
+            auth.delete_user(firebase_uid)
+        except auth.UserNotFoundError:
+            # Une tentative précédente peut avoir déjà
+            # supprimé l'identité Firebase.
+            return

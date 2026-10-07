@@ -1,6 +1,7 @@
 from fastapi.testclient import TestClient
 
 from app.api.dependencies.auth import get_current_identity
+from app.domain.errors import InvalidNationalityError
 from app.domain.user import User
 from app.main import app
 
@@ -455,7 +456,9 @@ def test_delete_my_profile(monkeypatch):
     ]
 
 
-def test_delete_missing_profile_returns_404(monkeypatch):
+def test_delete_missing_profile_resumes_firebase_deletion(
+    monkeypatch,
+):
     repository = FakeUserRepository()
     auth_provider = FakeAuthProvider()
 
@@ -469,7 +472,9 @@ def test_delete_missing_profile_returns_404(monkeypatch):
         lambda: auth_provider,
     )
 
-    app.dependency_overrides[get_current_identity] = verified_identity
+    app.dependency_overrides[
+        get_current_identity
+    ] = verified_identity
 
     client = TestClient(app)
 
@@ -479,8 +484,99 @@ def test_delete_missing_profile_returns_404(monkeypatch):
 
     app.dependency_overrides.clear()
 
-    assert response.status_code == 404
-    assert response.json()["error"]["code"] == "user_not_found"
+    assert response.status_code == 204
+    assert response.content == b""
 
     assert repository.users == []
-    assert auth_provider.deleted_uids == []
+    assert auth_provider.deleted_uids == [
+        "firebase-user-123"
+    ]
+
+def test_update_rejects_invalid_nationality(
+    monkeypatch,
+):
+    existing_user = User(
+        firebase_uid="firebase-user-123",
+        username="Jonathan Cahoreau",
+        email="user@nowave.test",
+    )
+
+    repository = FakeUserRepository(
+        users=[existing_user],
+    )
+
+    monkeypatch.setattr(
+        "app.api.routes.users.PostgreSQLUserRepository",
+        lambda: repository,
+    )
+
+    app.dependency_overrides[
+        get_current_identity
+    ] = verified_identity
+
+    client = TestClient(app)
+
+    response = client.patch(
+        "/api/v1/users/me",
+        json={
+            "nationality": "1!",
+        },
+    )
+
+    app.dependency_overrides.clear()
+
+    assert response.status_code == 422
+
+    assert (
+        response.json()["error"]["code"]
+        == "request_validation_error"
+    )
+
+
+def test_domain_invalid_nationality_returns_422(
+    monkeypatch,
+):
+    class FailingUpdateUser:
+        def __init__(self, repository):
+            pass
+
+        def execute(
+            self,
+            firebase_uid,
+            changes,
+        ):
+            raise InvalidNationalityError(
+                "invalid nationality"
+            )
+
+    monkeypatch.setattr(
+        "app.api.routes.users.UpdateUser",
+        FailingUpdateUser,
+    )
+
+    monkeypatch.setattr(
+        "app.api.routes.users.PostgreSQLUserRepository",
+        FakeUserRepository,
+    )
+
+    app.dependency_overrides[
+        get_current_identity
+    ] = verified_identity
+
+    client = TestClient(app)
+
+    response = client.patch(
+        "/api/v1/users/me",
+        json={
+            "nationality": "FR",
+        },
+    )
+
+    app.dependency_overrides.clear()
+
+    assert response.status_code == 422
+
+    assert (
+        response.json()["error"]["code"]
+        == "invalid_nationality"
+    )

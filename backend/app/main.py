@@ -18,6 +18,7 @@ from app.api.errors.handlers import (
     email_not_verified_handler,
     gps_precision_insufficient_handler,
     inactive_user_handler,
+    invalid_nationality_handler,
     invalid_positioning_input_handler,
     invalid_photo_handler,
     photo_already_uploaded_handler,
@@ -43,6 +44,7 @@ from app.domain.errors import (
     EmailNotVerifiedError,
     GpsPrecisionInsufficientError,
     InactiveUserError,
+    InvalidNationalityError,
     InvalidObservedAtError,
     InvalidPositioningInputError,
     InvalidPhotoError,
@@ -142,6 +144,11 @@ app.add_exception_handler(
     user_not_found_handler,
 )
 
+
+app.add_exception_handler(
+    InvalidNationalityError,
+    invalid_nationality_handler,
+)
 
 app.add_exception_handler(
     GpsPrecisionInsufficientError,

@@ -12,6 +12,11 @@ def normalize_flag_country(
     if flag_country is None:
         return None
 
+    if not isinstance(flag_country, str):
+        raise ValueError(
+            "flag_country must be a string"
+        )
+
     flag_country = flag_country.strip()
 
     if (

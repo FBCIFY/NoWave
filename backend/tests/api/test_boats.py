@@ -1,3 +1,4 @@
+import pytest
 from fastapi.testclient import TestClient
 
 from app.api.dependencies.auth import get_current_identity
@@ -474,4 +475,96 @@ def test_get_boat_without_user_profile_returns_404(
     assert (
         response.json()["error"]["code"]
         == "user_not_found"
+    )
+
+@pytest.mark.parametrize(
+    "flag_country",
+    [
+        123,
+        True,
+        {"code": "FR"},
+    ],
+)
+def test_create_boat_rejects_non_text_flag_country(
+    monkeypatch,
+    flag_country,
+):
+    user = make_user()
+
+    setup_repositories(
+        monkeypatch,
+        FakeUserRepository(user),
+        FakeBoatRepository(),
+    )
+
+    app.dependency_overrides[
+        get_current_identity
+    ] = verified_identity
+
+    client = TestClient(app)
+
+    response = client.post(
+        "/api/v1/users/me/boat",
+        json={
+            "boat_type": "voilier",
+            "flag_country": flag_country,
+        },
+    )
+
+    app.dependency_overrides.clear()
+
+    assert response.status_code == 422
+
+    assert (
+        response.json()["error"]["code"]
+        == "request_validation_error"
+    )
+
+
+@pytest.mark.parametrize(
+    "flag_country",
+    [
+        123,
+        True,
+        {"code": "FR"},
+    ],
+)
+def test_update_boat_rejects_non_text_flag_country(
+    monkeypatch,
+    flag_country,
+):
+    user = make_user()
+
+    boat = Boat(
+        user_id=user.id,
+        boat_type=BoatType.SAILBOAT,
+        flag_country="FR",
+    )
+
+    setup_repositories(
+        monkeypatch,
+        FakeUserRepository(user),
+        FakeBoatRepository(boat),
+    )
+
+    app.dependency_overrides[
+        get_current_identity
+    ] = verified_identity
+
+    client = TestClient(app)
+
+    response = client.patch(
+        "/api/v1/users/me/boat",
+        json={
+            "flag_country": flag_country,
+        },
+    )
+
+    app.dependency_overrides.clear()
+
+    assert response.status_code == 422
+
+    assert (
+        response.json()["error"]["code"]
+        == "request_validation_error"
     )
