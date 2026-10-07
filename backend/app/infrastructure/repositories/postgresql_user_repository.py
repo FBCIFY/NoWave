@@ -1,4 +1,5 @@
 from app.application.ports.user_repository import UserRepository
+from app.domain.errors import UserNotFoundError
 from app.domain.user import User, UserRole, UserStatus
 from app.infrastructure.database.connection import database_connection
 
@@ -182,7 +183,9 @@ class PostgreSQLUserRepository(UserRepository):
                 row = cursor.fetchone()
 
         if row is None:
-            return user
+            raise UserNotFoundError(
+                "user profile not found"
+            )
 
         return self._row_to_user(row)
 
