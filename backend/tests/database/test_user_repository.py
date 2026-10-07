@@ -1,3 +1,6 @@
+import pytest
+
+from app.domain.errors import UserNotFoundError
 from app.domain.user import User
 from app.infrastructure.repositories.postgresql_user_repository import (
     PostgreSQLUserRepository,
@@ -66,6 +69,7 @@ def test_user_repository_crud(dsn, monkeypatch):
 
     assert deleted is None
 
+
 def test_partial_updates_preserve_omitted_consent(
     dsn,
     monkeypatch,
@@ -126,3 +130,37 @@ def test_partial_updates_preserve_omitted_consent(
 
     repository.delete(updated)
 
+
+def test_update_raises_when_user_disappears(
+    dsn,
+    monkeypatch,
+):
+    monkeypatch.setenv("DATABASE_URL", dsn)
+
+    repository = PostgreSQLUserRepository()
+
+    user = User(
+        firebase_uid="firebase-update-race-test",
+        username="race-user",
+        email="race-user@nowave.test",
+    )
+
+    repository.save(user)
+
+    snapshot = repository.get_by_firebase_uid(
+        "firebase-update-race-test"
+    )
+    assert snapshot is not None
+
+    repository.delete(snapshot)
+
+    snapshot.update_profile({"username": "race-user-updated"})
+
+    with pytest.raises(
+        UserNotFoundError,
+        match="user profile not found",
+    ):
+        repository.update(
+            snapshot,
+            fields={"username"},
+        )
