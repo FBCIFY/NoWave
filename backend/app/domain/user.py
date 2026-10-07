@@ -49,10 +49,7 @@ class User:
                 "username cannot be empty"
             )
 
-        if any(char.isspace() for char in username):
-            raise ValueError("username cannot contain spaces")
-
-        if len(username.strip()) > 100:
+        if len(username) > 100:
             raise InvalidUsernameError(
                 "username cannot exceed 100 characters"
             )
