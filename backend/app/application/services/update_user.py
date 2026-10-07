@@ -24,6 +24,9 @@ class UpdateUser:
                 "user profile not found"
             )
 
+        if not changes:
+            return user
+
         if "username" in changes:
             username = changes["username"].strip()
 
@@ -41,4 +44,7 @@ class UpdateUser:
 
         user.update_profile(changes)
 
-        return self.user_repository.update(user)
+        return self.user_repository.update(
+            user,
+            fields=set(changes),
+        )

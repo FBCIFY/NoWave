@@ -109,36 +109,82 @@ class PostgreSQLUserRepository(UserRepository):
 
         return user
 
-    def update(self, user: User) -> User:
-        query = """
-            UPDATE nowave.users
-            SET
-                username = %s,
-                date_of_birth = %s,
-                nationality = %s,
-                show_user_name = %s,
-                show_boat_info = %s,
-                notifications_enabled = %s,
-                updated_at = %s
-            WHERE id = %s
-        """
-
-        values = (
-            user.username,
-            user.date_of_birth,
-            user.nationality,
-            user.show_user_name,
-            user.show_boat_info,
-            user.notifications_enabled,
-            user.updated_at,
-            user.id,
+    def update(
+        self,
+        user: User,
+        fields: set[str] | None = None,
+    ) -> User:
+        allowed_fields = (
+            "username",
+            "date_of_birth",
+            "nationality",
+            "show_user_name",
+            "show_boat_info",
+            "notifications_enabled",
         )
+
+        update_fields = (
+            set(allowed_fields)
+            if fields is None
+            else set(fields)
+        )
+
+        unsupported_fields = (
+            update_fields - set(allowed_fields)
+        )
+
+        if unsupported_fields:
+            raise ValueError(
+                "unsupported user update fields: "
+                + ", ".join(sorted(unsupported_fields))
+            )
+
+        if not update_fields:
+            return user
+
+        assignments = []
+        values = []
+
+        for field in allowed_fields:
+            if field not in update_fields:
+                continue
+
+            assignments.append(f"{field} = %s")
+            values.append(getattr(user, field))
+
+        assignments.append("updated_at = %s")
+        values.append(user.updated_at)
+        values.append(user.id)
+
+        query = f"""
+            UPDATE nowave.users
+            SET {", ".join(assignments)}
+            WHERE id = %s
+            RETURNING
+                id,
+                firebase_uid,
+                username,
+                email,
+                date_of_birth,
+                nationality,
+                role,
+                status,
+                show_user_name,
+                show_boat_info,
+                notifications_enabled,
+                created_at,
+                updated_at
+        """
 
         with database_connection() as connection:
             with connection.cursor() as cursor:
                 cursor.execute(query, values)
+                row = cursor.fetchone()
 
-        return user
+        if row is None:
+            return user
+
+        return self._row_to_user(row)
 
     def delete(self, user: User) -> None:
         query = """
