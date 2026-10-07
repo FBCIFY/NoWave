@@ -10,6 +10,7 @@ from app.api.errors.handlers import (
     dependency_unavailable_handler,
     device_conflict_handler,
     device_not_found_handler,
+    device_position_future_handler,
     device_position_stale_handler,
     http_exception_handler,
     boat_already_exists_handler,
@@ -35,6 +36,7 @@ from app.api.routes.health import router as health_router
 from app.domain.errors import (
     DeviceConflictError,
     DeviceNotFoundError,
+    DevicePositionFutureError,
     DevicePositionStaleError,
     BoatAlreadyExistsError,
     BoatNotFoundError,
@@ -191,6 +193,11 @@ app.add_exception_handler(
 app.add_exception_handler(
     DeviceNotFoundError,
     device_not_found_handler,
+)
+
+app.add_exception_handler(
+    DevicePositionFutureError,
+    device_position_future_handler,
 )
 
 app.add_exception_handler(
