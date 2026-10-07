@@ -1,9 +1,10 @@
 import 'dart:async';
-
 import 'dart:convert';
+import 'dart:math' as math;
 
 import 'package:blueway/core/api/api_service.dart';
 import 'package:blueway/core/location/location_service.dart';
+import 'package:blueway/core/sensors/camera_axis_service.dart';
 import 'package:blueway/core/sensors/camera_inclination_service.dart';
 import 'package:blueway/core/sensors/device_orientation_service.dart';
 import 'package:blueway/features/camera/data/position_estimate_service.dart';
@@ -98,7 +99,7 @@ void main() {
     expect(measurements.observerLongitude, -4.4861);
     expect(measurements.observerLatitude, 48.3904);
     expect(measurements.gpsAccuracyMeters, 8);
-    expect(measurements.azimuthDegrees, 245);
+    expect(measurements.azimuthDegrees, closeTo(245, 1e-6));
     expect(measurements.inclinationDegrees, closeTo(-10, 0.1));
   });
 
@@ -188,9 +189,90 @@ void main() {
       expect(find.text(message), findsNothing);
     });
   });
+
+  group('azimut de la caméra (NW-150)', () {
+    testWidgets('Android : suit l’axe de visée, pas le haut du téléphone', (
+      tester,
+    ) async {
+      // Haut du téléphone vers 100° : le cap de precise_compass ne doit pas
+      // servir, seule sa déclinaison (+2°) est reprise.
+      await _openCameraScreen(
+        tester,
+        cameraAxisService: _cameraAimingAt(magneticAzimuth: 30),
+      );
+
+      expect(find.text('±8 m · cap 32° · inclinaison -10°'), findsOneWidget);
+    });
+
+    testWidgets('Android : caméra vers le sol, la photo est bloquée', (
+      tester,
+    ) async {
+      await _openCameraScreen(
+        tester,
+        cameraAxisService: _cameraAimingAt(magneticAzimuth: 0, pitch: -89),
+      );
+
+      expect(find.text('Relevez le téléphone vers l’horizon.'), findsOneWidget);
+      expect(find.textContaining('cap'), findsNothing);
+    });
+
+    testWidgets('Android : capteur absent, la photo est bloquée', (
+      tester,
+    ) async {
+      await _openCameraScreen(
+        tester,
+        cameraAxisService: CameraAxisService(
+          rotationMatrices: Stream.error(StateError('unavailable')),
+        ),
+      );
+
+      expect(
+        find.text('Capteurs d’orientation indisponibles.'),
+        findsOneWidget,
+      );
+    });
+
+    testWidgets('iOS : garde le cap vrai de CoreLocation', (tester) async {
+      debugDefaultTargetPlatformOverride = TargetPlatform.iOS;
+      try {
+        await _openCameraScreen(tester);
+
+        expect(find.text('±8 m · cap 102° · inclinaison -10°'), findsOneWidget);
+      } finally {
+        debugDefaultTargetPlatformOverride = null;
+      }
+    });
+  });
 }
 
 const _previewKey = ValueKey('camera-preview');
+
+/// Téléphone debout, sans roulis, caméra visant [magneticAzimuth] et
+/// [pitch] degrés au-dessus de l'horizon (matrice Android, ligne par ligne).
+CameraAxisService _cameraAimingAt({
+  required double magneticAzimuth,
+  double pitch = -10,
+}) {
+  final h = magneticAzimuth * math.pi / 180;
+  final p = pitch * math.pi / 180;
+  // Colonnes : axes x, y et z du téléphone dans le repère est/nord/haut.
+  final x = [math.cos(h), -math.sin(h), 0.0];
+  final z = [
+    -math.sin(h) * math.cos(p),
+    -math.cos(h) * math.cos(p),
+    -math.sin(p),
+  ];
+  final y = [
+    z[1] * x[2] - z[2] * x[1],
+    z[2] * x[0] - z[0] * x[2],
+    z[0] * x[1] - z[1] * x[0],
+  ];
+  return CameraAxisService(
+    rotationMatrices: Stream.value([
+      for (var row = 0; row < 3; row++) ...[x[row], y[row], z[row]],
+    ]),
+  );
+}
 
 /// Ouvre l'écran comme la carte, pour récupérer ce qu'il renvoie en se
 /// fermant.
@@ -198,6 +280,7 @@ Future<Future<PhotoReportDraft?>> _openCameraScreen(
   WidgetTester tester, {
   _FakeCamera? camera,
   MockClientHandler? estimate,
+  CameraAxisService? cameraAxisService,
 }) async {
   tester.view.physicalSize = const Size(390, 844);
   tester.view.devicePixelRatio = 1;
@@ -223,6 +306,10 @@ Future<Future<PhotoReportDraft?>> _openCameraScreen(
             camera: camera ?? _FakeCamera(),
             locationService: _FakeLocationService(),
             orientationService: _FakeOrientationService(),
+            // Par défaut, caméra qui vise 245° vrais (243° magnétiques + 2°).
+            cameraAxisService: defaultTargetPlatform == TargetPlatform.android
+                ? cameraAxisService ?? _cameraAimingAt(magneticAzimuth: 243)
+                : null,
             inclinationService: CameraInclinationService(
               // Gravité d'un téléphone qui vise 10° sous l'horizon.
               accelerometer: Stream.value(
@@ -324,6 +411,6 @@ class _FakeOrientationService extends DeviceOrientationService {
   @override
   Stream<CompassReading> get readings => Stream.value(
     CompassReading.unavailable(timestamp: DateTime(2026))
-        .copyWith(headingTrue: 245, heading: 245),
+        .copyWith(headingMagnetic: 100, headingTrue: 102, heading: 102),
   );
 }

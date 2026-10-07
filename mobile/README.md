@@ -334,6 +334,22 @@ de brouillon, pas de file d’attente, pas d’envoi automatique plus tard.
 La vignette ouvre la photo en plein écran (`ReportPhotoViewer`). Fermer un
 signalement rempli demande une confirmation.
 
+### Azimut de la caméra — NW-150
+
+L’azimut envoyé est celui de l’axe de visée de la caméra arrière, par rapport
+au nord vrai :
+
+- sur Android, `precise_compass` donne le cap du haut du téléphone, faux quand
+  on le tient debout pour photographier. `MainActivity` envoie donc la matrice
+  de rotation du téléphone (canal `fr.blueway.app/rotation_matrix`) ;
+  `camera_azimuth.dart` en tire l’axe de la caméra, le projette à
+  l’horizontale et calcule son azimut. La déclinaison magnétique vient de
+  `precise_compass` (cap vrai − cap magnétique) ;
+- sur iOS, le cap vrai de CoreLocation suit déjà la caméra (à vérifier dans
+  NW-128) ;
+- caméra presque verticale (sol ou ciel), l’azimut n’a pas de sens : la photo
+  est bloquée avec « Relevez le téléphone vers l’horizon. ».
+
 ### Flèche de position
 
 La position de l’utilisateur est affichée par une flèche 3D qui suit le cap
@@ -351,7 +367,8 @@ python3 tool/make_location_puck.py assets/models/location_puck.glb
   404 (« envoi indisponible sur ce serveur ») ;
 - l’azimut dépend des perturbations magnétiques et de la calibration ;
 - l’inclinaison n’a pas été vérifiée avec un support d’angle étalonné ;
-- les conventions des capteurs doivent encore être validées sur Android réel ;
+- les conventions des capteurs doivent encore être validées sur Android réel,
+  avec une cible connue ;
 - la hauteur de caméra est fixée à 2,5 m pour le MVP.
 
 ## Appareil et position — NW-116
