@@ -4,8 +4,11 @@ import pytest
 from fastapi.testclient import TestClient
 
 import app.api.routes.devices as devices_routes
-from app.api.dependencies.auth import get_current_identity
-from app.domain.user import User
+from app.api.dependencies.auth import (
+    get_authenticated_identity,
+    get_current_identity,
+)
+from app.domain.user import User, UserStatus
 from app.main import app
 
 
@@ -46,11 +49,18 @@ def create_user():
 
 @pytest.fixture(autouse=True)
 def authenticated_user():
+    def identity():
+        return {
+            "uid": "firebase-jonathan",
+        }
+
+    app.dependency_overrides[
+        get_authenticated_identity
+    ] = identity
+
     app.dependency_overrides[
         get_current_identity
-    ] = lambda: {
-        "uid": "firebase-jonathan",
-    }
+    ] = identity
 
     yield
 
@@ -92,6 +102,33 @@ def test_delete_current_device_returns_204(
     )
 
     assert repository.user_id == user.id
+
+
+
+def test_suspended_user_can_deactivate_device(
+    monkeypatch,
+):
+    user = create_user()
+    user.status = UserStatus.SUSPENDED
+    repository = FakeDeviceRepository()
+
+    monkeypatch.setattr(
+        devices_routes,
+        "repositories",
+        lambda: (
+            FakeUserRepository(user),
+            repository,
+        ),
+    )
+
+    response = client.delete(
+        "/api/v1/devices/current",
+        headers={
+            "X-Installation-ID": str(uuid4()),
+        },
+    )
+
+    assert response.status_code == 204
 
 
 def test_delete_requires_installation_header(

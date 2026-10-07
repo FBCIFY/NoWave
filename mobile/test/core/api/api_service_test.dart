@@ -186,6 +186,40 @@ void main() {
     await verification;
   });
 
+  test('403 user_inactive notifie la suspension', () async {
+    var inactiveCalls = 0;
+
+    final client = MockClient((request) async {
+      return http.Response(
+        '{"error":{"code":"user_inactive","message":"user is not active","details":null}}',
+        403,
+      );
+    });
+
+    addTearDown(client.close);
+
+    final api = ApiService(
+      client: client,
+      baseUrl: 'https://example.com/',
+      onUserInactive: () {
+        inactiveCalls++;
+      },
+    );
+
+    await expectLater(
+      api.get('reports'),
+      throwsA(
+        isA<ApiException>().having(
+          (error) => error.code,
+          'code',
+          'user_inactive',
+        ),
+      ),
+    );
+
+    expect(inactiveCalls, 1);
+  });
+
   test('ApiException lit le contrat d’erreur NoWave', () {
     const error = ApiException(
       statusCode: 404,

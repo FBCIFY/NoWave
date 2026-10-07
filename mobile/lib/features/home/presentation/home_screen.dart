@@ -20,6 +20,7 @@ class HomeScreen extends StatelessWidget {
   final PositionEstimateService? positionEstimateService;
   final ReportTiles? reportTiles;
   final ReportDetailService? reportDetailService;
+  final VoidCallback? onUserInactive;
 
   const HomeScreen({
     super.key,
@@ -30,6 +31,7 @@ class HomeScreen extends StatelessWidget {
     this.positionEstimateService,
     this.reportTiles,
     this.reportDetailService,
+    this.onUserInactive,
   });
 
   @override
@@ -40,6 +42,7 @@ class HomeScreen extends StatelessWidget {
       reportService: reportService,
       reportTiles: reportTiles,
       reportDetailService: reportDetailService,
+      onUserInactive: onUserInactive,
       // La caméra renvoie la photo et le point estimé, que la carte fait
       // confirmer avant publication.
       onOpenCamera: positionEstimateService == null

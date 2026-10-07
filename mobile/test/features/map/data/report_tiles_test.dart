@@ -50,6 +50,14 @@ void main() {
     expect(pulsed, [for (final r in base) r * 1.25]);
   });
 
+  test('reconnaît un refus d’accès aux tuiles', () {
+    const prefix = 'Failed to load tile: HTTP status code';
+
+    expect(ReportTiles.isForbidden('$prefix 403'), isTrue);
+    expect(ReportTiles.isForbidden('$prefix 401'), isFalse);
+    expect(ReportTiles.isForbidden('$prefix 4030'), isFalse);
+  });
+
   test('reconnaît les tuiles refusées par la limite de débit', () {
     const prefix = 'Failed to load tile: HTTP status code';
 
