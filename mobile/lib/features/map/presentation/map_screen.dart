@@ -20,6 +20,7 @@ import '../../reports/presentation/report_detail_sheet.dart';
 import '../../reports/data/report_detail_service.dart';
 import '../../reports/data/manual_report_service.dart';
 import '../../reports/domain/manual_report.dart';
+import '../data/report_layer_controller.dart';
 import '../data/report_tiles.dart';
 import 'widgets/map_notice_banner.dart';
 import 'widgets/report_marker.dart';
@@ -112,6 +113,12 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
   /// Renouvellement périodique du token des tuiles ; arrêté en arrière-plan.
   Timer? _reportTilesTokenTimer;
 
+  /// Installation et état de la couche des signalements (NW-152).
+  late final ReportLayerController _reportLayer = ReportLayerController(
+    install: _installReportTiles,
+    authorize: _authorizeReportTiles,
+  );
+
   /// Halo de précision du GPS, sous le curseur et sous les signalements :
   /// un danger reste lisible même quand la position est approximative.
   final _accuracyHalo = AccuracyHalo(below: ReportTiles.heatmapLayerId);
@@ -128,6 +135,7 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
       onShow: _resumeMapUpdates,
     );
     _startReportTilesTokenRenewal();
+    _reportLayer.status.addListener(_handleReportLayerStatus);
     WidgetsBinding.instance.addObserver(this);
     _headingSubscription = DeviceOrientationService().readings.listen(
       (reading) {
@@ -285,13 +293,6 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
     }
   }
 
-  /// Dernière relance de la couche des signalements après une tuile en
-  /// échec : en déplaçant la carte, les erreurs arrivent par dizaines.
-  DateTime? _lastReportTilesRetry;
-
-  /// Intervalle minimal entre deux relances de la couche des signalements.
-  static const _reportTilesRetryInterval = Duration(seconds: 30);
-
   void _handleMapLoadError(MapLoadingErrorEventData event) {
     debugPrint(
       'Chargement Mapbox en échec (${event.type.name}, '
@@ -302,10 +303,7 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
     // Une tuile de signalements en échec ne doit pas cacher le fond de
     // carte, qui reste utilisable.
     if (event.sourceId == ReportTiles.sourceId) {
-      // Refusée par la limite de débit : Mapbox réessaie seul, et ni un
-      // nouveau token ni le bandeau n'y changent rien.
-      if (ReportTiles.isThrottled(event.message)) return;
-      _handleReportTilesError();
+      _reportLayer.tileError(event.message);
       return;
     }
 
@@ -314,28 +312,34 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
     });
   }
 
-  /// Le token Firebase expire au bout d'une heure : on le redonne à Mapbox,
-  /// qui l'enverra avec les prochaines tuiles, et on prévient sans bloquer.
-  void _handleReportTilesError() {
-    final map = _mapboxMap;
-    final reportTiles = widget.reportTiles;
-    final now = DateTime.now();
-    final lastRetry = _lastReportTilesRetry;
-    if (map == null || reportTiles == null) return;
-    if (lastRetry != null &&
-        now.difference(lastRetry) < _reportTilesRetryInterval) {
-      return;
-    }
-    _lastReportTilesRetry = now;
-    unawaited(
-      reportTiles.authorize(map).catchError((Object error) {
-        debugPrint('Token des signalements non renouvelé : $error');
-      }),
-    );
-    _showNotice(
-      'Signalements momentanément indisponibles.',
-      MapNoticeKind.warning,
-    );
+  /// Une tuile des signalements s'est chargée : la couche répond de nouveau.
+  void _handleSourceDataLoaded(SourceDataLoadedEventData event) {
+    if (event.id != ReportTiles.sourceId) return;
+    if (event.type != SourceDataType.TILE) return;
+    _reportLayer.tileLoaded();
+  }
+
+  /// Bandeau tant que la couche manque ou que ses tuiles échouent. Fermé
+  /// d'un appui, il revient au prochain changement d'état.
+  void _handleReportLayerStatus() {
+    if (mounted) setState(() => _reportLayerNoticeHidden = false);
+  }
+
+  bool _reportLayerNoticeHidden = false;
+
+  static const _reportLayerNotice = MapNotice(
+    'Signalements indisponibles. Nouvel essai automatique.',
+    MapNoticeKind.warning,
+  );
+
+  /// Bandeau permanent de la couche, derrière les messages courts.
+  MapNotice? get _reportLayerBanner {
+    if (_reportLayerNoticeHidden) return null;
+    return switch (_reportLayer.status.value) {
+      ReportLayerStatus.notInstalled ||
+      ReportLayerStatus.unavailable => _reportLayerNotice,
+      ReportLayerStatus.pending || ReportLayerStatus.installed => null,
+    };
   }
 
   /// Intervalle entre deux renouvellements du token des tuiles. Firebase
@@ -348,33 +352,31 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
     _reportTilesTokenTimer?.cancel();
     _reportTilesTokenTimer = Timer.periodic(
       _reportTilesTokenInterval,
-      (_) => _renewReportTilesToken(),
+      (_) => _reportLayer.renewToken(),
     );
   }
 
   /// Redonne le token à Mapbox ; le même tant qu'il est encore valide.
-  void _renewReportTilesToken() {
+  Future<void> _authorizeReportTiles() async {
     final map = _mapboxMap;
     final reportTiles = widget.reportTiles;
     if (!mounted || map == null || reportTiles == null) return;
-    unawaited(
-      reportTiles.authorize(map).catchError((Object error) {
-        debugPrint('Token des signalements non renouvelé : $error');
-      }),
-    );
+    await reportTiles.authorize(map);
   }
 
   /// L'app n'est plus visible : ni battement ni renouvellement du token.
   void _pauseMapUpdates() {
     widget.reportTiles?.stopPulse();
     _reportTilesTokenTimer?.cancel();
+    _reportLayer.pause();
   }
 
   /// Retour dans l'app : le token a pu expirer entre-temps, on le renouvelle
-  /// avant que Mapbox ne redemande les tuiles.
+  /// avant que Mapbox ne redemande les tuiles ; la couche manquante est
+  /// réinstallée.
   void _resumeMapUpdates() {
     _syncHeatmapPulse();
-    _renewReportTilesToken();
+    _reportLayer.resume();
     _startReportTilesTokenRenewal();
   }
 
@@ -383,20 +385,16 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
     setState(() => _mapError = null);
   }
 
-  /// Chaque chargement de style efface les couches ajoutées : on remet celle
-  /// des signalements. Une erreur ici ne doit pas bloquer la carte.
-  Future<void> _addReportTiles() async {
+  /// Installe la couche des signalements ; une erreur remonte au
+  /// contrôleur, qui retentera sans bloquer la carte.
+  Future<void> _installReportTiles() async {
     final map = _mapboxMap;
     final reportTiles = widget.reportTiles;
     if (map == null || reportTiles == null) return;
 
-    try {
-      await reportTiles.addTo(map);
-      _cameraZoom ??= (await map.getCameraState()).zoom;
-      _syncHeatmapPulse();
-    } catch (error) {
-      debugPrint('Couche des signalements indisponible : $error');
-    }
+    await reportTiles.addTo(map);
+    _cameraZoom ??= (await map.getCameraState()).zoom;
+    _syncHeatmapPulse();
   }
 
   /// Marge autour du doigt pour toucher un badge, en pixels.
@@ -1043,6 +1041,8 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
     _lifecycleListener?.dispose();
     WidgetsBinding.instance.removeObserver(this);
     _reportTilesTokenTimer?.cancel();
+    _reportLayer.status.removeListener(_handleReportLayerStatus);
+    _reportLayer.dispose();
     _reportPointTimer?.cancel();
     _reportMarkerDropTimer?.cancel();
     _noticeTimer?.cancel();
@@ -1069,7 +1069,8 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
         ReportComposerSheet.heightFor(mediaQuery) +
         mediaQuery.viewInsets.bottom +
         12;
-    final notice = _notice;
+    final shortNotice = _notice;
+    final notice = shortNotice ?? _reportLayerBanner;
     final gpsLabel = _isLocating
         ? 'Localisation…'
         : _locationError ??
@@ -1103,9 +1104,10 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
                 onMapLoadedListener: _handleMapLoaded,
                 onStyleLoadedListener: (_) {
                   _showAccuracyHalo();
-                  unawaited(_addReportTiles());
+                  if (widget.reportTiles != null) _reportLayer.styleLoaded();
                 },
                 onMapLoadErrorListener: _handleMapLoadError,
+                onSourceDataLoadedListener: _handleSourceDataLoaded,
                 onCameraChangeListener: _handleMapCameraChange,
                 onScrollListener: _handleMapGesture,
                 onZoomListener: _handleMapGesture,
@@ -1208,11 +1210,17 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
                         child: notice == null
                             ? const SizedBox.shrink()
                             : Padding(
-                                key: ValueKey(_noticeId),
+                                key: shortNotice == null
+                                    ? const ValueKey('report-layer')
+                                    : ValueKey(_noticeId),
                                 padding: const EdgeInsets.only(top: 12),
                                 child: MapNoticeBanner(
                                   notice: notice,
-                                  onDismiss: _hideNotice,
+                                  onDismiss: shortNotice == null
+                                      ? () => setState(
+                                          () => _reportLayerNoticeHidden = true,
+                                        )
+                                      : _hideNotice,
                                 ),
                               ),
                       ),

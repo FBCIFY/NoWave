@@ -140,12 +140,6 @@ class ReportTiles {
   static const _unknownMarkerIcon = Icons.place_outlined;
   static const _unknownMarkerColor = Color(0xFF64748B);
 
-  /// Vrai si une tuile a été refusée par la limite de débit du serveur :
-  /// 429, ou 503 quand l'appareil a trop de connexions ouvertes. Mapbox la
-  /// redemande lui-même un peu plus tard.
-  static bool isThrottled(String message) =>
-      RegExp(r'status code (429|503)\b').hasMatch(message);
-
   static String _markerIdOf(ReportCategory category) =>
       'nowave-report-${category.apiValue}';
 
@@ -245,14 +239,17 @@ class ReportTiles {
 
   /// Ajoute les badges, la source et les couches. Un changement de style les
   /// efface : à rappeler après chaque chargement de style.
+  ///
+  /// Sans danger si on le rappelle : ce qui existe déjà n'est pas recréé,
+  /// et une installation interrompue reprend où elle s'était arrêtée.
   Future<void> addTo(MapboxMap map) async {
     await authorize(map);
-    if (await map.style.styleSourceExists(sourceId)) return;
+    final style = map.style;
 
     final markers = await (_markers ??= _paintMarkers());
     final side = (ReportMarker.size * ReportMarker.pixelRatio).round();
     for (final MapEntry(key: id, value: png) in markers.entries) {
-      await map.style.addStyleImage(
+      await style.addStyleImage(
         id,
         ReportMarker.pixelRatio,
         MbxImage(width: side, height: side, data: png),
@@ -274,19 +271,22 @@ class ReportTiles {
     // aucune au-delà du zoom 12, agrandi ensuite par Mapbox ; pas de
     // préchargement des zooms inférieurs ; et rien pendant un geste, où les
     // zooms traversés ne restent pas affichés.
-    await map.style.addSource(
-      VectorSource(
-        id: sourceId,
-        tiles: ['${_apiBaseUrl}api/v1/map/tiles/{z}/{x}/{y}.mvt'],
-        maxzoom: _tilesMaxZoom,
-        prefetchZoomDelta: 0,
-        tileNetworkRequestsDelay: _gestureTilesDelaySeconds,
-      ),
-    );
+    if (!await style.styleSourceExists(sourceId)) {
+      await style.addSource(
+        VectorSource(
+          id: sourceId,
+          tiles: ['${_apiBaseUrl}api/v1/map/tiles/{z}/{x}/{y}.mvt'],
+          maxzoom: _tilesMaxZoom,
+          prefetchZoomDelta: 0,
+          tileNetworkRequestsDelay: _gestureTilesDelaySeconds,
+        ),
+      );
+    }
     // Chaque couche a sa plage de zoom : même quand Mapbox garde une
     // tuile d'un autre zoom le temps d'en charger une nouvelle, on ne voit
     // jamais la zone et les badges en même temps.
-    await map.style.addLayer(
+    await _addLayerOnce(
+      style,
       HeatmapLayer(
         id: heatmapLayerId,
         sourceId: sourceId,
@@ -330,7 +330,8 @@ class ReportTiles {
         ),
       ),
     );
-    await map.style.addLayer(
+    await _addLayerOnce(
+      style,
       SymbolLayer(
         id: countLayerId,
         sourceId: sourceId,
@@ -349,7 +350,8 @@ class ReportTiles {
         textEmissiveStrength: _fullBrightness,
       ),
     );
-    await map.style.addLayer(
+    await _addLayerOnce(
+      style,
       SymbolLayer(
         id: pointsLayerId,
         sourceId: sourceId,
@@ -371,6 +373,11 @@ class ReportTiles {
         iconEmissiveStrength: _fullBrightness,
       ),
     );
+  }
+
+  static Future<void> _addLayerOnce(StyleManager style, Layer layer) async {
+    if (await style.styleLayerExists(layer.id)) return;
+    await style.addLayer(layer);
   }
 
   static Future<Map<String, Uint8List>> _paintMarkers() async => {

@@ -268,9 +268,25 @@ les badges : un signalement publié, retiré ou expiré apparaît ou disparaît 
 en continu, l'application redonne le token Firebase à Mapbox toutes les
 4 minutes et au retour au premier plan, pour qu'il n'expire jamais.
 
-Si une tuile échoue (réseau, token), la carte reste utilisable et affiche
-« Signalements momentanément indisponibles. » La carte ne fonctionne pas hors
-ligne : les badges déjà affichés peuvent rester visibles sans être à jour.
+### État de la couche — NW-152
+
+`ReportLayerController` (`lib/features/map/data/report_layer_controller.dart`)
+suit la couche : en attente, non installée, installée ou indisponible. Le fond
+de carte reste utilisable dans tous les cas.
+
+- Si l'installation échoue (token, réseau), elle est retentée seule après
+  15 s, 30 s puis toutes les minutes, au retour dans l'app et à chaque
+  renouvellement du token, sans attendre un rechargement du style. Une seule
+  installation tourne à la fois, et `ReportTiles.addTo` ne recrée pas ce qui
+  existe déjà : pas de source en double.
+- Une tuile en échec (hors 429) rend la couche indisponible. Le bandeau
+  « Signalements indisponibles. Nouvel essai automatique. » reste affiché
+  jusqu'à ce qu'une tuile se charge sans nouvelle erreur pendant 2 s (Mapbox
+  signale aussi comme chargée une tuile qui vient d'échouer). Un appui le
+  ferme jusqu'au prochain changement d'état.
+
+La carte ne fonctionne pas hors ligne : les badges déjà affichés peuvent
+rester visibles sans être à jour.
 
 ### Limite de débit du serveur
 
@@ -278,9 +294,13 @@ nginx limite chaque appareil à 10 requêtes/s (pointes à 30) et à 30
 connexions. Pour rester en dessous, la source demande le moins de tuiles
 possible : aucune au-delà du zoom 12 (Mapbox agrandit celles du zoom 12, qui
 placent déjà un badge à 2 m près), pas de préchargement des zooms inférieurs,
-et rien pendant un geste. Une tuile refusée (429, ou 503 quand il y a trop de
-connexions) n'affiche pas le bandeau : Mapbox la redemande lui-même quelques
-secondes plus tard.
+et rien pendant un geste. Une tuile refusée en 429 n'affiche pas le
+bandeau : Mapbox la redemande lui-même quelques secondes plus tard. Un 503
+affiche le bandeau, car le backend répond aussi 503 quand la base ou le
+stockage sont en panne, et Mapbox ne transmet que le code HTTP. Or nginx
+répond 503 par défaut quand l'appareil dépasse 30 connexions : ajouter
+`limit_conn_status 429;` dans `deploy/web/nginx.conf` réserverait 503 aux
+vraies pannes.
 
 ### Position de l'utilisateur
 
@@ -293,7 +313,11 @@ Un halo bleu sous les signalements montre la précision du GPS.
 - le rafraîchissement dépend de l'en-tête `Cache-Control` du backend : si
   `max-age` change, la fréquence de mise à jour de la carte change aussi ;
 - hors ligne, les badges déjà affichés restent visibles sans être à jour ;
-  seul le message « momentanément indisponibles » le signale ;
+  seul le bandeau « Signalements indisponibles » le signale ;
+- Mapbox redemande seul une tuile en échec réseau ou 5xx, mais pas une tuile
+  refusée en 401 : après le renvoi du token, le bandeau ne part qu'au
+  prochain chargement de tuile (déplacement de la carte, ou expiration des
+  tuiles visibles) ;
 - l'état de la photo reste « Envoi en cours » tant que la route d'envoi de
   NW-112 n'est pas déployée ;
 - en zoomant ou dézoomant vite, nginx refuse encore des tuiles (429) : les
