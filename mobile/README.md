@@ -117,6 +117,12 @@ Le parcours comprend :
 - la création d’un profil avec un nom d’utilisateur unique ;
 - la récupération du profil existant sans création implicite.
 
+Si la réponse à la création du profil se perd alors que le serveur l’a
+enregistré, le nouvel essai reçoit 409 `user_already_exists`. L’écran relit
+alors le profil du compte (`GET /api/v1/users/me`) et continue avec lui, avec
+le nom enregistré la première fois (NW-153). S’il ne le trouve pas, il affiche
+une erreur sans recréer de profil.
+
 Les fichiers Firebase Android et iOS sont versionnés. Après un clone,
 `flutter pub get` suffit pour utiliser la configuration existante.
 
