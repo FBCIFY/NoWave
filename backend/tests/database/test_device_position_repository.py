@@ -2,9 +2,11 @@ from datetime import UTC, datetime, timedelta
 from uuid import uuid4
 
 import psycopg
+import pytest
 
 from app.domain.device import Device, DevicePlatform
 from app.domain.device_position import DevicePosition
+from app.domain.errors import DeviceNotFoundError
 from app.domain.user import User
 from app.infrastructure.repositories.postgresql_device_repository import (
     PostgreSQLDeviceRepository,
@@ -407,3 +409,17 @@ def test_save_position_updates_device_last_seen_at(
         ).fetchone()[0]
 
     assert last_seen_at == received_at
+
+
+def test_save_position_rejects_missing_device(dsn, monkeypatch):
+    monkeypatch.setenv("DATABASE_URL", dsn)
+    position = DevicePosition(
+        device_id=uuid4(),
+        longitude=5.37,
+        latitude=43.29,
+        accuracy_m=18.0,
+        measured_at=datetime.now(UTC),
+    )
+
+    with pytest.raises(DeviceNotFoundError, match="active device not found"):
+        PostgreSQLDeviceRepository().save_position(position)

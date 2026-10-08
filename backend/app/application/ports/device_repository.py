@@ -23,6 +23,11 @@ class DeviceRepository(ABC):
         self,
         position: DevicePosition,
     ) -> DevicePosition | None:
+        """Save atomically with the activity check and presence update.
+
+        Raise DeviceNotFoundError if the device is absent or inactive.
+        Return None only when the measurement is older than the stored one.
+        """
         pass
 
     @abstractmethod
