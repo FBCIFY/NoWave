@@ -9,7 +9,7 @@ from fastapi.testclient import TestClient
 import psycopg
 import pytest
 
-from app.api.dependencies.auth import get_current_identity
+from app.api.dependencies.auth import get_authenticated_identity
 from app.infrastructure.repositories import postgresql_device_repository
 from app.infrastructure.repositories.postgresql_device_repository import (
     PostgreSQLDeviceRepository,
@@ -47,8 +47,11 @@ def device_requests(db, dsn, monkeypatch, request):
         "accuracy_m": 18,
         "measured_at": datetime.now(UTC).isoformat(),
     }
+    # Both routes share authentication; PUT also checks the real user's status.
     monkeypatch.setitem(
-        app.dependency_overrides, get_current_identity, lambda: {"uid": uid}
+        app.dependency_overrides,
+        get_authenticated_identity,
+        lambda: {"uid": uid, "email_verified": True},
     )
 
     def put():
