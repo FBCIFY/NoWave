@@ -7,7 +7,7 @@ from app.application.ports.device_repository import (
 )
 from app.domain.device import Device, DevicePlatform
 from app.domain.device_position import DevicePosition
-from app.domain.errors import DeviceConflictError
+from app.domain.errors import DeviceConflictError, DeviceNotFoundError
 from app.infrastructure.database.connection import (
     database_connection,
 )
@@ -169,6 +169,22 @@ class PostgreSQLDeviceRepository(DeviceRepository):
 
         with database_connection() as connection:
             with connection.cursor() as cursor:
+                cursor.execute(
+                    """
+                    SELECT is_active
+                    FROM nowave.devices
+                    WHERE id = %s
+                    FOR UPDATE
+                    """,
+                    (position.device_id,),
+                )
+                device_row = cursor.fetchone()
+
+                if device_row is None or not device_row[0]:
+                    raise DeviceNotFoundError(
+                        "active device not found"
+                    )
+
                 cursor.execute(query, values)
                 row = cursor.fetchone()
 
