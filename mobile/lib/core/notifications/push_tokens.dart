@@ -29,9 +29,10 @@ class PushTokens {
     }
 
     final token = await messaging.getToken();
-    if (kDebugMode && token != null) {
-      debugPrint('Token FCM pour le test : $token');
-    }
+    // Jamais la valeur du token dans les journaux, même en debug (NW-144).
+    debugPrint(
+      token == null ? 'Token FCM indisponible.' : 'Token FCM obtenu.',
+    );
     return token;
   }
 
