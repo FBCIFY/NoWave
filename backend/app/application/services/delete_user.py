@@ -1,6 +1,5 @@
 from app.application.ports.auth_provider import AuthProvider
 from app.application.ports.user_repository import UserRepository
-from app.domain.errors import UserNotFoundError
 
 
 class DeleteUser:
@@ -17,12 +16,13 @@ class DeleteUser:
             firebase_uid
         )
 
-        if user is None:
-            raise UserNotFoundError(
-                "user profile not found"
-            )
-
-        self.user_repository.delete(user)
+        # SQL reste la première étape.
+        #
+        # Si une tentative précédente a déjà supprimé
+        # le profil mais a échoué côté Firebase, la
+        # suppression reprend directement côté Firebase.
+        if user is not None:
+            self.user_repository.delete(user)
 
         self.auth_provider.delete_identity(
             firebase_uid

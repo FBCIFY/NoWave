@@ -15,6 +15,11 @@ class BoatType(str, Enum):
 def _normalize_flag_country(
     flag_country: str,
 ) -> str:
+    if not isinstance(flag_country, str):
+        raise ValueError(
+            "flag_country must be a string"
+        )
+
     flag_country = flag_country.strip()
 
     if (

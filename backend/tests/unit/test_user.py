@@ -49,6 +49,16 @@ def test_username_is_trimmed():
     assert user.username == "Jonathan"
 
 
+def test_username_with_internal_spaces_is_allowed():
+    user = User(
+        firebase_uid="firebase_123",
+        username="Jonathan Cahoreau",
+        email="jonathan@example.com",
+    )
+
+    assert user.username == "Jonathan Cahoreau"
+
+
 def test_firebase_uid_is_trimmed():
     user = User(
         firebase_uid="  firebase_123  ",
@@ -145,4 +155,25 @@ def test_invalid_nationality_raises_error():
             username="Jonathan",
             email="jonathan@example.com",
             nationality="FRA",
+        )
+
+@pytest.mark.parametrize(
+    "nationality",
+    [
+        "12",
+        "F!",
+        "éé",
+    ],
+)
+def test_nationality_requires_iso_alpha2_format(
+    nationality,
+):
+    with pytest.raises(
+        InvalidNationalityError
+    ):
+        User(
+            firebase_uid="firebase_123",
+            username="Jonathan Cahoreau",
+            email="jonathan@example.com",
+            nationality=nationality,
         )

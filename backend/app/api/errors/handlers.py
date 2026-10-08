@@ -7,10 +7,12 @@ from app.domain.errors import (
     BoatNotFoundError,
     DeviceConflictError,
     DeviceNotFoundError,
+    DevicePositionFutureError,
     DevicePositionStaleError,
     EmailNotVerifiedError,
     GpsPrecisionInsufficientError,
     InactiveUserError,
+    InvalidNationalityError,
     InvalidObservedAtError,
     InvalidPhotoError,
     InvalidPositioningInputError,
@@ -84,7 +86,7 @@ def report_validation_handler(request, exc):
     error_code = REPORT_VALIDATION_CODES[type(exc)]
 
     return JSONResponse(
-        status_code=400,
+        status_code=422,
         content={
             "error": {
                 "code": error_code,
@@ -169,6 +171,22 @@ def user_not_found_handler(request, exc: UserNotFoundError):
         content={
             "error": {
                 "code": "user_not_found",
+                "message": str(exc),
+                "details": None,
+            }
+        },
+    )
+
+
+def invalid_nationality_handler(
+    request,
+    exc: InvalidNationalityError,
+):
+    return JSONResponse(
+        status_code=422,
+        content={
+            "error": {
+                "code": "invalid_nationality",
                 "message": str(exc),
                 "details": None,
             }
@@ -367,6 +385,26 @@ def device_not_found_handler(
                 "code": "device_not_found",
                 "message": str(exc),
                 "details": None,
+            }
+        },
+    )
+
+
+def device_position_future_handler(
+    request,
+    exc: DevicePositionFutureError,
+):
+    return JSONResponse(
+        status_code=422,
+        content={
+            "error": {
+                "code": "device_position_future",
+                "message": str(exc),
+                "details": {
+                    "maximum_future_seconds": (
+                        exc.maximum_future_seconds
+                    ),
+                },
             }
         },
     )

@@ -91,4 +91,23 @@ void main() {
       throwsFormatException,
     );
   });
+
+  group('focale (NW-156)', () {
+    test('lit la focale des EXIF de l’original', () {
+      final photo = img.Image(width: 8, height: 8);
+      photo.exif.exifIfd['FocalLength'] = img.IfdValueRational(425, 100);
+
+      expect(readFocalLengthMm(img.encodeJpg(photo)), closeTo(4.25, 1e-9));
+    });
+
+    test('null sans focale, avec une focale nulle ou sans image', () {
+      final withoutFocal = img.encodeJpg(img.Image(width: 8, height: 8));
+      final zeroFocal = img.Image(width: 8, height: 8);
+      zeroFocal.exif.exifIfd['FocalLength'] = img.IfdValueRational(0, 1);
+
+      expect(readFocalLengthMm(withoutFocal), isNull);
+      expect(readFocalLengthMm(img.encodeJpg(zeroFocal)), isNull);
+      expect(readFocalLengthMm(Uint8List.fromList([1, 2, 3])), isNull);
+    });
+  });
 }

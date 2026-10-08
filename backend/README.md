@@ -86,13 +86,32 @@ Les deux clés acceptent aussi les variantes `SCW_ACCESS_KEY_FILE` et
 - `PATCH /api/v1/users/me` modifie le profil.
 - `DELETE /api/v1/users/me` supprime le profil.
 
+### Suppression de compte
+
+La suppression conserve l'ordre SQL puis Firebase. Si la suppression SQL a
+déjà réussi mais que la suppression Firebase échoue, une nouvelle requête
+reprend directement à l'étape Firebase. L'absence de la ligne SQL ne bloque
+donc pas la reprise.
+
+Une identité Firebase déjà absente est considérée comme supprimée afin de
+rendre l'opération idempotente.
+
+Pour le MVP, la vérification d'authentification conserve le contrôle standard
+du jeton Firebase sans contrôle systématique de révocation à chaque requête.
+Cette option sera réévaluée si le besoin de révocation immédiate justifie le
+coût et la dépendance supplémentaires.
+
 ### Upload d'une photo de signalement
 
 `POST /api/v1/reports/{report_id}/photo` attend un champ multipart `file` de type
 `image/jpeg`. Un propriétaire actif peut envoyer la photo de son signalement.
-Le serveur décode réellement le JPEG, refuse les EXIF, les fichiers vides,
-corrompus ou supérieurs à 500 000 octets. Flutter doit corriger l'orientation
-et supprimer les EXIF avant l'envoi. Les octets acceptés restent inchangés.
+Le serveur lit d'abord l'en-tête JPEG sans charger le raster. Il refuse les
+EXIF, les fichiers vides, corrompus ou supérieurs à 500 000 octets, ainsi que
+les images dépassant 1600 px en largeur ou hauteur ou 2 560 000 pixels.
+Ces dimensions correspondent au plafond produit par `prepareReportJpeg` dans
+Flutter. Le raster n'est chargé qu'après ces contrôles. Flutter doit corriger
+l'orientation et supprimer les EXIF avant l'envoi. Les octets acceptés restent
+inchangés.
 
 ```bash
 curl -X POST \
@@ -141,7 +160,12 @@ aucune file locale ni reprise mobile après fermeture du parcours n'est ajoutée
 Les requêtes multipart sont limitées à 512 000 octets avant parsing, pour laisser
 une marge d'enveloppe au JPEG de 500 000 octets. Nginx conserve sa limite de 32 Ko
 sur les autres routes. Le décodage et les appels synchrones SQL/S3 s'exécutent dans
-le pool de threads FastAPI. Les doublures des tests ne prouvent pas les droits
+le pool de threads FastAPI. Le chargement du raster JPEG est limité à quatre
+décodages simultanés. À la borne de 1600 x 1600, un raster RGB représente
+environ 7,3 Mio d'octets de pixels décodés en mémoire, soit environ 29,3 Mio pour quatre
+rasters, hors buffers et mémoire du processus. Le conteneur API reste limité à
+384 Mio ; la validation de déploiement doit confirmer la marge par une mesure
+RSS sous concurrence. Les doublures des tests ne prouvent pas les droits
 Scaleway réels ni la lecture d'une URL expirée : voir la recette du déploiement.
 
 ## Tests
@@ -173,3 +197,8 @@ un cluster porte `cluster=true` et `cluster_count`. Seuls les signalements de
 statut `active` dont `expires_at` est futur sont inclus. La réponse a un cache
 privé de 15 secondes. Les retraits et les expirations sont pris en compte à
 chaque nouvelle requête de tuile.
+
+Décision T10 : le MVP accepte une latence visuelle maximale de 15 secondes liée
+au cache privé des tuiles. À chaque nouvelle requête serveur, un signalement
+dont `expires_at <= now()` est exclu immédiatement. Aucun job d'expiration
+n'est ajouté.

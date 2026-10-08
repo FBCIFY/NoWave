@@ -142,4 +142,38 @@ void main() {
       throwsFormatException,
     );
   });
+
+  group('fetchPhoto', () {
+    ReportDetailService photoService(MockClientHandler handler) =>
+        ReportDetailService(
+          apiService: ApiService(
+            client: MockClient((_) async => fail('appel backend inattendu')),
+            baseUrl: 'https://api.blueway.test/',
+          ),
+          getIdToken: () async => 'firebase-token',
+          photoClient: MockClient(handler),
+        );
+
+    test('télécharge l’URL signée telle quelle, sans token', () async {
+      const url = 'https://s3.test/reports/a.jpg?X-Amz-Signature=abc';
+      final service = photoService((request) async {
+        expect(request.url, Uri.parse(url));
+        expect(request.headers.containsKey('Authorization'), isFalse);
+        return http.Response.bytes([1, 2, 3], 200);
+      });
+
+      expect(await service.fetchPhoto(url), [1, 2, 3]);
+    });
+
+    test('lève une ApiException 403 si le stockage refuse', () async {
+      final service = photoService(
+        (_) async => http.Response('<Error>AccessDenied</Error>', 403),
+      );
+
+      await expectLater(
+        service.fetchPhoto('https://s3.test/a.jpg'),
+        throwsA(isA<ApiException>().having((e) => e.statusCode, 'status', 403)),
+      );
+    });
+  });
 }

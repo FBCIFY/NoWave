@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 
 import '../../../core/api/api_exception.dart';
 import '../data/profile_service.dart';
+import '../domain/user_profile.dart';
 import '../../auth/presentation/widgets/auth_layout.dart';
 import '../../auth/presentation/widgets/auth_primary_button.dart';
 import '../../auth/presentation/widgets/auth_text_field.dart';
@@ -10,7 +11,9 @@ import '../../auth/presentation/widgets/auth_text_field.dart';
 /// Création du profil NoWave (nom d'utilisateur) au premier passage.
 ///
 /// Le backend répond 409 si le nom est pris et 403 si l'e-mail n'est pas
-/// vérifié.
+/// vérifié. Il répond aussi 409 si ce compte a déjà un profil : une première
+/// création a abouti sans que sa réponse arrive (NW-153). L'écran relit alors
+/// le profil du compte et continue avec lui, sans en créer d'autre.
 class ProfileSetupScreen extends StatefulWidget {
   final ProfileService profileService;
   final VoidCallback onProfileCreated;
@@ -56,10 +59,14 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
     } on ApiException catch (error) {
       if (!mounted) return;
 
+      if (error.code == 'user_already_exists') {
+        await _continueWithExistingProfile();
+        return;
+      }
+
       setState(() {
         _errorMessage = switch (error.code) {
           'username_already_exists' => 'Ce nom d’utilisateur est déjà utilisé.',
-          'user_already_exists' => 'Votre profil NoWave existe déjà.',
           'email_not_verified' => 'Votre adresse e-mail doit être vérifiée.',
           'request_validation_error' => 'Vérifiez le nom d’utilisateur.',
           _ when error.statusCode == 409 => 'Impossible de créer ce profil.',
@@ -82,6 +89,34 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
         });
       }
     }
+  }
+
+  /// Le profil existe déjà côté serveur : on le relit et on continue avec
+  /// lui, quel que soit le nom saisi cette fois-ci. Une seule lecture par
+  /// appui sur le bouton.
+  Future<void> _continueWithExistingProfile() async {
+    final UserProfile? profile;
+    try {
+      profile = await widget.profileService.getCurrentProfile();
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _errorMessage =
+            'Votre profil existe déjà mais n’a pas pu être chargé. Réessayez.';
+      });
+      return;
+    }
+
+    if (!mounted) return;
+
+    if (profile == null) {
+      setState(() {
+        _errorMessage = 'Impossible de créer votre profil. Réessayez.';
+      });
+      return;
+    }
+
+    widget.onProfileCreated();
   }
 
   @override

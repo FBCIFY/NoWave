@@ -26,6 +26,7 @@ class _FakeDeviceService implements DeviceService {
 
   /// Si défini, [register] ne répond qu'une fois ce futur terminé.
   Future<void>? response;
+  Future<void>? deactivationResponse;
 
   _FakeDeviceService(this.installationIds, [List<Object>? errors])
     : errors = errors ?? [];
@@ -47,6 +48,7 @@ class _FakeDeviceService implements DeviceService {
   Future<void> deactivate() async {
     deactivations.add(await installationIds.read());
     calls.add('deactivate');
+    if (deactivationResponse case final response?) await response;
     if (errors.isNotEmpty) throw errors.removeAt(0);
   }
 }
@@ -59,6 +61,8 @@ class _FakePushTokens implements PushTokens {
       StreamController<String>.broadcast();
   int generation = 1;
   int deleteCalls = 0;
+  Object? deleteError;
+  Future<void>? tokenResponse;
 
   @override
   Stream<String> get onTokenRefresh => refreshes.stream;
@@ -66,12 +70,14 @@ class _FakePushTokens implements PushTokens {
   @override
   Future<String?> getToken() async {
     getTokenCalls++;
+    await tokenResponse;
     return 'fcm-$generation';
   }
 
   @override
   Future<void> deleteToken() async {
     deleteCalls++;
+    if (deleteError case final error?) throw error;
     generation++;
   }
 }
@@ -257,16 +263,192 @@ void main() {
     },
   );
 
-  test('unregister continue même si le DELETE échoue (hors ligne)', () async {
+  test('unregister garde l’identifiant si le DELETE échoue, même si '
+      'l’invalidation FCM réussit', () async {
     final devices = _FakeDeviceService(installationIds, [
       TimeoutException('pas de réseau'),
     ]);
 
-    await createRegistration(devices).unregister();
+    await expectLater(
+      createRegistration(devices).unregister(),
+      throwsA(isA<TimeoutException>()),
+    );
 
     expect(devices.deactivations, ['installation-1']);
     expect(pushTokens.deleteCalls, 1);
+    expect(await installationIds.read(), 'installation-1');
+  });
+
+  test('double échec : conserve l’ancien identifiant après redémarrage et '
+      'réessaie le nettoyage sans bloquer la file', () async {
+    final devices = _FakeDeviceService(installationIds);
+    final registration = createRegistration(devices);
+    await registration.start();
+    devices.errors.add(TimeoutException('pas de réseau'));
+    pushTokens.deleteError = StateError('FCM indisponible');
+
+    await expectLater(
+      registration.unregister(),
+      throwsA(isA<TimeoutException>()),
+    );
+    expect(await installationIds.read(), 'installation-1');
+    expect(await InstallationIdStore().read(), 'installation-1');
+    expect(registration.isSigningOut, isTrue);
+    expect(registration.completeSignOut, throwsStateError);
+    await registration.start();
+    await registration.register();
+    pushTokens.refreshes.add('token-pendant-déconnexion');
+    await pumpEventQueue();
+    expect(devices.registrations, hasLength(1));
+
+    pushTokens.deleteError = null;
+    await registration.unregister();
+    expect(devices.deactivations, ['installation-1', 'installation-1']);
     expect(await installationIds.read(), 'installation-2');
+    // Même nettoyé, il ne redémarre pas avant la fermeture de la session.
+    await registration.start();
+    expect(devices.registrations, hasLength(1));
+    registration.completeSignOut();
+    await registration.start();
+    expect(devices.registrations.last.installationId, 'installation-2');
+  });
+
+  test(
+    'annuler après un échec reprend l’enregistrement du même téléphone',
+    () async {
+      final devices = _FakeDeviceService(installationIds);
+      final registration = createRegistration(devices);
+      await registration.start();
+      devices.errors.add(TimeoutException('pas de réseau'));
+
+      await expectLater(
+        registration.unregister(),
+        throwsA(isA<TimeoutException>()),
+      );
+      registration.cancelSignOut();
+      expect(registration.isSigningOut, isFalse);
+      await registration.start();
+      pushTokens.refreshes.add('token-renouvelé');
+      await pumpEventQueue();
+
+      expect(devices.registrations.map((r) => r.installationId), [
+        'installation-1',
+        'installation-1',
+        'installation-1',
+      ]);
+      expect(devices.registrations.last.fcmToken, 'token-renouvelé');
+    },
+  );
+
+  test('annuler est refusé une fois la session fermée', () async {
+    final registration = createRegistration(
+      _FakeDeviceService(installationIds),
+    );
+    await registration.unregister();
+    registration.completeSignOut();
+
+    expect(registration.cancelSignOut, throwsStateError);
+  });
+
+  test('un échec Firebase après le nettoyage ne déclenche pas un DELETE '
+      'sur un nouvel identifiant au prochain essai', () async {
+    final devices = _FakeDeviceService(installationIds);
+    final registration = createRegistration(devices);
+    await registration.start();
+    await registration.unregister();
+    await registration.unregister();
+
+    expect(devices.deactivations, ['installation-1']);
+    expect(pushTokens.deleteCalls, 1);
+    expect(createdIds, 1);
+    expect(registration.isSigningOut, isTrue);
+  });
+
+  test('si le backend confirme le nettoyage, un échec FCM ne bloque pas '
+      'la déconnexion', () async {
+    final devices = _FakeDeviceService(installationIds);
+    final registration = createRegistration(devices);
+    pushTokens.deleteError = StateError('FCM indisponible');
+
+    await registration.unregister();
+    registration.completeSignOut();
+
+    expect(devices.deactivations, ['installation-1']);
+    expect(await installationIds.read(), 'installation-2');
+  });
+
+  for (final code in ['device_not_found', 'user_not_found']) {
+    test('404 $code confirme qu’il ne reste rien à nettoyer', () async {
+      final devices = _FakeDeviceService(installationIds, [
+        ApiException(statusCode: 404, body: '{"error":{"code":"$code"}}'),
+      ]);
+      final registration = createRegistration(devices);
+
+      await registration.unregister();
+      registration.completeSignOut();
+
+      expect(await installationIds.read(), 'installation-2');
+    });
+  }
+
+  for (final error in [
+    const ApiException(statusCode: 404, body: '<html>Not Found</html>'),
+    const ApiException(statusCode: 401, body: ''),
+    const ApiException(statusCode: 403, body: ''),
+    const ApiException(statusCode: 503, body: ''),
+  ]) {
+    test('${error.statusCode} non confirmé garde l’identifiant et bloque '
+        'le changement de compte', () async {
+      final devices = _FakeDeviceService(installationIds, [error]);
+      final registration = createRegistration(devices);
+
+      await expectLater(registration.unregister(), throwsA(same(error)));
+
+      expect(await installationIds.read(), 'installation-1');
+      expect(registration.completeSignOut, throwsStateError);
+    });
+  }
+
+  test(
+    'une réponse DELETE perdue se réessaie avec l’ancien identifiant',
+    () async {
+      final response = Completer<void>();
+      final devices = _FakeDeviceService(installationIds)
+        ..deactivationResponse = response.future;
+      final registration = createRegistration(devices);
+      await registration.start();
+      final unregistering = registration.unregister();
+      final failed = expectLater(
+        unregistering,
+        throwsA(isA<TimeoutException>()),
+      );
+      await pumpEventQueue();
+      await registration.start();
+      await pumpEventQueue();
+      expect(await installationIds.read(), 'installation-1');
+      expect(devices.registrations, hasLength(1));
+      response.completeError(TimeoutException('réponse perdue'));
+      await failed;
+
+      devices.deactivationResponse = null;
+      await registration.unregister();
+      expect(devices.deactivations, ['installation-1', 'installation-1']);
+    },
+  );
+
+  test('un token obtenu tardivement ne réenregistre pas après le début '
+      'de la déconnexion', () async {
+    final response = Completer<void>();
+    pushTokens.tokenResponse = response.future;
+    final devices = _FakeDeviceService(installationIds);
+    final registration = createRegistration(devices);
+    final registering = registration.start();
+    await pumpEventQueue();
+    final unregistering = registration.unregister();
+    response.complete();
+    await Future.wait([registering, unregistering]);
+
+    expect(devices.calls, ['deactivate']);
   });
 
   test('unregister attend la fin de l’enregistrement en cours', () async {
@@ -296,22 +478,26 @@ void main() {
     expect(devices.calls, ['deactivate']);
   });
 
-  test('après unregister, plus rien ne part jusqu’au prochain start', () async {
-    final devices = _FakeDeviceService(installationIds);
-    final registration = createRegistration(devices);
-    await registration.start();
-    await registration.unregister();
+  test(
+    'après unregister, plus rien ne part jusqu’à la session suivante',
+    () async {
+      final devices = _FakeDeviceService(installationIds);
+      final registration = createRegistration(devices);
+      await registration.start();
+      await registration.unregister();
 
-    pushTokens.refreshes.add('fcm-ignoré');
-    await pumpEventQueue();
-    await registration.register();
-    expect(devices.registrations, hasLength(1));
+      pushTokens.refreshes.add('fcm-ignoré');
+      await pumpEventQueue();
+      await registration.register();
+      expect(devices.registrations, hasLength(1));
 
-    await registration.start();
+      registration.completeSignOut();
+      await registration.start();
 
-    expect(devices.registrations.last, (
-      installationId: 'installation-2',
-      fcmToken: 'fcm-2',
-    ));
-  });
+      expect(devices.registrations.last, (
+        installationId: 'installation-2',
+        fcmToken: 'fcm-2',
+      ));
+    },
+  );
 }

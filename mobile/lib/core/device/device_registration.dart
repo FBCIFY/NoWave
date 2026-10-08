@@ -8,14 +8,17 @@ import '../notifications/push_tokens.dart';
 import 'device_service.dart';
 import 'installation_id_store.dart';
 
+enum _RegistrationState { active, cleaning, cleaned, signedOut }
+
 /// Tient l'enregistrement de ce téléphone à jour côté backend.
 ///
 /// Le token FCM n'est envoyé que si le téléphone autorise les notifications ;
 /// sinon le backend reçoit `null` et efface l'ancien token (« jeton révoqué »
 /// de la doc technique). L'appareil reste enregistré pour sa position GPS.
 ///
-/// Les échecs (réseau, serveur) sont seulement journalisés : le prochain
-/// retour dans l'app réessaie.
+/// Les échecs d'enregistrement sont journalisés et réessayés au retour dans
+/// l'app. Un échec de nettoyage bloque la déconnexion pour garder la session
+/// qui permet de réessayer avec le même identifiant.
 class DeviceRegistration {
   final DeviceService _devices;
   final PushTokens _pushTokens;
@@ -24,9 +27,11 @@ class DeviceRegistration {
 
   StreamSubscription<String>? _tokenSubscription;
 
-  /// Vrai entre [unregister] et le prochain [start] : plus aucun
-  /// enregistrement ne part pour le compte qui se déconnecte.
-  bool _unregistered = false;
+  _RegistrationState _state = _RegistrationState.active;
+
+  /// Reste vrai jusqu'au démarrage de la session suivante, même après un
+  /// échec : les reprises du cycle de vie ne doivent pas relancer le GPS.
+  bool get isSigningOut => _state != _RegistrationState.active;
 
   /// Dernier enregistrement demandé. Les demandes s'enchaînent pour que le
   /// dernier token envoyé soit toujours le plus récent.
@@ -55,7 +60,11 @@ class DeviceRegistration {
 
   /// Enregistre le téléphone, puis le réenregistre à chaque nouveau token FCM.
   Future<void> start() {
-    _unregistered = false;
+    if (_state == _RegistrationState.cleaning ||
+        _state == _RegistrationState.cleaned) {
+      return Future.value();
+    }
+    _state = _RegistrationState.active;
     _tokenSubscription ??= _pushTokens.onTokenRefresh.listen(
       (token) => unawaited(register(refreshedToken: token)),
     );
@@ -78,22 +87,71 @@ class DeviceRegistration {
   /// Déconnexion : désactive le téléphone côté backend, invalide son token
   /// FCM et prépare un nouvel identifiant pour le prochain compte.
   ///
-  /// À appeler avant `signOut`, qui coupe l'accès au backend. Chaque étape
-  /// est tentée même si la précédente échoue (hors ligne) : la déconnexion ne
-  /// doit jamais rester bloquée. Ne lève jamais d'erreur.
+  /// À appeler avant `signOut`, qui coupe l'accès au backend. Un échec du
+  /// DELETE conserve l'identifiant et remonte à l'appelant : la session doit
+  /// rester ouverte pour une nouvelle tentative authentifiée.
   Future<void> unregister() {
-    _unregistered = true;
+    beginSignOut();
     // Après l'enregistrement en cours, pour que le DELETE passe en dernier.
-    return _queue = _queue.then((_) => _unregister());
+    final result = _queue.then((_) => _unregister());
+    // L'appelant reçoit l'erreur, mais elle n'empoisonne pas les tentatives
+    // suivantes dans la file.
+    _queue = result.then<void>((_) {}, onError: (Object error) {});
+    return result;
+  }
+
+  /// Ferme immédiatement les reprises GPS/FCM, avant d'attendre les envois
+  /// GPS en cours puis d'appeler [unregister].
+  void beginSignOut() {
+    if (_state == _RegistrationState.active) {
+      _state = _RegistrationState.cleaning;
+    }
+  }
+
+  /// Après un échec, l'utilisateur renonce à se déconnecter : il reste sur
+  /// le compte actuel, qui peut de nouveau enregistrer le téléphone. À
+  /// appeler seulement quand [unregister] a rendu la main.
+  void cancelSignOut() {
+    if (_state == _RegistrationState.signedOut) {
+      throw StateError('La session est déjà fermée.');
+    }
+    _state = _RegistrationState.active;
+  }
+
+  /// À appeler seulement après la fermeture effective de la session Firebase.
+  /// Un remontage de l'écran ne suffit pas à autoriser un nouvel enregistrement.
+  void completeSignOut() {
+    if (_state != _RegistrationState.cleaned) {
+      throw StateError('Le nettoyage de l’appareil n’est pas terminé.');
+    }
+    _state = _RegistrationState.signedOut;
   }
 
   Future<void> _unregister() async {
+    if (_state == _RegistrationState.cleaned ||
+        _state == _RegistrationState.signedOut) {
+      return;
+    }
     await stop();
-    await _attempt('Désactivation du téléphone', _devices.deactivate);
-    // Sans ça, le compte suivant recevrait les alertes de l'ancien si le
-    // DELETE a échoué.
-    await _attempt('Suppression du token FCM', _pushTokens.deleteToken);
-    await _attempt('Nouvel identifiant d’installation', _installationIds.reset);
+    try {
+      await _devices.deactivate();
+    } on ApiException catch (error) {
+      // Absence confirmée pour ce compte : rien ne reste à désactiver.
+      // Un 404 de proxy ou d'une route absente n'est pas une confirmation.
+      if (error.statusCode != 404 ||
+          (error.code != 'device_not_found' &&
+              error.code != 'user_not_found')) {
+        rethrow;
+      }
+    } finally {
+      // Même si le serveur ne répond pas, on tente d'invalider le token.
+      // Son succès seul ne permet pas d'abandonner l'ancien appareil.
+      await _attempt('Suppression du token FCM', _pushTokens.deleteToken);
+    }
+    // Seulement après confirmation serveur. Une erreur du stockage remonte
+    // aussi : elle ne doit pas être masquée par la déconnexion Firebase.
+    await _installationIds.reset();
+    _state = _RegistrationState.cleaned;
   }
 
   static Future<void> _attempt(
@@ -108,13 +166,14 @@ class DeviceRegistration {
   }
 
   Future<void> _register(String? refreshedToken) async {
-    if (_unregistered) return;
+    if (isSigningOut) return;
     try {
       final allowed =
           await _permissions.getStatus() == NotificationPermission.granted;
       final token = allowed
           ? refreshedToken ?? await _pushTokens.getToken()
           : null;
+      if (isSigningOut) return;
       try {
         await _devices.register(fcmToken: token);
       } on ApiException catch (error) {
@@ -130,20 +189,25 @@ class DeviceRegistration {
   /// autre appareil (déconnexion hors ligne, app réinstallée). On essaie un
   /// nouveau token, puis, si ça ne suffit pas, un nouvel identifiant.
   Future<void> _recoverFromConflict({required bool allowed}) async {
+    if (isSigningOut) return;
     // Sans token envoyé, seul l'identifiant peut être en conflit.
     if (allowed) {
       await _pushTokens.deleteToken();
+      if (isSigningOut) return;
       try {
-        await _devices.register(fcmToken: await _pushTokens.getToken());
+        final token = await _pushTokens.getToken();
+        if (isSigningOut) return;
+        await _devices.register(fcmToken: token);
         return;
       } on ApiException catch (error) {
         if (error.statusCode != 409) rethrow;
       }
     }
 
+    if (isSigningOut) return;
     await _installationIds.reset();
-    await _devices.register(
-      fcmToken: allowed ? await _pushTokens.getToken() : null,
-    );
+    final token = allowed ? await _pushTokens.getToken() : null;
+    if (isSigningOut) return;
+    await _devices.register(fcmToken: token);
   }
 }

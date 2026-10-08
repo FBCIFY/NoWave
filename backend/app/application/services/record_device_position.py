@@ -1,11 +1,14 @@
-from datetime import datetime
+from datetime import UTC, datetime
 from uuid import UUID
 
 from app.application.ports.device_repository import (
     DeviceRepository,
 )
 from app.application.ports.user_repository import UserRepository
-from app.domain.device_position import DevicePosition
+from app.domain.device_position import (
+    DevicePosition,
+    validate_device_measurement_time,
+)
 from app.domain.errors import (
     DeviceNotFoundError,
     DevicePositionStaleError,
@@ -54,6 +57,13 @@ class RecordDevicePosition:
                 "active device not found"
             )
 
+        received_at = datetime.now(UTC)
+
+        validate_device_measurement_time(
+            measured_at=measured_at,
+            server_time=received_at,
+        )
+
         position = DevicePosition(
             device_id=device.id,
             longitude=longitude,
@@ -61,6 +71,7 @@ class RecordDevicePosition:
             accuracy_m=accuracy_m,
             heading_deg=heading_deg,
             measured_at=measured_at,
+            received_at=received_at,
         )
 
         saved_position = (

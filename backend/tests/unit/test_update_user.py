@@ -14,6 +14,7 @@ from app.domain.user import User
 class FakeUserRepository(UserRepository):
     def __init__(self):
         self.users = []
+        self.update_calls = 0
 
     def get_by_firebase_uid(self, firebase_uid: str) -> User | None:
         for user in self.users:
@@ -33,7 +34,12 @@ class FakeUserRepository(UserRepository):
         self.users.append(user)
         return user
 
-    def update(self, user: User) -> User:
+    def update(
+        self,
+        user: User,
+        fields: set[str] | None = None,
+    ) -> User:
+        self.update_calls += 1
         return user
 
     def delete(self, user: User) -> None:
@@ -119,6 +125,28 @@ def test_update_only_changes_provided_fields():
     assert updated_user.email == "jonathan@example.com"
     assert updated_user.nationality == "FR"
     assert updated_user.show_user_name is True
+
+
+def test_update_with_no_changes_is_noop():
+    repository = FakeUserRepository()
+
+    user = User(
+        firebase_uid="firebase_123",
+        username="Jonathan",
+        email="jonathan@example.com",
+    )
+
+    repository.save(user)
+
+    update_user = UpdateUser(repository)
+
+    updated_user = update_user.execute(
+        firebase_uid="firebase_123",
+        changes={},
+    )
+
+    assert updated_user is user
+    assert repository.update_calls == 0
 
 
 def test_update_user_not_found_raises_error():

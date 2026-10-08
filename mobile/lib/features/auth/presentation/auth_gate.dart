@@ -1,4 +1,5 @@
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 import '../../../core/device/device_position_reporter.dart';
@@ -29,6 +30,7 @@ class AuthGate extends StatefulWidget {
   final ReportDetailService reportDetailService;
   final DeviceRegistration deviceRegistration;
   final DevicePositionReporter devicePositionReporter;
+  final ValueListenable<int>? inactiveUserEvents;
 
   const AuthGate({
     super.key,
@@ -40,6 +42,7 @@ class AuthGate extends StatefulWidget {
     required this.reportDetailService,
     required this.deviceRegistration,
     required this.devicePositionReporter,
+    this.inactiveUserEvents,
   });
 
   @override
@@ -85,6 +88,7 @@ class _AuthGateState extends State<AuthGate> {
             screen = PushNotificationListener(
               child: ProfileGate(
                 authService: widget.authService,
+                inactiveUserEvents: widget.inactiveUserEvents,
                 profileService: widget.profileService,
                 reportService: widget.reportService,
                 positionEstimateService: widget.positionEstimateService,

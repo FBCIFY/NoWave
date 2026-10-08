@@ -11,6 +11,13 @@ from app.domain.errors import (
 )
 
 
+REPORT_LIFETIME = timedelta(hours=24)
+
+
+def utc_now() -> datetime:
+    return datetime.now(UTC)
+
+
 class ReportCategory(str, Enum):
     MARINE_ANIMAL = "marine_animal"
     OBSTRUCTION = "obstruction"
@@ -95,11 +102,11 @@ class Report:
         self.longitude = longitude
         self.latitude = latitude
         self.observed_at = observed_at
-        self.expires_at = observed_at + timedelta(hours=24)
+        self.expires_at = observed_at + REPORT_LIFETIME
         self.status = ReportStatus(status)
         self.version = version
 
-        now = datetime.now(UTC)
+        now = utc_now()
 
         self.created_at = created_at if created_at is not None else now
         self.updated_at = updated_at if updated_at is not None else now
@@ -122,7 +129,7 @@ class Report:
             )
 
         observed_at = observed_at.astimezone(UTC)
-        now = datetime.now(UTC)
+        now = utc_now()
 
         if author_id is None:
                     raise ValueError("author_id is required")
@@ -132,9 +139,9 @@ class Report:
                 "observed_at cannot be in the future"
             )
 
-        if observed_at < now - timedelta(hours=24):
+        if observed_at + REPORT_LIFETIME <= now:
             raise InvalidObservedAtError(
-                "observed_at cannot be older than 24 hours"
+                "observed_at cannot be older than or equal to 24 hours"
             )
 
         return cls(
@@ -169,7 +176,7 @@ class Report:
             )
 
         observed_at = observed_at.astimezone(UTC)
-        now = datetime.now(UTC)
+        now = utc_now()
 
         if author_id is None:
             raise ValueError(
@@ -181,9 +188,9 @@ class Report:
                 "observed_at cannot be in the future"
             )
 
-        if observed_at < now - timedelta(hours=24):
+        if observed_at + REPORT_LIFETIME <= now:
             raise InvalidObservedAtError(
-                "observed_at cannot be older than 24 hours"
+                "observed_at cannot be older than or equal to 24 hours"
             )
 
         return cls(

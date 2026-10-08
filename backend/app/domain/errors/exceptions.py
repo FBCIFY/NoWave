@@ -110,3 +110,15 @@ class DeviceNotFoundError(DomainError):
 
 class DevicePositionStaleError(DomainError):
     pass
+
+
+class DevicePositionFutureError(DomainError):
+    def __init__(
+        self,
+        maximum_future_seconds: int,
+    ):
+        self.maximum_future_seconds = maximum_future_seconds
+
+        super().__init__(
+            "position measurement is too far in the future"
+        )

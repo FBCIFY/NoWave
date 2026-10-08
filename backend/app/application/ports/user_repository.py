@@ -17,7 +17,11 @@ class UserRepository(ABC):
         pass
 
     @abstractmethod
-    def update(self, user: User) -> User:
+    def update(
+        self,
+        user: User,
+        fields: set[str] | None = None,
+    ) -> User:
         pass
 
     @abstractmethod

@@ -10,6 +10,7 @@ from app.api.errors.handlers import (
     dependency_unavailable_handler,
     device_conflict_handler,
     device_not_found_handler,
+    device_position_future_handler,
     device_position_stale_handler,
     http_exception_handler,
     boat_already_exists_handler,
@@ -17,6 +18,7 @@ from app.api.errors.handlers import (
     email_not_verified_handler,
     gps_precision_insufficient_handler,
     inactive_user_handler,
+    invalid_nationality_handler,
     invalid_positioning_input_handler,
     invalid_photo_handler,
     photo_already_uploaded_handler,
@@ -35,12 +37,14 @@ from app.api.routes.health import router as health_router
 from app.domain.errors import (
     DeviceConflictError,
     DeviceNotFoundError,
+    DevicePositionFutureError,
     DevicePositionStaleError,
     BoatAlreadyExistsError,
     BoatNotFoundError,
     EmailNotVerifiedError,
     GpsPrecisionInsufficientError,
     InactiveUserError,
+    InvalidNationalityError,
     InvalidObservedAtError,
     InvalidPositioningInputError,
     InvalidPhotoError,
@@ -142,6 +146,11 @@ app.add_exception_handler(
 
 
 app.add_exception_handler(
+    InvalidNationalityError,
+    invalid_nationality_handler,
+)
+
+app.add_exception_handler(
     GpsPrecisionInsufficientError,
     gps_precision_insufficient_handler,
 )
@@ -191,6 +200,11 @@ app.add_exception_handler(
 app.add_exception_handler(
     DeviceNotFoundError,
     device_not_found_handler,
+)
+
+app.add_exception_handler(
+    DevicePositionFutureError,
+    device_position_future_handler,
 )
 
 app.add_exception_handler(

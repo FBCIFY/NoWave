@@ -117,6 +117,12 @@ Le parcours comprend :
 - la création d’un profil avec un nom d’utilisateur unique ;
 - la récupération du profil existant sans création implicite.
 
+Si la réponse à la création du profil se perd alors que le serveur l’a
+enregistré, le nouvel essai reçoit 409 `user_already_exists`. L’écran relit
+alors le profil du compte (`GET /api/v1/users/me`) et continue avec lui, avec
+le nom enregistré la première fois (NW-153). S’il ne le trouve pas, il affiche
+une erreur sans recréer de profil.
+
 Les fichiers Firebase Android et iOS sont versionnés. Après un clone,
 `flutter pub get` suffit pour utiliser la configuration existante.
 
@@ -255,9 +261,16 @@ Toucher un badge ouvre la fiche du signalement (`ReportDetailSheet`),
 chargée par `GET /api/v1/reports/{id}` : catégorie, date d'observation,
 position en degrés/minutes/secondes, distance et direction depuis
 l'utilisateur en milles nautiques, auteur et bateau s'ils sont rendus
-publics, état de la photo et fin du signalement. Un signalement expiré ou
+publics, photo et fin du signalement. Un signalement expiré ou
 retiré entre-temps affiche « n'est plus disponible » ; les autres erreurs
 proposent de réessayer.
+
+La photo publiée (NW-151) est téléchargée depuis l'URL signée de la fiche,
+valable cinq minutes, sans token Firebase ; un appui l'ouvre en plein écran.
+Le stockage répond 403 aussi bien pour une URL expirée que pour un refus :
+sur un 403, la fiche est relue une fois pour une URL neuve, et un second
+refus s'affiche comme tel. « Réessayer » repart aussi d'une URL neuve. Une
+photo en cours d'envoi, en échec ou masquée reste affichée en texte.
 
 ### Rafraîchissement
 
@@ -268,9 +281,30 @@ les badges : un signalement publié, retiré ou expiré apparaît ou disparaît 
 en continu, l'application redonne le token Firebase à Mapbox toutes les
 4 minutes et au retour au premier plan, pour qu'il n'expire jamais.
 
-Si une tuile échoue (réseau, token), la carte reste utilisable et affiche
-« Signalements momentanément indisponibles. » La carte ne fonctionne pas hors
-ligne : les badges déjà affichés peuvent rester visibles sans être à jour.
+### État de la couche — NW-152
+
+`ReportLayerController` (`lib/features/map/data/report_layer_controller.dart`)
+suit la couche : en attente, non installée, installée ou indisponible. Le fond
+de carte reste utilisable dans tous les cas.
+
+- Si l'installation échoue (token, réseau), elle est retentée seule après
+  15 s, 30 s puis toutes les minutes, au retour dans l'app et à chaque
+  renouvellement du token, sans attendre un rechargement du style. Une seule
+  installation tourne à la fois, et `ReportTiles.addTo` ne recrée pas ce qui
+  existe déjà : pas de source en double.
+- Une tuile en échec (hors 429) rend la couche indisponible. Le bandeau
+  « Signalements indisponibles. Nouvel essai automatique. » reste affiché
+  jusqu'à ce qu'une tuile se charge sans nouvelle erreur pendant 2 s. Mapbox
+  signale aussi comme chargée une tuile qui vient d'échouer : seule une autre
+  tuile (identifiée par `z/x/y`) compte comme preuve de retour, même si elle
+  arrive dans les 2 s qui suivent l'erreur. Un appui ferme le bandeau jusqu'au
+  prochain changement d'état.
+- Seul un 401 fait redonner le token à Mapbox (au plus toutes les 30 s). Un
+  403 fait revalider le profil (compte peut-être suspendu) ; un 503 ne
+  déclenche que le bandeau.
+
+La carte ne fonctionne pas hors ligne : les badges déjà affichés peuvent
+rester visibles sans être à jour.
 
 ### Limite de débit du serveur
 
@@ -278,9 +312,13 @@ nginx limite chaque appareil à 10 requêtes/s (pointes à 30) et à 30
 connexions. Pour rester en dessous, la source demande le moins de tuiles
 possible : aucune au-delà du zoom 12 (Mapbox agrandit celles du zoom 12, qui
 placent déjà un badge à 2 m près), pas de préchargement des zooms inférieurs,
-et rien pendant un geste. Une tuile refusée (429, ou 503 quand il y a trop de
-connexions) n'affiche pas le bandeau : Mapbox la redemande lui-même quelques
-secondes plus tard.
+et rien pendant un geste. Une tuile refusée en 429 n'affiche pas le
+bandeau : Mapbox la redemande lui-même quelques secondes plus tard. Un 503
+affiche le bandeau, car le backend répond aussi 503 quand la base ou le
+stockage sont en panne, et Mapbox ne transmet que le code HTTP. Or nginx
+répond 503 par défaut quand l'appareil dépasse 30 connexions : ajouter
+`limit_conn_status 429;` dans `deploy/web/nginx.conf` réserverait 503 aux
+vraies pannes.
 
 ### Position de l'utilisateur
 
@@ -293,7 +331,11 @@ Un halo bleu sous les signalements montre la précision du GPS.
 - le rafraîchissement dépend de l'en-tête `Cache-Control` du backend : si
   `max-age` change, la fréquence de mise à jour de la carte change aussi ;
 - hors ligne, les badges déjà affichés restent visibles sans être à jour ;
-  seul le message « momentanément indisponibles » le signale ;
+  seul le bandeau « Signalements indisponibles » le signale ;
+- Mapbox redemande seul une tuile en échec réseau ou 5xx, mais pas une tuile
+  refusée en 401 : après le renvoi du token, le bandeau ne part qu'au
+  prochain chargement de tuile (déplacement de la carte, ou expiration des
+  tuiles visibles) ;
 - l'état de la photo reste « Envoi en cours » tant que la route d'envoi de
   NW-112 n'est pas déployée ;
 - en zoomant ou dézoomant vite, nginx refuse encore des tuiles (429) : les
@@ -334,6 +376,45 @@ de brouillon, pas de file d’attente, pas d’envoi automatique plus tard.
 La vignette ouvre la photo en plein écran (`ReportPhotoViewer`). Fermer un
 signalement rempli demande une confirmation.
 
+### Azimut de la caméra — NW-150
+
+L’azimut envoyé est celui de l’axe de visée de la caméra arrière, par rapport
+au nord vrai :
+
+- sur Android, `precise_compass` donne le cap du haut du téléphone, faux quand
+  on le tient debout pour photographier. `MainActivity` envoie donc la matrice
+  de rotation du téléphone (canal `fr.blueway.app/rotation_matrix`) ;
+  `camera_azimuth.dart` en tire l’axe de la caméra, le projette à
+  l’horizontale et calcule son azimut. La déclinaison magnétique vient de
+  `precise_compass` (cap vrai − cap magnétique) ;
+- sur iOS, le cap vrai de CoreLocation suit déjà la caméra (à vérifier dans
+  NW-128) ;
+- caméra presque verticale (sol ou ciel), l’azimut n’a pas de sens : la photo
+  est bloquée avec « Relevez le téléphone vers l’horizon. ».
+
+### Estimation, caméra et arrière-plan — NW-156
+
+- si l’estimation est indisponible (pas de réseau, 404, 429 ou 5xx), le
+  bouton « Placer le point moi-même » garde la photo et ouvre la carte sans
+  estimation : l’utilisateur place le point sur l’objet photographié. Les
+  refus (401, 403, 422) n’affichent pas ce bouton ;
+- la requête d’estimation envoie aussi la focale lue dans les EXIF de la photo
+  (`focal_length_mm`, omise si absente) et `zoom_ratio: 1`, car l’application
+  ne zoome jamais ;
+- quand l’application passe en arrière-plan (écran verrouillé, autre
+  application), la caméra est libérée ; elle est rouverte au retour. Une photo
+  déjà prise est conservée. Une ouverture encore en cours quand l’écran se
+  ferme est annulée et le contrôleur libéré (`DeviceReportCamera`) ;
+- deux caméras ne sont jamais ouvertes en même temps : `dispose()` ne se
+  termine qu’une fois la caméra rendue au système (après la fin d’une
+  ouverture en cours), et `CameraScreen` attend cette libération avant d’en
+  ouvrir une nouvelle ;
+- hauteur de caméra : 2,5 ± 0,5 m (source `default`), une valeur moyenne non
+  calibrée, gardée comme compromis pour le MVP plutôt que demandée à
+  l’utilisateur. Si le téléphone est tenu à 1 m ou à 6 m, la distance estimée peut
+  être fausse d’un facteur 2 environ ; l’utilisateur confirme toujours le
+  point sur la carte.
+
 ### Flèche de position
 
 La position de l’utilisateur est affichée par une flèche 3D qui suit le cap
@@ -351,8 +432,12 @@ python3 tool/make_location_puck.py assets/models/location_puck.glb
   404 (« envoi indisponible sur ce serveur ») ;
 - l’azimut dépend des perturbations magnétiques et de la calibration ;
 - l’inclinaison n’a pas été vérifiée avec un support d’angle étalonné ;
-- les conventions des capteurs doivent encore être validées sur Android réel ;
-- la hauteur de caméra est fixée à 2,5 m pour le MVP.
+- les conventions des capteurs doivent encore être validées sur Android réel,
+  avec une cible connue ;
+- la hauteur de caméra est fixée à 2,5 m pour le MVP ;
+- le plugin caméra ne permet pas de choisir l’objectif ni de forcer la mise
+  au point à l’infini : l’application ouvre la première caméra arrière, ce
+  qu’il faut vérifier sur chaque téléphone.
 
 ## Appareil et position — NW-116
 
@@ -395,24 +480,40 @@ historique.
 
 Avant `signOut`, l'application :
 
-1. arrête le suivi ;
+1. bloque les reprises GPS/FCM et attend la fin des envois en cours ;
 2. désactive le téléphone (`DELETE /api/v1/devices/current`, avec l'en-tête
    `X-Installation-ID`) ;
-3. supprime le token FCM ;
-4. oublie l'identifiant d'installation : le compte suivant en reçoit un
-   nouveau.
+3. tente de supprimer le token FCM, même si le serveur n'a pas répondu ;
+4. oublie l'identifiant d'installation seulement après confirmation du
+   nettoyage serveur, puis ferme la session Firebase. Le compte suivant
+   reçoit un nouvel identifiant.
 
-Chaque étape est tentée même si la précédente échoue, pour que la déconnexion
-ne reste jamais bloquée.
+Si le `DELETE` échoue, une fenêtre explique que la déconnexion reste à terminer
+et propose de réessayer ou d'annuler. L'identifiant et la session de l'ancien
+compte sont conservés : la nouvelle tentative utilise toujours ses droits. Un
+retour au premier plan ne relance pas les envois GPS/FCM pendant cette
+transition. « Annuler » garde l'utilisateur sur son compte et relance
+l'enregistrement du téléphone et le suivi GPS.
+
+Seuls un succès du `DELETE` ou un 404 métier `device_not_found` / `user_not_found`
+confirment qu'il ne reste rien à nettoyer pour ce compte. Un 404 de proxy ou une
+erreur d'authentification ne permettent pas de poursuivre. Si le serveur a
+confirmé le nettoyage, une erreur d'invalidation FCM est journalisée mais ne
+bloque pas la fermeture de session : l'ancien appareil n'a plus de token côté
+backend. Si seule la fermeture Firebase échoue, le prochain essai ne recrée
+pas d'appareil et ne répète pas un nettoyage déjà terminé.
+
+Après fermeture forcée de l'application pendant un échec serveur, la session
+Firebase et l'ancien identifiant restent conservés. L'utilisateur peut reprendre
+la déconnexion depuis ce même compte. Les tests automatisés couvrent la
+conservation de l'identifiant et les requêtes authentifiées ; les essais sur
+deux comptes réels et après relancement sont à consigner dans NW-128.
 
 ### Limites connues
 
-- déconnexion hors ligne : le `DELETE` et la suppression du token FCM
-  échouent. L'appareil reste alors actif côté backend avec son token, et
-  l'ancien compte peut encore recevoir des alertes sur ce téléphone. Au
-  prochain enregistrement en ligne, le token déjà pris déclenche un 409 et
-  l'application en demande un nouveau. Tant que personne ne se reconnecte, le
-  problème reste ;
+- hors ligne, la déconnexion et le changement de compte attendent le retour
+  du réseau. Tant que le nettoyage n'est pas confirmé, l'appareil peut rester
+  actif côté backend, mais le mobile conserve sa référence et la session ;
 - un enregistrement raté n'est pas réessayé tout de suite : il est refait au
   prochain retour dans l'application, ou au prochain envoi de position (404) ;
 - sur le simulateur iOS, il n'y a pas de token APNs : le téléphone est

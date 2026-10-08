@@ -3,7 +3,12 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
-from app.domain.user import UserRole, UserStatus
+from app.domain.errors import InvalidNationalityError
+from app.domain.user import (
+    UserRole,
+    UserStatus,
+    normalize_nationality,
+)
 
 
 class UserCreateRequest(BaseModel):
@@ -63,13 +68,29 @@ class UserUpdateRequest(BaseModel):
 
         return username
 
-    @field_validator("nationality")
+    @field_validator(
+        "nationality",
+        mode="before",
+    )
     @classmethod
-    def clean_nationality(cls, nationality: str | None) -> str | None:
+    def clean_nationality(
+        cls,
+        nationality,
+    ) -> str | None:
         if nationality is None:
             return None
 
-        return nationality.upper()
+        if not isinstance(nationality, str):
+            raise ValueError(
+                "nationality must be a string"
+            )
+
+        try:
+            return normalize_nationality(
+                nationality
+            )
+        except InvalidNationalityError as exc:
+            raise ValueError(str(exc)) from exc
 
 
 class UserProfileResponse(BaseModel):

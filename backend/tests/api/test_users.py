@@ -1,7 +1,11 @@
 from fastapi.testclient import TestClient
 
-from app.api.dependencies.auth import get_current_identity
-from app.domain.user import User
+from app.api.dependencies.auth import (
+    get_authenticated_identity,
+    get_current_identity,
+)
+from app.domain.errors import InvalidNationalityError
+from app.domain.user import User, UserStatus
 from app.main import app
 
 
@@ -27,7 +31,7 @@ class FakeUserRepository:
         self.users.append(user)
         return user
 
-    def update(self, user):
+    def update(self, user, fields=None):
         return user
 
     def delete(self, user):
@@ -50,6 +54,15 @@ def unverified_identity():
     }
 
 
+
+def set_identity_override(provider):
+    app.dependency_overrides[
+        get_authenticated_identity
+    ] = provider
+    app.dependency_overrides[
+        get_current_identity
+    ] = provider
+
 def test_create_my_profile(monkeypatch):
     repository = FakeUserRepository()
 
@@ -58,7 +71,7 @@ def test_create_my_profile(monkeypatch):
         lambda: repository,
     )
 
-    app.dependency_overrides[get_current_identity] = verified_identity
+    set_identity_override(verified_identity)
 
     client = TestClient(app)
 
@@ -94,7 +107,7 @@ def test_create_profile_with_unverified_email_returns_403(monkeypatch):
         lambda: repository,
     )
 
-    app.dependency_overrides[get_current_identity] = unverified_identity
+    set_identity_override(unverified_identity)
 
     client = TestClient(app)
 
@@ -127,7 +140,7 @@ def test_create_existing_profile_returns_409(monkeypatch):
         lambda: repository,
     )
 
-    app.dependency_overrides[get_current_identity] = verified_identity
+    set_identity_override(verified_identity)
 
     client = TestClient(app)
 
@@ -160,7 +173,7 @@ def test_create_profile_with_existing_username_returns_409(monkeypatch):
         lambda: repository,
     )
 
-    app.dependency_overrides[get_current_identity] = verified_identity
+    set_identity_override(verified_identity)
 
     client = TestClient(app)
 
@@ -185,7 +198,7 @@ def test_create_profile_with_invalid_payload_returns_422(monkeypatch):
         lambda: repository,
     )
 
-    app.dependency_overrides[get_current_identity] = verified_identity
+    set_identity_override(verified_identity)
 
     client = TestClient(app)
 
@@ -217,7 +230,7 @@ def test_get_my_profile(monkeypatch):
         lambda: repository,
     )
 
-    app.dependency_overrides[get_current_identity] = verified_identity
+    set_identity_override(verified_identity)
 
     client = TestClient(app)
 
@@ -239,6 +252,36 @@ def test_get_my_profile(monkeypatch):
     assert "email" not in data
 
 
+
+def test_get_suspended_profile_returns_200(monkeypatch):
+    existing_user = User(
+        firebase_uid="firebase-user-123",
+        username="Jonathan",
+        email="user@nowave.test",
+    )
+    existing_user.status = UserStatus.SUSPENDED
+
+    repository = FakeUserRepository(
+        users=[existing_user],
+    )
+
+    monkeypatch.setattr(
+        "app.api.routes.users.PostgreSQLUserRepository",
+        lambda: repository,
+    )
+
+    set_identity_override(verified_identity)
+
+    response = TestClient(app).get(
+        "/api/v1/users/me",
+    )
+
+    app.dependency_overrides.clear()
+
+    assert response.status_code == 200
+    assert response.json()["status"] == "suspended"
+
+
 def test_get_missing_profile_returns_404(monkeypatch):
     repository = FakeUserRepository()
 
@@ -247,7 +290,7 @@ def test_get_missing_profile_returns_404(monkeypatch):
         lambda: repository,
     )
 
-    app.dependency_overrides[get_current_identity] = verified_identity
+    set_identity_override(verified_identity)
 
     client = TestClient(app)
 
@@ -279,14 +322,14 @@ def test_update_my_profile(monkeypatch):
         lambda: repository,
     )
 
-    app.dependency_overrides[get_current_identity] = verified_identity
+    set_identity_override(verified_identity)
 
     client = TestClient(app)
 
     response = client.patch(
         "/api/v1/users/me",
         json={
-            "username": "John",
+            "username": "John Doe",
             "nationality": "fr",
             "show_user_name": True,
         },
@@ -298,7 +341,7 @@ def test_update_my_profile(monkeypatch):
 
     data = response.json()
 
-    assert data["username"] == "John"
+    assert data["username"] == "John Doe"
     assert data["nationality"] == "FR"
     assert data["show_user_name"] is True
 
@@ -314,7 +357,7 @@ def test_update_missing_profile_returns_404(monkeypatch):
         lambda: repository,
     )
 
-    app.dependency_overrides[get_current_identity] = verified_identity
+    set_identity_override(verified_identity)
 
     client = TestClient(app)
 
@@ -356,7 +399,7 @@ def test_update_with_existing_username_returns_409(monkeypatch):
         lambda: repository,
     )
 
-    app.dependency_overrides[get_current_identity] = verified_identity
+    set_identity_override(verified_identity)
 
     client = TestClient(app)
 
@@ -389,7 +432,7 @@ def test_update_with_invalid_payload_returns_422(monkeypatch):
         lambda: repository,
     )
 
-    app.dependency_overrides[get_current_identity] = verified_identity
+    set_identity_override(verified_identity)
 
     client = TestClient(app)
 
@@ -436,7 +479,7 @@ def test_delete_my_profile(monkeypatch):
         lambda: auth_provider,
     )
 
-    app.dependency_overrides[get_current_identity] = verified_identity
+    set_identity_override(verified_identity)
 
     client = TestClient(app)
 
@@ -455,7 +498,9 @@ def test_delete_my_profile(monkeypatch):
     ]
 
 
-def test_delete_missing_profile_returns_404(monkeypatch):
+def test_delete_missing_profile_resumes_firebase_deletion(
+    monkeypatch,
+):
     repository = FakeUserRepository()
     auth_provider = FakeAuthProvider()
 
@@ -469,7 +514,7 @@ def test_delete_missing_profile_returns_404(monkeypatch):
         lambda: auth_provider,
     )
 
-    app.dependency_overrides[get_current_identity] = verified_identity
+    set_identity_override(verified_identity)
 
     client = TestClient(app)
 
@@ -479,8 +524,95 @@ def test_delete_missing_profile_returns_404(monkeypatch):
 
     app.dependency_overrides.clear()
 
-    assert response.status_code == 404
-    assert response.json()["error"]["code"] == "user_not_found"
+    assert response.status_code == 204
+    assert response.content == b""
 
     assert repository.users == []
-    assert auth_provider.deleted_uids == []
+    assert auth_provider.deleted_uids == [
+        "firebase-user-123"
+    ]
+
+def test_update_rejects_invalid_nationality(
+    monkeypatch,
+):
+    existing_user = User(
+        firebase_uid="firebase-user-123",
+        username="Jonathan Cahoreau",
+        email="user@nowave.test",
+    )
+
+    repository = FakeUserRepository(
+        users=[existing_user],
+    )
+
+    monkeypatch.setattr(
+        "app.api.routes.users.PostgreSQLUserRepository",
+        lambda: repository,
+    )
+
+    set_identity_override(verified_identity)
+
+    client = TestClient(app)
+
+    response = client.patch(
+        "/api/v1/users/me",
+        json={
+            "nationality": "1!",
+        },
+    )
+
+    app.dependency_overrides.clear()
+
+    assert response.status_code == 422
+
+    assert (
+        response.json()["error"]["code"]
+        == "request_validation_error"
+    )
+
+
+def test_domain_invalid_nationality_returns_422(
+    monkeypatch,
+):
+    class FailingUpdateUser:
+        def __init__(self, repository):
+            pass
+
+        def execute(
+            self,
+            firebase_uid,
+            changes,
+        ):
+            raise InvalidNationalityError(
+                "invalid nationality"
+            )
+
+    monkeypatch.setattr(
+        "app.api.routes.users.UpdateUser",
+        FailingUpdateUser,
+    )
+
+    monkeypatch.setattr(
+        "app.api.routes.users.PostgreSQLUserRepository",
+        FakeUserRepository,
+    )
+
+    set_identity_override(verified_identity)
+
+    client = TestClient(app)
+
+    response = client.patch(
+        "/api/v1/users/me",
+        json={
+            "nationality": "FR",
+        },
+    )
+
+    app.dependency_overrides.clear()
+
+    assert response.status_code == 422
+
+    assert (
+        response.json()["error"]["code"]
+        == "invalid_nationality"
+    )
