@@ -42,7 +42,8 @@ modification de `.env.json` nécessite un redémarrage complet de `flutter run`.
 Le fichier `.env.json` ne doit jamais être ajouté à Git.
 
 `MAPTILER_STYLE_URL` n’est plus lu par l’application : la carte utilise le
-style Mapbox Standard.
+style Mapbox Standard. Les couches publiques du Shom utilisées par la carte
+ne demandent aucune clé supplémentaire dans `.env.json`.
 
 ## Organisation du code
 
@@ -186,8 +187,33 @@ flutter test
 La carte utilise :
 
 - le SDK Mapbox pour l’affichage et les interactions ;
-- le style Mapbox Standard pour le fond ;
+- le style Mapbox Standard pour le fond terrestre ;
+- les services WMTS publics du Shom, à distance, pour la bathymétrie,
+  la réglementation de navigation, les informations portuaires, la toponymie
+  marine et le balisage ;
 - Geolocator pour récupérer la position de l’appareil.
+
+Les couches Shom sont demandées directement en Web Mercator EPSG:3857 par le
+mobile. NoWave n’embarque donc ni PBF, ni MBTiles, ni base cartographique Shom
+locale, et aucun téléchargement d’environ 2 Gio n’est nécessaire. Les sources
+raster sont déclarées volatiles dans Mapbox ; le cache normal du SDK peut
+néanmoins conserver temporairement les ressources nécessaires à l’affichage.
+
+Le WFS public du Shom est référencé pour de futures fonctions d’interrogation
+d’objets (bouées, balises, feux, etc.) mais n’est pas utilisé pour dessiner le
+fond actuel. La couche « Épaves et obstructions » est préparée dans le code
+mais désactivée par défaut car sa licence CC BY-SA 4.0 demande un traitement
+d’attribution distinct des couches actives.
+
+Les libellés de lieux du style Standard sont remplacés par des couches NoWave :
+les pays restent visibles jusqu’au zoom 6 inclus ; les villes s’affichent pour
+un zoom strictement supérieur à 6 et strictement inférieur à 12. Les noms
+français sont utilisés lorsqu’ils existent.
+
+Les signalements restent totalement indépendants du Shom : ils proviennent
+toujours des tuiles MVT du backend NoWave. Une panne de tuiles Shom affiche un
+avertissement sans bloquer le fond Mapbox, le GPS, la création de signalement
+ni les signalements déjà servis par NoWave.
 
 L’écran permet de demander la permission de localisation, d’afficher la
 position en degrés, minutes et secondes (par exemple `48° 23′ 12″ N`), et de

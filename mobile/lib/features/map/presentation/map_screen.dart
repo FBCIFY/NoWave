@@ -10,6 +10,7 @@ import 'package:uuid/uuid.dart';
 
 import '../../../core/map/accuracy_halo.dart';
 import '../../../core/map/map_config.dart';
+import '../../../core/map/shom_maritime_layers.dart';
 import '../../../core/location/coordinate_formatter.dart';
 import '../../../core/location/location_service.dart';
 import '../../../core/sensors/device_orientation_service.dart';
@@ -82,6 +83,7 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
   String? _locationError;
   MapboxMap? _mapboxMap;
   String? _mapError;
+  bool _shomUnavailable = false;
   bool _reportComposerOpen = false;
   CameraState? _cameraBeforeReport;
   bool _restoreFollowAfterReport = false;
@@ -315,6 +317,19 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
       return;
     }
 
+    // Une panne du service maritime ne doit jamais masquer le fond Mapbox,
+    // le GPS ni les signalements NoWave.
+    if (ShomMaritimeLayers.isSourceId(event.sourceId)) {
+      if (!_shomUnavailable) {
+        _shomUnavailable = true;
+        _showNotice(
+          'Données maritimes SHOM temporairement indisponibles.',
+          MapNoticeKind.warning,
+        );
+      }
+      return;
+    }
+
     setState(() {
       _mapError = 'Impossible de charger la carte. Vérifiez votre connexion et réessayez.';
     });
@@ -322,6 +337,10 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
 
   /// Une tuile des signalements s'est chargée : la couche répond de nouveau.
   void _handleSourceDataLoaded(SourceDataLoadedEventData event) {
+    if (ShomMaritimeLayers.isSourceId(event.id)) {
+      if (event.type == SourceDataType.TILE) _shomUnavailable = false;
+      return;
+    }
     if (event.id != ReportTiles.sourceId) return;
     if (event.type != SourceDataType.TILE) return;
     _reportLayer.tileLoaded(tile: _tileKey(event.tileID));
@@ -389,6 +408,31 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
     _syncHeatmapPulse();
     _reportLayer.resume();
     _startReportTilesTokenRenewal();
+  }
+
+  /// Ajoute les données maritimes distantes après le chargement du style.
+  /// Les signalements sont installés ensuite pour rester au-dessus du SHOM.
+  Future<void> _handleStyleLoaded() async {
+    final map = _mapboxMap;
+    if (map == null) return;
+
+    try {
+      await ShomMaritimeLayers.addTo(map);
+      _shomUnavailable = false;
+    } catch (error) {
+      debugPrint('Installation des couches SHOM impossible : $error');
+      if (mounted && !_shomUnavailable) {
+        _shomUnavailable = true;
+        _showNotice(
+          'Données maritimes SHOM temporairement indisponibles.',
+          MapNoticeKind.warning,
+        );
+      }
+    }
+
+    if (!mounted) return;
+    _showAccuracyHalo();
+    if (widget.reportTiles != null) _reportLayer.styleLoaded();
   }
 
   void _handleMapLoaded(MapLoadedEventData event) {
@@ -1114,10 +1158,7 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
                   unawaited(_locate());
                 },
                 onMapLoadedListener: _handleMapLoaded,
-                onStyleLoadedListener: (_) {
-                  _showAccuracyHalo();
-                  if (widget.reportTiles != null) _reportLayer.styleLoaded();
-                },
+                onStyleLoadedListener: (_) => unawaited(_handleStyleLoaded()),
                 onMapLoadErrorListener: _handleMapLoadError,
                 onSourceDataLoadedListener: _handleSourceDataLoaded,
                 onCameraChangeListener: _handleMapCameraChange,
