@@ -1,7 +1,7 @@
 import pytest
 
 from app.domain.boat import Boat, BoatType
-from app.domain.errors import BoatAlreadyExistsError
+from app.domain.errors import BoatAlreadyExistsError, BoatNotFoundError
 from app.domain.user import User
 from app.infrastructure.repositories.postgresql_boat_repository import (
     PostgreSQLBoatRepository,
@@ -54,7 +54,7 @@ def test_boat_repository_crud(dsn, monkeypatch):
         }
     )
 
-    boat_repository.update(boat)
+    boat_repository.update(boat, fields={"name", "boat_type", "flag_country"})
 
     updated = boat_repository.get_by_user_id(user.id)
 
@@ -119,3 +119,31 @@ def test_boat_repository_rejects_second_boat(
         stored_boat.boat_type
         == BoatType.SAILBOAT
     )
+
+
+def test_partial_boat_update_returns_current_omitted_values(db, dsn, monkeypatch):
+    monkeypatch.setenv("DATABASE_URL", dsn)
+    connection, ids = db
+    repository = PostgreSQLBoatRepository()
+    stale = repository.get_by_user_id(ids["user"])
+    connection.execute(
+        "UPDATE nowave.boats SET flag_country = 'IT' WHERE id = %s",
+        (ids["boat"],),
+    )
+    connection.commit()
+
+    stale.update({"name": "Aurore"})
+    result = repository.update(stale, fields={"name"})
+    assert result.name == "Aurore"
+    assert result.flag_country == "IT"
+    assert result.boat_type == BoatType.SAILBOAT
+
+
+def test_update_rejects_disappeared_boat(db, dsn, monkeypatch):
+    monkeypatch.setenv("DATABASE_URL", dsn)
+    repository = PostgreSQLBoatRepository()
+    boat = repository.get_by_user_id(db[1]["user"])
+    repository.delete(boat)
+    boat.update({"name": "Aurore"})
+    with pytest.raises(BoatNotFoundError):
+        repository.update(boat, fields={"name"})

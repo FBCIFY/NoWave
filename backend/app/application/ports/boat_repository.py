@@ -14,7 +14,8 @@ class BoatRepository(ABC):
         pass
 
     @abstractmethod
-    def update(self, boat: Boat) -> Boat:
+    def update(self, boat: Boat, *, fields: set[str]) -> Boat:
+        """Update only supplied fields and return the stored boat."""
         pass
 
     @abstractmethod

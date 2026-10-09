@@ -1,4 +1,7 @@
+from uuid import uuid4
+
 import pytest
+from psycopg.errors import UniqueViolation
 
 from app.domain.errors import UserNotFoundError
 from app.domain.user import User
@@ -164,3 +167,25 @@ def test_update_raises_when_user_disappears(
             snapshot,
             fields={"username"},
         )
+
+
+def test_unrelated_unique_violation_is_not_translated(dsn, monkeypatch):
+    monkeypatch.setenv("DATABASE_URL", dsn)
+    repository = PostgreSQLUserRepository()
+    suffix = uuid4().hex
+    first = User(
+        firebase_uid=f"first-{suffix}",
+        username=f"first-{suffix}",
+        email=f"first-{suffix}@nowave.test",
+    )
+    repository.save(first)
+    duplicate_id = User(
+        id=first.id,
+        firebase_uid=f"second-{suffix}",
+        username=f"second-{suffix}",
+        email=f"second-{suffix}@nowave.test",
+    )
+    with pytest.raises(UniqueViolation) as failure:
+        repository.save(duplicate_id)
+    assert failure.value.diag.constraint_name == "users_pkey"
+    assert repository.get_by_firebase_uid(duplicate_id.firebase_uid) is None

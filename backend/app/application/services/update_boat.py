@@ -39,6 +39,9 @@ class UpdateBoat:
                 "boat not found"
             )
 
+        if not changes:
+            return boat
+
         boat.update(changes)
 
-        return self.boat_repository.update(boat)
+        return self.boat_repository.update(boat, fields=set(changes))

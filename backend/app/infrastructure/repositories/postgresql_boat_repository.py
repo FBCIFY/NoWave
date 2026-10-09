@@ -2,7 +2,7 @@ from uuid import UUID
 
 from app.application.ports.boat_repository import BoatRepository
 from app.domain.boat import Boat, BoatType
-from app.domain.errors import BoatAlreadyExistsError
+from app.domain.errors import BoatAlreadyExistsError, BoatNotFoundError
 from app.infrastructure.database.connection import database_connection
 
 
@@ -69,30 +69,51 @@ class PostgreSQLBoatRepository(BoatRepository):
 
         return boat
 
-    def update(self, boat: Boat) -> Boat:
-        query = """
-            UPDATE nowave.boats
-            SET
-                name = %s,
-                boat_type = %s,
-                flag_country = %s,
-                updated_at = %s
-            WHERE id = %s
-        """
+    def update(self, boat: Boat, *, fields: set[str]) -> Boat:
+        allowed_fields = ("name", "boat_type", "flag_country")
+        unsupported_fields = fields - set(allowed_fields)
+        if unsupported_fields:
+            raise ValueError(
+                "unsupported boat update fields: "
+                + ", ".join(sorted(unsupported_fields))
+            )
+        if not fields:
+            return boat
 
-        values = (
-            boat.name,
-            boat.boat_type.value,
-            boat.flag_country,
-            boat.updated_at,
-            boat.id,
-        )
+        assignments = []
+        values = []
+        for field in allowed_fields:
+            if field not in fields:
+                continue
+            assignments.append(f"{field} = %s")
+            value = getattr(boat, field)
+            values.append(value.value if field == "boat_type" else value)
+
+        assignments.append("updated_at = %s")
+        values.extend((boat.updated_at, boat.id))
+
+        query = f"""
+            UPDATE nowave.boats
+            SET {", ".join(assignments)}
+            WHERE id = %s
+            RETURNING
+                id,
+                user_id,
+                name,
+                boat_type,
+                flag_country,
+                created_at,
+                updated_at
+        """
 
         with database_connection() as connection:
             with connection.cursor() as cursor:
                 cursor.execute(query, values)
+                row = cursor.fetchone()
 
-        return boat
+        if row is None:
+            raise BoatNotFoundError("boat not found")
+        return self._row_to_boat(row)
 
     def delete(self, boat: Boat) -> None:
         query = """
