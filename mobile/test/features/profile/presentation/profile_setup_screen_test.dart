@@ -187,8 +187,8 @@ void main() {
       expect(created, 0);
       expect(
         find.text(
-          'Cette adresse e-mail est déjà liée à un autre compte NoWave. '
-          'Connectez-vous avec ce compte.',
+          'Cette adresse e-mail est déjà liée à un autre profil NoWave. '
+          'Contactez le support.',
         ),
         findsOneWidget,
       );

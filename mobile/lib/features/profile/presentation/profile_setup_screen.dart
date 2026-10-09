@@ -70,8 +70,8 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
         _errorMessage = switch (error.code) {
           'username_already_exists' => 'Ce nom d’utilisateur est déjà utilisé.',
           'email_already_registered' =>
-            'Cette adresse e-mail est déjà liée à un autre compte NoWave. '
-                'Connectez-vous avec ce compte.',
+            'Cette adresse e-mail est déjà liée à un autre profil NoWave. '
+                'Contactez le support.',
           'email_not_verified' => 'Votre adresse e-mail doit être vérifiée.',
           'request_validation_error' => 'Vérifiez le nom d’utilisateur.',
           _ when error.statusCode == 409 => 'Impossible de créer ce profil.',
