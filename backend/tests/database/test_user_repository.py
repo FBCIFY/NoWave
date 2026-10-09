@@ -3,7 +3,12 @@ from uuid import uuid4
 import pytest
 from psycopg.errors import UniqueViolation
 
-from app.domain.errors import UserNotFoundError
+from app.domain.errors import (
+    EmailAlreadyRegisteredError,
+    UserAlreadyExistsError,
+    UserNotFoundError,
+    UsernameAlreadyExistsError,
+)
 from app.domain.user import User
 from app.infrastructure.repositories.postgresql_user_repository import (
     PostgreSQLUserRepository,
@@ -189,3 +194,61 @@ def test_unrelated_unique_violation_is_not_translated(dsn, monkeypatch):
         repository.save(duplicate_id)
     assert failure.value.diag.constraint_name == "users_pkey"
     assert repository.get_by_firebase_uid(duplicate_id.firebase_uid) is None
+
+
+@pytest.mark.parametrize(
+    ("field", "expected_error"),
+    [
+        ("username", UsernameAlreadyExistsError),
+        ("firebase_uid", UserAlreadyExistsError),
+        ("email", EmailAlreadyRegisteredError),
+    ],
+)
+def test_save_translates_user_unique_conflicts(
+    dsn, monkeypatch, field, expected_error
+):
+    monkeypatch.setenv("DATABASE_URL", dsn)
+    repository = PostgreSQLUserRepository()
+    suffix = uuid4().hex
+    first = User(
+        firebase_uid=f"first-{suffix}",
+        username=f"first-{suffix}",
+        email=f"first-{suffix}@nowave.test",
+    )
+    second = User(
+        firebase_uid=f"second-{suffix}",
+        username=f"second-{suffix}",
+        email=f"second-{suffix}@nowave.test",
+    )
+    repository.save(first)
+    setattr(second, field, getattr(first, field))
+
+    with pytest.raises(expected_error):
+        repository.save(second)
+
+
+def test_update_translates_username_unique_conflict(dsn, monkeypatch):
+    monkeypatch.setenv("DATABASE_URL", dsn)
+    repository = PostgreSQLUserRepository()
+    suffix = uuid4().hex
+    first = User(
+        firebase_uid=f"first-update-{suffix}",
+        username=f"first-update-{suffix}",
+        email=f"first-update-{suffix}@nowave.test",
+    )
+    second = User(
+        firebase_uid=f"second-update-{suffix}",
+        username=f"second-update-{suffix}",
+        email=f"second-update-{suffix}@nowave.test",
+    )
+    repository.save(first)
+    repository.save(second)
+    original_username = second.username
+    second.update_profile({"username": first.username})
+
+    with pytest.raises(UsernameAlreadyExistsError):
+        repository.update(second, fields={"username"})
+
+    persisted = repository.get_by_firebase_uid(second.firebase_uid)
+    assert persisted is not None
+    assert persisted.username == original_username

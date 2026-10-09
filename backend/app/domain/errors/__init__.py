@@ -6,6 +6,7 @@ from app.domain.errors.exceptions import (
     DevicePositionFutureError,
     DevicePositionStaleError,
     DomainError,
+    EmailAlreadyRegisteredError,
     EmailNotVerifiedError,
     GpsPrecisionInsufficientError,
     InactiveUserError,

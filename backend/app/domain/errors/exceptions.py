@@ -26,6 +26,10 @@ class UserAlreadyExistsError(DomainError):
     pass
 
 
+class EmailAlreadyRegisteredError(DomainError):
+    pass
+
+
 class UsernameAlreadyExistsError(DomainError):
     pass
 

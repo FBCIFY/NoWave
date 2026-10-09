@@ -86,6 +86,12 @@ Les deux clés acceptent aussi les variantes `SCW_ACCESS_KEY_FILE` et
 - `PATCH /api/v1/users/me` modifie le profil.
 - `DELETE /api/v1/users/me` supprime le profil.
 
+Les conflits de création de profil renvoient `409` avec un code distinct :
+`user_already_exists` si l'UID Firebase possède déjà un profil,
+`username_already_exists` si le nom est pris, et `email_already_registered`
+si l'adresse e-mail appartient à un autre profil. Ce dernier code ne signifie
+pas qu'un profil existe pour l'UID Firebase courant.
+
 ### Suppression de compte
 
 La suppression conserve l'ordre SQL puis Firebase. Si la suppression SQL a

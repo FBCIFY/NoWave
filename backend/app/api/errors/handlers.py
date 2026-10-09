@@ -9,6 +9,7 @@ from app.domain.errors import (
     DeviceNotFoundError,
     DevicePositionFutureError,
     DevicePositionStaleError,
+    EmailAlreadyRegisteredError,
     EmailNotVerifiedError,
     GpsPrecisionInsufficientError,
     InactiveUserError,
@@ -132,6 +133,19 @@ def email_not_verified_handler(request, exc: EmailNotVerifiedError):
         content={
             "error": {
                 "code": "email_not_verified",
+                "message": str(exc),
+                "details": None,
+            }
+        },
+    )
+
+
+def email_already_registered_handler(request, exc: EmailAlreadyRegisteredError):
+    return JSONResponse(
+        status_code=409,
+        content={
+            "error": {
+                "code": "email_already_registered",
                 "message": str(exc),
                 "details": None,
             }

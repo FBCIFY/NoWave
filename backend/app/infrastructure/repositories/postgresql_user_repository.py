@@ -2,6 +2,7 @@ from psycopg.errors import UniqueViolation
 
 from app.application.ports.user_repository import UserRepository
 from app.domain.errors import (
+    EmailAlreadyRegisteredError,
     UserAlreadyExistsError,
     UserNotFoundError,
     UsernameAlreadyExistsError,
@@ -220,7 +221,12 @@ class PostgreSQLUserRepository(UserRepository):
     @staticmethod
     def _unique_conflict(
         error: UniqueViolation,
-    ) -> UserAlreadyExistsError | UsernameAlreadyExistsError | None:
+    ) -> (
+        EmailAlreadyRegisteredError
+        | UserAlreadyExistsError
+        | UsernameAlreadyExistsError
+        | None
+    ):
         if error.diag.schema_name != "nowave" or error.diag.table_name != "users":
             return None
 
@@ -229,7 +235,7 @@ class PostgreSQLUserRepository(UserRepository):
         if error.diag.constraint_name == "users_firebase_uid_key":
             return UserAlreadyExistsError("user profile already exists")
         if error.diag.constraint_name == "users_email_key":
-            return UserAlreadyExistsError("email already registered")
+            return EmailAlreadyRegisteredError("email already registered")
         return None
 
     def _row_to_user(self, row) -> User:
