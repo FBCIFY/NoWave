@@ -15,6 +15,7 @@ from app.api.errors.handlers import (
     http_exception_handler,
     boat_already_exists_handler,
     boat_not_found_handler,
+    email_already_registered_handler,
     email_not_verified_handler,
     gps_precision_insufficient_handler,
     inactive_user_handler,
@@ -41,6 +42,7 @@ from app.domain.errors import (
     DevicePositionStaleError,
     BoatAlreadyExistsError,
     BoatNotFoundError,
+    EmailAlreadyRegisteredError,
     EmailNotVerifiedError,
     GpsPrecisionInsufficientError,
     InactiveUserError,
@@ -122,6 +124,11 @@ app.add_exception_handler(
 app.add_exception_handler(
     InactiveUserError,
     inactive_user_handler,
+)
+
+app.add_exception_handler(
+    EmailAlreadyRegisteredError,
+    email_already_registered_handler,
 )
 
 app.add_exception_handler(

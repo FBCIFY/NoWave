@@ -4,7 +4,7 @@ from app.api.dependencies.auth import (
     get_authenticated_identity,
     get_current_identity,
 )
-from app.domain.errors import InvalidNationalityError
+from app.domain.errors import EmailAlreadyRegisteredError, InvalidNationalityError
 from app.domain.user import User, UserStatus
 from app.main import app
 
@@ -188,6 +188,36 @@ def test_create_profile_with_existing_username_returns_409(monkeypatch):
 
     assert response.status_code == 409
     assert response.json()["error"]["code"] == "username_already_exists"
+
+
+def test_create_profile_with_existing_email_returns_distinct_409(monkeypatch):
+    repository = FakeUserRepository()
+
+    def reject_registered_email(user):
+        raise EmailAlreadyRegisteredError("email already registered")
+
+    monkeypatch.setattr(repository, "save", reject_registered_email)
+    monkeypatch.setattr(
+        "app.api.routes.users.PostgreSQLUserRepository",
+        lambda: repository,
+    )
+    set_identity_override(verified_identity)
+
+    client = TestClient(app)
+    response = client.post(
+        "/api/v1/users/me",
+        json={"username": "Jonathan"},
+    )
+    app.dependency_overrides.clear()
+
+    assert response.status_code == 409
+    assert response.json() == {
+        "error": {
+            "code": "email_already_registered",
+            "message": "email already registered",
+            "details": None,
+        }
+    }
 
 
 def test_create_profile_with_invalid_payload_returns_422(monkeypatch):
