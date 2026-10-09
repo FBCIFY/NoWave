@@ -128,10 +128,14 @@ class DeviceRegistration {
   }
 
   Future<void> _unregister() async {
-    if (_state == _RegistrationState.cleaned ||
-        _state == _RegistrationState.signedOut) {
+    // Session ouverte après une déconnexion, sans atteindre l'accueil (compte
+    // sans profil ou suspendu) : l'identifiant a été oublié à la déconnexion
+    // précédente et rien n'a été enregistré depuis, rien à nettoyer.
+    if (_state == _RegistrationState.signedOut) {
+      _state = _RegistrationState.cleaned;
       return;
     }
+    if (_state == _RegistrationState.cleaned) return;
     await stop();
     try {
       await _devices.deactivate();

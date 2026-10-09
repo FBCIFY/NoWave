@@ -350,6 +350,27 @@ void main() {
     expect(registration.cancelSignOut, throwsStateError);
   });
 
+  test('se déconnecte d’une session qui n’a pas atteint l’accueil', () async {
+    final devices = _FakeDeviceService(installationIds);
+    final registration = createRegistration(devices);
+    await registration.unregister();
+    registration.completeSignOut();
+
+    final newId = await installationIds.read();
+
+    // Compte suivant sans profil ou suspendu : start() n'est jamais appelé.
+    await registration.unregister();
+    registration.completeSignOut();
+
+    expect(devices.deactivations, hasLength(1));
+    expect(pushTokens.deleteCalls, 1);
+    expect(await installationIds.read(), newId);
+
+    // Le compte d'après arrive sur l'accueil : le téléphone s'enregistre.
+    await registration.start();
+    expect(devices.registrations.single.installationId, newId);
+  });
+
   test('un échec Firebase après le nettoyage ne déclenche pas un DELETE '
       'sur un nouvel identifiant au prochain essai', () async {
     final devices = _FakeDeviceService(installationIds);

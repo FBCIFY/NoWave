@@ -503,6 +503,11 @@ bloque pas la fermeture de session : l'ancien appareil n'a plus de token côté
 backend. Si seule la fermeture Firebase échoue, le prochain essai ne recrée
 pas d'appareil et ne répète pas un nettoyage déjà terminé.
 
+Un compte qui n'atteint pas l'accueil (sans profil ou suspendu) n'enregistre
+pas le téléphone. S'il succède à une autre session sans relancer l'app, sa
+déconnexion n'appelle pas le backend : l'identifiant a déjà été oublié et
+rien n'a été enregistré depuis (NW-158).
+
 Après fermeture forcée de l'application pendant un échec serveur, la session
 Firebase et l'ancien identifiant restent conservés. L'utilisateur peut reprendre
 la déconnexion depuis ce même compte. Les tests automatisés couvrent la
