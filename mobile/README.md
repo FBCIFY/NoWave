@@ -123,6 +123,10 @@ alors le profil du compte (`GET /api/v1/users/me`) et continue avec lui, avec
 le nom enregistré la première fois (NW-153). S’il ne le trouve pas, il affiche
 une erreur sans recréer de profil.
 
+Si l’adresse e-mail appartient déjà au profil d’un autre compte, le serveur
+répond 409 `email_already_registered`. L’écran affiche un message dédié et
+ne relit pas le profil : ce compte n’en a pas (NW-155).
+
 Les fichiers Firebase Android et iOS sont versionnés. Après un clone,
 `flutter pub get` suffit pour utiliser la configuration existante.
 

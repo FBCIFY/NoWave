@@ -172,6 +172,29 @@ void main() {
     expect(find.text('Ce nom d’utilisateur est déjà utilisé.'), findsOneWidget);
   });
 
+  testWidgets(
+    'e-mail lié à un autre profil : message dédié, pas de relecture',
+    (tester) async {
+      final backend = _Backend(
+        posts: [_error(409, 'email_already_registered')],
+      );
+      var created = 0;
+      await _pumpScreen(tester, backend, onProfileCreated: () => created++);
+
+      await _submit(tester, 'nouveau_nom');
+
+      expect(backend.requests, ['POST']);
+      expect(created, 0);
+      expect(
+        find.text(
+          'Cette adresse e-mail est déjà liée à un autre profil NoWave. '
+          'Contactez le support.',
+        ),
+        findsOneWidget,
+      );
+    },
+  );
+
   testWidgets('création réussie : continue sans relecture', (tester) async {
     final backend = _Backend(
       posts: [http.Response(jsonEncode(_profileJson), 201)],
