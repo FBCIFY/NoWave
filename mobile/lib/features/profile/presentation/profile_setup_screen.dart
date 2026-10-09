@@ -14,6 +14,8 @@ import '../../auth/presentation/widgets/auth_text_field.dart';
 /// vérifié. Il répond aussi 409 si ce compte a déjà un profil : une première
 /// création a abouti sans que sa réponse arrive (NW-153). L'écran relit alors
 /// le profil du compte et continue avec lui, sans en créer d'autre.
+/// Un 409 `email_already_registered` signifie que l'e-mail appartient au
+/// profil d'un autre compte : pas de relecture, un message suffit (NW-155).
 class ProfileSetupScreen extends StatefulWidget {
   final ProfileService profileService;
   final VoidCallback onProfileCreated;
@@ -67,6 +69,9 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
       setState(() {
         _errorMessage = switch (error.code) {
           'username_already_exists' => 'Ce nom d’utilisateur est déjà utilisé.',
+          'email_already_registered' =>
+            'Cette adresse e-mail est déjà liée à un autre compte NoWave. '
+                'Connectez-vous avec ce compte.',
           'email_not_verified' => 'Votre adresse e-mail doit être vérifiée.',
           'request_validation_error' => 'Vérifiez le nom d’utilisateur.',
           _ when error.statusCode == 409 => 'Impossible de créer ce profil.',
