@@ -1,5 +1,11 @@
+from psycopg.errors import UniqueViolation
+
 from app.application.ports.user_repository import UserRepository
-from app.domain.errors import UserNotFoundError
+from app.domain.errors import (
+    UserAlreadyExistsError,
+    UserNotFoundError,
+    UsernameAlreadyExistsError,
+)
 from app.domain.user import User, UserRole, UserStatus
 from app.infrastructure.database.connection import database_connection
 
@@ -104,9 +110,15 @@ class PostgreSQLUserRepository(UserRepository):
             user.updated_at,
         )
 
-        with database_connection() as connection:
-            with connection.cursor() as cursor:
-                cursor.execute(query, values)
+        try:
+            with database_connection() as connection:
+                with connection.cursor() as cursor:
+                    cursor.execute(query, values)
+        except UniqueViolation as error:
+            conflict = self._unique_conflict(error)
+            if conflict is None:
+                raise
+            raise conflict from error
 
         return user
 
@@ -177,10 +189,16 @@ class PostgreSQLUserRepository(UserRepository):
                 updated_at
         """
 
-        with database_connection() as connection:
-            with connection.cursor() as cursor:
-                cursor.execute(query, values)
-                row = cursor.fetchone()
+        try:
+            with database_connection() as connection:
+                with connection.cursor() as cursor:
+                    cursor.execute(query, values)
+                    row = cursor.fetchone()
+        except UniqueViolation as error:
+            conflict = self._unique_conflict(error)
+            if conflict is None:
+                raise
+            raise conflict from error
 
         if row is None:
             raise UserNotFoundError(
@@ -198,6 +216,21 @@ class PostgreSQLUserRepository(UserRepository):
         with database_connection() as connection:
             with connection.cursor() as cursor:
                 cursor.execute(query, (user.id,))
+
+    @staticmethod
+    def _unique_conflict(
+        error: UniqueViolation,
+    ) -> UserAlreadyExistsError | UsernameAlreadyExistsError | None:
+        if error.diag.schema_name != "nowave" or error.diag.table_name != "users":
+            return None
+
+        if error.diag.constraint_name == "users_username_key":
+            return UsernameAlreadyExistsError("username already exists")
+        if error.diag.constraint_name == "users_firebase_uid_key":
+            return UserAlreadyExistsError("user profile already exists")
+        if error.diag.constraint_name == "users_email_key":
+            return UserAlreadyExistsError("email already registered")
+        return None
 
     def _row_to_user(self, row) -> User:
         return User(

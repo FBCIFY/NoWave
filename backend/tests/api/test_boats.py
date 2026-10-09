@@ -38,7 +38,7 @@ class FakeBoatRepository:
         self.boat = boat
         return boat
 
-    def update(self, boat):
+    def update(self, boat, *, fields):
         self.boat = boat
         return boat
 
