@@ -247,6 +247,7 @@ class _ProfileGateState extends State<ProfileGate> with WidgetsBindingObserver {
           step = 4;
           screen = SuspendedAccountScreen(
             onSignOut: () => unawaited(_signOut()),
+            onDeleteAccount: () => unawaited(_openAccountDeletion()),
           );
         } else if (snapshot.connectionState == ConnectionState.waiting) {
           if (_profileWasJustCreated) {
