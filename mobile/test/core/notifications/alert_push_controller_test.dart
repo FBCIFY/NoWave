@@ -35,6 +35,30 @@ void main() {
     await controller.start();
   }
 
+  for (final delivery in ['foreground', 'background', 'terminated']) {
+    test('push sans GeoJSON en $delivery ouvre une seule fois', () async {
+      final message = RemoteMessage(
+        messageId: 'dms-only',
+        data: pushData()
+          ..remove('position')
+          ..remove('alerted_at'),
+      );
+      if (delivery == 'terminated') source.initial = message;
+      await ready();
+      if (delivery == 'foreground') {
+        source.messages.add(message);
+        expect(controller.foreground, isNotNull);
+        controller.open(controller.foreground!);
+      }
+      source.taps.add(message);
+      source.taps.add(message);
+      await flush();
+      expect(opened, hasLength(1));
+      expect(opened.single.alert.reportId, 'report-a');
+      expect(opened.single.alert.latitude, closeTo(43.29, 1e-10));
+    });
+  }
+
   test('foreground affiche une fois, aucun déplacement avant appui', () async {
     await ready();
     var notices = 0;

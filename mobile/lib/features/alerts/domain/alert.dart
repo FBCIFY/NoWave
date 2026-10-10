@@ -132,7 +132,7 @@ class AlertPage {
 }
 
 /// Contrat de data FCM proposé en attendant le worker : toutes les valeurs
-/// FCM sont des chaînes ; position contient un Point GeoJSON sérialisé.
+/// FCM sont des chaînes ; position_dms est requis, position GeoJSON facultatif.
 class AlertPush {
   const AlertPush({
     required this.alert,
@@ -149,17 +149,28 @@ class AlertPush {
 
   factory AlertPush.fromData(Map<String, dynamic> data, {String? messageId}) {
     final expiresAt = DateTime.parse(Alert.nonEmpty(data['expires_at']));
+    final positionDms = Alert.nonEmpty(data['position_dms']);
+    final coordinates = _parseDms(positionDms);
     final alert = Alert.fromJson({
       'id': data['alert_id'],
       'report_id': data['report_id'],
       'report_version': int.parse(Alert.nonEmpty(data['report_version'])),
       'category': data['category'],
-      'position': jsonDecode(Alert.nonEmpty(data['position'])),
+      'position': data.containsKey('position')
+          ? jsonDecode(Alert.nonEmpty(data['position']))
+          : {
+              'type': 'Point',
+              'coordinates': [coordinates.longitude, coordinates.latitude],
+            },
       'distance_m': double.parse(Alert.nonEmpty(data['distance_m'])),
       'alerted_at': data['alerted_at'],
     }, requireAlertedAt: false);
-    final positionDms = Alert.nonEmpty(data['position_dms']);
-    _validateDms(positionDms, alert);
+    // Le GeoJSON fourni conserve sa précision, après contrôle de cohérence.
+    const tolerance = 0.5 / 3600 + 1e-10;
+    if ((coordinates.latitude - alert.latitude).abs() > tolerance ||
+        (coordinates.longitude - alert.longitude).abs() > tolerance) {
+      throw const FormatException('Position DMS incohérente avec le GeoJSON.');
+    }
     return AlertPush(
       alert: alert,
       expiresAt: expiresAt,
@@ -170,9 +181,8 @@ class AlertPush {
 
   /// DMS requis : latitude puis longitude, séparées par un point médian
   /// ou une virgule. Accepte les primes Unicode et les quotes ASCII.
-  /// Tolérance d'une demi-seconde d'arc pour l'arrondi à la seconde entière.
-  /// L'UI continue de formater les coordonnées GeoJSON validées.
-  static void _validateDms(String value, Alert alert) {
+  /// Les coordonnées dérivées servent aussi lorsque le GeoJSON est absent.
+  static ({double latitude, double longitude}) _parseDms(String value) {
     const component =
         r"""(\d{1,3})°\s*(\d{1,2})[′']\s*(\d{1,2}(?:\.\d+)?)[″"]\s*""";
     final match = RegExp(
@@ -196,10 +206,6 @@ class AlertPush {
       return direction == 'S' || direction == 'W' ? -absolute : absolute;
     }
 
-    const tolerance = 0.5 / 3600 + 1e-10;
-    if ((coordinate(1, 90) - alert.latitude).abs() > tolerance ||
-        (coordinate(5, 180) - alert.longitude).abs() > tolerance) {
-      throw const FormatException('Position DMS incohérente avec le GeoJSON.');
-    }
+    return (latitude: coordinate(1, 90), longitude: coordinate(5, 180));
   }
 }

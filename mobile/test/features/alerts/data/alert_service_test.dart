@@ -128,6 +128,51 @@ void main() {
       );
     });
   }
+  test('payload documentaire sans GeoJSON : coordonnées dérivées du DMS', () {
+    final data = pushData()
+      ..remove('position')
+      ..remove('alerted_at');
+    final push = AlertPush.fromData(data);
+    expect(push.alert.latitude, closeTo(43.29, 1e-10));
+    expect(push.alert.longitude, closeTo(5.37, 1e-10));
+    expect(push.alert.reportId, 'report-a');
+    expect(push.alert.alertedAt, isNull);
+    expect(push.alert.positionDms, push.positionDms);
+  });
+  test('sans GeoJSON : dérivation des hémisphères sud et ouest', () {
+    final data = pushData()..remove('position');
+    data['position_dms'] = '43° 17′ 24″ S · 5° 22′ 12″ W';
+    final push = AlertPush.fromData(data);
+    expect(push.alert.latitude, closeTo(-43.29, 1e-10));
+    expect(push.alert.longitude, closeTo(-5.37, 1e-10));
+  });
+  for (final position in <Object?>[
+    null,
+    '',
+    'not-json',
+    '{"type":"LineString","coordinates":[5.37,43.29]}',
+    '{"type":"Point","coordinates":[190,43.29]}',
+    '{"type":"Point","coordinates":[5.37]}',
+    '{"type":"Point","coordinates":["5.37",43.29]}',
+  ]) {
+    test('GeoJSON fourni invalide reste rejeté : $position', () {
+      expect(
+        () => AlertPush.fromData({...pushData(), 'position': position}),
+        throwsFormatException,
+      );
+    });
+  }
+  for (final dms in [null, 'not-dms', '91° 0′ 0″ N · 5° 0′ 0″ E']) {
+    test('sans GeoJSON, DMS absent ou invalide reste rejeté : $dms', () {
+      final data = pushData()..remove('position');
+      if (dms == null) {
+        data.remove('position_dms');
+      } else {
+        data['position_dms'] = dms;
+      }
+      expect(() => AlertPush.fromData(data), throwsFormatException);
+    });
+  }
   test('push exige position_dms', () {
     expect(
       () => AlertPush.fromData(pushData()..remove('position_dms')),
