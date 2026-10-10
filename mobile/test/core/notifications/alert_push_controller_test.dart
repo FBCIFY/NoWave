@@ -130,6 +130,29 @@ void main() {
     await flush();
     expect(opened, isEmpty);
   });
+  for (final delivery in ['foreground', 'background', 'terminated']) {
+    test('DMS incohérent en $delivery : aucun crash ni navigation', () async {
+      final message = RemoteMessage(
+        data: {...pushData(), 'position_dms': '43° 17′ 24″ S · 5° 22′ 12″ E'},
+      );
+      if (delivery == 'terminated') source.initial = message;
+      await ready();
+      if (delivery == 'foreground') source.messages.add(message);
+      if (delivery == 'background') source.taps.add(message);
+      await flush();
+      expect(opened, isEmpty);
+      expect(controller.foreground, isNull);
+      if (delivery != 'foreground') {
+        expect(controller.notice, contains('invalide'));
+      }
+      // Un rejet ne consomme pas les identifiants de déduplication.
+      source.taps.add(pushMessage());
+      source.taps.add(pushMessage());
+      await flush();
+      expect(opened, hasLength(1));
+    });
+  }
+
   test('payload invalide ou incomplet ne crashe pas', () async {
     await ready();
     source.taps.add(const RemoteMessage(data: {'report_id': 'a'}));

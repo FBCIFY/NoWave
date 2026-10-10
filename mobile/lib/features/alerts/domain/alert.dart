@@ -138,30 +138,68 @@ class AlertPush {
     required this.alert,
     required this.expiresAt,
     this.messageId,
-    this.positionDms,
+    required this.positionDms,
   });
   final Alert alert;
   final DateTime expiresAt;
   final String? messageId;
-  final String? positionDms;
+  final String positionDms;
 
   bool expired(DateTime now) => !expiresAt.isAfter(now);
 
   factory AlertPush.fromData(Map<String, dynamic> data, {String? messageId}) {
     final expiresAt = DateTime.parse(Alert.nonEmpty(data['expires_at']));
+    final alert = Alert.fromJson({
+      'id': data['alert_id'],
+      'report_id': data['report_id'],
+      'report_version': int.parse(Alert.nonEmpty(data['report_version'])),
+      'category': data['category'],
+      'position': jsonDecode(Alert.nonEmpty(data['position'])),
+      'distance_m': double.parse(Alert.nonEmpty(data['distance_m'])),
+      'alerted_at': data['alerted_at'],
+    }, requireAlertedAt: false);
+    final positionDms = Alert.nonEmpty(data['position_dms']);
+    _validateDms(positionDms, alert);
     return AlertPush(
-      alert: Alert.fromJson({
-        'id': data['alert_id'],
-        'report_id': data['report_id'],
-        'report_version': int.parse(Alert.nonEmpty(data['report_version'])),
-        'category': data['category'],
-        'position': jsonDecode(Alert.nonEmpty(data['position'])),
-        'distance_m': double.parse(Alert.nonEmpty(data['distance_m'])),
-        'alerted_at': data['alerted_at'],
-      }, requireAlertedAt: false),
+      alert: alert,
       expiresAt: expiresAt,
       messageId: messageId,
-      positionDms: data['position_dms'] as String?,
+      positionDms: positionDms,
     );
+  }
+
+  /// DMS requis : latitude puis longitude, séparées par un point médian
+  /// ou une virgule. Accepte les primes Unicode et les quotes ASCII.
+  /// Tolérance d'une demi-seconde d'arc pour l'arrondi à la seconde entière.
+  /// L'UI continue de formater les coordonnées GeoJSON validées.
+  static void _validateDms(String value, Alert alert) {
+    const component =
+        r"""(\d{1,3})°\s*(\d{1,2})[′']\s*(\d{1,2}(?:\.\d+)?)[″"]\s*""";
+    final match = RegExp(
+      '^\\s*$component([NS])\\s*[·,]\\s*$component([EW])\\s*\$',
+    ).firstMatch(value);
+    if (match == null) {
+      throw const FormatException('Position DMS invalide.');
+    }
+    double coordinate(int offset, int maximum) {
+      final degrees = int.parse(match.group(offset)!);
+      final minutes = int.parse(match.group(offset + 1)!);
+      final seconds = double.parse(match.group(offset + 2)!);
+      final direction = match.group(offset + 3)!;
+      if (degrees > maximum ||
+          minutes >= 60 ||
+          seconds >= 60 ||
+          (degrees == maximum && (minutes != 0 || seconds != 0))) {
+        throw const FormatException('Coordonnée DMS invalide.');
+      }
+      final absolute = degrees + minutes / 60 + seconds / 3600;
+      return direction == 'S' || direction == 'W' ? -absolute : absolute;
+    }
+
+    const tolerance = 0.5 / 3600 + 1e-10;
+    if ((coordinate(1, 90) - alert.latitude).abs() > tolerance ||
+        (coordinate(5, 180) - alert.longitude).abs() > tolerance) {
+      throw const FormatException('Position DMS incohérente avec le GeoJSON.');
+    }
   }
 }
