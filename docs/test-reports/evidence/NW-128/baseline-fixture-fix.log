@@ -1,0 +1,5 @@
+00:00 +0: loading /home/palms/NoWave-sprint3/mobile/test/features/alerts/presentation/auth_gate_alerts_test.dart
+00:00 +0: terminated simulé avant connexion, puis profil prêt, doublon et logout
+00:00 +1: compte suspendu ne reçoit pas de navigation depuis FCM
+00:00 +2: accueil ouvre l’historique puis la fiche existante
+00:01 +3: All tests passed!
