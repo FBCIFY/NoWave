@@ -260,6 +260,7 @@ void main() {
         final f = _Session()..suspended = suspended;
         await f.mount(tester);
         await f.deleteAction(tester);
+        f.source.taps.add(pushMessage());
         await tester.tap(find.text('Supprimer définitivement mon compte'));
         await tester.pumpAndSettle();
         expect(find.byType(LoginScreen), findsOneWidget);
@@ -272,6 +273,14 @@ void main() {
         expect(prefs.getString('installation_id'), isNull);
         expect(prefs.getStringList('account_deletion'), isNull);
         expect(f.auth.currentUser, isNull);
+        f.suspended = false;
+        f.auth.login('b');
+        await tester.pumpAndSettle();
+        expect(find.byType(AlertReportScreen), findsNothing);
+        expect(
+          f.requests.where((r) => r.url.path.contains('/reports/')),
+          isEmpty,
+        );
         await tester.pumpWidget(const SizedBox.shrink());
       },
     );
