@@ -1,18 +1,21 @@
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
-import 'package:mapbox_maps_flutter/mapbox_maps_flutter.dart';
 import 'package:http/http.dart' as http;
+import 'package:mapbox_maps_flutter/mapbox_maps_flutter.dart';
 
 import 'app/app.dart';
-import 'core/map/map_config.dart';
 import 'core/api/api_service.dart';
 import 'core/device/device_position_reporter.dart';
 import 'core/device/device_registration.dart';
 import 'core/device/device_service.dart';
 import 'core/device/installation_id_store.dart';
 import 'core/location/location_service.dart';
+import 'core/map/map_config.dart';
+import 'core/notifications/alert_push_controller.dart';
+import 'core/notifications/alert_push_source.dart';
 import 'core/notifications/notification_permission.dart';
 import 'core/notifications/push_tokens.dart';
+import 'features/alerts/data/alert_service.dart';
 import 'features/auth/data/auth_service.dart';
 import 'features/auth/presentation/auth_gate.dart';
 import 'features/camera/data/position_estimate_service.dart';
@@ -79,6 +82,11 @@ Future<void> main() async {
     MyApp(
       home: AuthGate(
         authService: authService,
+        alertService: AlertService(
+          apiService: apiService,
+          getIdToken: authService.getIdToken,
+        ),
+        pushController: AlertPushController(source: FirebaseAlertPushSource()),
         inactiveUserEvents: inactiveUserEvents,
         profileService: profileService,
         reportService: reportService,

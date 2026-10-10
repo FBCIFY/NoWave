@@ -20,9 +20,11 @@ class ReportDetailSheet extends StatefulWidget {
     required this.loadPhoto,
     this.userPosition,
     this.now = DateTime.now,
+    this.onShowOnMap,
   });
 
   final String reportId;
+  final Future<void> Function(ReportDetail)? onShowOnMap;
 
   /// Charge la fiche, en général `ReportDetailService.fetchReport`.
   final Future<ReportDetail> Function(String reportId) loadReport;
@@ -87,6 +89,7 @@ class _ReportDetailSheetState extends State<ReportDetailSheet> {
             if (snapshot.hasData) {
               return _ReportDetailContent(
                 report: snapshot.requireData,
+                onShowOnMap: widget.onShowOnMap,
                 userPosition: widget.userPosition,
                 now: widget.now(),
                 loadPhoto: widget.loadPhoto,
@@ -114,6 +117,7 @@ class _ReportDetailSheetState extends State<ReportDetailSheet> {
 class _ReportDetailContent extends StatelessWidget {
   const _ReportDetailContent({
     required this.report,
+    this.onShowOnMap,
     required this.userPosition,
     required this.now,
     required this.loadPhoto,
@@ -121,6 +125,7 @@ class _ReportDetailContent extends StatelessWidget {
   });
 
   final ReportDetail report;
+  final Future<void> Function(ReportDetail)? onShowOnMap;
   final ({double latitude, double longitude})? userPosition;
   final DateTime now;
   final Future<Uint8List> Function(String url) loadPhoto;
@@ -189,6 +194,8 @@ class _ReportDetailContent extends StatelessWidget {
               ),
             ],
           ),
+          if (onShowOnMap != null)
+            _ShowOnMapButton(onPressed: () => onShowOnMap!(report)),
           if (description != null && description.isNotEmpty) ...[
             const SizedBox(height: 16),
             Text(description, style: theme.textTheme.bodyLarge),
@@ -469,6 +476,8 @@ class _ReportDetailError extends StatelessWidget {
         'Ce signalement n’est plus disponible : il a expiré ou a été retiré.',
       ApiException(statusCode: 401) =>
         'Votre session a expiré. Reconnectez-vous puis réessayez.',
+      ApiException(statusCode: 403) =>
+        'Vous n’avez pas accès à ce signalement.',
       ApiException() => 'Le serveur ne répond pas correctement. Réessayez.',
       // Délai dépassé, pas de réseau ou réponse illisible.
       _ => 'Impossible de charger le signalement. Vérifiez votre connexion.',
@@ -498,4 +507,40 @@ class _ReportDetailError extends StatelessWidget {
       ],
     );
   }
+}
+
+/// Une seule navigation carte à la fois, même après un double appui.
+class _ShowOnMapButton extends StatefulWidget {
+  const _ShowOnMapButton({required this.onPressed});
+  final Future<void> Function() onPressed;
+  @override
+  State<_ShowOnMapButton> createState() => _ShowOnMapButtonState();
+}
+
+class _ShowOnMapButtonState extends State<_ShowOnMapButton> {
+  bool _busy = false;
+  Future<void> _open() async {
+    if (_busy) return;
+    setState(() => _busy = true);
+    try {
+      await widget.onPressed();
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Impossible d’ouvrir la carte. Réessayez.'),
+          ),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) => TextButton.icon(
+    onPressed: _busy ? null : _open,
+    icon: const Icon(Icons.map_outlined),
+    label: const Text('Voir sur la carte'),
+  );
 }

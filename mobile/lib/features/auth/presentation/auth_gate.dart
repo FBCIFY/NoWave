@@ -1,10 +1,14 @@
+import 'dart:async';
+
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 import '../../../core/device/device_position_reporter.dart';
 import '../../../core/device/device_registration.dart';
-import '../../../core/notifications/push_notification_listener.dart';
+
+import '../../../core/notifications/alert_push_controller.dart';
+import '../../alerts/data/alert_service.dart';
 import '../../camera/data/position_estimate_service.dart';
 import '../../map/data/report_tiles.dart';
 import '../../profile/data/profile_service.dart';
@@ -23,6 +27,8 @@ import 'widgets/flow_transition.dart';
 /// `step` ne sert qu'au sens de l'animation entre deux écrans.
 class AuthGate extends StatefulWidget {
   final AuthService authService;
+  final AlertService? alertService;
+  final AlertPushController? pushController;
   final ProfileService profileService;
   final ManualReportService reportService;
   final PositionEstimateService positionEstimateService;
@@ -35,6 +41,8 @@ class AuthGate extends StatefulWidget {
   const AuthGate({
     super.key,
     required this.authService,
+    this.alertService,
+    this.pushController,
     required this.profileService,
     required this.reportService,
     required this.positionEstimateService,
@@ -52,11 +60,31 @@ class AuthGate extends StatefulWidget {
 class _AuthGateState extends State<AuthGate> {
   late final Stream<User?> _userChanges;
   bool _showRegistration = false;
+  String? _previousUid;
 
   @override
   void initState() {
     super.initState();
-    _userChanges = widget.authService.userChanges;
+    _userChanges = widget.authService.userChanges.map((user) {
+      if (_previousUid != null && _previousUid != user?.uid) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted) {
+            ScaffoldMessenger.of(context).clearSnackBars();
+            Navigator.of(context).popUntil((route) => route.isFirst);
+          }
+        });
+      }
+      _previousUid = user?.uid;
+      widget.pushController?.setSession(user?.uid);
+      return user;
+    });
+    unawaited(widget.pushController?.start());
+  }
+
+  @override
+  void dispose() {
+    widget.pushController?.dispose();
+    super.dispose();
   }
 
   @override
@@ -85,18 +113,19 @@ class _AuthGateState extends State<AuthGate> {
           } else {
             // Compte vérifié : on écoute les notifications et on passe au profil.
             step = 3;
-            screen = PushNotificationListener(
-              child: ProfileGate(
-                authService: widget.authService,
-                inactiveUserEvents: widget.inactiveUserEvents,
-                profileService: widget.profileService,
-                reportService: widget.reportService,
-                positionEstimateService: widget.positionEstimateService,
-                reportTiles: widget.reportTiles,
-                reportDetailService: widget.reportDetailService,
-                deviceRegistration: widget.deviceRegistration,
-                devicePositionReporter: widget.devicePositionReporter,
-              ),
+            screen = ProfileGate(
+              key: ValueKey(user.uid),
+              alertService: widget.alertService,
+              pushController: widget.pushController,
+              authService: widget.authService,
+              inactiveUserEvents: widget.inactiveUserEvents,
+              profileService: widget.profileService,
+              reportService: widget.reportService,
+              positionEstimateService: widget.positionEstimateService,
+              reportTiles: widget.reportTiles,
+              reportDetailService: widget.reportDetailService,
+              deviceRegistration: widget.deviceRegistration,
+              devicePositionReporter: widget.devicePositionReporter,
             );
           }
         } else if (_showRegistration) {

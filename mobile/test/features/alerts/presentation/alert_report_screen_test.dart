@@ -1,0 +1,166 @@
+import 'dart:async';
+
+import 'package:blueway/core/api/api_exception.dart';
+import 'package:blueway/features/alerts/presentation/alert_report_screen.dart';
+import 'package:blueway/features/map/presentation/map_screen.dart';
+import 'package:blueway/features/reports/data/report_detail_service.dart';
+import 'package:blueway/features/reports/domain/manual_report.dart';
+import 'package:blueway/features/reports/domain/report_detail.dart';
+import 'package:flutter/material.dart';
+import 'package:flutter_test/flutter_test.dart';
+import 'package:mapbox_maps_flutter/mapbox_maps_flutter.dart';
+import 'package:http/http.dart' as http;
+
+import '../support/alert_fixtures.dart';
+
+ReportDetail report({DateTime? expiry}) => ReportDetail(
+  id: 'report-a',
+  category: ReportCategory.pollution,
+  description: 'Position actualisée',
+  latitude: 44,
+  longitude: 6,
+  observedAt: testNow.subtract(const Duration(hours: 1)),
+  expiresAt: expiry ?? testNow.add(const Duration(hours: 1)),
+  author: null,
+  boat: null,
+  photo: null,
+);
+
+class Reports extends Fake implements ReportDetailService {
+  late Future<ReportDetail> Function() respond;
+  final ids = <String>[];
+  @override
+  Future<ReportDetail> fetchReport(String id) {
+    ids.add(id);
+    return respond();
+  }
+}
+
+void main() {
+  late Reports service;
+  setUp(() {
+    service = Reports();
+  });
+  Future<void> open(
+    WidgetTester tester, {
+    Future<void> Function(ReportDetail)? onMap,
+  }) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: AlertReportScreen(
+          reportId: 'report-a',
+          service: service,
+          now: () => testNow,
+          onShowOnMap: onMap,
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+  }
+
+  testWidgets(
+    'relit le détail puis utilise la position actuelle pour la carte',
+    (tester) async {
+      service.respond = () async => report();
+      ReportDetail? selection;
+      await open(tester, onMap: (r) async => selection = r);
+      expect(service.ids, ['report-a']);
+      expect(find.text('Position actualisée'), findsOneWidget);
+      await tester.tap(find.text('Voir sur la carte'));
+      await tester.pumpAndSettle();
+      expect(selection!.longitude, 6);
+      expect(selection!.latitude, 44);
+    },
+  );
+  testWidgets(
+    'navigation réelle vers MapScreen centré sur le signalement sélectionné',
+    (tester) async {
+      final selected = report(
+        expiry: DateTime.now().add(const Duration(hours: 1)),
+      );
+      service.respond = () async => selected;
+      await open(tester);
+      await tester.tap(find.text('Voir sur la carte'));
+      await tester.pumpAndSettle();
+      final map = tester.widget<MapScreen>(find.byType(MapScreen));
+      expect(map.initialReport, same(selected));
+      final viewport =
+          tester.widget<MapWidget>(find.byType(MapWidget)).viewport
+              as CameraViewportState;
+      expect(viewport.center!.coordinates.lng, 6);
+      expect(viewport.center!.coordinates.lat, 44);
+      expect(find.text('Signalement sélectionné'), findsOneWidget);
+      await tester.pageBack();
+      await tester.pumpAndSettle();
+      expect(find.byType(MapScreen), findsNothing);
+    },
+  );
+  testWidgets('signalement expiré malgré HTTP 200 ne propose aucune carte', (
+    tester,
+  ) async {
+    service.respond = () async => report(expiry: testNow);
+    await open(tester);
+    expect(find.textContaining('n’est plus disponible'), findsOneWidget);
+    expect(find.text('Voir sur la carte'), findsNothing);
+  });
+  for (final error in <Object>[
+    const ReportNotFoundException(),
+    const ApiException(statusCode: 401, body: ''),
+    const ApiException(statusCode: 403, body: ''),
+    const ApiException(statusCode: 503, body: ''),
+    TimeoutException('timeout'),
+    http.ClientException('offline'),
+  ]) {
+    testWidgets('report indisponible : $error', (tester) async {
+      service.respond = () async => throw error;
+      await open(tester);
+      expect(find.text('Voir sur la carte'), findsNothing);
+      if (error is ReportNotFoundException) {
+        expect(find.textContaining('n’est plus disponible'), findsOneWidget);
+      } else {
+        expect(find.text('Réessayer'), findsOneWidget);
+        service.respond = () async => report();
+        await tester.tap(find.text('Réessayer'));
+        await tester.pumpAndSettle();
+        expect(find.text('Voir sur la carte'), findsOneWidget);
+      }
+    });
+  }
+  testWidgets('signalement retiré entre détail et carte : aucune navigation', (
+    tester,
+  ) async {
+    service.respond = () async => report();
+    var navigations = 0;
+    await open(
+      tester,
+      onMap: (_) async {
+        navigations++;
+      },
+    );
+    service.respond = () async => throw const ReportNotFoundException();
+    await tester.tap(find.text('Voir sur la carte'));
+    await tester.pumpAndSettle();
+    expect(navigations, 0);
+    expect(service.ids, ['report-a', 'report-a']);
+    expect(find.text('Ce signalement n’est plus disponible.'), findsOneWidget);
+  });
+
+  testWidgets('double appui carte ne double pas la navigation', (tester) async {
+    service.respond = () async => report();
+    final route = Completer<void>();
+    var count = 0;
+    await open(
+      tester,
+      onMap: (_) {
+        count++;
+        return route.future;
+      },
+    );
+    await tester.tap(find.text('Voir sur la carte'));
+    await tester.tap(find.text('Voir sur la carte'));
+    await tester.pump();
+    expect(count, 1);
+    route.complete();
+    await tester.pumpAndSettle();
+  });
+}

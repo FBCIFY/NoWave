@@ -1,25 +1,27 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:math' as math;
 import 'dart:ui' as ui;
 
-import 'package:geolocator/geolocator.dart' as geo;
 import 'package:flutter/material.dart';
+import 'package:geolocator/geolocator.dart' as geo;
 import 'package:mapbox_maps_flutter/mapbox_maps_flutter.dart';
 import 'package:precise_compass/precise_compass.dart';
 import 'package:uuid/uuid.dart';
 
-import '../../../core/map/accuracy_halo.dart';
-import '../../../core/map/map_config.dart';
+import '../../../core/haptics/app_haptics.dart';
 import '../../../core/location/coordinate_formatter.dart';
 import '../../../core/location/location_service.dart';
+import '../../../core/map/accuracy_halo.dart';
+import '../../../core/map/map_config.dart';
 import '../../../core/sensors/device_orientation_service.dart';
-import '../../../core/haptics/app_haptics.dart';
 import '../../camera/domain/photo_report_draft.dart';
+import '../../reports/data/manual_report_service.dart';
+import '../../reports/data/report_detail_service.dart';
+import '../../reports/domain/manual_report.dart';
+import '../../reports/domain/report_detail.dart';
 import '../../reports/presentation/report_composer_sheet.dart';
 import '../../reports/presentation/report_detail_sheet.dart';
-import '../../reports/data/report_detail_service.dart';
-import '../../reports/data/manual_report_service.dart';
-import '../../reports/domain/manual_report.dart';
 import '../data/report_layer_controller.dart';
 import '../data/report_tiles.dart';
 import 'widgets/map_notice_banner.dart';
@@ -38,6 +40,8 @@ enum _MapOrientationMode { north, heading, manual }
 /// l'utilisateur confirme ou corrige de la même façon.
 class MapScreen extends StatefulWidget {
   final VoidCallback? onOpenProfile;
+  final VoidCallback? onOpenAlerts;
+  final ReportDetail? initialReport;
 
   /// Ouvre la caméra ; renvoie null si l'utilisateur la ferme sans photo.
   final Future<PhotoReportDraft?> Function()? onOpenCamera;
@@ -53,6 +57,8 @@ class MapScreen extends StatefulWidget {
   const MapScreen({
     super.key,
     this.onOpenProfile,
+    this.onOpenAlerts,
+    this.initialReport,
     this.onOpenCamera,
     this.reportService,
     this.reportTiles,
@@ -103,6 +109,8 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
   MapNotice? _notice;
   int _noticeId = 0;
   Timer? _noticeTimer;
+  Timer? _selectedExpiryTimer;
+  bool _selectedExpired = false;
 
   /// Dernier zoom connu, pour relancer le battement de la heatmap au
   /// retour au premier plan.
@@ -132,6 +140,28 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
   @override
   void initState() {
     super.initState();
+    if (widget.initialReport case final report?) {
+      _viewport = CameraViewportState(
+        center: Point(coordinates: Position(report.longitude, report.latitude)),
+        zoom: 14,
+        pitch: 0,
+      );
+      _selectedExpiryTimer = Timer(
+        report.expiresAt.difference(DateTime.now()),
+        () {
+          if (!mounted) return;
+          setState(() => _selectedExpired = true);
+          final map = _mapboxMap;
+          if (map != null) {
+            unawaited(
+              map.style
+                  .removeStyleLayer('alert-selected-point')
+                  .catchError((_) {}),
+            );
+          }
+        },
+      );
+    }
     _lifecycleListener = AppLifecycleListener(
       onHide: _pauseMapUpdates,
       onShow: _resumeMapUpdates,
@@ -438,6 +468,50 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
         radius: _clusterTapRadius,
       ),
     );
+  }
+
+  /// Repère explicite de la sélection, indépendant du chargement des MVT.
+  Future<void> _showSelectedReport() async {
+    final report = widget.initialReport;
+    final map = _mapboxMap;
+    if (report == null || map == null || _selectedExpired) return;
+    try {
+      if (!await map.style.styleSourceExists('alert-selected')) {
+        await map.style.addSource(
+          GeoJsonSource(
+            id: 'alert-selected',
+            data: jsonEncode({
+              'type': 'Feature',
+              'properties': {'report_id': report.id},
+              'geometry': {
+                'type': 'Point',
+                'coordinates': [report.longitude, report.latitude],
+              },
+            }),
+          ),
+        );
+      }
+      if (!await map.style.styleLayerExists('alert-selected-point') &&
+          !_selectedExpired) {
+        await map.style.addLayer(
+          CircleLayer(
+            id: 'alert-selected-point',
+            sourceId: 'alert-selected',
+            circleRadius: 10,
+            circleColor: 0xFF7C3AED,
+            circleStrokeColor: 0xFFFFFFFF,
+            circleStrokeWidth: 3,
+          ),
+        );
+      }
+    } catch (_) {
+      if (mounted) {
+        _showNotice(
+          'Position sélectionnée indisponible sur la carte.',
+          MapNoticeKind.error,
+        );
+      }
+    }
   }
 
   /// Ouvre la fiche du signalement touché, sauf pendant une création.
@@ -1058,6 +1132,7 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
     _reportPointTimer?.cancel();
     _reportMarkerDropTimer?.cancel();
     _noticeTimer?.cancel();
+    _selectedExpiryTimer?.cancel();
     _reportPoint.dispose();
     _reportMarkerLifted.dispose();
     final subscription = _positionSubscription;
@@ -1094,6 +1169,28 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
     // Pendant un signalement, le retour arrière est géré par
     // ReportComposerSheet : il passe par la même confirmation que la croix.
     return Scaffold(
+      appBar: widget.initialReport == null
+          ? null
+          : AppBar(
+              title: Text(
+                _selectedExpired
+                    ? 'Signalement expiré'
+                    : 'Signalement sélectionné',
+              ),
+              actions: [
+                if (!_selectedExpired && widget.reportDetailService != null)
+                  IconButton(
+                    tooltip: 'Détail du signalement',
+                    icon: const Icon(Icons.info_outline),
+                    onPressed: () => ReportDetailSheet.show(
+                      context,
+                      reportId: widget.initialReport!.id,
+                      loadReport: widget.reportDetailService!.fetchReport,
+                      loadPhoto: widget.reportDetailService!.fetchPhoto,
+                    ),
+                  ),
+              ],
+            ),
       resizeToAvoidBottomInset: false,
       body: Stack(
         children: [
@@ -1111,11 +1208,12 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
                   setState(() => _mapboxMap = map);
                   unawaited(MapConfig.hideDefaultOrnaments(map));
                   _addReportInteractions(map);
-                  unawaited(_locate());
+                  if (widget.initialReport == null) unawaited(_locate());
                 },
                 onMapLoadedListener: _handleMapLoaded,
                 onStyleLoadedListener: (_) {
                   _showAccuracyHalo();
+                  unawaited(_showSelectedReport());
                   if (widget.reportTiles != null) _reportLayer.styleLoaded();
                 },
                 onMapLoadErrorListener: _handleMapLoadError,
@@ -1192,6 +1290,17 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
                               ),
                             ),
                           ),
+                          if (widget.onOpenAlerts != null) ...[
+                            const SizedBox(width: 12),
+                            _PoppingMapButton(
+                              tooltip: 'Mes alertes',
+                              onPressed: widget.onOpenAlerts,
+                              icon: const Icon(
+                                Icons.notifications_outlined,
+                                color: Color(0xFF243243),
+                              ),
+                            ),
+                          ],
                           if (widget.onOpenProfile != null) ...[
                             const SizedBox(width: 12),
                             _PoppingMapButton(
