@@ -25,6 +25,7 @@ import 'package:mapbox_maps_flutter/mapbox_maps_flutter.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:http/testing.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import '../support/alert_fixtures.dart';
 
@@ -61,6 +62,7 @@ class _Reporter extends Fake implements DevicePositionReporter {
 }
 
 void main() {
+  setUp(() => SharedPreferences.setMockInitialValues({}));
   Future<({FakeAlertPushSource source, _Auth auth, List<String> calls})> mount(
     WidgetTester tester, {
     bool initial = false,
