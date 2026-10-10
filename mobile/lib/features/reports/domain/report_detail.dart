@@ -1,21 +1,7 @@
 import 'manual_report.dart';
 
-/// Types de bateau ; [apiValue] est la valeur renvoyée par le backend.
-enum BoatType {
-  sailboat('voilier', 'Voilier'),
-  motorboat('bateau_moteur', 'Bateau à moteur'),
-  catamaran('catamaran', 'Catamaran'),
-  rib('semi_rigide', 'Semi-rigide'),
-  jetSki('jet_ski', 'Jet-ski'),
-  other('autre', 'Autre');
-
-  const BoatType(this.apiValue, this.label);
-
-  final String apiValue;
-
-  /// Libellé affiché dans la fiche.
-  final String label;
-}
+import '../../profile/domain/boat.dart';
+export '../../profile/domain/boat.dart' show BoatType;
 
 /// État de la photo d'un signalement photo.
 enum ReportPhotoStatus {

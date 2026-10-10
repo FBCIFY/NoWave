@@ -86,12 +86,21 @@ class ApiService {
     return _readResponse(response);
   }
 
-  Future<String> delete(String path, {Map<String, String>? headers}) async {
+  Future<String> delete(
+    String path, {
+    Map<String, String>? headers,
+    int? expectedStatusCode,
+  }) async {
     final response = await _client
         .delete(_resolveUri(path), headers: headers)
         .timeout(const Duration(seconds: 10));
 
-    return _readResponse(response);
+    final body = _readResponse(response);
+    if (expectedStatusCode != null &&
+        response.statusCode != expectedStatusCode) {
+      throw const FormatException('Statut de suppression inattendu.');
+    }
+    return body;
   }
 
   Uri _resolveUri(String path) {

@@ -14,6 +14,8 @@ import '../../camera/data/position_estimate_service.dart';
 import '../../home/presentation/home_screen.dart';
 import '../../map/data/report_tiles.dart';
 import '../data/profile_service.dart';
+import '../data/account_deletion.dart';
+import 'account_deletion_screen.dart';
 import '../domain/user_profile.dart';
 import '../../reports/data/manual_report_service.dart';
 import '../../reports/data/report_detail_service.dart';
@@ -63,13 +65,38 @@ class _ProfileGateState extends State<ProfileGate> with WidgetsBindingObserver {
   Future<void>? _signingOut;
   bool _accessRevoked = false;
   bool _refreshingAccess = false;
+  bool _deletingAccount = false;
+  bool _deletionChecked = false;
+  late final AccountDeletion _accountDeletion;
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
     widget.inactiveUserEvents?.addListener(_markAccessRevoked);
-    _profileFuture = widget.profileService.getCurrentProfile();
+    _accountDeletion = AccountDeletion(
+      profileService: widget.profileService,
+      authService: widget.authService,
+      registration: widget.deviceRegistration,
+      reporter: widget.devicePositionReporter,
+    );
+    _profileFuture = _loadInitialProfile();
+  }
+
+  Future<UserProfile?> _loadInitialProfile() async {
+    final pending = await _accountDeletion.restore();
+    if (!mounted) return null;
+    _deletionChecked = true;
+    if (pending) {
+      setState(() => _deletingAccount = true);
+      return null;
+    }
+    return widget.profileService.getCurrentProfile();
+  }
+
+  Future<void> _openAccountDeletion() async {
+    Navigator.of(context).popUntil((route) => route.isFirst);
+    setState(() => _deletingAccount = true);
   }
 
   @override
@@ -97,7 +124,7 @@ class _ProfileGateState extends State<ProfileGate> with WidgetsBindingObserver {
   }
 
   void _markAccessRevoked() {
-    if (!mounted) return;
+    if (!mounted || _deletingAccount) return;
 
     Navigator.of(context).popUntil((route) => route.isFirst);
 
@@ -107,14 +134,14 @@ class _ProfileGateState extends State<ProfileGate> with WidgetsBindingObserver {
   }
 
   Future<void> _refreshAccessStatus() async {
-    if (_refreshingAccess) return;
+    if (_refreshingAccess || _deletingAccount || !_deletionChecked) return;
 
     _refreshingAccess = true;
 
     try {
       final profile = await widget.profileService.getCurrentProfile();
 
-      if (!mounted) return;
+      if (!mounted || _deletingAccount) return;
 
       setState(() {
         _accessRevoked = profile?.status == 'suspended';
@@ -132,7 +159,7 @@ class _ProfileGateState extends State<ProfileGate> with WidgetsBindingObserver {
     setState(() {
       _profileWasJustCreated = true;
       _latestProfile = null;
-      _profileFuture = widget.profileService.getCurrentProfile();
+      _profileFuture = _loadInitialProfile();
     });
   }
 
@@ -203,7 +230,20 @@ class _ProfileGateState extends State<ProfileGate> with WidgetsBindingObserver {
         late final int step;
         late final Widget screen;
 
-        if (_accessRevoked || snapshot.data?.status == 'suspended') {
+        if (_deletingAccount) {
+          step = 5;
+          screen = AccountDeletionScreen(
+            deletion: _accountDeletion,
+            onCancel: () => setState(() => _deletingAccount = false),
+            onDone: () {
+              if (!mounted) return;
+              setState(() {
+                _latestProfile = null;
+              });
+              Navigator.of(context).popUntil((route) => route.isFirst);
+            },
+          );
+        } else if (_accessRevoked || snapshot.data?.status == 'suspended') {
           step = 4;
           screen = SuspendedAccountScreen(
             onSignOut: () => unawaited(_signOut()),
@@ -274,6 +314,8 @@ class _ProfileGateState extends State<ProfileGate> with WidgetsBindingObserver {
                 profile: _latestProfile ?? profile,
                 onUserInactive: () => unawaited(_refreshAccessStatus()),
                 onSignOut: () => _signOut(resumeDevices: true),
+                onDeleteAccount: _openAccountDeletion,
+                profileService: widget.profileService,
                 onUpdatePreferences: _updatePreferences,
                 reportService: widget.reportService,
                 positionEstimateService: widget.positionEstimateService,

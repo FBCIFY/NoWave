@@ -30,6 +30,12 @@ class _FakeDeviceService implements DeviceService {
 }
 
 class _FakeDeviceRegistration implements DeviceRegistration {
+  @override
+  Future<void> pauseForAccountDeletion() => throw UnimplementedError();
+
+  @override
+  Future<void> finishAccountDeletion() => throw UnimplementedError();
+
   int registerCalls = 0;
   Future<void>? response;
 

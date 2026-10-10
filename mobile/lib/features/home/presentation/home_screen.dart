@@ -1,3 +1,5 @@
+import '../../profile/data/profile_service.dart';
+
 import 'package:flutter/material.dart';
 
 import '../../map/data/report_tiles.dart';
@@ -13,6 +15,8 @@ import '../../../core/notifications/notification_permission.dart';
 
 /// Accueil après connexion : la carte, avec un bouton qui ouvre le profil.
 class HomeScreen extends StatelessWidget {
+  final ProfileService? profileService;
+  final Future<void> Function()? onDeleteAccount;
   final UserProfile? profile;
   final Future<void> Function()? onSignOut;
   final UpdatePreferences? onUpdatePreferences;
@@ -24,6 +28,8 @@ class HomeScreen extends StatelessWidget {
 
   const HomeScreen({
     super.key,
+    this.profileService,
+    this.onDeleteAccount,
     this.profile,
     this.onSignOut,
     this.onUpdatePreferences,
@@ -63,6 +69,8 @@ class HomeScreen extends StatelessWidget {
                 MaterialPageRoute<void>(
                   builder: (_) => ProfileScreen(
                     profile: profile!,
+                    profileService: profileService,
+                    onDeleteAccount: onDeleteAccount,
                     onSignOut: onSignOut!,
                     onUpdatePreferences: onUpdatePreferences!,
                     notificationPermissions:

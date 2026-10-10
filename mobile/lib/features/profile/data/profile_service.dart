@@ -3,6 +3,7 @@ import 'dart:convert';
 import '../../../core/api/api_exception.dart';
 import '../../../core/api/api_service.dart';
 import '../domain/user_profile.dart';
+import '../domain/boat.dart';
 
 /// Accès au profil NoWave côté backend (`api/v1/users/me`) : lecture,
 /// création et mise à jour des préférences, avec le token Firebase.
@@ -84,6 +85,82 @@ class ProfileService {
     );
 
     return _decodeProfile(response);
+  }
+
+  /// Seul 204 confirme la fin du flux serveur (SQL puis Firebase).
+  Future<void> deleteAccount() async {
+    final token = await _getIdToken();
+    await _apiService.delete(
+      _profilePath,
+      headers: {'Authorization': 'Bearer $token'},
+      expectedStatusCode: 204,
+    );
+  }
+
+  Future<Boat?> getBoat() async {
+    final token = await _getIdToken();
+    try {
+      return _decodeBoat(
+        await _apiService.get(
+          '$_profilePath/boat',
+          headers: {'Authorization': 'Bearer $token'},
+        ),
+      );
+    } on ApiException catch (error) {
+      if (error.statusCode == 404 && error.code == 'boat_not_found') {
+        return null;
+      }
+      rethrow;
+    }
+  }
+
+  Future<Boat> saveBoat({
+    required bool create,
+    required BoatType type,
+    required String name,
+    required String flagCountry,
+  }) async {
+    final token = await _getIdToken();
+    final headers = {
+      'Authorization': 'Bearer $token',
+      'Content-Type': 'application/json',
+    };
+    final body = jsonEncode({
+      'boat_type': type.apiValue,
+      'name': name.trim().isEmpty ? null : name.trim(),
+      'flag_country': flagCountry.trim().isEmpty
+          ? null
+          : flagCountry.trim().toUpperCase(),
+    });
+    final response = create
+        ? await _apiService.post(
+            '$_profilePath/boat',
+            headers: headers,
+            body: body,
+          )
+        : await _apiService.patch(
+            '$_profilePath/boat',
+            headers: headers,
+            body: body,
+          );
+    return _decodeBoat(response);
+  }
+
+  Future<void> deleteBoat() async {
+    final token = await _getIdToken();
+    await _apiService.delete(
+      '$_profilePath/boat',
+      headers: {'Authorization': 'Bearer $token'},
+      expectedStatusCode: 204,
+    );
+  }
+
+  Boat _decodeBoat(String response) {
+    final json = jsonDecode(response);
+    if (json is! Map<String, dynamic>) {
+      throw const FormatException('Le bateau reçu est invalide.');
+    }
+    return Boat.fromJson(json);
   }
 
   UserProfile _decodeProfile(String response) {

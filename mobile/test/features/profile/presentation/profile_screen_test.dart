@@ -1,5 +1,9 @@
 import 'dart:async';
 
+import '../support/account_deletion_fixture.dart';
+
+import 'package:blueway/features/profile/presentation/boat_screen.dart';
+
 import 'package:blueway/features/profile/domain/user_profile.dart';
 import 'package:blueway/features/profile/presentation/profile_screen.dart';
 import 'package:flutter/material.dart';
@@ -58,6 +62,41 @@ void main() {
     await tester.tap(find.byKey(const Key('notificationsEnabledSwitch')));
     await tester.pumpAndSettle();
   }
+
+  testWidgets('profil ouvre le bateau et le parcours de suppression', (
+    tester,
+  ) async {
+    final f = AccountFixture();
+    addTearDown(f.dispose);
+    var requested = false;
+    await tester.binding.setSurfaceSize(const Size(430, 1400));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    await tester.pumpWidget(
+      MaterialApp(
+        home: ProfileScreen(
+          profile: profile,
+          profileService: f.profiles,
+          onSignOut: () async {},
+          onUpdatePreferences: unusedUpdate,
+          onDeleteAccount: () async {
+            requested = true;
+          },
+          notificationPermissions: FakeNotificationPermissionService(),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Mon bateau'));
+    await tester.pumpAndSettle();
+    expect(find.byType(BoatScreen), findsOneWidget);
+    await tester.pageBack();
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Supprimer mon compte'));
+    await tester.pumpAndSettle();
+    expect(requested, isTrue);
+    expect(f.auth.signOutCalls, 0);
+    expect(f.requests.where((r) => r.method == 'DELETE'), isEmpty);
+  });
 
   testWidgets('affiche le profil et les préférences par défaut', (
     tester,
