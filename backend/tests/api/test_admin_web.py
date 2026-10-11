@@ -1,6 +1,7 @@
 import psycopg
 import pytest
 from fastapi.testclient import TestClient
+from starlette.requests import Request
 
 from app.config.settings import ConfigurationError
 from app.dependencies.admin_web_session import get_admin_web_session
@@ -15,8 +16,9 @@ from app.domain.errors import (
 )
 from app.domain.user import User, UserRole, UserStatus
 from app.main import app
-from app.web.csrf import CSRF_COOKIE
-from app.web.errors import SESSION_COOKIE
+from app.web.csrf import CSRF_COOKIE, session_csrf_token
+from app.web.errors import SESSION_COOKIE, WebCsrfRejected, WebLoginRequired
+from app.web.security import AdminSecurity
 
 
 ADMIN = User(
@@ -125,8 +127,8 @@ def test_login_creates_secure_session(client, web_session):
     ):
         assert flag in header
 
-    # The token seen before sign-in is replaced.
-    assert client.cookies.get(CSRF_COOKIE) != token
+    # Signed-in forms use the session token: the login one is dropped.
+    assert "Max-Age=0" in cookie_header(response, CSRF_COOKIE)
 
 
 @pytest.mark.parametrize("csrf_token", ["", "forged-token"])
@@ -228,6 +230,9 @@ def test_home_requires_session(client, web_session):
 
     assert response.status_code == 303
     assert response.headers["location"] == "/admin/login"
+    # A link from another site arrives without the SameSite=Strict
+    # cookie: the session of the other tabs must not be deleted.
+    assert "set-cookie" not in response.headers
 
 
 def test_trailing_slash_redirect_stays_relative(client, web_session):
@@ -246,6 +251,10 @@ def test_home_shows_active_admin(client, web_session):
     assert response.headers["cache-control"] == "no-store"
     assert "Bonjour admin" in response.text
     assert 'action="/admin/logout"' in response.text
+    token = session_csrf_token("session-cookie")
+    assert f'name="csrf_token" value="{token}"' in response.text
+    # The page does not set a login token again.
+    assert CSRF_COOKIE not in response.headers.get("set-cookie", "")
 
 
 def test_invalid_session_redirects_and_clears_cookie(client, web_session):
@@ -294,32 +303,103 @@ def test_session_check_outage_returns_503(client, web_session):
 
 def test_logout_clears_cookies(client, web_session):
     sign_in(client)
-    token = client.cookies.get(CSRF_COOKIE)
 
     response = client.post(
         "/admin/logout",
-        data={"csrf_token": token},
+        data={"csrf_token": session_csrf_token("session-cookie")},
         follow_redirects=False,
     )
 
     assert response.status_code == 303
     assert response.headers["location"] == "/admin/login"
+    assert response.headers["cache-control"] == "no-store"
     assert 'Max-Age=0' in cookie_header(response, SESSION_COOKIE)
     assert 'Max-Age=0' in cookie_header(response, CSRF_COOKIE)
     assert client.get("/admin", follow_redirects=False).status_code == 303
 
 
-def test_forged_logout_is_rejected(client, web_session):
+@pytest.mark.parametrize(
+    "csrf_token",
+    [
+        "",
+        "forged-token",
+        # Valid token, but of another session.
+        session_csrf_token("other-session-cookie"),
+    ],
+)
+def test_forged_logout_is_rejected(client, web_session, csrf_token):
     sign_in(client)
 
     response = client.post(
         "/admin/logout",
-        data={"csrf_token": "forged-token"},
+        data={"csrf_token": csrf_token},
         follow_redirects=False,
     )
 
     assert response.status_code == 403
+    assert "Formulaire expiré" in response.text
     assert client.get("/admin").status_code == 200
+
+
+def test_login_form_token_cannot_log_out(client, web_session):
+    _, login_token = login_form(client)
+    sign_in(client)
+
+    response = client.post(
+        "/admin/logout",
+        data={"csrf_token": login_token},
+        follow_redirects=False,
+    )
+
+    assert response.status_code == 403
+
+
+def test_logout_without_session_goes_to_login(client, web_session):
+    response = client.post(
+        "/admin/logout",
+        data={"csrf_token": "any-token"},
+        follow_redirects=False,
+    )
+
+    assert response.status_code == 303
+    assert response.headers["location"] == "/admin/login"
+
+
+def test_session_csrf_token_is_bound_to_the_session():
+    token = session_csrf_token("session-cookie")
+
+    assert token == session_csrf_token("session-cookie")
+    assert token != session_csrf_token("next-session-cookie")
+
+
+def request_with_session(session_cookie):
+    headers = []
+    if session_cookie:
+        headers.append(
+            (b"cookie", f"{SESSION_COOKIE}={session_cookie}".encode())
+        )
+    return Request({"type": "http", "method": "GET", "headers": headers})
+
+
+def test_admin_security_builds_context_from_session():
+    security = AdminSecurity(FakeAdminWebSession())
+    request = request_with_session("session-cookie")
+
+    context = security.require_active_admin(request)
+
+    assert context.subject is ADMIN
+    assert context.csrf_token == session_csrf_token("session-cookie")
+    security.verify_csrf(request, context, context.csrf_token)
+
+    with pytest.raises(WebCsrfRejected):
+        security.verify_csrf(request, context, "forged-token")
+
+
+def test_admin_security_requires_session():
+    security = AdminSecurity(FakeAdminWebSession())
+
+    with pytest.raises(WebLoginRequired):
+        security.require_active_admin(request_with_session(None))
 
 
 def test_username_is_escaped(client, web_session):

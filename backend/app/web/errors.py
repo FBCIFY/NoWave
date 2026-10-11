@@ -47,7 +47,11 @@ def delete_session_cookie(response) -> None:
 def login_required_handler(request: Request, exc: WebLoginRequired):
     response = RedirectResponse(LOGIN_PATH, status_code=303)
     response.headers["Cache-Control"] = "no-store"
-    delete_session_cookie(response)
+    # Only a cookie the browser sent and Firebase refused is deleted. A
+    # link from another site arrives without the SameSite=Strict cookie:
+    # deleting it there would sign the admin out of the other tabs.
+    if SESSION_COOKIE in request.cookies:
+        delete_session_cookie(response)
     return response
 
 

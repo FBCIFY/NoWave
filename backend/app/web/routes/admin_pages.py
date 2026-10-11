@@ -1,5 +1,3 @@
-import secrets
-
 from fastapi import APIRouter, Depends, Form, Request
 from fastapi.responses import RedirectResponse
 
@@ -9,30 +7,25 @@ from app.application.services.admin_web_session import (
 )
 from app.dependencies.admin_web_session import get_admin_web_session
 from app.domain.errors import (
-    AdminRequiredError,
-    EmailNotVerifiedError,
-    InactiveUserError,
     InvalidCredentialsError,
-    InvalidSessionError,
     SignInUnavailableError,
-    UserNotFoundError,
 )
-from app.domain.user import User
 from app.web.csrf import (
-    check_csrf,
-    csrf_token_for,
+    check_login_csrf,
     delete_csrf_cookie,
-    require_csrf,
+    login_csrf_token,
     set_csrf_cookie,
 )
 from app.web.errors import (
     DEPENDENCY_ERRORS,
-    LOGIN_PATH,
     SESSION_COOKIE,
-    WebAccessDenied,
-    WebLoginRequired,
-    WebServiceUnavailable,
-    delete_session_cookie,
+)
+from app.web.security import (
+    ACCESS_DENIED_ERRORS,
+    AdminContext,
+    AdminSecurity,
+    get_admin_context,
+    get_admin_security,
 )
 from app.web.templating import render
 
@@ -43,53 +36,23 @@ router = APIRouter(
     include_in_schema=False,
 )
 
-# A valid account that may not use the back office. One message for all
-# of them, so the page does not reveal why a given account is refused.
-ACCESS_DENIED_ERRORS = (
-    AdminRequiredError,
-    EmailNotVerifiedError,
-    InactiveUserError,
-    UserNotFoundError,
-)
 
-
-def get_current_web_admin(
+def render_admin_page(
     request: Request,
-    session: AdminWebSession = Depends(get_admin_web_session),
-) -> User:
-    """Every admin page depends on this: a valid session cookie and an
-    active admin profile, read again on each request."""
-    session_cookie = request.cookies.get(SESSION_COOKIE)
-
-    if not session_cookie:
-        raise WebLoginRequired()
-
-    try:
-        return session.authenticate(session_cookie)
-    except InvalidSessionError:
-        raise WebLoginRequired() from None
-    except ACCESS_DENIED_ERRORS:
-        raise WebAccessDenied() from None
-    except (SignInUnavailableError, *DEPENDENCY_ERRORS):
-        raise WebServiceUnavailable() from None
-
-
-def render_page(
-    request: Request,
+    context: AdminContext,
     name: str,
-    context: dict | None = None,
-    status_code: int = 200,
+    page_context: dict | None = None,
 ):
-    """Render a page with forms: every form carries the CSRF token."""
-    token = csrf_token_for(request)
-    response = render(
+    """Render a signed-in page: its forms carry the session CSRF token."""
+    return render(
         request,
         name,
-        {**(context or {}), "csrf_token": token},
-        status_code=status_code,
+        {
+            **(page_context or {}),
+            "admin": context.subject,
+            "csrf_token": context.csrf_token,
+        },
     )
-    set_csrf_cookie(response, token)
-    return response
 
 
 def login_page(
@@ -98,12 +61,15 @@ def login_page(
     email: str = "",
     status_code: int = 200,
 ):
-    return render_page(
+    token = login_csrf_token(request)
+    response = render(
         request,
         "admin/login.html",
-        {"error": error, "email": email},
+        {"error": error, "email": email, "csrf_token": token},
         status_code=status_code,
     )
+    set_csrf_cookie(response, token)
+    return response
 
 
 @router.get("/login")
@@ -120,7 +86,7 @@ def submit_login(
     session: AdminWebSession = Depends(get_admin_web_session),
 ):
     # Before any call to Firebase: a forged form costs nothing.
-    check_csrf(request, csrf_token)
+    check_login_csrf(request, csrf_token)
 
     email = email.strip()
 
@@ -168,20 +134,20 @@ def submit_login(
         samesite="strict",
         path="/",
     )
-    # New token once signed in: a token seen before login is useless.
-    set_csrf_cookie(response, secrets.token_urlsafe(32))
-    return response
-
-
-@router.post("/logout", dependencies=[Depends(require_csrf)])
-def logout():
-    # Only the browser session ends: the Firebase refresh tokens stay
-    # valid, so the admin's mobile app is not signed out.
-    response = RedirectResponse(LOGIN_PATH, status_code=303)
-    response.headers["Cache-Control"] = "no-store"
-    delete_session_cookie(response)
+    # Signed-in forms use the session token: the login one is dropped.
     delete_csrf_cookie(response)
     return response
+
+
+@router.post("/logout")
+def logout(
+    request: Request,
+    csrf_token: str = Form(""),
+    context: AdminContext = Depends(get_admin_context),
+    security: AdminSecurity = Depends(get_admin_security),
+):
+    security.verify_csrf(request, context, csrf_token)
+    return security.logout(request, context)
 
 
 @router.get("/")
@@ -194,11 +160,7 @@ def redirect_home():
 @router.get("")
 def show_home(
     request: Request,
-    admin: User = Depends(get_current_web_admin),
+    context: AdminContext = Depends(get_admin_context),
 ):
     # Placeholder until the moderation pages of NW-127.
-    return render_page(
-        request,
-        "admin/home.html",
-        {"admin": admin},
-    )
+    return render_admin_page(request, context, "admin/home.html")

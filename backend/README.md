@@ -301,18 +301,29 @@ JavaScript, la CSP du site reste donc inchangée.
   `Secure`, `SameSite=Strict`. À chaque page, le cookie est vérifié auprès de
   Firebase (révocation comprise) et le profil est relu : une suspension
   s'applique dès la requête suivante.
-- **CSRF :** chaque formulaire `POST` contient un champ caché `csrf_token` qui
-  doit être égal au cookie `__Host-nowave_admin_csrf` (double submit). Le jeton
-  change à la connexion. Pour une nouvelle page, utiliser `render_page` (qui
-  fournit `csrf_token` au template) et la dépendance `require_csrf` sur la
-  route `POST`.
+- **CSRF :** chaque formulaire `POST` contient un champ caché `csrf_token`.
+  - Formulaire de connexion : pas encore de session, le champ doit être égal
+    au cookie `__Host-nowave_admin_csrf` (double submit). Ce cookie est
+    supprimé une fois connecté.
+  - Pages connectées : le jeton est calculé par le serveur à partir du cookie
+    de session (SHA-256). Il change à chaque nouvelle session et ne sert plus
+    à rien après la déconnexion.
+- **Contrat pour les pages Jinja (`app/web/security.py`) :**
+  - `AdminSecurity.require_active_admin(request) -> AdminContext`, où
+    `AdminContext` contient `subject` (le `User` admin) et `csrf_token`.
+    La dépendance `get_admin_context` l'appelle pour une route.
+  - `AdminSecurity.verify_csrf(request, context, token)` sur chaque `POST`.
+  - `AdminSecurity.logout(request, context) -> Response`.
+  - `render_admin_page` fournit `admin` et `csrf_token` au template.
 - **Erreurs :** session absente ou invalide → redirection vers
-  `/admin/login`. Compte non admin, suspendu ou sans profil NoWave → page
-  `403`. Firebase ou base indisponible → page `503`. Les messages techniques
-  ne sont jamais affichés.
-- **Déconnexion :** elle efface seulement les cookies du navigateur. Les
-  tokens Firebase restent valides, donc l'application mobile de l'admin reste
-  connectée.
+  `/admin/login` (le cookie n'est effacé que s'il a été envoyé et refusé).
+  Compte non admin, suspendu ou sans profil NoWave → page `403`. Firebase ou
+  base indisponible → page `503`. Les messages techniques ne sont jamais
+  affichés.
+- **Déconnexion :** elle revérifie d'abord la session et le jeton CSRF, puis
+  efface seulement les cookies du navigateur. Les tokens Firebase restent
+  valides, donc l'application mobile de l'admin reste connectée. Si Firebase
+  ou la base est indisponible, elle répond `503` et le cookie expire seul.
 
 La connexion exige la clé Web API Firebase du projet (la même que celle de
 l'application mobile), à fournir hors de Git :
