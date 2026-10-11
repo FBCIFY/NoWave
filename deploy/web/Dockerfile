@@ -10,6 +10,7 @@ ARG NOWAVE_VERSION=development
 LABEL org.opencontainers.image.source="https://github.com/FBCIFY/NoWave" org.opencontainers.image.revision="$NOWAVE_VERSION"
 RUN apk upgrade --no-cache
 COPY deploy/web/nginx.conf /etc/nginx/nginx.conf
+RUN nginx -t
 COPY --from=build /web/dist/ /usr/share/nginx/html/
 RUN printf '{"service":"nowave-web","version":"%s"}\n' "$NOWAVE_VERSION" > /usr/share/nginx/html/version.json
 USER 101:101
