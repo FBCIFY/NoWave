@@ -126,3 +126,15 @@ class DevicePositionFutureError(DomainError):
         super().__init__(
             "position measurement is too far in the future"
         )
+
+
+class AdminRequiredError(DomainError):
+    pass
+
+
+class ModerationConflictError(DomainError):
+    pass
+
+
+class PhotoNotFoundError(DomainError):
+    pass

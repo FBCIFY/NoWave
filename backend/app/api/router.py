@@ -1,5 +1,6 @@
 from fastapi import APIRouter
 
+from app.api.routes.admin import router as admin_router
 from app.api.routes.boats import router as boats_router
 from app.api.routes.devices import router as devices_router
 from app.api.routes.map_tiles import router as map_tiles_router
@@ -18,3 +19,4 @@ router.include_router(report_details_router)
 router.include_router(position_estimates_router)
 router.include_router(devices_router)
 router.include_router(map_tiles_router)
+router.include_router(admin_router)

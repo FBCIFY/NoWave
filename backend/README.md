@@ -174,6 +174,38 @@ rasters, hors buffers et mémoire du processus. Le conteneur API reste limité �
 RSS sous concurrence. Les doublures des tests ne prouvent pas les droits
 Scaleway réels ni la lecture d'une URL expirée : voir la recette du déploiement.
 
+### Modération
+
+Les routes `/api/v1/admin` exigent un profil actif de rôle `admin` : sinon
+`403 admin_required` (ou `403 user_inactive` pour un admin suspendu). Chaque
+action attend un motif `reason` non vide après suppression des espaces, sinon
+`422`.
+
+- `DELETE /api/v1/admin/reports/{id}` avec `{"reason": "…"}` retire le
+  signalement et renvoie `204`.
+- `PATCH /api/v1/admin/reports/{id}` avec `{"status": "active", "reason": "…"}`
+  restaure un signalement retiré et renvoie son détail.
+- `PATCH /api/v1/admin/reports/{id}/photo` avec `{"hidden": true, "reason": "…"}`
+  masque une photo uploadée et renvoie ses métadonnées.
+- `PATCH /api/v1/admin/users/{id}` avec `{"status": "suspended" | "active",
+  "reason": "…"}` suspend ou réactive un compte et renvoie son profil public.
+
+Le changement et la ligne `moderation_actions` sont écrits dans la même
+transaction, sous verrou de la ligne ciblée. Un état incompatible (rapport déjà
+retiré, photo déjà masquée ou non uploadée, compte déjà suspendu, auto-suspension)
+renvoie `409 moderation_conflict` sans écrire d'audit. Si l'administrateur est
+suspendu pendant la requête, le trigger d'audit refuse l'insertion, tout est
+annulé et la route renvoie `403 admin_required`.
+
+La restauration ne prolonge jamais la durée de vie : `expires_at` reste
+inchangé, le statut redevient `active` avant expiration, sinon `expired`. La
+version du signalement n'est pas incrémentée, aucune nouvelle alerte n'est donc
+produite. Une photo masquée conserve son statut d'upload et ne reçoit plus
+d'URL de lecture. Un compte suspendu conserve ses signalements, mais
+`get_current_identity` lui refuse toute route authentifiée : il ne peut plus
+publier ni envoyer de position. Le futur worker d'alertes devra en plus ignorer
+les comptes suspendus et les signalements retirés au moment de l'envoi.
+
 ## Tests
 
 Depuis la racine, avec l’environnement virtuel activé :
