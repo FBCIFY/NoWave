@@ -251,6 +251,34 @@ d'URL de lecture. Un compte suspendu conserve ses signalements, mais
 publier ni envoyer de position. Le futur worker d'alertes devra en plus ignorer
 les comptes suspendus et les signalements retirés au moment de l'envoi.
 
+#### Lectures administrateur
+
+Ces routes en lecture seule servent de contrat JSON aux pages Jinja
+d'administration :
+
+- `GET /api/v1/admin/reports?page=1&limit=20&status=removed` liste tous les
+  signalements, du plus récent au plus ancien. `status` (`active`, `expired`,
+  `removed`) est optionnel.
+- `GET /api/v1/admin/reports/{id}` renvoie le `ReportDetail` complété de
+  `removed_at`, de l'auteur (`id`, `username`, `email`, `status`, `deleted`) et
+  de `photo.hidden_at`. Il reste lisible pour un signalement retiré ou expiré.
+- `GET /api/v1/admin/users?status=suspended` liste les comptes avec leur rôle,
+  leur statut, leur e-mail et leur nombre de signalements.
+- `GET /api/v1/admin/moderation-actions` liste l'audit, de la plus récente à la
+  plus ancienne action. Aucune route ne modifie ni ne supprime une entrée.
+
+Les listes acceptent `page` (défaut `1`) et `limit` (défaut `20`, maximum
+`100`) et renvoient `{"items": [...], "page": 1, "limit": 20, "total": 0,
+"pages": 0}`. Une page au-delà de la dernière renvoie `items` vide. Le total et
+la page sont lus dans le même instantané PostgreSQL.
+
+Aucun job ne réécrit le statut d'un signalement expiré : ces vues affichent
+`expired` dès que `expires_at` est passé, même si la ligne vaut encore `active`.
+La vue admin ignore les choix de visibilité de l'auteur (nom, bateau). Elle
+signe une URL photo de cinq minutes même pour un signalement retiré ou expiré,
+mais jamais pour une photo masquée. Une entrée d'audit dont l'administrateur ou
+la cible a été supprimé reste listée avec un identifiant `null`.
+
 ## Tests
 
 Depuis la racine, avec l’environnement virtuel activé :
