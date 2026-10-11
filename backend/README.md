@@ -279,6 +279,55 @@ signe une URL photo de cinq minutes même pour un signalement retiré ou expiré
 mais jamais pour une photo masquée. Une entrée d'audit dont l'administrateur ou
 la cible a été supprimé reste listée avec un identifiant `null`.
 
+### Administration web
+
+Les pages d'administration sont rendues par FastAPI avec Jinja, sur le même
+domaine que le site : `https://no-wave.fr/admin`. Elles n'utilisent pas de
+JavaScript, la CSP du site reste donc inchangée.
+
+| Route | Rôle |
+|---|---|
+| `GET /admin/login` | Formulaire de connexion |
+| `POST /admin/login` | Vérifie le mot de passe puis ouvre la session |
+| `GET /admin` | Accueil, réservé à un administrateur actif |
+| `POST /admin/logout` | Ferme la session du navigateur |
+
+- **Connexion :** FastAPI envoie l'e-mail et le mot de passe à Firebase
+  (`accounts:signInWithPassword`), vérifie le token obtenu, puis applique la
+  même règle que `/api/v1/admin` (`resolve_active_admin`) : e-mail vérifié,
+  profil actif et rôle `admin`. Ce n'est qu'ensuite qu'il crée un session
+  cookie Firebase. Un compte refusé ne reçoit donc jamais de session.
+- **Session :** cookie `__Host-nowave_admin_session`, valable 8 h, `HttpOnly`,
+  `Secure`, `SameSite=Strict`. À chaque page, le cookie est vérifié auprès de
+  Firebase (révocation comprise) et le profil est relu : une suspension
+  s'applique dès la requête suivante.
+- **CSRF :** chaque formulaire `POST` contient un champ caché `csrf_token` qui
+  doit être égal au cookie `__Host-nowave_admin_csrf` (double submit). Le jeton
+  change à la connexion. Pour une nouvelle page, utiliser `render_page` (qui
+  fournit `csrf_token` au template) et la dépendance `require_csrf` sur la
+  route `POST`.
+- **Erreurs :** session absente ou invalide → redirection vers
+  `/admin/login`. Compte non admin, suspendu ou sans profil NoWave → page
+  `403`. Firebase ou base indisponible → page `503`. Les messages techniques
+  ne sont jamais affichés.
+- **Déconnexion :** elle efface seulement les cookies du navigateur. Les
+  tokens Firebase restent valides, donc l'application mobile de l'admin reste
+  connectée.
+
+La connexion exige la clé Web API Firebase du projet (la même que celle de
+l'application mobile), à fournir hors de Git :
+
+```dotenv
+FIREBASE_WEB_API_KEY=cle-web-api
+```
+
+Elle accepte aussi `FIREBASE_WEB_API_KEY_FILE`. Sans cette clé, le formulaire
+répond `503` mais le reste de l'API démarre normalement.
+
+nginx route `/admin` vers l'API et limite les envois du formulaire de
+connexion à 10 par minute et par visiteur (rafale de 5), en plus de la limite
+générale.
+
 ## Tests
 
 Depuis la racine, avec l’environnement virtuel activé :

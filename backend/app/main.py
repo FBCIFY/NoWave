@@ -41,6 +41,8 @@ from app.api.errors.handlers import (
 )
 from app.api.router import router as api_router
 from app.api.routes.health import router as health_router
+from app.web.errors import register_web_error_handlers
+from app.web.routes.admin_pages import router as admin_pages_router
 from app.domain.errors import (
     AdminRequiredError,
     DeviceConflictError,
@@ -98,6 +100,8 @@ for error_type in (
 
 app.include_router(health_router)
 app.include_router(api_router)
+app.include_router(admin_pages_router)
+register_web_error_handlers(app)
 
 app.add_exception_handler(
     StarletteHTTPException,

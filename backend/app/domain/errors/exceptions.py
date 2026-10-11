@@ -138,3 +138,15 @@ class ModerationConflictError(DomainError):
 
 class PhotoNotFoundError(DomainError):
     pass
+
+
+class InvalidCredentialsError(DomainError):
+    pass
+
+
+class InvalidSessionError(DomainError):
+    pass
+
+
+class SignInUnavailableError(DomainError):
+    pass
