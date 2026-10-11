@@ -312,11 +312,14 @@ rester visibles sans être à jour.
 
 ### Limite de débit du serveur
 
-nginx limite chaque appareil à 10 requêtes/s (pointes à 30) et à 30
-connexions. Pour rester en dessous, la source demande le moins de tuiles
-possible : aucune au-delà du zoom 12 (Mapbox agrandit celles du zoom 12, qui
-placent déjà un badge à 2 m près), pas de préchargement des zooms inférieurs,
-et rien pendant un geste. Une tuile refusée en 429 n'affiche pas le
+nginx limite les tuiles à 30 requêtes/s par IP (rafale de 50, avec attente
+au-delà de 15 requêtes en pointe), séparément des autres routes API qui
+restent à 10 requêtes/s (rafale de 30). La limite de 30 connexions par IP
+s'applique toujours à tout le serveur. Pour garder de la marge, la source
+demande le moins de tuiles possible : aucune au-delà du zoom 12 (Mapbox
+agrandit celles du zoom 12, qui placent déjà un badge à 2 m près), pas de
+préchargement des zooms inférieurs, et un délai réseau pendant les gestes et
+animations. Une tuile refusée en 429 n'affiche pas le
 bandeau : Mapbox la redemande lui-même quelques secondes plus tard. Un 503
 affiche le bandeau, car le backend répond aussi 503 quand la base ou le
 stockage sont en panne, et Mapbox ne transmet que le code HTTP. Or nginx
@@ -342,9 +345,9 @@ Un halo bleu sous les signalements montre la précision du GPS.
   tuiles visibles) ;
 - l'état de la photo reste « Envoi en cours » tant que la route d'envoi de
   NW-112 n'est pas déployée ;
-- en zoomant ou dézoomant vite, nginx refuse encore des tuiles (429) : les
-  badges arrivent quelques secondes après la fin du geste, en attendant une
-  limite propre aux tuiles côté serveur ;
+- la limite propre aux tuiles doit être validée sur appareil après
+  déploiement : compter les 429/503 et le délai d'apparition des badges
+  pendant des zooms répétés ;
 - les regroupements sont calculés tuile par tuile, aux zooms entiers : en
   dézoomant, ils fusionnent par sauts, et deux zones proches séparées par une
   limite de tuile ne fusionnent qu'à un zoom plus bas.
