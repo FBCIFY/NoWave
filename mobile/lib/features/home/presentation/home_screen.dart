@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 import '../../../core/notifications/alert_push_controller.dart';
@@ -72,12 +74,30 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
+  /// Un tap explicite sur une nouvelle notification ouvre immédiatement
+  /// sa fiche, même si une autre fiche d'alerte est déjà affichée.
+  Future<void> _openReportFromPush(String reportId) {
+    unawaited(_openReport(reportId));
+    return Future<void>.value();
+  }
+
   /// Le détail vient d'être relu auprès du backend par AlertReportScreen.
   /// On revient à la route principale puis on pilote la MapScreen existante.
   Future<void> _showReportOnMainMap(ReportDetail report) async {
     if (!mounted) return;
 
-    _mapFocusController.focus(report);
+    if (!_mapFocusController.focus(report)) {
+      ScaffoldMessenger.of(context)
+        ..hideCurrentSnackBar()
+        ..showSnackBar(
+          const SnackBar(
+            content: Text(
+              'Terminez ou annulez votre signalement avant de centrer la carte.',
+            ),
+          ),
+        );
+      return;
+    }
 
     Navigator.of(context).popUntil((route) => route.isFirst);
   }
@@ -142,7 +162,7 @@ class _HomeScreenState extends State<HomeScreen> {
         ? map
         : PushNotificationListener(
             controller: controller,
-            onOpen: (push) => _openReport(push.alert.reportId),
+            onOpen: (push) => _openReportFromPush(push.alert.reportId),
             child: map,
           );
   }

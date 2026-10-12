@@ -182,6 +182,55 @@ void main() {
       await tester.pumpWidget(const SizedBox.shrink());
     },
   );
+  testWidgets(
+    'deux notifications distinctes empilent immédiatement leurs fiches',
+    (tester) async {
+      final f = await mount(tester, reportAvailable: true);
+
+      f.auth.changes.add(_User('user-a'));
+      await tester.pumpAndSettle();
+
+      f.source.taps.add(pushMessage());
+      await tester.pumpAndSettle();
+
+      expect(
+        tester
+            .widget<AlertReportScreen>(find.byType(AlertReportScreen))
+            .reportId,
+        'report-a',
+      );
+
+      f.source.taps.add(pushMessage(id: 'alert-b', reportId: 'report-b'));
+      await tester.pumpAndSettle();
+
+      final allScreens = tester
+          .widgetList<AlertReportScreen>(
+            find.byType(AlertReportScreen, skipOffstage: false),
+          )
+          .toList();
+
+      expect(allScreens, hasLength(2));
+      expect(
+        tester
+            .widget<AlertReportScreen>(find.byType(AlertReportScreen))
+            .reportId,
+        'report-b',
+      );
+
+      await tester.pageBack();
+      await tester.pumpAndSettle();
+
+      expect(
+        tester
+            .widget<AlertReportScreen>(find.byType(AlertReportScreen))
+            .reportId,
+        'report-a',
+      );
+
+      await tester.pumpWidget(const SizedBox.shrink());
+    },
+  );
+
   testWidgets('compte suspendu ne reçoit pas de navigation depuis FCM', (
     tester,
   ) async {
@@ -214,6 +263,45 @@ void main() {
     ]);
     await tester.pumpWidget(const SizedBox.shrink());
   });
+
+  testWidgets(
+    'Voir sur la carte reste bloqué pendant un signalement en cours',
+    (tester) async {
+      final f = await mount(tester, reportAvailable: true);
+
+      f.auth.changes.add(_User('user-a'));
+      await tester.pumpAndSettle();
+
+      final map = tester.widget<MapScreen>(find.byType(MapScreen));
+      final focusController = map.focusController!;
+
+      focusController.setBlocked(true);
+
+      await tester.tap(find.byTooltip('Mes alertes'));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byKey(const ValueKey('alert-a')));
+      await tester.pumpAndSettle();
+
+      expect(find.byType(AlertReportScreen), findsOneWidget);
+
+      await tester.tap(find.text('Voir sur la carte'));
+      await tester.pumpAndSettle();
+
+      expect(find.byType(AlertReportScreen), findsOneWidget);
+      expect(focusController.report, isNull);
+      expect(
+        find.text(
+          'Terminez ou annulez votre signalement avant de centrer la carte.',
+        ),
+        findsOneWidget,
+      );
+
+      focusController.setBlocked(false);
+
+      await tester.pumpWidget(const SizedBox.shrink());
+    },
+  );
 
   testWidgets(
     'Voir sur la carte revient à la MapScreen principale et la cible',

@@ -250,6 +250,53 @@ envoyé au backend avec l’enregistrement du téléphone (voir NW-116).
 - `ProfileGate` n’a pas de test automatisé : le parcours a été vérifié à la
   main sur iPhone.
 
+## Historique et navigation des alertes — NW-125
+
+L’historique des alertes du compte est chargé depuis
+`GET /api/v1/users/me/alerts` avec pagination.
+
+Lorsqu’une alerte est ouverte depuis l’historique ou depuis une notification
+FCM, le mobile relit le signalement avec `GET /api/v1/reports/{report_id}`.
+Le contenu du push ne constitue donc pas la source de vérité du signalement.
+
+L’action « Voir sur la carte » utilise la `MapScreen` principale existante et
+la centre sur la position courante du signalement relue auprès du backend.
+
+Si un signalement est en cours de création ou de positionnement, la fiche de
+l’alerte peut être consultée mais le recentrage de la carte est refusé jusqu’à
+ce que l’utilisateur termine ou annule le signalement en cours.
+
+Si une notification distincte est sélectionnée alors qu’une autre fiche
+d’alerte est déjà ouverte, la nouvelle fiche est ouverte immédiatement
+au-dessus de la précédente. Le bouton Retour revient à la fiche précédente.
+Les doublons représentant le même événement restent dédupliqués.
+
+Le champ `data` du message FCM utilise uniquement des valeurs chaîne.
+
+Champs obligatoires :
+
+- `alert_id`
+- `report_id`
+- `report_version`
+- `category`
+- `position_dms`
+- `distance_m`
+- `expires_at`
+
+Champs facultatifs :
+
+- `position`
+- `alerted_at`
+
+`position_dms` contient la position en degrés, minutes et secondes.
+`position`, lorsqu’il est fourni, contient un Point GeoJSON sérialisé.
+
+Si `position` est absent, le mobile reconstruit les coordonnées à partir de
+`position_dms`. S’il est présent, il doit être valide et cohérent avec
+`position_dms` ; sinon le payload est rejeté.
+
+Un signalement expiré, retiré ou introuvable n’est pas ouvert sur la carte.
+
 ## Couche des signalements — NW-114
 
 Les signalements actifs sont affichés par-dessus le fond Mapbox, dans une

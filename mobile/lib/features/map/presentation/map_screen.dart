@@ -33,12 +33,19 @@ enum _MapOrientationMode { north, heading, manual }
 
 class MapFocusController extends ChangeNotifier {
   ReportDetail? _report;
+  bool _blocked = false;
 
   ReportDetail? get report => _report;
 
-  void focus(ReportDetail report) {
+  void setBlocked(bool blocked) {
+    _blocked = blocked;
+  }
+
+  bool focus(ReportDetail report) {
+    if (_blocked) return false;
     _report = report;
     notifyListeners();
+    return true;
   }
 }
 
@@ -921,6 +928,7 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
       _cameraBeforeReport = camera;
       _restoreFollowAfterReport = _isFollowing;
       _reportComposerOpen = true;
+      widget.focusController?.setBlocked(true);
       _pendingReport = null;
       _photoDraft = photoDraft;
       _isFollowing = false;
@@ -967,6 +975,7 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
     final resumeFollowing = _restoreFollowAfterReport;
     setState(() {
       _reportComposerOpen = false;
+      widget.focusController?.setBlocked(false);
       _reportPoint.value = null;
       _pendingReport = null;
       _photoDraft = null;
