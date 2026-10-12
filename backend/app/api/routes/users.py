@@ -131,7 +131,7 @@ def list_my_alerts(
     identity: dict = Depends(get_current_identity),
 ):
     service = ListMyAlerts(
-        user_repository=PostgreSQLUserRepository(),
+        user_repository=reuse_current_user(identity, PostgreSQLUserRepository()),
         alert_history_repository=PostgreSQLAlertHistoryRepository(),
     )
 

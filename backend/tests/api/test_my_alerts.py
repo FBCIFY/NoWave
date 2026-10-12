@@ -25,8 +25,11 @@ PATH = "/api/v1/users/me/alerts"
 class FakeUserRepository:
     def __init__(self, user):
         self.user = user
+        self.reads = []
 
     def get_by_firebase_uid(self, firebase_uid):
+        self.reads.append(firebase_uid)
+
         if self.user.firebase_uid == firebase_uid:
             return self.user
 
@@ -161,6 +164,27 @@ def test_my_alerts_use_default_pagination(monkeypatch):
             "limit": DEFAULT_PAGE_LIMIT,
         },
     ]
+
+
+def test_my_alerts_read_the_profile_once(monkeypatch):
+    user = make_user()
+    users = FakeUserRepository(user)
+    alerts = FakeAlertHistoryRepository()
+    configure(monkeypatch, user, alerts)
+    monkeypatch.setattr(
+        auth_dependency,
+        "PostgreSQLUserRepository",
+        lambda: users,
+    )
+    monkeypatch.setattr(
+        "app.api.routes.users.PostgreSQLUserRepository",
+        lambda: users,
+    )
+
+    response = get()
+
+    assert response.status_code == 200
+    assert users.reads == [user.firebase_uid]
 
 
 def test_my_alerts_follow_the_history_contract(monkeypatch):
