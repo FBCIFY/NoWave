@@ -40,7 +40,7 @@ Les identifiants Firebase restent séparés. `NOWAVE_CONFIG_DIR` et
 `NOWAVE_SECRETS_DIR` permettent de valider Compose avec des répertoires de test.
 
 Le rôle `nowave_runtime` obtient `UPDATE` sur `report_photos` lors des migrations.
-Les connexions PostgreSQL de l'API sont réutilisées dans un pool de 10 par
+Les connexions PostgreSQL de l'API sont réutilisées dans un pool de 15 connexions maximum par
 processus. Les refus nginx pour débit ou connexions répondent 429 ; une panne
 de base répond 503. Le journal JSON du serveur web expose `status`,
 `upstream_status`, `limit_req_status` et `limit_conn_status` pour distinguer
