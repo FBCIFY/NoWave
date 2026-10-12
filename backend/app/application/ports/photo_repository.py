@@ -32,6 +32,14 @@ class PhotoUploadSession(ABC):
 
 class PhotoRepository(ABC):
     @abstractmethod
+    def referenced_keys(self, report_ids: list[UUID]) -> set[str]:
+        """Read current references in a batch, without locking retained photos.
+
+        Missing keys are only candidates: recheck under lock before deletion.
+        """
+        pass
+
+    @abstractmethod
     def lock_for_upload(
         self, report_id: UUID
     ) -> AbstractContextManager[PhotoUploadSession]:

@@ -141,6 +141,8 @@ psycopg[binary]==3.2.10
     # via -r backend/app/infrastructure/database/requirements.txt
 psycopg-binary==3.2.10
     # via psycopg
+psycopg-pool==3.2.8
+    # via -r backend/app/infrastructure/database/requirements.txt
 pyasn1==0.6.4
     # via pyasn1-modules
 pyasn1-modules==0.4.2
@@ -190,6 +192,7 @@ typing-extensions==4.16.0
     #   grpcio
     #   opentelemetry-api
     #   psycopg
+    #   psycopg-pool
     #   pydantic
     #   pydantic-core
     #   sqlalchemy

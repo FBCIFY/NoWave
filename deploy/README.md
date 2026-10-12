@@ -40,6 +40,12 @@ Les identifiants Firebase restent séparés. `NOWAVE_CONFIG_DIR` et
 `NOWAVE_SECRETS_DIR` permettent de valider Compose avec des répertoires de test.
 
 Le rôle `nowave_runtime` obtient `UPDATE` sur `report_photos` lors des migrations.
+Les connexions PostgreSQL de l'API sont réutilisées dans un pool de 15 connexions maximum par
+processus. Les refus nginx pour débit ou connexions répondent 429 ; une panne
+de base répond 503. Le journal JSON du serveur web expose `status`,
+`upstream_status`, `limit_req_status` et `limit_conn_status` pour distinguer
+ces cas lors d'une recette de zooms répétés. Comparer aussi la révision de
+`/version` avec la révision livrée avant d'attribuer un incident à ce réglage.
 Le service `photo-cleanup` partage le code de l'API et tourne toutes les cinq
 minutes ; ses logs indiquent les suppressions et les pannes sans exposer les
 secrets ni les URL signées. Il ne supprime que les objets NoWave non référencés

@@ -1,6 +1,9 @@
 from fastapi import Depends, HTTPException
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
+from app.application.ports.user_repository import UserRepository
+from app.application.repositories.preloaded_user_repository import PreloadedUserRepository
+
 from app.domain.errors import (
     AdminRequiredError,
     EmailNotVerifiedError,
@@ -15,6 +18,20 @@ from app.infrastructure.repositories.postgresql_user_repository import (
 
 
 bearer_scheme = HTTPBearer(auto_error=False)
+
+
+class CurrentIdentity(dict):
+    """Verified claims plus a server-loaded profile, outside the JSON claims."""
+
+    def __init__(self, identity: dict, user: User):
+        super().__init__(identity)
+        self.user = user
+
+
+def reuse_current_user(identity: dict, repository: UserRepository) -> UserRepository:
+    if isinstance(identity, CurrentIdentity):
+        return PreloadedUserRepository(repository, identity.user)
+    return repository
 
 
 def get_authenticated_identity(
@@ -63,13 +80,13 @@ def get_current_identity(
             "user is not active"
         )
 
-    return identity
+    return CurrentIdentity(identity, user)
 
 
 def get_current_admin(
     identity: dict = Depends(get_current_identity),
 ) -> User:
-    repository = PostgreSQLUserRepository()
+    repository = reuse_current_user(identity, PostgreSQLUserRepository())
 
     user = repository.get_by_firebase_uid(
         identity["uid"]

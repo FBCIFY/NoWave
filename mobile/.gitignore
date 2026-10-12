@@ -49,6 +49,7 @@ app.*.map.json
 
 # Secrets
 /.env.json
+/.env-local.json
 
 # Generated Android files
 /android/build/
