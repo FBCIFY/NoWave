@@ -15,9 +15,10 @@ import '../../profile/domain/user_profile.dart';
 import '../../profile/presentation/profile_screen.dart';
 import '../../reports/data/manual_report_service.dart';
 import '../../reports/data/report_detail_service.dart';
+import '../../reports/domain/report_detail.dart';
 
 /// Accueil après connexion : la carte, avec un bouton qui ouvre le profil.
-class HomeScreen extends StatelessWidget {
+class HomeScreen extends StatefulWidget {
   final UserProfile? profile;
   final AlertService? alertService;
   final AlertPushController? pushController;
@@ -44,37 +45,66 @@ class HomeScreen extends StatelessWidget {
   });
 
   @override
-  Widget build(BuildContext context) {
-    final positionEstimateService = this.positionEstimateService;
+  State<HomeScreen> createState() => _HomeScreenState();
+}
 
-    Future<void> openReport(String reportId) async {
-      final service = reportDetailService;
-      if (service == null) return;
-      await Navigator.of(context).push(
-        MaterialPageRoute<void>(
-          builder: (_) =>
-              AlertReportScreen(reportId: reportId, service: service),
+class _HomeScreenState extends State<HomeScreen> {
+  final MapFocusController _mapFocusController = MapFocusController();
+
+  @override
+  void dispose() {
+    _mapFocusController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _openReport(String reportId) async {
+    final service = widget.reportDetailService;
+    if (service == null || !mounted) return;
+
+    await Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => AlertReportScreen(
+          reportId: reportId,
+          service: service,
+          onShowOnMap: _showReportOnMainMap,
         ),
-      );
-    }
+      ),
+    );
+  }
+
+  /// Le détail vient d'être relu auprès du backend par AlertReportScreen.
+  /// On revient à la route principale puis on pilote la MapScreen existante.
+  Future<void> _showReportOnMainMap(ReportDetail report) async {
+    if (!mounted) return;
+
+    _mapFocusController.focus(report);
+
+    Navigator.of(context).popUntil((route) => route.isFirst);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final positionEstimateService = widget.positionEstimateService;
 
     final map = MapScreen(
-      onOpenAlerts: alertService == null || reportDetailService == null
+      focusController: _mapFocusController,
+      onOpenAlerts:
+          widget.alertService == null || widget.reportDetailService == null
           ? null
           : () {
               Navigator.of(context).push(
                 MaterialPageRoute<void>(
                   builder: (_) => AlertsScreen(
-                    service: alertService!,
-                    onOpen: (alert) => openReport(alert.reportId),
+                    service: widget.alertService!,
+                    onOpen: (alert) => _openReport(alert.reportId),
                   ),
                 ),
               );
             },
-      reportService: reportService,
-      reportTiles: reportTiles,
-      reportDetailService: reportDetailService,
-      onUserInactive: onUserInactive,
+      reportService: widget.reportService,
+      reportTiles: widget.reportTiles,
+      reportDetailService: widget.reportDetailService,
+      onUserInactive: widget.onUserInactive,
       // La caméra renvoie la photo et le point estimé, que la carte fait
       // confirmer avant publication.
       onOpenCamera: positionEstimateService == null
@@ -88,15 +118,17 @@ class HomeScreen extends StatelessWidget {
               ),
             ),
       onOpenProfile:
-          profile == null || onSignOut == null || onUpdatePreferences == null
+          widget.profile == null ||
+              widget.onSignOut == null ||
+              widget.onUpdatePreferences == null
           ? null
           : () {
               Navigator.of(context).push(
                 MaterialPageRoute<void>(
                   builder: (_) => ProfileScreen(
-                    profile: profile!,
-                    onSignOut: onSignOut!,
-                    onUpdatePreferences: onUpdatePreferences!,
+                    profile: widget.profile!,
+                    onSignOut: widget.onSignOut!,
+                    onUpdatePreferences: widget.onUpdatePreferences!,
                     notificationPermissions:
                         const NotificationPermissionService(),
                   ),
@@ -104,12 +136,13 @@ class HomeScreen extends StatelessWidget {
               );
             },
     );
-    final controller = pushController;
+
+    final controller = widget.pushController;
     return controller == null
         ? map
         : PushNotificationListener(
             controller: controller,
-            onOpen: (push) => openReport(push.alert.reportId),
+            onOpen: (push) => _openReport(push.alert.reportId),
             child: map,
           );
   }

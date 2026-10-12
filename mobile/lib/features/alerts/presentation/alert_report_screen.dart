@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 
-import '../../map/presentation/map_screen.dart';
 import '../../reports/data/report_detail_service.dart';
 import '../../reports/domain/report_detail.dart';
 import '../../reports/presentation/report_detail_sheet.dart';
@@ -13,12 +12,12 @@ class AlertReportScreen extends StatelessWidget {
     required this.reportId,
     required this.service,
     this.now = DateTime.now,
-    this.onShowOnMap,
+    required this.onShowOnMap,
   });
   final String reportId;
   final ReportDetailService service;
   final DateTime Function() now;
-  final Future<void> Function(ReportDetail)? onShowOnMap;
+  final Future<void> Function(ReportDetail) onShowOnMap;
 
   @override
   Widget build(BuildContext context) => Scaffold(
@@ -52,23 +51,7 @@ class AlertReportScreen extends StatelessWidget {
           return;
         }
         if (!context.mounted) return;
-        if (!current.expiresAt.isAfter(now())) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Ce signalement a expiré.')),
-          );
-          return;
-        }
-        final callback = onShowOnMap;
-        if (callback != null) {
-          await callback(current);
-          return;
-        }
-        await Navigator.of(context).push(
-          MaterialPageRoute<void>(
-            builder: (_) =>
-                MapScreen(initialReport: current, reportDetailService: service),
-          ),
-        );
+        await onShowOnMap(current);
       },
     ),
   );

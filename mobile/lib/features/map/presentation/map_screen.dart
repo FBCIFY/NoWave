@@ -31,6 +31,17 @@ import 'widgets/report_marker.dart';
 /// faite au doigt.
 enum _MapOrientationMode { north, heading, manual }
 
+class MapFocusController extends ChangeNotifier {
+  ReportDetail? _report;
+
+  ReportDetail? get report => _report;
+
+  void focus(ReportDetail report) {
+    _report = report;
+    notifyListeners();
+  }
+}
+
 /// Carte principale : position GPS, suivi de l'utilisateur, boussole et
 /// création d'un signalement.
 ///
@@ -41,7 +52,7 @@ enum _MapOrientationMode { north, heading, manual }
 class MapScreen extends StatefulWidget {
   final VoidCallback? onOpenProfile;
   final VoidCallback? onOpenAlerts;
-  final ReportDetail? initialReport;
+  final MapFocusController? focusController;
 
   /// Ouvre la caméra ; renvoie null si l'utilisateur la ferme sans photo.
   final Future<PhotoReportDraft?> Function()? onOpenCamera;
@@ -58,7 +69,7 @@ class MapScreen extends StatefulWidget {
     super.key,
     this.onOpenProfile,
     this.onOpenAlerts,
-    this.initialReport,
+    this.focusController,
     this.onOpenCamera,
     this.reportService,
     this.reportTiles,
@@ -111,6 +122,7 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
   Timer? _noticeTimer;
   Timer? _selectedExpiryTimer;
   bool _selectedExpired = false;
+  ReportDetail? _selectedReport;
 
   /// Dernier zoom connu, pour relancer le battement de la heatmap au
   /// retour au premier plan.
@@ -140,28 +152,7 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
   @override
   void initState() {
     super.initState();
-    if (widget.initialReport case final report?) {
-      _viewport = CameraViewportState(
-        center: Point(coordinates: Position(report.longitude, report.latitude)),
-        zoom: 14,
-        pitch: 0,
-      );
-      _selectedExpiryTimer = Timer(
-        report.expiresAt.difference(DateTime.now()),
-        () {
-          if (!mounted) return;
-          setState(() => _selectedExpired = true);
-          final map = _mapboxMap;
-          if (map != null) {
-            unawaited(
-              map.style
-                  .removeStyleLayer('alert-selected-point')
-                  .catchError((_) {}),
-            );
-          }
-        },
-      );
-    }
+    widget.focusController?.addListener(_handleFocusRequest);
     _lifecycleListener = AppLifecycleListener(
       onHide: _pauseMapUpdates,
       onShow: _resumeMapUpdates,
@@ -470,27 +461,114 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
     );
   }
 
+  @override
+  void didUpdateWidget(covariant MapScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+
+    if (oldWidget.focusController != widget.focusController) {
+      oldWidget.focusController?.removeListener(_handleFocusRequest);
+      widget.focusController?.addListener(_handleFocusRequest);
+    }
+  }
+
+  void _handleFocusRequest() {
+    final report = widget.focusController?.report;
+    if (report == null) return;
+    unawaited(_focusSelectedReport(report));
+  }
+
+  void _scheduleSelectedExpiry(ReportDetail report) {
+    _selectedExpiryTimer?.cancel();
+
+    final remaining = report.expiresAt.difference(DateTime.now());
+    if (remaining <= Duration.zero) return;
+
+    _selectedExpiryTimer = Timer(remaining, () {
+      if (!mounted || _selectedReport?.id != report.id) return;
+
+      setState(() => _selectedExpired = true);
+
+      final map = _mapboxMap;
+      if (map != null) {
+        unawaited(
+          map.style.removeStyleLayer('alert-selected-point').catchError((_) {}),
+        );
+      }
+    });
+  }
+
+  Future<void> _focusSelectedReport(ReportDetail report) async {
+    if (!mounted) return;
+
+    final expired = !report.expiresAt.isAfter(DateTime.now());
+
+    setState(() {
+      _selectedReport = report;
+      _selectedExpired = expired;
+      _isFollowing = false;
+      _viewport = CameraViewportState(
+        center: Point(coordinates: Position(report.longitude, report.latitude)),
+        zoom: 14,
+        pitch: 0,
+      );
+    });
+
+    _selectedExpiryTimer?.cancel();
+
+    if (expired) return;
+
+    _scheduleSelectedExpiry(report);
+
+    final map = _mapboxMap;
+    if (map == null) return;
+
+    try {
+      await map.easeTo(
+        CameraOptions(
+          center: Point(
+            coordinates: Position(report.longitude, report.latitude),
+          ),
+          zoom: 14,
+          pitch: 0,
+        ),
+        MapAnimationOptions(duration: 350),
+      );
+
+      await _showSelectedReport();
+    } catch (_) {
+      if (mounted) {
+        _showNotice(
+          'Impossible de centrer la carte sur ce signalement.',
+          MapNoticeKind.error,
+        );
+      }
+    }
+  }
+
   /// Repère explicite de la sélection, indépendant du chargement des MVT.
   Future<void> _showSelectedReport() async {
-    final report = widget.initialReport;
+    final report = _selectedReport;
     final map = _mapboxMap;
     if (report == null || map == null || _selectedExpired) return;
+
+    final data = jsonEncode({
+      'type': 'Feature',
+      'properties': {'report_id': report.id},
+      'geometry': {
+        'type': 'Point',
+        'coordinates': [report.longitude, report.latitude],
+      },
+    });
+
     try {
       if (!await map.style.styleSourceExists('alert-selected')) {
         await map.style.addSource(
-          GeoJsonSource(
-            id: 'alert-selected',
-            data: jsonEncode({
-              'type': 'Feature',
-              'properties': {'report_id': report.id},
-              'geometry': {
-                'type': 'Point',
-                'coordinates': [report.longitude, report.latitude],
-              },
-            }),
-          ),
+          GeoJsonSource(id: 'alert-selected', data: data),
         );
+      } else {
+        await map.style.setStyleSourceProperty('alert-selected', 'data', data);
       }
+
       if (!await map.style.styleLayerExists('alert-selected-point') &&
           !_selectedExpired) {
         await map.style.addLayer(
@@ -1123,6 +1201,7 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
 
   @override
   void dispose() {
+    widget.focusController?.removeListener(_handleFocusRequest);
     widget.reportTiles?.stopPulse();
     _lifecycleListener?.dispose();
     WidgetsBinding.instance.removeObserver(this);
@@ -1169,28 +1248,6 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
     // Pendant un signalement, le retour arrière est géré par
     // ReportComposerSheet : il passe par la même confirmation que la croix.
     return Scaffold(
-      appBar: widget.initialReport == null
-          ? null
-          : AppBar(
-              title: Text(
-                _selectedExpired
-                    ? 'Signalement expiré'
-                    : 'Signalement sélectionné',
-              ),
-              actions: [
-                if (!_selectedExpired && widget.reportDetailService != null)
-                  IconButton(
-                    tooltip: 'Détail du signalement',
-                    icon: const Icon(Icons.info_outline),
-                    onPressed: () => ReportDetailSheet.show(
-                      context,
-                      reportId: widget.initialReport!.id,
-                      loadReport: widget.reportDetailService!.fetchReport,
-                      loadPhoto: widget.reportDetailService!.fetchPhoto,
-                    ),
-                  ),
-              ],
-            ),
       resizeToAvoidBottomInset: false,
       body: Stack(
         children: [
@@ -1208,7 +1265,7 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
                   setState(() => _mapboxMap = map);
                   unawaited(MapConfig.hideDefaultOrnaments(map));
                   _addReportInteractions(map);
-                  if (widget.initialReport == null) unawaited(_locate());
+                  if (_selectedReport == null) unawaited(_locate());
                 },
                 onMapLoadedListener: _handleMapLoaded,
                 onStyleLoadedListener: (_) {

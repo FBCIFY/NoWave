@@ -29,6 +29,7 @@ class AlertPushController extends ChangeNotifier {
   bool _navigating = false;
   bool _ready = false;
   void setReady(bool ready) {
+    if (_ready == ready) return;
     _ready = ready;
     if (ready) scheduleMicrotask(_drain);
   }

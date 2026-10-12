@@ -13,6 +13,7 @@ import 'package:blueway/features/auth/presentation/auth_gate.dart';
 import 'package:blueway/features/auth/presentation/login_screen.dart';
 import 'package:blueway/features/camera/data/position_estimate_service.dart';
 import 'package:blueway/features/map/data/report_tiles.dart';
+import 'package:blueway/features/map/presentation/map_screen.dart';
 import 'package:blueway/features/profile/data/profile_service.dart';
 import 'package:blueway/features/profile/presentation/suspended_account_screen.dart';
 import 'package:blueway/features/reports/data/manual_report_service.dart';
@@ -20,6 +21,7 @@ import 'package:blueway/features/reports/data/report_detail_service.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:mapbox_maps_flutter/mapbox_maps_flutter.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 
@@ -62,6 +64,7 @@ void main() {
     WidgetTester tester, {
     bool initial = false,
     bool suspended = false,
+    bool reportAvailable = false,
   }) async {
     final auth = _Auth();
     final source = FakeAlertPushSource();
@@ -73,7 +76,33 @@ void main() {
       if (request.url.path.endsWith('/alerts')) {
         return http.Response(jsonEncode(pageJson()), 200);
       }
-      if (request.url.path.contains('/reports/')) return http.Response('', 404);
+      if (request.url.path.contains('/reports/')) {
+        if (!reportAvailable) return http.Response('', 404);
+        return http.Response(
+          jsonEncode({
+            'id': 'report-a',
+            'category': 'pollution',
+            'description': 'Position actualisée',
+            'positioning_mode': 'manual',
+            'final_position': {
+              'type': 'Point',
+              'coordinates': [6.0, 44.0],
+            },
+            'status': 'active',
+            'observed_at': testNow
+                .subtract(const Duration(hours: 1))
+                .toIso8601String(),
+            'expires_at': DateTime.now()
+                .add(const Duration(hours: 1))
+                .toUtc()
+                .toIso8601String(),
+            'author': null,
+            'boat': null,
+            'photo': null,
+          }),
+          200,
+        );
+      }
       return http.Response(
         jsonEncode({
           'id': 'profile-a',
@@ -185,4 +214,56 @@ void main() {
     ]);
     await tester.pumpWidget(const SizedBox.shrink());
   });
+
+  testWidgets(
+    'Voir sur la carte revient à la MapScreen principale et la cible',
+    (tester) async {
+      final f = await mount(tester, reportAvailable: true);
+
+      f.auth.changes.add(_User('user-a'));
+      await tester.pumpAndSettle();
+
+      expect(find.byType(MapScreen), findsOneWidget);
+
+      await tester.tap(find.byTooltip('Mes alertes'));
+      await tester.pumpAndSettle();
+
+      expect(find.byType(AlertsScreen), findsOneWidget);
+
+      await tester.tap(find.byKey(const ValueKey('alert-a')));
+      await tester.pumpAndSettle();
+
+      expect(find.byType(AlertReportScreen), findsOneWidget);
+
+      await tester.tap(find.text('Voir sur la carte'));
+      await tester.pumpAndSettle();
+
+      expect(find.byType(AlertsScreen), findsNothing);
+      expect(find.byType(AlertReportScreen), findsNothing);
+      expect(find.byType(MapScreen), findsOneWidget);
+
+      final map = tester.widget<MapScreen>(find.byType(MapScreen));
+      final selected = map.focusController?.report;
+
+      expect(selected, isNotNull);
+      expect(selected!.id, 'report-a');
+      expect(selected.longitude, 6);
+      expect(selected.latitude, 44);
+
+      final viewport =
+          tester.widget<MapWidget>(find.byType(MapWidget)).viewport
+              as CameraViewportState;
+
+      expect(viewport.center!.coordinates.lng, 6);
+      expect(viewport.center!.coordinates.lat, 44);
+      expect(viewport.zoom, 14);
+
+      expect(
+        f.calls.where((path) => path == '/api/v1/reports/report-a').length,
+        2,
+      );
+
+      await tester.pumpWidget(const SizedBox.shrink());
+    },
+  );
 }

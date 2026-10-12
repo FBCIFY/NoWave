@@ -59,8 +59,9 @@ lib/
 │   └── sensors/       cap et inclinaison du téléphone
 └── features/          une fonctionnalité par dossier
     ├── auth/          connexion, inscription, vérification de l’e-mail
-    ├── profile/       création du profil, préférences, écran d’alertes
-    ├── home/          accueil (la carte + accès au profil)
+    ├── profile/       création du profil, préférences et onboarding alertes
+    ├── home/          accueil et orchestration carte/profil/alertes
+    ├── alerts/        historique, parsing FCM et navigation des alertes
     ├── map/           carte, boussole, mode signalement
     ├── reports/       formulaire et envoi des signalements
     └── camera/        prise de photo, mesures et estimation de position
@@ -87,6 +88,9 @@ AuthGate          (session Firebase)
     ├── AlertsOnboardingScreen   une seule fois, après la création du profil
     └── HomeScreen → MapScreen
                      ├── ProfileScreen (bouton profil)
+                     ├── AlertsScreen (bouton alertes)
+                     │   └── AlertReportScreen
+                     │       └── retour à la MapScreen principale ciblée
                      ├── ReportComposerSheet (bouton +, signalement manuel)
                      └── CameraScreen (bouton appareil photo)
                          └── ReportComposerSheet → ReportPhotoViewer

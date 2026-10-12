@@ -8,7 +8,6 @@ import 'package:blueway/features/reports/domain/manual_report.dart';
 import 'package:blueway/features/reports/domain/report_detail.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:mapbox_maps_flutter/mapbox_maps_flutter.dart';
 import 'package:http/http.dart' as http;
 
 import '../support/alert_fixtures.dart';
@@ -51,7 +50,7 @@ void main() {
           reportId: 'report-a',
           service: service,
           now: () => testNow,
-          onShowOnMap: onMap,
+          onShowOnMap: onMap ?? (_) async {},
         ),
       ),
     );
@@ -73,25 +72,22 @@ void main() {
     },
   );
   testWidgets(
-    'navigation réelle vers MapScreen centré sur le signalement sélectionné',
+    'Voir sur la carte délègue au callback sans créer une seconde MapScreen',
     (tester) async {
-      final selected = report(
-        expiry: DateTime.now().add(const Duration(hours: 1)),
+      service.respond = () async => report();
+      var navigations = 0;
+
+      await open(
+        tester,
+        onMap: (_) async {
+          navigations++;
+        },
       );
-      service.respond = () async => selected;
-      await open(tester);
+
       await tester.tap(find.text('Voir sur la carte'));
       await tester.pumpAndSettle();
-      final map = tester.widget<MapScreen>(find.byType(MapScreen));
-      expect(map.initialReport, same(selected));
-      final viewport =
-          tester.widget<MapWidget>(find.byType(MapWidget)).viewport
-              as CameraViewportState;
-      expect(viewport.center!.coordinates.lng, 6);
-      expect(viewport.center!.coordinates.lat, 44);
-      expect(find.text('Signalement sélectionné'), findsOneWidget);
-      await tester.pageBack();
-      await tester.pumpAndSettle();
+
+      expect(navigations, 1);
       expect(find.byType(MapScreen), findsNothing);
     },
   );
