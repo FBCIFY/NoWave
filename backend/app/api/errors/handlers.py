@@ -3,6 +3,7 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 from fastapi.responses import JSONResponse
 
 from app.domain.errors import (
+    AdminRequiredError,
     BoatAlreadyExistsError,
     BoatNotFoundError,
     DeviceConflictError,
@@ -20,9 +21,11 @@ from app.domain.errors import (
     InvalidReportCategoryError,
     InvalidReportDescriptionError,
     InvalidReportPositionError,
+    ModerationConflictError,
     ReportClientIdConflictError,
     ReportNotFoundError,
     PhotoAlreadyUploadedError,
+    PhotoNotFoundError,
     PhotoStorageError,
     PhotoUploadForbiddenError,
     UserAlreadyExistsError,
@@ -433,6 +436,54 @@ def device_position_stale_handler(
         content={
             "error": {
                 "code": "device_position_stale",
+                "message": str(exc),
+                "details": None,
+            }
+        },
+    )
+
+
+def admin_required_handler(
+    request,
+    exc: AdminRequiredError,
+):
+    return JSONResponse(
+        status_code=403,
+        content={
+            "error": {
+                "code": "admin_required",
+                "message": str(exc),
+                "details": None,
+            }
+        },
+    )
+
+
+def moderation_conflict_handler(
+    request,
+    exc: ModerationConflictError,
+):
+    return JSONResponse(
+        status_code=409,
+        content={
+            "error": {
+                "code": "moderation_conflict",
+                "message": str(exc),
+                "details": None,
+            }
+        },
+    )
+
+
+def photo_not_found_handler(
+    request,
+    exc: PhotoNotFoundError,
+):
+    return JSONResponse(
+        status_code=404,
+        content={
+            "error": {
+                "code": "photo_not_found",
                 "message": str(exc),
                 "details": None,
             }

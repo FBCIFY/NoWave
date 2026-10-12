@@ -2,11 +2,12 @@ from fastapi import Depends, HTTPException
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
 from app.domain.errors import (
+    AdminRequiredError,
     EmailNotVerifiedError,
     InactiveUserError,
     UserNotFoundError,
 )
-from app.domain.user import UserStatus
+from app.domain.user import User, UserRole, UserStatus
 from app.infrastructure.adapters.firebase_auth_adapter import FirebaseAuthAdapter
 from app.infrastructure.repositories.postgresql_user_repository import (
     PostgreSQLUserRepository,
@@ -63,3 +64,25 @@ def get_current_identity(
         )
 
     return identity
+
+
+def get_current_admin(
+    identity: dict = Depends(get_current_identity),
+) -> User:
+    repository = PostgreSQLUserRepository()
+
+    user = repository.get_by_firebase_uid(
+        identity["uid"]
+    )
+
+    if user is None:
+        raise UserNotFoundError(
+            "user profile not found"
+        )
+
+    if user.role != UserRole.ADMIN:
+        raise AdminRequiredError(
+            "an active administrator is required"
+        )
+
+    return user
