@@ -4,6 +4,7 @@ from fastapi import (
 )
 
 from app.api.dependencies.auth import (
+    reuse_current_user,
     get_current_identity,
 )
 from app.api.schemas.position_estimate import (
@@ -65,9 +66,7 @@ def create_position_estimate(
     )
 
     service = PositioningService(
-        user_repository=(
-            PostgreSQLUserRepository()
-        ),
+        user_repository=reuse_current_user(identity, PostgreSQLUserRepository()),
     )
 
     result = service.estimate(

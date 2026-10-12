@@ -11,6 +11,19 @@ from app.infrastructure.database.connection import database_connection
 
 
 class PostgreSQLPhotoRepository(PhotoRepository):
+    def referenced_keys(self, report_ids: list[UUID]) -> set[str]:
+        if not report_ids:
+            return set()
+        with database_connection() as connection:
+            rows = connection.execute(
+                """
+                SELECT object_key FROM nowave.report_photos
+                WHERE report_id = ANY(%s::uuid[]) AND object_key IS NOT NULL
+                """,
+                (report_ids,),
+            ).fetchall()
+        return {row[0] for row in rows}
+
     @contextmanager
     def lock_for_upload(self, report_id: UUID):
         with database_connection() as connection:

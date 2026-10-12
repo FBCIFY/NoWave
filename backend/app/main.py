@@ -1,9 +1,12 @@
+from contextlib import asynccontextmanager
+
 import psycopg
 from fastapi import FastAPI
 from fastapi.exceptions import RequestValidationError
 from starlette.exceptions import HTTPException as StarletteHTTPException
 from app.config.production import configure_production, is_production
 from app.config.settings import ConfigurationError
+from app.infrastructure.database.connection import close_database_pools
 from app.api.photo_upload_limit import PhotoUploadLimitMiddleware
 
 from app.api.errors.handlers import (
@@ -70,7 +73,16 @@ from app.domain.errors import (
 )
 
 
+@asynccontextmanager
+async def lifespan(_app: FastAPI):
+    try:
+        yield
+    finally:
+        close_database_pools()
+
+
 app = FastAPI(
+    lifespan=lifespan,
     docs_url=None if is_production() else "/docs",
     redoc_url=None if is_production() else "/redoc",
     openapi_url=None if is_production() else "/openapi.json",

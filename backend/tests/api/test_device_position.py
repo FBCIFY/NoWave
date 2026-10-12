@@ -122,6 +122,39 @@ def valid_payload():
     }
 
 
+def test_position_reads_profile_once_and_rechecks_next_request(monkeypatch):
+    import app.api.dependencies.auth as auth
+    from app.domain.user import UserStatus
+
+    user = create_user()
+    device = create_device(user)
+    reads = []
+
+    class CountingUsers(FakeUserRepository):
+        def get_by_firebase_uid(self, uid):
+            reads.append(uid)
+            return super().get_by_firebase_uid(uid)
+
+    users = CountingUsers(user)
+    devices = FakeDeviceRepository(device)
+    app.dependency_overrides.pop(get_current_identity)
+    app.dependency_overrides[auth.get_authenticated_identity] = lambda: {
+        "uid": user.firebase_uid, "email_verified": True,
+    }
+    monkeypatch.setattr(auth, "PostgreSQLUserRepository", lambda: users)
+    monkeypatch.setattr(devices_routes, "repositories", lambda: (users, devices))
+    payload = valid_payload()
+    payload["measured_at"] = datetime.now(UTC).isoformat()
+    headers = {"X-Installation-ID": str(device.installation_id)}
+    path = "/api/v1/devices/current/position"
+
+    assert client.put(path, headers=headers, json=payload).status_code == 200
+    assert reads == [user.firebase_uid]
+    user.status = UserStatus.SUSPENDED
+    assert client.put(path, headers=headers, json=payload).status_code == 403
+    assert reads == [user.firebase_uid, user.firebase_uid]
+
+
 def test_record_position_returns_200(
     monkeypatch,
 ):

@@ -111,6 +111,11 @@ class FakePhotoRepository:
         self.lock = Lock()
         self.commit_failure = None
 
+    def referenced_keys(self, report_ids):
+        if self.photo and self.photo.report_id in report_ids and self.photo.object_key:
+            return {self.photo.object_key}
+        return set()
+
     @contextmanager
     def lock_for_upload(self, report_id):
         with self.lock:

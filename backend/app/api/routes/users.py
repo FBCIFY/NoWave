@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Depends, status
 
 from app.api.dependencies.auth import (
+    reuse_current_user,
     get_authenticated_identity,
     get_current_identity,
 )
@@ -68,7 +69,7 @@ def update_my_profile(
     request: UserUpdateRequest,
     identity: dict = Depends(get_current_identity),
 ):
-    repository = PostgreSQLUserRepository()
+    repository = reuse_current_user(identity, PostgreSQLUserRepository())
     update_user = UpdateUser(repository)
 
     changes = request.model_dump(
