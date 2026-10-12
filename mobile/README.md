@@ -320,12 +320,12 @@ demande le moins de tuiles possible : aucune au-delà du zoom 12 (Mapbox
 agrandit celles du zoom 12, qui placent déjà un badge à 2 m près), pas de
 préchargement des zooms inférieurs, et un délai réseau pendant les gestes et
 animations. Une tuile refusée en 429 n'affiche pas le
-bandeau : Mapbox la redemande lui-même quelques secondes plus tard. Un 503
-affiche le bandeau, car le backend répond aussi 503 quand la base ou le
-stockage sont en panne, et Mapbox ne transmet que le code HTTP. Or nginx
-répond 503 par défaut quand l'appareil dépasse 30 connexions : ajouter
-`limit_conn_status 429;` dans `deploy/web/nginx.conf` réserverait 503 aux
-vraies pannes.
+bandeau : Mapbox la redemande lui-même quelques secondes plus tard. nginx
+répond maintenant 429 aussi lorsque la limite de 30 connexions est atteinte.
+Un 503 affiche le bandeau, car il indique une panne du backend ou d'une de ses
+dépendances, et Mapbox ne transmet que le code HTTP. Le backend réutilise ses
+connexions PostgreSQL pour réduire le temps de traitement des tuiles ; les 429
+restent possibles pendant une forte rafale.
 
 ### Position de l'utilisateur
 

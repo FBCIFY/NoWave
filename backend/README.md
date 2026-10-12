@@ -11,11 +11,33 @@ python -m pip install -r backend/requirements.txt
 cp .env.example .env
 ```
 
-Compléter `.env`, puis démarrer PostgreSQL :
+Compléter `.env` avec le même mot de passe local dans `NOWAVE_DB_PASSWORD` et
+`DATABASE_URL`. Par exemple (remplacer le mot de passe) :
+
+```dotenv
+NOWAVE_DB_PASSWORD=mot-de-passe-local
+NOWAVE_DB_PORT=55432
+DATABASE_URL=postgresql://nowave:mot-de-passe-local@localhost:55432/nowave
+GOOGLE_CLOUD_PROJECT=blueway-dev
+```
+
+`NOWAVE_DB_PASSWORD` sert à Docker Compose ; `DATABASE_URL` sert au backend et
+aux migrations lancés sur le poste. Les anciens noms `BLUEWAY_DB_PASSWORD` et
+`BLUEWAY_DB_PORT` ne sont plus lus par Compose. Le projet Firebase reste
+`blueway-dev` : il est indépendant du nom de la base PostgreSQL `nowave`.
+L'application mobile lit encore une autre configuration, `mobile/.env.json`,
+via `--dart-define-from-file`.
+
+Vérifier la configuration et démarrer PostgreSQL :
 
 ```bash
-docker compose up -d database
+docker compose config --quiet
+docker compose up -d --wait database
 ```
+
+Si un volume `nowave-database` existe déjà, vérifier sa base et ses données
+avant de modifier son initialisation. Changer `.env` ne renomme pas une base
+déjà créée ; ne pas supprimer le volume pour résoudre une erreur de connexion.
 
 Charger les variables et appliquer les migrations :
 
@@ -46,8 +68,16 @@ DATABASE_URL=postgresql://nowave:mot-de-passe@localhost:55432/nowave
 ```
 
 Psycopg utilise directement `postgresql://`. Alembic convertit automatiquement
-cette URL en `postgresql+psycopg://` pour SQLAlchemy. Docker Compose utilisait
-déjà le format standard avec le service `database` et son port interne `5432`.
+cette URL en `postgresql+psycopg://` pour SQLAlchemy. Dans Docker Compose,
+le backend joint le service `database` sur son port interne `5432`.
+
+Le backend réutilise les connexions via un pool par processus, de 1 à 10
+connexions. Chaque emprunt vérifie que la connexion fonctionne ; après une
+opération, sa transaction est validée ou annulée avant le retour au pool.
+L'attente d'une connexion est limitée à 3 secondes. Si la base ne répond pas,
+les routes concernées renvoient toujours 503. La production utilise actuellement
+un processus Uvicorn ; avec plusieurs processus, chaque processus possède son
+propre pool de 10 connexions maximum.
 
 ## Authentification Firebase
 

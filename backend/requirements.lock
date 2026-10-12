@@ -1140,6 +1140,12 @@ psycopg-binary==3.2.10 \
     # via
     #   -c backend/requirements-test.txt
     #   psycopg
+psycopg-pool==3.2.8 \
+    --hash=sha256:5474137f3a58e697e0141d0311e70ec067fc4466031496d7f9ef3e2c28a1dc09 \
+    --hash=sha256:854e17c2a637c3b9f8d8b24faad57d4cf850baf3fc03ca56ef7e5b4998e391b9
+    # via
+    #   -c backend/requirements-test.txt
+    #   -r backend/app/infrastructure/database/requirements.txt
 pyasn1==0.6.4 \
     --hash=sha256:9c447d8431c947fe4c8febc4ed9e760bc29011a5b01e5c74b67025bd9fb8ce81 \
     --hash=sha256:deda9277cfd454080ec40b207fb6df82206a3a2688735233cdcd8d3d565f088b
@@ -1489,6 +1495,7 @@ typing-extensions==4.16.0 \
     #   grpcio
     #   opentelemetry-api
     #   psycopg
+    #   psycopg-pool
     #   pydantic
     #   pydantic-core
     #   sqlalchemy
