@@ -59,8 +59,9 @@ lib/
 │   └── sensors/       cap et inclinaison du téléphone
 └── features/          une fonctionnalité par dossier
     ├── auth/          connexion, inscription, vérification de l’e-mail
-    ├── profile/       création du profil, préférences, écran d’alertes
-    ├── home/          accueil (la carte + accès au profil)
+    ├── profile/       création du profil, préférences et onboarding alertes
+    ├── home/          accueil et orchestration carte/profil/alertes
+    ├── alerts/        historique, parsing FCM et navigation des alertes
     ├── map/           carte, boussole, mode signalement
     ├── reports/       formulaire et envoi des signalements
     └── camera/        prise de photo, mesures et estimation de position
@@ -87,6 +88,9 @@ AuthGate          (session Firebase)
     ├── AlertsOnboardingScreen   une seule fois, après la création du profil
     └── HomeScreen → MapScreen
                      ├── ProfileScreen (bouton profil)
+                     ├── AlertsScreen (bouton alertes)
+                     │   └── AlertReportScreen
+                     │       └── retour à la MapScreen principale ciblée
                      ├── ReportComposerSheet (bouton +, signalement manuel)
                      └── CameraScreen (bouton appareil photo)
                          └── ReportComposerSheet → ReportPhotoViewer
@@ -246,6 +250,53 @@ envoyé au backend avec l’enregistrement du téléphone (voir NW-116).
 - `ProfileGate` n’a pas de test automatisé : le parcours a été vérifié à la
   main sur iPhone.
 
+## Historique et navigation des alertes — NW-125
+
+L’historique des alertes du compte est chargé depuis
+`GET /api/v1/users/me/alerts` avec pagination.
+
+Lorsqu’une alerte est ouverte depuis l’historique ou depuis une notification
+FCM, le mobile relit le signalement avec `GET /api/v1/reports/{report_id}`.
+Le contenu du push ne constitue donc pas la source de vérité du signalement.
+
+L’action « Voir sur la carte » utilise la `MapScreen` principale existante et
+la centre sur la position courante du signalement relue auprès du backend.
+
+Si un signalement est en cours de création ou de positionnement, la fiche de
+l’alerte peut être consultée mais le recentrage de la carte est refusé jusqu’à
+ce que l’utilisateur termine ou annule le signalement en cours.
+
+Si une notification distincte est sélectionnée alors qu’une autre fiche
+d’alerte est déjà ouverte, la nouvelle fiche est ouverte immédiatement
+au-dessus de la précédente. Le bouton Retour revient à la fiche précédente.
+Les doublons représentant le même événement restent dédupliqués.
+
+Le champ `data` du message FCM utilise uniquement des valeurs chaîne.
+
+Champs obligatoires :
+
+- `alert_id`
+- `report_id`
+- `report_version`
+- `category`
+- `position_dms`
+- `distance_m`
+- `expires_at`
+
+Champs facultatifs :
+
+- `position`
+- `alerted_at`
+
+`position_dms` contient la position en degrés, minutes et secondes.
+`position`, lorsqu’il est fourni, contient un Point GeoJSON sérialisé.
+
+Si `position` est absent, le mobile reconstruit les coordonnées à partir de
+`position_dms`. S’il est présent, il doit être valide et cohérent avec
+`position_dms` ; sinon le payload est rejeté.
+
+Un signalement expiré, retiré ou introuvable n’est pas ouvert sur la carte.
+
 ## Couche des signalements — NW-114
 
 Les signalements actifs sont affichés par-dessus le fond Mapbox, dans une
@@ -312,11 +363,14 @@ rester visibles sans être à jour.
 
 ### Limite de débit du serveur
 
-nginx limite chaque appareil à 10 requêtes/s (pointes à 30) et à 30
-connexions. Pour rester en dessous, la source demande le moins de tuiles
-possible : aucune au-delà du zoom 12 (Mapbox agrandit celles du zoom 12, qui
-placent déjà un badge à 2 m près), pas de préchargement des zooms inférieurs,
-et rien pendant un geste. Une tuile refusée en 429 n'affiche pas le
+nginx limite les tuiles à 30 requêtes/s par IP (rafale de 50, avec attente
+au-delà de 15 requêtes en pointe), séparément des autres routes API qui
+restent à 10 requêtes/s (rafale de 30). La limite de 30 connexions par IP
+s'applique toujours à tout le serveur. Pour garder de la marge, la source
+demande le moins de tuiles possible : aucune au-delà du zoom 12 (Mapbox
+agrandit celles du zoom 12, qui placent déjà un badge à 2 m près), pas de
+préchargement des zooms inférieurs, et un délai réseau pendant les gestes et
+animations. Une tuile refusée en 429 n'affiche pas le
 bandeau : Mapbox la redemande lui-même quelques secondes plus tard. Un 503
 affiche le bandeau, car le backend répond aussi 503 quand la base ou le
 stockage sont en panne, et Mapbox ne transmet que le code HTTP. Or nginx
@@ -342,9 +396,9 @@ Un halo bleu sous les signalements montre la précision du GPS.
   tuiles visibles) ;
 - l'état de la photo reste « Envoi en cours » tant que la route d'envoi de
   NW-112 n'est pas déployée ;
-- en zoomant ou dézoomant vite, nginx refuse encore des tuiles (429) : les
-  badges arrivent quelques secondes après la fin du geste, en attendant une
-  limite propre aux tuiles côté serveur ;
+- la limite propre aux tuiles doit être validée sur appareil après
+  déploiement : compter les 429/503 et le délai d'apparition des badges
+  pendant des zooms répétés ;
 - les regroupements sont calculés tuile par tuile, aux zooms entiers : en
   dézoomant, ils fusionnent par sauts, et deux zones proches séparées par une
   limite de tuile ne fusionnent qu'à un zoom plus bas.

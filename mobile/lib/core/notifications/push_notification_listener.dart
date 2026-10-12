@@ -1,52 +1,70 @@
-import 'dart:async';
-
-import 'package:firebase_messaging/firebase_messaging.dart';
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
-/// Affiche les notifications reçues pendant que l'app est ouverte, après la
-/// vérification du compte.
-///
-/// L'autorisation n'est pas demandée ici : elle l'est depuis l'écran
-/// « Alertes à proximité » ou le profil, quand l'utilisateur active les alertes.
-/// Le token FCM est envoyé au backend par `DeviceRegistration`.
+import '../../features/alerts/domain/alert.dart';
+import '../../features/reports/presentation/report_category_style.dart';
+import '../../features/reports/presentation/report_detail_format.dart';
+import 'alert_push_controller.dart';
+
+/// UI attachée uniquement à l'accueil autorisé. Le contrôleur capture les taps
+/// plus tôt (AuthGate), puis attend cet écran pour naviguer.
 class PushNotificationListener extends StatefulWidget {
+  const PushNotificationListener({
+    super.key,
+    required this.controller,
+    required this.onOpen,
+    required this.child,
+  });
+  final AlertPushController controller;
+  final Future<void> Function(AlertPush) onOpen;
   final Widget child;
-
-  const PushNotificationListener({super.key, required this.child});
-
   @override
   State<PushNotificationListener> createState() =>
       _PushNotificationListenerState();
 }
 
 class _PushNotificationListenerState extends State<PushNotificationListener> {
-  StreamSubscription<RemoteMessage>? _messageSubscription;
-
+  Future<void> _open(AlertPush push) => widget.onOpen(push);
   @override
   void initState() {
     super.initState();
-    _messageSubscription = FirebaseMessaging.onMessage.listen(_showMessage);
+    widget.controller.addListener(_changed);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      widget.controller.attach(_open);
+      _changed();
+    });
   }
 
-  void _showMessage(RemoteMessage message) {
-    if (kDebugMode) {
-      debugPrint('Notification FCM reçue au premier plan.');
-    }
+  void _changed() {
     if (!mounted) return;
-    final notification = message.notification;
-    final title = notification?.title ?? 'Nouvelle notification';
-    final body = notification?.body;
-    final text = body == null || body.isEmpty ? title : '$title — $body';
-
+    final controller = widget.controller;
+    final push = controller.foreground;
+    final notice = controller.notice;
+    controller.foreground = null;
+    controller.notice = null;
+    if (push == null && notice == null) return;
     ScaffoldMessenger.of(context)
       ..hideCurrentSnackBar()
-      ..showSnackBar(SnackBar(content: Text(text)));
+      ..showSnackBar(
+        SnackBar(
+          content: Text(
+            notice ??
+                '${push!.alert.category.label} · ${formatNauticalMiles(push.alert.distanceM)}\n${push.alert.positionDms}',
+          ),
+          action: notice != null || push == null
+              ? null
+              : SnackBarAction(
+                  label: 'Ouvrir',
+                  onPressed: () => controller.open(push),
+                ),
+        ),
+      );
   }
 
   @override
   void dispose() {
-    unawaited(_messageSubscription?.cancel());
+    widget.controller.removeListener(_changed);
+    widget.controller.detach(_open);
     super.dispose();
   }
 

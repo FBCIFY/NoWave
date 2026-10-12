@@ -11,6 +11,9 @@ from app.api.schemas.report_detail import (
     ReportDetailPhotoResponse,
     ReportDetailResponse,
 )
+from app.application.ports.report_detail_repository import (
+    ReportDetailData,
+)
 from app.application.services.get_report_detail import (
     GetReportDetail,
 )
@@ -47,6 +50,12 @@ def get_report_detail(
         report_id=report_id,
     )
 
+    return report_detail_response(report)
+
+
+def report_detail_response(
+    report: ReportDetailData,
+) -> ReportDetailResponse:
     author = None
 
     if report.author_deleted:

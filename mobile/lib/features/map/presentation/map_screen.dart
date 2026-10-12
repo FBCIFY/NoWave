@@ -1,25 +1,27 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:math' as math;
 import 'dart:ui' as ui;
 
-import 'package:geolocator/geolocator.dart' as geo;
 import 'package:flutter/material.dart';
+import 'package:geolocator/geolocator.dart' as geo;
 import 'package:mapbox_maps_flutter/mapbox_maps_flutter.dart';
 import 'package:precise_compass/precise_compass.dart';
 import 'package:uuid/uuid.dart';
 
-import '../../../core/map/accuracy_halo.dart';
-import '../../../core/map/map_config.dart';
+import '../../../core/haptics/app_haptics.dart';
 import '../../../core/location/coordinate_formatter.dart';
 import '../../../core/location/location_service.dart';
+import '../../../core/map/accuracy_halo.dart';
+import '../../../core/map/map_config.dart';
 import '../../../core/sensors/device_orientation_service.dart';
-import '../../../core/haptics/app_haptics.dart';
 import '../../camera/domain/photo_report_draft.dart';
+import '../../reports/data/manual_report_service.dart';
+import '../../reports/data/report_detail_service.dart';
+import '../../reports/domain/manual_report.dart';
+import '../../reports/domain/report_detail.dart';
 import '../../reports/presentation/report_composer_sheet.dart';
 import '../../reports/presentation/report_detail_sheet.dart';
-import '../../reports/data/report_detail_service.dart';
-import '../../reports/data/manual_report_service.dart';
-import '../../reports/domain/manual_report.dart';
 import '../data/report_layer_controller.dart';
 import '../data/report_tiles.dart';
 import 'widgets/map_notice_banner.dart';
@@ -28,6 +30,24 @@ import 'widgets/report_marker.dart';
 /// Nord en haut, carte tournée selon le cap du téléphone, ou rotation libre
 /// faite au doigt.
 enum _MapOrientationMode { north, heading, manual }
+
+class MapFocusController extends ChangeNotifier {
+  ReportDetail? _report;
+  bool _blocked = false;
+
+  ReportDetail? get report => _report;
+
+  void setBlocked(bool blocked) {
+    _blocked = blocked;
+  }
+
+  bool focus(ReportDetail report) {
+    if (_blocked) return false;
+    _report = report;
+    notifyListeners();
+    return true;
+  }
+}
 
 /// Carte principale : position GPS, suivi de l'utilisateur, boussole et
 /// création d'un signalement.
@@ -38,6 +58,8 @@ enum _MapOrientationMode { north, heading, manual }
 /// l'utilisateur confirme ou corrige de la même façon.
 class MapScreen extends StatefulWidget {
   final VoidCallback? onOpenProfile;
+  final VoidCallback? onOpenAlerts;
+  final MapFocusController? focusController;
 
   /// Ouvre la caméra ; renvoie null si l'utilisateur la ferme sans photo.
   final Future<PhotoReportDraft?> Function()? onOpenCamera;
@@ -53,6 +75,8 @@ class MapScreen extends StatefulWidget {
   const MapScreen({
     super.key,
     this.onOpenProfile,
+    this.onOpenAlerts,
+    this.focusController,
     this.onOpenCamera,
     this.reportService,
     this.reportTiles,
@@ -103,6 +127,9 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
   MapNotice? _notice;
   int _noticeId = 0;
   Timer? _noticeTimer;
+  Timer? _selectedExpiryTimer;
+  bool _selectedExpired = false;
+  ReportDetail? _selectedReport;
 
   /// Dernier zoom connu, pour relancer le battement de la heatmap au
   /// retour au premier plan.
@@ -132,6 +159,7 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
   @override
   void initState() {
     super.initState();
+    widget.focusController?.addListener(_handleFocusRequest);
     _lifecycleListener = AppLifecycleListener(
       onHide: _pauseMapUpdates,
       onShow: _resumeMapUpdates,
@@ -438,6 +466,137 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
         radius: _clusterTapRadius,
       ),
     );
+  }
+
+  @override
+  void didUpdateWidget(covariant MapScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+
+    if (oldWidget.focusController != widget.focusController) {
+      oldWidget.focusController?.removeListener(_handleFocusRequest);
+      widget.focusController?.addListener(_handleFocusRequest);
+    }
+  }
+
+  void _handleFocusRequest() {
+    final report = widget.focusController?.report;
+    if (report == null) return;
+    unawaited(_focusSelectedReport(report));
+  }
+
+  void _scheduleSelectedExpiry(ReportDetail report) {
+    _selectedExpiryTimer?.cancel();
+
+    final remaining = report.expiresAt.difference(DateTime.now());
+    if (remaining <= Duration.zero) return;
+
+    _selectedExpiryTimer = Timer(remaining, () {
+      if (!mounted || _selectedReport?.id != report.id) return;
+
+      setState(() => _selectedExpired = true);
+
+      final map = _mapboxMap;
+      if (map != null) {
+        unawaited(
+          map.style.removeStyleLayer('alert-selected-point').catchError((_) {}),
+        );
+      }
+    });
+  }
+
+  Future<void> _focusSelectedReport(ReportDetail report) async {
+    if (!mounted) return;
+
+    final expired = !report.expiresAt.isAfter(DateTime.now());
+
+    setState(() {
+      _selectedReport = report;
+      _selectedExpired = expired;
+      _isFollowing = false;
+      _viewport = CameraViewportState(
+        center: Point(coordinates: Position(report.longitude, report.latitude)),
+        zoom: 14,
+        pitch: 0,
+      );
+    });
+
+    _selectedExpiryTimer?.cancel();
+
+    if (expired) return;
+
+    _scheduleSelectedExpiry(report);
+
+    final map = _mapboxMap;
+    if (map == null) return;
+
+    try {
+      await map.easeTo(
+        CameraOptions(
+          center: Point(
+            coordinates: Position(report.longitude, report.latitude),
+          ),
+          zoom: 14,
+          pitch: 0,
+        ),
+        MapAnimationOptions(duration: 350),
+      );
+
+      await _showSelectedReport();
+    } catch (_) {
+      if (mounted) {
+        _showNotice(
+          'Impossible de centrer la carte sur ce signalement.',
+          MapNoticeKind.error,
+        );
+      }
+    }
+  }
+
+  /// Repère explicite de la sélection, indépendant du chargement des MVT.
+  Future<void> _showSelectedReport() async {
+    final report = _selectedReport;
+    final map = _mapboxMap;
+    if (report == null || map == null || _selectedExpired) return;
+
+    final data = jsonEncode({
+      'type': 'Feature',
+      'properties': {'report_id': report.id},
+      'geometry': {
+        'type': 'Point',
+        'coordinates': [report.longitude, report.latitude],
+      },
+    });
+
+    try {
+      if (!await map.style.styleSourceExists('alert-selected')) {
+        await map.style.addSource(
+          GeoJsonSource(id: 'alert-selected', data: data),
+        );
+      } else {
+        await map.style.setStyleSourceProperty('alert-selected', 'data', data);
+      }
+
+      if (!await map.style.styleLayerExists('alert-selected-point') &&
+          !_selectedExpired) {
+        await map.style.addLayer(
+          CircleLayer(
+            id: 'alert-selected-point',
+            sourceId: 'alert-selected',
+            circleRadius: 10,
+            circleColor: 0xFF7C3AED,
+            circleStrokeColor: 0xFFFFFFFF,
+            circleStrokeWidth: 3,
+          ),
+        );
+      }
+    } catch (_) {
+      if (mounted) {
+        _showNotice(
+          'Position sélectionnée indisponible sur la carte.',
+          MapNoticeKind.error,
+        );
+      }
+    }
   }
 
   /// Ouvre la fiche du signalement touché, sauf pendant une création.
@@ -769,6 +928,7 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
       _cameraBeforeReport = camera;
       _restoreFollowAfterReport = _isFollowing;
       _reportComposerOpen = true;
+      widget.focusController?.setBlocked(true);
       _pendingReport = null;
       _photoDraft = photoDraft;
       _isFollowing = false;
@@ -815,6 +975,7 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
     final resumeFollowing = _restoreFollowAfterReport;
     setState(() {
       _reportComposerOpen = false;
+      widget.focusController?.setBlocked(false);
       _reportPoint.value = null;
       _pendingReport = null;
       _photoDraft = null;
@@ -1049,6 +1210,7 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
 
   @override
   void dispose() {
+    widget.focusController?.removeListener(_handleFocusRequest);
     widget.reportTiles?.stopPulse();
     _lifecycleListener?.dispose();
     WidgetsBinding.instance.removeObserver(this);
@@ -1058,6 +1220,7 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
     _reportPointTimer?.cancel();
     _reportMarkerDropTimer?.cancel();
     _noticeTimer?.cancel();
+    _selectedExpiryTimer?.cancel();
     _reportPoint.dispose();
     _reportMarkerLifted.dispose();
     final subscription = _positionSubscription;
@@ -1111,11 +1274,12 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
                   setState(() => _mapboxMap = map);
                   unawaited(MapConfig.hideDefaultOrnaments(map));
                   _addReportInteractions(map);
-                  unawaited(_locate());
+                  if (_selectedReport == null) unawaited(_locate());
                 },
                 onMapLoadedListener: _handleMapLoaded,
                 onStyleLoadedListener: (_) {
                   _showAccuracyHalo();
+                  unawaited(_showSelectedReport());
                   if (widget.reportTiles != null) _reportLayer.styleLoaded();
                 },
                 onMapLoadErrorListener: _handleMapLoadError,
@@ -1192,6 +1356,17 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
                               ),
                             ),
                           ),
+                          if (widget.onOpenAlerts != null) ...[
+                            const SizedBox(width: 12),
+                            _PoppingMapButton(
+                              tooltip: 'Mes alertes',
+                              onPressed: widget.onOpenAlerts,
+                              icon: const Icon(
+                                Icons.notifications_outlined,
+                                color: Color(0xFF243243),
+                              ),
+                            ),
+                          ],
                           if (widget.onOpenProfile != null) ...[
                             const SizedBox(width: 12),
                             _PoppingMapButton(

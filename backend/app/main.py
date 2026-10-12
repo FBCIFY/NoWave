@@ -7,6 +7,7 @@ from app.config.settings import ConfigurationError
 from app.api.photo_upload_limit import PhotoUploadLimitMiddleware
 
 from app.api.errors.handlers import (
+    admin_required_handler,
     dependency_unavailable_handler,
     device_conflict_handler,
     device_not_found_handler,
@@ -22,7 +23,9 @@ from app.api.errors.handlers import (
     invalid_nationality_handler,
     invalid_positioning_input_handler,
     invalid_photo_handler,
+    moderation_conflict_handler,
     photo_already_uploaded_handler,
+    photo_not_found_handler,
     photo_storage_error_handler,
     photo_upload_forbidden_handler,
     report_client_id_conflict_handler,
@@ -36,6 +39,7 @@ from app.api.errors.handlers import (
 from app.api.router import router as api_router
 from app.api.routes.health import router as health_router
 from app.domain.errors import (
+    AdminRequiredError,
     DeviceConflictError,
     DeviceNotFoundError,
     DevicePositionFutureError,
@@ -53,9 +57,11 @@ from app.domain.errors import (
     InvalidReportCategoryError,
     InvalidReportDescriptionError,
     InvalidReportPositionError,
+    ModerationConflictError,
     ReportClientIdConflictError,
     ReportNotFoundError,
     PhotoAlreadyUploadedError,
+    PhotoNotFoundError,
     PhotoStorageError,
     PhotoUploadForbiddenError,
     UserAlreadyExistsError,
@@ -217,4 +223,19 @@ app.add_exception_handler(
 app.add_exception_handler(
     DevicePositionStaleError,
     device_position_stale_handler,
+)
+
+app.add_exception_handler(
+    AdminRequiredError,
+    admin_required_handler,
+)
+
+app.add_exception_handler(
+    ModerationConflictError,
+    moderation_conflict_handler,
+)
+
+app.add_exception_handler(
+    PhotoNotFoundError,
+    photo_not_found_handler,
 )

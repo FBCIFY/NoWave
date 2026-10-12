@@ -1,4 +1,5 @@
 from app.domain.errors.exceptions import (
+    AdminRequiredError,
     BoatAlreadyExistsError,
     BoatNotFoundError,
     DeviceConflictError,
@@ -20,9 +21,11 @@ from app.domain.errors.exceptions import (
     InvalidReportDescriptionError,
     InvalidReportPositionError,
     InvalidUsernameError,
+    ModerationConflictError,
     ReportClientIdConflictError,
     ReportNotFoundError,
     PhotoAlreadyUploadedError,
+    PhotoNotFoundError,
     PhotoStorageError,
     PhotoUploadForbiddenError,
     UserAlreadyExistsError,

@@ -271,12 +271,13 @@ class ReportTiles {
     // sans effacer les badges. Les signalements publiés, expirés ou retirés
     // apparaissent ou disparaissent donc en 15 s environ.
     //
-    // Le serveur limite chaque appareil à 10 requêtes/s (pointes à 30) et
-    // 30 connexions ; au-delà, il répond 429 ou 503 et les badges tardent
-    // d'une à deux minutes. On demande donc le moins de tuiles possible :
+    // Le proxy donne aux tuiles un budget séparé de 30 requêtes/s (rafale
+    // de 50) et limite toujours chaque IP à 30 connexions. On garde le
+    // nombre de tuiles demandé bas tant que la recette de zoom n'a pas
+    // mesuré la marge disponible :
     // aucune au-delà du zoom 12, agrandi ensuite par Mapbox ; pas de
-    // préchargement des zooms inférieurs ; et rien pendant un geste, où les
-    // zooms traversés ne restent pas affichés.
+    // préchargement des zooms inférieurs ; les requêtes réseau des tuiles
+    // transitoires sont retardées pendant les gestes et animations.
     if (!await style.styleSourceExists(sourceId)) {
       await style.addSource(
         VectorSource(
