@@ -121,6 +121,43 @@ def test_cleanup_keeps_referenced_and_recent_objects():
     assert len(storage.objects) == 2
 
 
+def test_cleanup_skips_locks_for_referenced_photos(monkeypatch):
+    service, user, repository, storage = build_service()
+    upload(service, user, repository.photo.report_id)
+
+    def unexpected_lock(*args):
+        pytest.fail("Retained photos must not take an upload lock")
+
+    monkeypatch.setattr(repository, "lock_for_upload", unexpected_lock)
+    assert CleanUnusedPhotos(repository, storage).execute(
+        datetime.now(UTC) + timedelta(hours=2)
+    ) == 0
+    assert repository.photo.object_key in storage.objects
+
+
+def test_cleanup_batches_references_and_rechecks_candidates(monkeypatch):
+    service, user, repository, storage = build_service()
+    upload(service, user, repository.photo.report_id)
+    retained = repository.photo.object_key
+    for _ in range(501):
+        key = f"reports/{uuid4()}/{'a' * 64}/{uuid4().hex}.jpg"
+        storage.store(key, b"orphan", "image/jpeg")
+    batches = []
+
+    def stale_references(ids):
+        batches.append(len(ids))
+        # Simulate an upload committing after the batch read: only the final
+        # locked recheck can protect the retained object.
+        return set()
+
+    monkeypatch.setattr(repository, "referenced_keys", stale_references)
+    assert CleanUnusedPhotos(repository, storage).execute(
+        datetime.now(UTC) + timedelta(hours=2)
+    ) == 501
+    assert batches == [250, 250, 2]
+    assert set(storage.objects) == {retained}
+
+
 def test_cleanup_recovers_from_delete_failure_and_process_restart(caplog):
     service, user, repository, storage = build_service()
     storage.fail_store = True

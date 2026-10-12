@@ -141,7 +141,8 @@ def test_active_user_returns_identity(monkeypatch):
     )
 
     assert response.status_code == 200
-    assert response.json()["uid"] == "firebase-user-123"
+    # The preloaded server profile must not become a JSON field or a claim.
+    assert response.json() == verified_identity()
 
 
 def test_missing_token_returns_401():

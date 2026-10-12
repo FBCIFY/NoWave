@@ -140,6 +140,12 @@ du jeton Firebase sans contrôle systématique de révocation à chaque requête
 Cette option sera réévaluée si le besoin de révocation immédiate justifie le
 coût et la dépendance supplémentaires.
 
+Le profil chargé par le contrôle d'accès est réutilisé par les services pendant
+la même requête HTTP. Il n'est jamais mis en cache entre utilisateurs ou entre
+requêtes : le statut du compte est relu à chaque appel. Un envoi GPS normal
+effectue ainsi cinq instructions SQL métier au lieu de six, hors transactions
+et vérification de connexion.
+
 ### Upload d'une photo de signalement
 
 `POST /api/v1/reports/{report_id}/photo` attend un champ multipart `file` de type
@@ -188,7 +194,13 @@ les objets `reports/{report_id}/{SHA256}/{tentative_uuid}.jpg` âgés d'au moins
 verrou, il supprime uniquement ceux que la ligne photo ne référence plus. Les
 photos référencées, même masquées ou expirées, sont conservées. Un échec de
 suppression est journalisé et retenté au passage suivant ; aucun état de nettoyage
-n'est perdu au redémarrage puisque le bucket est rescanné. Réserver ce préfixe à
+n'est perdu au redémarrage puisque le bucket est rescanné. Les références SQL
+sont lues sans verrou par lots de 250 objets admissibles ; les objets encore
+référencés, y compris les photos masquées ou expirées, sont ignorés. Seuls les
+candidats à la suppression prennent le verrou d'upload, avec une seconde
+vérification de leur référence après acquisition. Le listing paginé du bucket
+reste complet pour retrouver aussi les objets orphelins après une panne, sans
+charger tout le stock en mémoire. Réserver ce préfixe à
 NoWave et utiliser un bucket privé sans versioning pour cette politique de purge.
 Les anciennes versions d'un bucket versionné exigeraient une politique distincte.
 
@@ -273,3 +285,23 @@ Décision T10 : le MVP accepte une latence visuelle maximale de 15 secondes lié
 au cache privé des tuiles. À chaque nouvelle requête serveur, un signalement
 dont `expires_at <= now()` est exclu immédiatement. Aucun job d'expiration
 n'est ajouté.
+
+Le calcul PostGIS des tuiles est partagé entre les utilisateurs d'un même
+processus API via un cache mémoire de 15 secondes maximum, borné à 512 entrées
+et 16 Mio de contenu. Les requêtes simultanées d'une même tuile ne lancent qu'un
+calcul. Les coordonnées, la catégorie, le signalement filtré et la connexion
+à la base font partie de la clé ; aucune identité ni URL photo n'est stockée.
+
+Chaque appel conserve l'authentification et une lecture SQL de la révision des
+signalements. La migration `20261012_0003` ajoute cette révision, modifiée dans
+la même transaction que toute écriture sur `reports`, y compris une écriture SQL
+directe. La révision et le calcul utilisent le même snapshot PostgreSQL. Un
+retrait, une création ou une restauration invalide donc les anciennes tuiles
+dans tous les processus au prochain appel. L'expiration la plus proche dans la
+tuile borne aussi sa validité, sans attendre une écriture ou la fin des 15 secondes.
+Le cache HTTP privé et les réponses de l'API restent inchangés.
+
+Avant de démarrer cette version, appliquer les migrations et les droits runtime
+comme d'habitude (`deploy/hostinger/migrate.py` en production). Le rôle runtime
+dispose seulement de SELECT sur `map_cache_revision` ; son invalidation passe
+par le trigger, sans droit d'écriture direct pour l'API.

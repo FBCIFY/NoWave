@@ -9,7 +9,7 @@ from fastapi import (
     status,
 )
 
-from app.api.dependencies.auth import get_current_identity
+from app.api.dependencies.auth import get_current_identity, reuse_current_user
 from app.api.schemas.position_estimate import (
     PositionEstimateRequest,
 )
@@ -80,7 +80,7 @@ def create_report(
     response: Response,
     identity: dict = Depends(get_current_identity),
 ):
-    user_repository = PostgreSQLUserRepository()
+    user_repository = reuse_current_user(identity, PostgreSQLUserRepository())
     report_repository = PostgreSQLReportRepository()
 
     service = CreateReport(
@@ -164,7 +164,7 @@ def upload_report_photo(
         raise InvalidPhotoError("photo size must be between 1 and 500000 bytes")
 
     service = UploadReportPhoto(
-        user_repository=PostgreSQLUserRepository(),
+        user_repository=reuse_current_user(identity, PostgreSQLUserRepository()),
         photo_repository=PostgreSQLPhotoRepository(),
         image_validator=JpegValidator(),
         photo_storage=get_photo_storage(),
