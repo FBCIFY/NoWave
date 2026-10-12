@@ -55,7 +55,7 @@ def test_pool_is_bounded_and_shared_per_database_url(monkeypatch):
         assert len(created) == 1
         kwargs, _ = created[0]
         assert kwargs["min_size"] == 1
-        assert kwargs["max_size"] == 10
+        assert kwargs["max_size"] == 15
         assert kwargs["timeout"] == 3
         assert kwargs["kwargs"] == {"connect_timeout": 3}
         assert kwargs["check"] is make_pool.check_connection
