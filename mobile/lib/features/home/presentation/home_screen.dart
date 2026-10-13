@@ -13,6 +13,7 @@ import '../../camera/domain/photo_report_draft.dart';
 import '../../camera/presentation/camera_screen.dart';
 import '../../map/data/report_tiles.dart';
 import '../../map/presentation/map_screen.dart';
+import '../../profile/data/profile_service.dart';
 import '../../profile/domain/user_profile.dart';
 import '../../profile/presentation/profile_screen.dart';
 import '../../reports/data/manual_report_service.dart';
@@ -21,6 +22,8 @@ import '../../reports/domain/report_detail.dart';
 
 /// Accueil après connexion : la carte, avec un bouton qui ouvre le profil.
 class HomeScreen extends StatefulWidget {
+  final ProfileService? profileService;
+  final Future<void> Function()? onDeleteAccount;
   final UserProfile? profile;
   final AlertService? alertService;
   final AlertPushController? pushController;
@@ -34,6 +37,8 @@ class HomeScreen extends StatefulWidget {
 
   const HomeScreen({
     super.key,
+    this.profileService,
+    this.onDeleteAccount,
     this.alertService,
     this.pushController,
     this.profile,
@@ -147,6 +152,8 @@ class _HomeScreenState extends State<HomeScreen> {
                 MaterialPageRoute<void>(
                   builder: (_) => ProfileScreen(
                     profile: widget.profile!,
+                    profileService: widget.profileService,
+                    onDeleteAccount: widget.onDeleteAccount,
                     onSignOut: widget.onSignOut!,
                     onUpdatePreferences: widget.onUpdatePreferences!,
                     notificationPermissions:

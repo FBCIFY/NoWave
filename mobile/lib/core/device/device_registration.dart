@@ -127,6 +127,23 @@ class DeviceRegistration {
     _state = _RegistrationState.signedOut;
   }
 
+  /// Suspend les envois sans effacer de donnée avant le DELETE du compte.
+  Future<void> pauseForAccountDeletion() async {
+    beginSignOut();
+    await stop();
+    await _queue;
+  }
+
+  /// Le DELETE compte 204 garantit déjà la suppression des appareils.
+  /// Ne plus appeler leur API avec une identité Firebase supprimée.
+  Future<void> finishAccountDeletion() async {
+    await pauseForAccountDeletion();
+    if (_state == _RegistrationState.cleaned) return;
+    await _attempt('Suppression du token FCM', _pushTokens.deleteToken);
+    await _installationIds.reset();
+    _state = _RegistrationState.cleaned;
+  }
+
   Future<void> _unregister() async {
     // Session ouverte après une déconnexion, sans atteindre l'accueil (compte
     // sans profil ou suspendu) : l'identifiant a été oublié à la déconnexion

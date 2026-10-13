@@ -23,6 +23,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mapbox_maps_flutter/mapbox_maps_flutter.dart';
 import 'package:http/http.dart' as http;
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:http/testing.dart';
 
 import '../support/alert_fixtures.dart';
@@ -66,6 +67,8 @@ void main() {
     bool suspended = false,
     bool reportAvailable = false,
   }) async {
+    SharedPreferences.setMockInitialValues({});
+
     final auth = _Auth();
     final source = FakeAlertPushSource();
     if (initial) source.initial = pushMessage();

@@ -2,8 +2,13 @@ import 'package:flutter/material.dart';
 
 class SuspendedAccountScreen extends StatelessWidget {
   final VoidCallback onSignOut;
+  final VoidCallback onDeleteAccount;
 
-  const SuspendedAccountScreen({super.key, required this.onSignOut});
+  const SuspendedAccountScreen({
+    super.key,
+    required this.onSignOut,
+    required this.onDeleteAccount,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -32,6 +37,10 @@ class SuspendedAccountScreen extends StatelessWidget {
               FilledButton(
                 onPressed: onSignOut,
                 child: const Text('Déconnexion'),
+              ),
+              TextButton(
+                onPressed: onDeleteAccount,
+                child: const Text('Supprimer mon compte'),
               ),
             ],
           ),

@@ -1,3 +1,6 @@
+import 'boat_screen.dart';
+import '../data/profile_service.dart';
+
 import 'dart:async';
 
 import 'package:flutter/material.dart';
@@ -20,6 +23,8 @@ typedef UpdatePreferences = Future<UserProfile> Function({
 /// le backend refuse. Le statut de l'autorisation du téléphone est relu à
 /// chaque retour dans l'app.
 class ProfileScreen extends StatefulWidget {
+  final ProfileService? profileService;
+  final Future<void> Function()? onDeleteAccount;
   final UserProfile profile;
   final Future<void> Function() onSignOut;
   final UpdatePreferences onUpdatePreferences;
@@ -27,6 +32,8 @@ class ProfileScreen extends StatefulWidget {
 
   const ProfileScreen({
     super.key,
+    this.profileService,
+    this.onDeleteAccount,
     required this.profile,
     required this.onSignOut,
     required this.onUpdatePreferences,
@@ -268,6 +275,20 @@ class _ProfileScreenState extends State<ProfileScreen> {
             ),
           ),
           const SizedBox(height: 24),
+          if (widget.profileService case final service?) ...[
+            OutlinedButton.icon(
+              onPressed: _isSaving
+                  ? null
+                  : () => Navigator.of(context).push(
+                      MaterialPageRoute<void>(
+                        builder: (_) => BoatScreen(profileService: service),
+                      ),
+                    ),
+              icon: const Icon(Icons.sailing),
+              label: const Text('Mon bateau'),
+            ),
+            const SizedBox(height: 24),
+          ],
           const _SectionTitle('Préférences'),
           const SizedBox(height: 10),
           _ProfileCard(
@@ -306,7 +327,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
           ),
           const SizedBox(height: 28),
           FilledButton.icon(
-            onPressed: _signOut,
+            onPressed: _isSaving ? null : _signOut,
             icon: const Icon(Icons.logout, size: 18),
             label: const Text('Se déconnecter'),
             style: FilledButton.styleFrom(
@@ -318,6 +339,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
               ),
             ),
           ),
+          if (widget.onDeleteAccount != null)
+            TextButton(
+              onPressed: _isSaving ? null : widget.onDeleteAccount,
+              child: const Text('Supprimer mon compte'),
+            ),
         ],
       ),
     );

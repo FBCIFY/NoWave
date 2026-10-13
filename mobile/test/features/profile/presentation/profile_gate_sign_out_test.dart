@@ -198,10 +198,10 @@ void main() {
 
       expect(auth.account, isNull);
       expect(auth.signOutCalls, 1);
-      expect(
-        requests.where((request) => request.method == 'DELETE'),
-        hasLength(1),
-      );
+      final deletions = requests.where((request) => request.method == 'DELETE');
+      expect(deletions, hasLength(1));
+      expect(deletions.single.url.path, '/api/v1/devices/current');
+      expect(deletions.single.headers['authorization'], 'Bearer token-a');
     },
   );
 
