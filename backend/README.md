@@ -457,3 +457,62 @@ Un signalement absent, retiré ou expiré ne sélectionne personne.
 
 La sélection par défaut de `PostgreSQLReportRepository` est réelle. Les tests
 peuvent toujours injecter une fonction respectant la même signature.
+
+## NW-123 — Worker FCM
+
+Le worker lit la table `notifications` après commit. Il démarre avec
+`python -m app.workers.notifications`, ou en développement avec
+`docker compose --profile alerts up -d notifications`. Le profil `alerts`
+réutilise la connexion PostgreSQL et le secret Firebase du backend. Le compte
+de service doit pouvoir envoyer des messages au projet Firebase de l'app.
+Aucun service de file supplémentaire ni changement de schéma n'est nécessaire.
+
+Chaque tentative a sa transaction. Le worker verrouille l'utilisateur et le
+signalement en lecture partagée, puis l'appareil et la notification en écriture,
+toujours dans cet ordre. Les lignes occupées sont ignorées avec `SKIP LOCKED`.
+Les contrôles de version, visibilité, expiration, consentement, activité et
+propriété précèdent l'envoi ; les verrous restent détenus pendant cet envoi.
+Une modification concurrente de ces informations attend donc la fin de la
+tentative. Les positions ne sont pas recalculées : les destinataires et la
+distance de l'historique sont ceux de la publication.
+
+Les identifiants sont conservés à chaque tentative : `notifications.id` identifie
+la tâche par appareil et `alert_history.id` fournit l'`alert_id` partagé entre
+les appareils de l'utilisateur. Le payload contient aussi `report_id`,
+`report_version`, `category`, `distance_m`, `position_dms`, `position` (GeoJSON
+encodé), `alerted_at` et `expires_at`. Toutes les valeurs `data` sont des chaînes.
+Le TTL Android utilise la durée restante au départ de l'appel ; APNs reçoit
+l'expiration absolue. Le mobile vérifie également `expires_at`.
+
+Le transport HTTP v1 ne réessaie pas un envoi de lui-même. Ses délais sont de
+3 secondes pour la connexion et 10 secondes pour les opérations de lecture et
+d'écriture ; le renouvellement OAuth se fait avant de prendre les verrous SQL.
+Le SDK Firebase sert à charger les identifiants, pas à envoyer les messages :
+ses retries automatiques ne correspondent pas au calendrier du ticket.
+
+Après un échec temporaire, les délais sont de 1, 5, 15, 30 puis 60 minutes,
+et restent à 60 minutes pour les tentatives suivantes. `Retry-After`, en secondes
+ou en date HTTP, peut allonger ce délai. Si la prochaine tentative atteint
+l'expiration, la tâche passe en `failed` sans nouvel envoi. Une erreur permanente
+passe également en `failed`. Seul `UNREGISTERED` efface le token ; une erreur
+de payload ou de configuration ne désactive pas l'appareil. Les pannes réseau,
+quotas et erreurs serveur sont temporaires. Les problèmes d'identifiants sont
+temporisés et journalisés sans secret ; un refus OAuth 401 force leur
+renouvellement avant la prochaine tentative.
+
+`sent` signifie que FCM a accepté le message, pas que le téléphone l'a reçu.
+Un arrêt entre l'acceptation FCM et le commit peut provoquer un nouvel envoi,
+avec les mêmes identifiants. La déduplication mobile et les identifiants de
+notification Android/APNs limitent les doublons ; une livraison exactement une
+fois n'est pas garantie. `attempt_count` compte les résultats de tentatives
+enregistrés en base, pas les appels perdus lors d'un crash.
+
+Les tâches expirées sont clôturées même si les identifiants FCM sont indisponibles.
+La purge s'exécute au démarrage puis chaque heure, par lots de 500. Elle supprime
+les tâches `sent` et `failed` dont `updated_at` (instant de transition terminale)
+date de plus de sept jours. Elle ne touche pas `alert_history`. Les lots pleins
+sont suivis d'un autre passage après une seconde. SIGTERM/SIGINT arrêtent le
+worker après l'opération courante, sans commencer une nouvelle tentative.
+
+Les tests et limites de la validation locale sont décrits dans
+[`docs/NW-122-NW-123.md`](../docs/NW-122-NW-123.md).
