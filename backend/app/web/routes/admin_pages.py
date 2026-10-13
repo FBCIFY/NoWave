@@ -14,6 +14,7 @@ from app.dependencies.admin_web_session import get_admin_web_session
 from app.domain.errors import (
     InvalidCredentialsError,
     ModerationConflictError,
+    PhotoNotFoundError,
     ReportNotFoundError,
     SignInUnavailableError,
     UserNotFoundError,
@@ -473,7 +474,7 @@ def submit_admin_action(
             target_id,
             reason=reason,
             error="Le motif est obligatoire.",
-            status_code=400,
+            status_code=422,
         )
 
     if confirmed != "yes":
@@ -528,6 +529,16 @@ def submit_admin_action(
             error="Cette action n’est pas possible dans l’état actuel.",
             status_code=409,
         )
+    except PhotoNotFoundError:
+        return render_action_page(
+            request,
+            context,
+            action,
+            target_id,
+            reason=reason,
+            error="Ce signalement ne possède aucune photo à masquer.",
+            status_code=404,
+        )
     except (ReportNotFoundError, UserNotFoundError):
         return render_action_page(
             request,
@@ -546,7 +557,7 @@ def submit_admin_action(
             target_id,
             reason=reason,
             error="Le motif fourni n’est pas valide.",
-            status_code=400,
+            status_code=422,
         )
     except DEPENDENCY_ERRORS:
         return render_action_page(

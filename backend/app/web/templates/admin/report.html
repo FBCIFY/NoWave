@@ -92,9 +92,11 @@
       Restaurer le signalement
     </a>
 
+    {% if item.photo_status and item.photo_status.value == 'uploaded' and not item.photo_hidden_at %}
     <a href="{{ request.url_for('admin_action', collection='reports', target_id=item.id, action_name='hide-photo').path }}">
       Masquer la photo
     </a>
+    {% endif %}
   </div>
 </section>
 {% endblock %}

@@ -5,7 +5,10 @@ import pytest
 from fastapi.testclient import TestClient
 
 from app.dependencies.admin_web_session import get_admin_web_session
-from app.domain.errors import InvalidSessionError
+from app.domain.errors import (
+    InvalidSessionError,
+    PhotoNotFoundError,
+)
 from app.domain.user import User, UserRole
 from app.main import app
 from app.web.csrf import CSRF_COOKIE, session_csrf_token
@@ -372,3 +375,67 @@ def test_action_rejects_forged_csrf_before_service_call(client, services):
     assert response.status_code == 403
     assert "Formulaire expiré" in response.text
     assert moderation.calls == []
+
+
+
+@pytest.mark.parametrize("reason", ["", "   "])
+def test_action_rejects_blank_reason_with_422(client, services, reason):
+    _, moderation = services
+    sign_in(client)
+
+    response = client.post(
+        f"/admin/actions/reports/{REPORT_ID}/remove",
+        data={
+            "csrf_token": session_csrf_token("session-cookie"),
+            "reason": reason,
+            "confirmed": "yes",
+        },
+    )
+
+    assert response.status_code == 422
+    assert "motif est obligatoire" in response.text.lower()
+    assert moderation.calls == []
+
+
+def test_hide_photo_not_found_returns_html_404(client, services):
+    _, moderation = services
+    sign_in(client)
+
+    def missing_photo(**kwargs):
+        raise PhotoNotFoundError("report has no photo")
+
+    moderation.hide_photo = missing_photo
+
+    response = client.post(
+        f"/admin/actions/reports/{REPORT_ID}/hide-photo",
+        data={
+            "csrf_token": session_csrf_token("session-cookie"),
+            "reason": "Photo non exploitable",
+            "confirmed": "yes",
+        },
+    )
+
+    assert response.status_code == 404
+    assert response.headers["content-type"].startswith("text/html")
+    assert "aucune photo à masquer" in response.text.lower()
+
+
+def test_report_without_photo_does_not_offer_hide_action(client, services):
+    reads, _ = services
+    sign_in(client)
+
+    original_get_report = reads.get_report
+
+    def get_report_without_photo(report_id, now=None):
+        item = original_get_report(report_id, now)
+        item.photo_status = None
+        item.photo_hidden_at = None
+        return item
+
+    reads.get_report = get_report_without_photo
+
+    response = client.get(f"/admin/reports/{REPORT_ID}")
+
+    assert response.status_code == 200
+    assert "Aucune photo" in response.text
+    assert "Masquer la photo" not in response.text
