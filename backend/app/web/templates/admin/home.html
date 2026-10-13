@@ -1,0 +1,19 @@
+{% extends "admin/base.html" %}
+
+{% block title %}Tableau de bord{% endblock %}
+
+{% block header %}
+<header>
+  <strong>NoWave · Administration</strong>
+  <form method="post" action="/admin/logout">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+    <span>{{ admin.username }}</span>
+    <button type="submit">Se déconnecter</button>
+  </form>
+</header>
+{% endblock %}
+
+{% block content %}
+<h1>Bonjour {{ admin.username }}</h1>
+<p>Les pages de modération arrivent avec NW-127.</p>
+{% endblock %}

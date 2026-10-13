@@ -279,6 +279,78 @@ signe une URL photo de cinq minutes même pour un signalement retiré ou expiré
 mais jamais pour une photo masquée. Une entrée d'audit dont l'administrateur ou
 la cible a été supprimé reste listée avec un identifiant `null`.
 
+### Administration web
+
+Les pages d'administration sont rendues par FastAPI avec Jinja, sur le même
+domaine que le site : `https://no-wave.fr/admin`. Elles n'utilisent pas de
+JavaScript, la CSP du site reste donc inchangée.
+
+| Route | Rôle |
+|---|---|
+| `GET /admin/login` | Formulaire de connexion |
+| `POST /admin/login` | Vérifie le mot de passe puis ouvre la session |
+| `GET /admin` | Accueil, réservé à un administrateur actif |
+| `POST /admin/logout` | Ferme la session du navigateur |
+
+- **Connexion :** FastAPI envoie l'e-mail et le mot de passe à Firebase
+  (`accounts:signInWithPassword`), vérifie le token obtenu, puis applique la
+  même règle que `/api/v1/admin` (`resolve_active_admin`) : e-mail vérifié,
+  profil actif et rôle `admin`. Ce n'est qu'ensuite qu'il crée un session
+  cookie Firebase. Un compte refusé ne reçoit donc jamais de session.
+- **Session :** cookie `__Host-nowave_admin_session`, valable 8 h, `HttpOnly`,
+  `Secure`, `SameSite=Strict`. À chaque page, le cookie est vérifié auprès de
+  Firebase (révocation comprise) et le profil est relu : une suspension
+  s'applique dès la requête suivante.
+- **CSRF :** chaque formulaire `POST` contient un champ caché `csrf_token`.
+  - Formulaire de connexion : pas encore de session, le champ doit être égal
+    au cookie `__Host-nowave_admin_csrf` (double submit). Ce cookie est
+    supprimé une fois connecté.
+  - Pages connectées : le jeton est calculé par le serveur à partir du cookie
+    de session (SHA-256). Il change à chaque nouvelle session et ne sert plus
+    à rien après la déconnexion.
+- **Contrat pour les pages Jinja (`app/web/security.py`) :**
+  - `AdminSecurity.require_active_admin(request) -> AdminContext`, où
+    `AdminContext` contient `subject` (le `User` admin) et `csrf_token`.
+    La dépendance `get_admin_context` l'appelle pour une route.
+  - `AdminSecurity.verify_csrf(request, context, token)` sur chaque `POST`.
+  - `AdminSecurity.logout(request, context) -> Response`.
+  - `render_admin_page` fournit `admin` et `csrf_token` au template.
+- **Erreurs :** session absente ou invalide → redirection vers
+  `/admin/login` (le cookie n'est effacé que s'il a été envoyé et refusé).
+  Compte non admin, suspendu ou sans profil NoWave → page `403`. Firebase ou
+  base indisponible → page `503`. Les messages techniques ne sont jamais
+  affichés.
+- **Déconnexion :** elle revérifie d'abord la session et le jeton CSRF, puis
+  efface seulement les cookies du navigateur. Les tokens Firebase restent
+  valides, donc l'application mobile de l'admin reste connectée. Si Firebase
+  ou la base est indisponible, elle répond `503` et le cookie expire seul.
+
+La connexion exige la clé Web API Firebase du projet (la même que celle de
+l'application mobile), à fournir hors de Git :
+
+```dotenv
+FIREBASE_WEB_API_KEY=cle-web-api
+```
+
+Elle accepte aussi `FIREBASE_WEB_API_KEY_FILE`. Sans cette clé, le formulaire
+répond `503` mais le reste de l'API démarre normalement. Docker Compose la
+transmet au conteneur `backend` depuis `.env`. En production, l'API la lit dans
+le secret Docker `/opt/nowave/secrets/firebase_web_api_key` ; `deploy.sh` refuse
+de déployer si ce fichier manque.
+
+À la connexion, FastAPI attend Firebase 5 secondes au maximum. Les tokens et
+les cookies de session tolèrent un décalage d'horloge de 10 secondes avec
+Google.
+
+Les cookies sont `Secure` : en local, ouvrir
+`http://localhost:8000/admin/login` dans Chrome ou Firefox, qui acceptent ces
+cookies sur `localhost`. Par une adresse IP du réseau, en HTTP, le navigateur
+les refuse et le formulaire répond « Formulaire expiré ».
+
+nginx route `/admin` vers l'API et limite les envois du formulaire de
+connexion à 10 par minute et par visiteur (rafale de 5), en plus de la limite
+générale.
+
 ## Tests
 
 Depuis la racine, avec l’environnement virtuel activé :

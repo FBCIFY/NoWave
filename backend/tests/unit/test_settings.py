@@ -89,3 +89,15 @@ def test_photo_settings_require_complete_scaleway_configuration(change):
     }
     with pytest.raises(ConfigurationError):
         Settings(**(values | change)).require_photo_storage()
+
+
+def test_firebase_web_api_key_can_be_loaded_from_file(monkeypatch, tmp_path):
+    secret = tmp_path / "firebase_web_api_key"
+    secret.write_text("web-key\n")
+    monkeypatch.delenv("FIREBASE_WEB_API_KEY", raising=False)
+    monkeypatch.setenv("FIREBASE_WEB_API_KEY_FILE", str(secret))
+
+    settings = get_settings()
+
+    assert settings.firebase_web_api_key == "web-key"
+    assert "web-key" not in repr(settings)
