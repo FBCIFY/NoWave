@@ -18,6 +18,9 @@ from app.domain.report import (
 from app.domain.report_photo import UploadStatus
 from app.domain.report_positioning import StoredReportPositioning
 from app.infrastructure.database.connection import database_connection
+from app.infrastructure.repositories.postgresql_alert_recipient_repository import (
+    select_alert_recipients,
+)
 
 
 AlertRecipientSelector = Callable[
@@ -26,23 +29,10 @@ AlertRecipientSelector = Callable[
 ]
 
 
-def no_alert_recipients(
-    cursor: Cursor,
-    report_id: UUID,
-) -> list[AlertRecipient]:
-    """
-    Doublure de la sélection des destinataires en attendant NW-122 :
-    la publication fonctionne, mais aucune alerte n'est créée.
-    """
-
-    return []
-
-
 class PostgreSQLReportRepository(ReportRepository):
     def __init__(
         self,
-        # NW-122 remplace la doublure par select_alert_recipients.
-        select_recipients: AlertRecipientSelector = no_alert_recipients,
+        select_recipients: AlertRecipientSelector = select_alert_recipients,
     ):
         self.select_recipients = select_recipients
 

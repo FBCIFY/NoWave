@@ -541,7 +541,7 @@ def test_conflicting_save_skips_the_selection(dsn, people):
 
 
 @pytest.mark.parametrize("mode", MODES)
-def test_default_selector_creates_no_alert(dsn, people, mode):
+def test_default_selector_requires_a_device_position(dsn, people, mode):
     report, saved = publish(
         PostgreSQLReportRepository(),
         mode,
@@ -554,8 +554,11 @@ def test_default_selector_creates_no_alert(dsn, people, mode):
         counts = count_report_rows(connection, report.id)
 
     assert counts["reports"] == 1
-    assert counts["alert_history"] == 0
-    assert counts["notifications"] == 0
+    with psycopg.connect(dsn) as connection:
+        assert connection.execute(
+            "SELECT count(*) FROM nowave.alert_history WHERE report_id = %s AND user_id = ANY(%s)",
+            (report.id, [people[1], people[2]]),
+        ).fetchone()[0] == 0
 
 
 def test_history_is_paged_newest_first_per_user(dsn, people):

@@ -231,9 +231,8 @@ sont copiés de la ligne du rapport. Si une écriture échoue, tout est annulé,
 signalement compris. Un rejeu du même `client_report_id` ne crée ni
 signalement ni alerte.
 
-En attendant NW-122, la sélection est une doublure qui renvoie `[]` : la
-publication fonctionne, mais aucune alerte n'est créée. NW-122 remplace la
-valeur par défaut de `select_recipients` dans `PostgreSQLReportRepository`.
+La sélection PostGIS NW-122 est branchée par défaut dans
+`PostgreSQLReportRepository`.
 Aucun `NOTIFY` n'est émis : le worker d'envoi (NW-123) interroge les tâches
 `pending` dont `next_attempt_at` est passé, une fois la transaction committée.
 Le rôle runtime reçoit `INSERT` sur `notifications` et `SELECT, INSERT` sur
@@ -440,56 +439,21 @@ comme d'habitude (`deploy/hostinger/migrate.py` en production). Le rôle runtime
 dispose seulement de SELECT sur `map_cache_revision` ; son invalidation passe
 par le trigger, sans droit d'écriture direct pour l'API.
 
-## NW-122 — Contrat de sélection des destinataires
+## NW-122 — Sélection des destinataires
 
-Première étape implémentée : les types, l'interface et le service communs.
-La requête PostgreSQL et les branchements publication/worker restent à réaliser.
-Ce contrat interne Python ne crée pas de nouvelle route HTTP.
+La fonction `select_alert_recipients(cursor, report_id)` utilise le curseur de
+publication. Elle retourne les `AlertRecipient` du contrat NW-118 : utilisateur,
+distance minimale en mètres et identifiants des appareils éligibles distincts.
+Elle ne committe rien et n'ouvre pas de connexion. Les alertes et le signalement
+sont donc toujours enregistrés ou annulés ensemble.
 
-Ordre de lecture :
+La sélection utilise PostGIS sur les colonnes geography, dans un rayon inclusif
+de 18 520 mètres autour de la position finale du signalement. Elle exclut
+auteur, utilisateurs inactifs ou sans consentement, appareils inactifs, tokens
+vides et positions absentes ou de précision hors de [0, 50] mètres. Aucun filtre
+sur le cap, l'âge de la position ou la dernière activité n'est appliqué. Tous les
+appareils éligibles sont retenus ; la distance utilisateur est leur minimum.
+Un signalement absent, retiré ou expiré ne sélectionne personne.
 
-1. `app/domain/alert_recipient.py` : `RecipientDevice` contient l'identifiant,
-   le token FCM et la distance en mètres d'un appareil éligible.
-   `AlertRecipient` contient un utilisateur et un tuple d'appareils distincts.
-   Sa propriété `distance_m` calcule la distance minimale de ces appareils.
-2. `app/application/ports/alert_recipient_repository.py` : définit
-   `select_for_report(report_id) -> tuple[AlertRecipient, ...]` et les règles
-   que le repository PostgreSQL devra appliquer.
-3. `app/application/services/select_alert_recipients.py` : fournit
-   `SelectAlertRecipients(repository).execute(report_id)` aux consommateurs.
-
-Le repository devra exclure l'auteur, les utilisateurs suspendus ou sans
-consentement, les appareils inactifs, sans token non vide ou sans position
-valide de précision comprise entre 0 et 50 mètres. Il devra retenir les appareils
-à une distance inférieure ou égale à 18 520 mètres de la position finale du
-signalement. Aucun filtre d'âge de position, de dernière activité ou de cap.
-Chaque utilisateur apparaît une fois, avec tous ses appareils éligibles.
-Un appareil hors rayon n'est pas ajouté parce qu'un autre appareil du même
-utilisateur est proche. L'ordre des résultats n'est pas contractuel.
-
-Convention proposée pour les consommateurs : un signalement inexistant produit
-`ReportNotFoundError`. Un signalement retiré ou expiré, ou sans destinataire
-éligible, produit `()`. L'expiration doit prendre en compte `expires_at`, même si
-le statut stocké est encore `active`. Ces règles de recherche sont documentées
-ici mais leur implémentation SQL n'est pas encore présente.
-
-Les résultats sont un instantané : ils ne garantissent pas qu'un token sera
-accepté par FCM ni qu'un utilisateur sera encore consentant lors de l'envoi.
-Le worker devra vérifier à nouveau le signalement, sa version et l'éligibilité
-du destinataire et de l'appareil avant livraison. La sélection ne crée ni
-notification ni historique ; ces écritures et leur transaction appartiennent
-au raccordement avec la publication et le worker.
-
-Étapes suivantes :
-
-1. Créer `app/infrastructure/repositories/postgresql_alert_recipient_repository.py`
-   et implémenter l'interface avec PostGIS et les tables existantes.
-2. Créer `tests/database/test_alert_recipient_repository.py` pour vérifier le
-   seuil géographique inclusif, la précision, plusieurs appareils/utilisateurs,
-   le consentement, la suspension, les positions anciennes et les caps absents.
-3. Raccorder le service à la publication et au worker suivant leur contrat
-   d'intégration, notamment pour la version et les transactions.
-
-Les tests unitaires de cette première étape vérifient les invariants des types
-et montrent une doublure utilisable par les consommateurs. Ils ne prouvent pas
-encore les filtres SQL ni le calcul géographique.
+La sélection par défaut de `PostgreSQLReportRepository` est réelle. Les tests
+peuvent toujours injecter une fonction respectant la même signature.
