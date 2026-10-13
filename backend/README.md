@@ -240,3 +240,57 @@ Décision T10 : le MVP accepte une latence visuelle maximale de 15 secondes lié
 au cache privé des tuiles. À chaque nouvelle requête serveur, un signalement
 dont `expires_at <= now()` est exclu immédiatement. Aucun job d'expiration
 n'est ajouté.
+
+## NW-122 — Contrat de sélection des destinataires
+
+Première étape implémentée : les types, l'interface et le service communs.
+La requête PostgreSQL et les branchements publication/worker restent à réaliser.
+Ce contrat interne Python ne crée pas de nouvelle route HTTP.
+
+Ordre de lecture :
+
+1. `app/domain/alert_recipient.py` : `RecipientDevice` contient l'identifiant,
+   le token FCM et la distance en mètres d'un appareil éligible.
+   `AlertRecipient` contient un utilisateur et un tuple d'appareils distincts.
+   Sa propriété `distance_m` calcule la distance minimale de ces appareils.
+2. `app/application/ports/alert_recipient_repository.py` : définit
+   `select_for_report(report_id) -> tuple[AlertRecipient, ...]` et les règles
+   que le repository PostgreSQL devra appliquer.
+3. `app/application/services/select_alert_recipients.py` : fournit
+   `SelectAlertRecipients(repository).execute(report_id)` aux consommateurs.
+
+Le repository devra exclure l'auteur, les utilisateurs suspendus ou sans
+consentement, les appareils inactifs, sans token non vide ou sans position
+valide de précision comprise entre 0 et 50 mètres. Il devra retenir les appareils
+à une distance inférieure ou égale à 18 520 mètres de la position finale du
+signalement. Aucun filtre d'âge de position, de dernière activité ou de cap.
+Chaque utilisateur apparaît une fois, avec tous ses appareils éligibles.
+Un appareil hors rayon n'est pas ajouté parce qu'un autre appareil du même
+utilisateur est proche. L'ordre des résultats n'est pas contractuel.
+
+Convention proposée pour les consommateurs : un signalement inexistant produit
+`ReportNotFoundError`. Un signalement retiré ou expiré, ou sans destinataire
+éligible, produit `()`. L'expiration doit prendre en compte `expires_at`, même si
+le statut stocké est encore `active`. Ces règles de recherche sont documentées
+ici mais leur implémentation SQL n'est pas encore présente.
+
+Les résultats sont un instantané : ils ne garantissent pas qu'un token sera
+accepté par FCM ni qu'un utilisateur sera encore consentant lors de l'envoi.
+Le worker devra vérifier à nouveau le signalement, sa version et l'éligibilité
+du destinataire et de l'appareil avant livraison. La sélection ne crée ni
+notification ni historique ; ces écritures et leur transaction appartiennent
+au raccordement avec la publication et le worker.
+
+Étapes suivantes :
+
+1. Créer `app/infrastructure/repositories/postgresql_alert_recipient_repository.py`
+   et implémenter l'interface avec PostGIS et les tables existantes.
+2. Créer `tests/database/test_alert_recipient_repository.py` pour vérifier le
+   seuil géographique inclusif, la précision, plusieurs appareils/utilisateurs,
+   le consentement, la suspension, les positions anciennes et les caps absents.
+3. Raccorder le service à la publication et au worker suivant leur contrat
+   d'intégration, notamment pour la version et les transactions.
+
+Les tests unitaires de cette première étape vérifient les invariants des types
+et montrent une doublure utilisable par les consommateurs. Ils ne prouvent pas
+encore les filtres SQL ni le calcul géographique.
