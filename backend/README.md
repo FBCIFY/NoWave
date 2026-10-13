@@ -333,7 +333,18 @@ FIREBASE_WEB_API_KEY=cle-web-api
 ```
 
 Elle accepte aussi `FIREBASE_WEB_API_KEY_FILE`. Sans cette clé, le formulaire
-répond `503` mais le reste de l'API démarre normalement.
+répond `503` mais le reste de l'API démarre normalement. Docker Compose la
+transmet au conteneur `backend` depuis `.env`. En production, elle doit être
+ajoutée aux secrets Docker de `deploy/compose.yaml`.
+
+À la connexion, FastAPI attend Firebase 5 secondes au maximum. Les tokens et
+les cookies de session tolèrent un décalage d'horloge de 10 secondes avec
+Google.
+
+Les cookies sont `Secure` : en local, ouvrir
+`http://localhost:8000/admin/login` dans Chrome ou Firefox, qui acceptent ces
+cookies sur `localhost`. Par une adresse IP du réseau, en HTTP, le navigateur
+les refuse et le formulaire répond « Formulaire expiré ».
 
 nginx route `/admin` vers l'API et limite les envois du formulaire de
 connexion à 10 par minute et par visiteur (rafale de 5), en plus de la limite

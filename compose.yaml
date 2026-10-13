@@ -47,6 +47,7 @@ services:
       PHOTO_STORAGE_REGION: ${PHOTO_STORAGE_REGION:-fr-par}
       SCW_ACCESS_KEY: ${SCW_ACCESS_KEY:-}
       SCW_SECRET_KEY: ${SCW_SECRET_KEY:-}
+      FIREBASE_WEB_API_KEY: ${FIREBASE_WEB_API_KEY:-}
 
     secrets:
       - firebase_service_account
