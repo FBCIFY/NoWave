@@ -22,6 +22,9 @@ if s.get('type') != 'service_account' or s.get('project_id') != 'blueway-dev' or
 PY
 chown root:10001 "$root/secrets/firebase_service_account.json"
 chmod 0440 "$root/secrets/firebase_service_account.json"
+[[ -s "$root/secrets/firebase_web_api_key" ]] || { echo 'Firebase Web API key is missing; deployment was not activated.' >&2; exit 1; }
+chown root:10001 "$root/secrets/firebase_web_api_key"
+chmod 0440 "$root/secrets/firebase_web_api_key"
 # Storage settings live outside release.env so deployments never overwrite them.
 for required in "$root/config/photo-storage.env" "$root/secrets/scaleway_access_key" "$root/secrets/scaleway_secret_key"; do
   [[ -s "$required" ]] || { echo 'Scaleway photo configuration is missing; deployment was not activated.' >&2; exit 1; }
