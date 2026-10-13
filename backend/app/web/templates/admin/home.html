@@ -2,18 +2,16 @@
 
 {% block title %}Tableau de bord{% endblock %}
 
-{% block header %}
-<header>
-  <strong>NoWave · Administration</strong>
-  <form method="post" action="/admin/logout">
-    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-    <span>{{ admin.username }}</span>
-    <button type="submit">Se déconnecter</button>
-  </form>
-</header>
-{% endblock %}
-
 {% block content %}
 <h1>Bonjour {{ admin.username }}</h1>
-<p>Les pages de modération arrivent avec NW-127.</p>
+<p>Accédez aux fonctions de modération NoWave.</p>
+
+<section class="card">
+  <h2>Modération</h2>
+  <div class="actions">
+    <a href="/admin/reports">Consulter les signalements</a>
+    <a href="/admin/users">Gérer les utilisateurs</a>
+    <a href="/admin/audit">Consulter l’audit</a>
+  </div>
+</section>
 {% endblock %}

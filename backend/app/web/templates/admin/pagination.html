@@ -1,0 +1,5 @@
+<nav class="pagination" aria-label="Pagination">
+  {% if page > 1 %}<a rel="prev" href="?page={{ page - 1 }}&amp;limit={{ limit }}">Page précédente</a>{% endif %}
+  <span>Page {{ page }}{% if result.pages %} sur {{ result.pages }}{% endif %} · {{ result.total }} résultat(s)</span>
+  {% if page < result.pages %}<a rel="next" href="?page={{ page + 1 }}&amp;limit={{ limit }}">Page suivante</a>{% endif %}
+</nav>

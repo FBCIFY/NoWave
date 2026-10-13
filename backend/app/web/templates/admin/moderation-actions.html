@@ -1,0 +1,9 @@
+{% extends 'admin/base.html' %}
+{% block title %}Audit de modération{% endblock %}
+{% block content %}
+<h1>Audit de modération</h1><p>Historique en lecture seule des actions administrateur.</p>
+{% if result.items %}<div class="table-scroll"><table><caption>Actions de modération</caption>
+<thead><tr><th scope="col">Date / identifiant</th><th scope="col">Administrateur</th><th scope="col">Action / cible</th><th scope="col">Motif</th><th scope="col">État précédent → suivant</th></tr></thead>
+<tbody>{% for item in result.items %}<tr><td>{{ item.created_at }}<small>{{ item.id }}</small></td><td>{{ item.admin_user_id or 'Utilisateur supprimé' }}</td><td>{{ item.action.value }}<small>{{ item.target_report_id or item.target_user_id or item.target_photo_report_id or 'Cible supprimée' }}</small></td><td class="preserve">{{ item.reason }}</td><td>{{ item.previous_status or '—' }} → {{ item.new_status or '—' }}</td></tr>{% endfor %}</tbody></table></div>{% else %}<p class="empty">Aucune action de modération sur cette page.</p>{% endif %}
+{% include 'admin/pagination.html' %}
+{% endblock %}
