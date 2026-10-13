@@ -41,6 +41,7 @@ class Settings:
     photo_storage_region: str = "fr-par"
     scaleway_access_key: str | None = field(default=None, repr=False)
     scaleway_secret_key: str | None = field(default=None, repr=False)
+    firebase_web_api_key: str | None = field(default=None, repr=False)
 
     def require_database_url(self) -> str:
         if not self.database_url or not self.database_url.strip():
@@ -88,4 +89,5 @@ def get_settings() -> Settings:
         photo_storage_region=os.getenv("PHOTO_STORAGE_REGION", "fr-par"),
         scaleway_access_key=read_secret("SCW_ACCESS_KEY"),
         scaleway_secret_key=read_secret("SCW_SECRET_KEY"),
+        firebase_web_api_key=read_secret("FIREBASE_WEB_API_KEY"),
     )

@@ -11,11 +11,36 @@ python -m pip install -r backend/requirements.txt
 cp .env.example .env
 ```
 
-Compléter `.env`, puis démarrer PostgreSQL :
+Compléter `.env` avec le même mot de passe local dans `NOWAVE_DB_PASSWORD` et
+`DATABASE_URL`. Par exemple (remplacer le mot de passe) :
+
+```dotenv
+NOWAVE_DB_PASSWORD=mot-de-passe-local
+NOWAVE_DB_PORT=55432
+DATABASE_URL=postgresql://nowave:mot-de-passe-local@localhost:55432/nowave
+GOOGLE_CLOUD_PROJECT=blueway-dev
+FIREBASE_SERVICE_ACCOUNT_FILE=./chemin-vers-le-compte-de-service-firebase.json
+```
+
+`NOWAVE_DB_PASSWORD` sert à Docker Compose ; `DATABASE_URL` sert au backend et
+aux migrations lancés sur le poste. Les anciens noms `BLUEWAY_DB_PASSWORD` et
+`BLUEWAY_DB_PORT` ne sont plus lus par Compose. Le projet Firebase reste
+`blueway-dev` : il est indépendant du nom de la base PostgreSQL `nowave`.
+Docker Compose monte le fichier `FIREBASE_SERVICE_ACCOUNT_FILE` en lecture seule
+pour vérifier les jetons Firebase de l'application mobile.
+L'application mobile lit encore une autre configuration, `mobile/.env.json`,
+via `--dart-define-from-file`.
+
+Vérifier la configuration et démarrer PostgreSQL :
 
 ```bash
-docker compose up -d database
+docker compose config --quiet
+docker compose up -d --wait database
 ```
+
+Si un volume `nowave-database` existe déjà, vérifier sa base et ses données
+avant de modifier son initialisation. Changer `.env` ne renomme pas une base
+déjà créée ; ne pas supprimer le volume pour résoudre une erreur de connexion.
 
 Charger les variables et appliquer les migrations :
 
@@ -46,8 +71,16 @@ DATABASE_URL=postgresql://nowave:mot-de-passe@localhost:55432/nowave
 ```
 
 Psycopg utilise directement `postgresql://`. Alembic convertit automatiquement
-cette URL en `postgresql+psycopg://` pour SQLAlchemy. Docker Compose utilisait
-déjà le format standard avec le service `database` et son port interne `5432`.
+cette URL en `postgresql+psycopg://` pour SQLAlchemy. Dans Docker Compose,
+le backend joint le service `database` sur son port interne `5432`.
+
+Le backend réutilise les connexions via un pool par processus, de 1 à 15
+connexions. Chaque emprunt vérifie que la connexion fonctionne ; après une
+opération, sa transaction est validée ou annulée avant le retour au pool.
+L'attente d'une connexion est limitée à 3 secondes. Si la base ne répond pas,
+les routes concernées renvoient toujours 503. La production utilise actuellement
+un processus Uvicorn ; avec plusieurs processus, chaque processus possède son
+propre pool de 15 connexions maximum.
 
 ## Authentification Firebase
 
@@ -107,6 +140,12 @@ du jeton Firebase sans contrôle systématique de révocation à chaque requête
 Cette option sera réévaluée si le besoin de révocation immédiate justifie le
 coût et la dépendance supplémentaires.
 
+Le profil chargé par le contrôle d'accès est réutilisé par les services pendant
+la même requête HTTP. Il n'est jamais mis en cache entre utilisateurs ou entre
+requêtes : le statut du compte est relu à chaque appel. Un envoi GPS normal
+effectue ainsi cinq instructions SQL métier au lieu de six, hors transactions
+et vérification de connexion.
+
 ### Upload d'une photo de signalement
 
 `POST /api/v1/reports/{report_id}/photo` attend un champ multipart `file` de type
@@ -155,7 +194,13 @@ les objets `reports/{report_id}/{SHA256}/{tentative_uuid}.jpg` âgés d'au moins
 verrou, il supprime uniquement ceux que la ligne photo ne référence plus. Les
 photos référencées, même masquées ou expirées, sont conservées. Un échec de
 suppression est journalisé et retenté au passage suivant ; aucun état de nettoyage
-n'est perdu au redémarrage puisque le bucket est rescanné. Réserver ce préfixe à
+n'est perdu au redémarrage puisque le bucket est rescanné. Les références SQL
+sont lues sans verrou par lots de 250 objets admissibles ; les objets encore
+référencés, y compris les photos masquées ou expirées, sont ignorés. Seuls les
+candidats à la suppression prennent le verrou d'upload, avec une seconde
+vérification de leur référence après acquisition. Le listing paginé du bucket
+reste complet pour retrouver aussi les objets orphelins après une panne, sans
+charger tout le stock en mémoire. Réserver ce préfixe à
 NoWave et utiliser un bucket privé sans versioning pour cette politique de purge.
 Les anciennes versions d'un bucket versionné exigeraient une politique distincte.
 
@@ -206,6 +251,106 @@ d'URL de lecture. Un compte suspendu conserve ses signalements, mais
 publier ni envoyer de position. Le futur worker d'alertes devra en plus ignorer
 les comptes suspendus et les signalements retirés au moment de l'envoi.
 
+#### Lectures administrateur
+
+Ces routes en lecture seule servent de contrat JSON aux pages Jinja
+d'administration :
+
+- `GET /api/v1/admin/reports?page=1&limit=20&status=removed` liste tous les
+  signalements, du plus récent au plus ancien. `status` (`active`, `expired`,
+  `removed`) est optionnel.
+- `GET /api/v1/admin/reports/{id}` renvoie le `ReportDetail` complété de
+  `removed_at`, de l'auteur (`id`, `username`, `email`, `status`, `deleted`) et
+  de `photo.hidden_at`. Il reste lisible pour un signalement retiré ou expiré.
+- `GET /api/v1/admin/users?status=suspended` liste les comptes avec leur rôle,
+  leur statut, leur e-mail et leur nombre de signalements.
+- `GET /api/v1/admin/moderation-actions` liste l'audit, de la plus récente à la
+  plus ancienne action. Aucune route ne modifie ni ne supprime une entrée.
+
+Les listes acceptent `page` (défaut `1`) et `limit` (défaut `20`, maximum
+`100`) et renvoient `{"items": [...], "page": 1, "limit": 20, "total": 0,
+"pages": 0}`. Une page au-delà de la dernière renvoie `items` vide. Le total et
+la page sont lus dans le même instantané PostgreSQL.
+
+Aucun job ne réécrit le statut d'un signalement expiré : ces vues affichent
+`expired` dès que `expires_at` est passé, même si la ligne vaut encore `active`.
+La vue admin ignore les choix de visibilité de l'auteur (nom, bateau). Elle
+signe une URL photo de cinq minutes même pour un signalement retiré ou expiré,
+mais jamais pour une photo masquée. Une entrée d'audit dont l'administrateur ou
+la cible a été supprimé reste listée avec un identifiant `null`.
+
+### Administration web
+
+Les pages d'administration sont rendues par FastAPI avec Jinja, sur le même
+domaine que le site : `https://no-wave.fr/admin`. Elles n'utilisent pas de
+JavaScript, la CSP du site reste donc inchangée.
+
+| Route | Rôle |
+|---|---|
+| `GET /admin/login` | Formulaire de connexion |
+| `POST /admin/login` | Vérifie le mot de passe puis ouvre la session |
+| `GET /admin` | Accueil, réservé à un administrateur actif |
+| `POST /admin/logout` | Ferme la session du navigateur |
+
+- **Connexion :** FastAPI envoie l'e-mail et le mot de passe à Firebase
+  (`accounts:signInWithPassword`), vérifie le token obtenu, puis applique la
+  même règle que `/api/v1/admin` (`resolve_active_admin`) : e-mail vérifié,
+  profil actif et rôle `admin`. Ce n'est qu'ensuite qu'il crée un session
+  cookie Firebase. Un compte refusé ne reçoit donc jamais de session.
+- **Session :** cookie `__Host-nowave_admin_session`, valable 8 h, `HttpOnly`,
+  `Secure`, `SameSite=Strict`. À chaque page, le cookie est vérifié auprès de
+  Firebase (révocation comprise) et le profil est relu : une suspension
+  s'applique dès la requête suivante.
+- **CSRF :** chaque formulaire `POST` contient un champ caché `csrf_token`.
+  - Formulaire de connexion : pas encore de session, le champ doit être égal
+    au cookie `__Host-nowave_admin_csrf` (double submit). Ce cookie est
+    supprimé une fois connecté.
+  - Pages connectées : le jeton est calculé par le serveur à partir du cookie
+    de session (SHA-256). Il change à chaque nouvelle session et ne sert plus
+    à rien après la déconnexion.
+- **Contrat pour les pages Jinja (`app/web/security.py`) :**
+  - `AdminSecurity.require_active_admin(request) -> AdminContext`, où
+    `AdminContext` contient `subject` (le `User` admin) et `csrf_token`.
+    La dépendance `get_admin_context` l'appelle pour une route.
+  - `AdminSecurity.verify_csrf(request, context, token)` sur chaque `POST`.
+  - `AdminSecurity.logout(request, context) -> Response`.
+  - `render_admin_page` fournit `admin` et `csrf_token` au template.
+- **Erreurs :** session absente ou invalide → redirection vers
+  `/admin/login` (le cookie n'est effacé que s'il a été envoyé et refusé).
+  Compte non admin, suspendu ou sans profil NoWave → page `403`. Firebase ou
+  base indisponible → page `503`. Les messages techniques ne sont jamais
+  affichés.
+- **Déconnexion :** elle revérifie d'abord la session et le jeton CSRF, puis
+  efface seulement les cookies du navigateur. Les tokens Firebase restent
+  valides, donc l'application mobile de l'admin reste connectée. Si Firebase
+  ou la base est indisponible, elle répond `503` et le cookie expire seul.
+
+La connexion exige la clé Web API Firebase du projet (la même que celle de
+l'application mobile), à fournir hors de Git :
+
+```dotenv
+FIREBASE_WEB_API_KEY=cle-web-api
+```
+
+Elle accepte aussi `FIREBASE_WEB_API_KEY_FILE`. Sans cette clé, le formulaire
+répond `503` mais le reste de l'API démarre normalement. Docker Compose la
+transmet au conteneur `backend` depuis `.env`. En production, l'API la lit dans
+le secret Docker `/opt/nowave/secrets/firebase_web_api_key` ; `deploy.sh` refuse
+de déployer si ce fichier manque.
+
+À la connexion, FastAPI attend Firebase 5 secondes au maximum. Les tokens et
+les cookies de session tolèrent un décalage d'horloge de 10 secondes avec
+Google.
+
+Les cookies sont `Secure` : en local, ouvrir
+`http://localhost:8000/admin/login` dans Chrome ou Firefox, qui acceptent ces
+cookies sur `localhost`. Par une adresse IP du réseau, en HTTP, le navigateur
+les refuse et le formulaire répond « Formulaire expiré ».
+
+nginx route `/admin` vers l'API et limite les envois du formulaire de
+connexion à 10 par minute et par visiteur (rafale de 5), en plus de la limite
+générale.
+
 ## Tests
 
 Depuis la racine, avec l’environnement virtuel activé :
@@ -240,6 +385,26 @@ Décision T10 : le MVP accepte une latence visuelle maximale de 15 secondes lié
 au cache privé des tuiles. À chaque nouvelle requête serveur, un signalement
 dont `expires_at <= now()` est exclu immédiatement. Aucun job d'expiration
 n'est ajouté.
+
+Le calcul PostGIS des tuiles est partagé entre les utilisateurs d'un même
+processus API via un cache mémoire de 15 secondes maximum, borné à 512 entrées
+et 16 Mio de contenu. Les requêtes simultanées d'une même tuile ne lancent qu'un
+calcul. Les coordonnées, la catégorie, le signalement filtré et la connexion
+à la base font partie de la clé ; aucune identité ni URL photo n'est stockée.
+
+Chaque appel conserve l'authentification et une lecture SQL de la révision des
+signalements. La migration `20261012_0003` ajoute cette révision, modifiée dans
+la même transaction que toute écriture sur `reports`, y compris une écriture SQL
+directe. La révision et le calcul utilisent le même snapshot PostgreSQL. Un
+retrait, une création ou une restauration invalide donc les anciennes tuiles
+dans tous les processus au prochain appel. L'expiration la plus proche dans la
+tuile borne aussi sa validité, sans attendre une écriture ou la fin des 15 secondes.
+Le cache HTTP privé et les réponses de l'API restent inchangés.
+
+Avant de démarrer cette version, appliquer les migrations et les droits runtime
+comme d'habitude (`deploy/hostinger/migrate.py` en production). Le rôle runtime
+dispose seulement de SELECT sur `map_cache_revision` ; son invalidation passe
+par le trigger, sans droit d'écriture direct pour l'API.
 
 ## NW-122 — Contrat de sélection des destinataires
 

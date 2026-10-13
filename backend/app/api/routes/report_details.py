@@ -53,6 +53,23 @@ def get_report_detail(
     return report_detail_response(report)
 
 
+def photo_read_url(
+    report: ReportDetailData,
+) -> str | None:
+    """A hidden photo never receives a new read URL, even for an admin."""
+    if (
+        report.photo_status != UploadStatus.UPLOADED
+        or report.photo_object_key is None
+        or report.photo_hidden_at is not None
+    ):
+        return None
+
+    return get_photo_storage().create_read_url(
+        object_key=report.photo_object_key,
+        expires_in=timedelta(minutes=5),
+    )
+
+
 def report_detail_response(
     report: ReportDetailData,
 ) -> ReportDetailResponse:
@@ -80,21 +97,9 @@ def report_detail_response(
     photo = None
 
     if report.photo_status is not None:
-        photo_url = None
-
-        if (
-            report.photo_status == UploadStatus.UPLOADED
-            and report.photo_object_key is not None
-            and report.photo_hidden_at is None
-        ):
-            photo_url = get_photo_storage().create_read_url(
-                object_key=report.photo_object_key,
-                expires_in=timedelta(minutes=5),
-            )
-
         photo = ReportDetailPhotoResponse(
             status=report.photo_status,
-            url=photo_url,
+            url=photo_read_url(report),
         )
 
     return ReportDetailResponse(

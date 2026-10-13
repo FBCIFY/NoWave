@@ -513,5 +513,17 @@
       "type": "timestamptz",
       "nullable": false
     }
+  ],
+  "map_cache_revision": [
+    {
+      "name": "singleton",
+      "type": "boolean",
+      "nullable": false
+    },
+    {
+      "name": "revision",
+      "type": "uuid",
+      "nullable": false
+    }
   ]
 }

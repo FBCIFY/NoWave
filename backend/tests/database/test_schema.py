@@ -23,10 +23,10 @@ def test_exact_dictionary_and_foreign_keys(dsn):
                 ty=field['type'].replace('varchar','character varying').replace('char(', 'character(').replace('timestamptz','timestamp with time zone')
                 expected.append((table,field['name'],ty,field['nullable']))
         assert rows == expected
-        assert len(rows) == 99
+        assert len(rows) == 101
         fk=conn.execute("SELECT confdeltype,count(*) FROM pg_constraint WHERE contype='f' AND connamespace='nowave'::regnamespace GROUP BY 1").fetchall()
         assert dict(fk)=={'c':9,'n':5}
-        assert conn.execute("SELECT count(*) FROM pg_constraint WHERE contype='p' AND connamespace='nowave'::regnamespace").fetchone()[0]==10
+        assert conn.execute("SELECT count(*) FROM pg_constraint WHERE contype='p' AND connamespace='nowave'::regnamespace").fetchone()[0]==11
 
 
 def test_spatial_indexes_and_distance(db):
@@ -177,7 +177,7 @@ def test_historical_versions_are_not_foreign_keys(db):
 def test_migration_replay(dsn):
     upgrade_database(dsn)
     with psycopg.connect(dsn) as conn:
-        assert conn.execute('SELECT version_num FROM alembic_version').fetchone()==('20261007_0002',)
+        assert conn.execute('SELECT version_num FROM alembic_version').fetchone()==('20261012_0003',)
 
 
 def test_migrations_roundtrip(dsn):

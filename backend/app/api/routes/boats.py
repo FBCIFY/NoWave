@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, status
 
-from app.api.dependencies.auth import get_current_identity
+from app.api.dependencies.auth import get_current_identity, reuse_current_user
 from app.api.schemas.boat import (
     BoatCreateRequest,
     BoatResponse,
@@ -39,6 +39,7 @@ def get_my_boat(
     identity: dict = Depends(get_current_identity),
 ):
     user_repository, boat_repository = repositories()
+    user_repository = reuse_current_user(identity, user_repository)
 
     service = GetBoat(
         user_repository=user_repository,
@@ -60,6 +61,7 @@ def create_my_boat(
     identity: dict = Depends(get_current_identity),
 ):
     user_repository, boat_repository = repositories()
+    user_repository = reuse_current_user(identity, user_repository)
 
     service = CreateBoat(
         user_repository=user_repository,
@@ -83,6 +85,7 @@ def update_my_boat(
     identity: dict = Depends(get_current_identity),
 ):
     user_repository, boat_repository = repositories()
+    user_repository = reuse_current_user(identity, user_repository)
 
     service = UpdateBoat(
         user_repository=user_repository,
@@ -107,6 +110,7 @@ def delete_my_boat(
     identity: dict = Depends(get_current_identity),
 ):
     user_repository, boat_repository = repositories()
+    user_repository = reuse_current_user(identity, user_repository)
 
     service = DeleteBoat(
         user_repository=user_repository,

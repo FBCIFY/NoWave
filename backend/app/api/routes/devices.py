@@ -3,6 +3,7 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, Header, Response, status
 
 from app.api.dependencies.auth import (
+    reuse_current_user,
     get_authenticated_identity,
     get_current_identity,
 )
@@ -51,6 +52,7 @@ def register_current_device(
     identity: dict = Depends(get_current_identity),
 ):
     user_repository, device_repository = repositories()
+    user_repository = reuse_current_user(identity, user_repository)
 
     service = RegisterDevice(
         user_repository=user_repository,
@@ -77,6 +79,7 @@ def record_current_device_position(
     identity: dict = Depends(get_current_identity),
 ):
     user_repository, device_repository = repositories()
+    user_repository = reuse_current_user(identity, user_repository)
 
     service = RecordDevicePosition(
         user_repository=user_repository,

@@ -1,8 +1,11 @@
 from uuid import UUID
+from time import monotonic
 
 from app.application.ports.map_tile_reader import MapTileReader
 from app.domain.report import ReportCategory
+from app.config.settings import get_settings
 from app.infrastructure.database.connection import database_connection
+from app.infrastructure.cache.map_tile_cache import tile_cache
 
 
 class PostgreSQLMapTileRepository(MapTileReader):
@@ -42,6 +45,7 @@ class PostgreSQLMapTileRepository(MapTileReader):
                 SELECT
                     report.id,
                     report.category,
+                    report.expires_at,
                     ST_Transform(report.final_position::geometry, 3857) AS point
                 FROM nowave.reports AS report
                 CROSS JOIN tile
@@ -96,12 +100,13 @@ class PostgreSQLMapTileRepository(MapTileReader):
                 FROM map_features
                 CROSS JOIN tile
             )
-            SELECT COALESCE(
-                ST_AsMVT(tile_features, 'reports', 4096, 'geom'),
-                '\\x'::bytea
-            )
-            FROM tile_features
-            WHERE geom IS NOT NULL
+            SELECT (
+                SELECT COALESCE(
+                    ST_AsMVT(tile_features, 'reports', 4096, 'geom'),
+                    '\\x'::bytea
+                )
+                FROM tile_features WHERE geom IS NOT NULL
+            ), (SELECT MIN(expires_at) FROM visible_reports)
         """
         values = (
             zoom,
@@ -111,9 +116,26 @@ class PostgreSQLMapTileRepository(MapTileReader):
             report_id,
         )
 
-        with database_connection() as connection:
-            with connection.cursor() as cursor:
-                cursor.execute(query, values)
-                row = cursor.fetchone()
-
-        return row[0] if row and row[0] is not None else b""
+        settings = get_settings()
+        key = (settings.require_database_url(), *values)
+        # Wait before opening the transaction, so concurrent misses share a build
+        # without holding database connections or an old snapshot while queued.
+        with tile_cache.flight(key):
+            started = monotonic()
+            with database_connection(settings) as connection:
+                connection.execute(
+                    "SET TRANSACTION ISOLATION LEVEL REPEATABLE READ, READ ONLY"
+                )
+                revision, database_now = connection.execute(
+                    "SELECT revision, statement_timestamp() "
+                    "FROM nowave.map_cache_revision WHERE singleton"
+                ).fetchone()
+                cached = tile_cache.get(key, revision, database_now)
+                if cached is not None:
+                    return cached
+                # The tile and its revision must come from the same snapshot.
+                # Report writes invalidate every process, including direct SQL.
+                row = connection.execute(query, values).fetchone()
+                content, expires_at = row
+            tile_cache.put(key, revision, content, expires_at, started)
+            return content

@@ -8,6 +8,9 @@ def grant_runtime_table_permissions(connection, role_name="nowave_runtime"):
         sql.SQL("GRANT USAGE ON SCHEMA nowave, public TO {}").format(role)
     )
     connection.execute(
+        sql.SQL("GRANT SELECT ON nowave.map_cache_revision TO {}").format(role)
+    )
+    connection.execute(
         sql.SQL(
             "GRANT SELECT, INSERT, UPDATE, DELETE ON nowave.users, nowave.reports, nowave.boats TO {}"
         ).format(role)

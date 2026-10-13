@@ -4,19 +4,23 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 import '../../../core/device/device_position_reporter.dart';
-import '../../../core/device/device_registration.dart';
 import '../../../core/device/device_position_tracker.dart';
 import '../../../core/device/device_registrar.dart';
+import '../../../core/device/device_registration.dart';
+import '../../../core/notifications/alert_push_controller.dart';
 import '../../../core/notifications/notification_permission.dart';
+import '../../alerts/data/alert_service.dart';
 import '../../auth/data/auth_service.dart';
 import '../../auth/presentation/widgets/flow_transition.dart';
 import '../../camera/data/position_estimate_service.dart';
 import '../../home/presentation/home_screen.dart';
 import '../../map/data/report_tiles.dart';
-import '../data/profile_service.dart';
-import '../domain/user_profile.dart';
 import '../../reports/data/manual_report_service.dart';
 import '../../reports/data/report_detail_service.dart';
+import '../data/account_deletion.dart';
+import '../data/profile_service.dart';
+import '../domain/user_profile.dart';
+import 'account_deletion_screen.dart';
 import 'alerts_onboarding_screen.dart';
 import 'profile_setup_screen.dart';
 import 'sign_out_dialog.dart';
@@ -29,6 +33,8 @@ import 'suspended_account_screen.dart';
 /// Garde aussi le dernier profil modifié pour que l'accueil reste à jour.
 class ProfileGate extends StatefulWidget {
   final AuthService authService;
+  final AlertService? alertService;
+  final AlertPushController? pushController;
   final ProfileService profileService;
   final ManualReportService reportService;
   final PositionEstimateService positionEstimateService;
@@ -41,6 +47,8 @@ class ProfileGate extends StatefulWidget {
   const ProfileGate({
     super.key,
     required this.authService,
+    this.alertService,
+    this.pushController,
     required this.profileService,
     required this.reportService,
     required this.positionEstimateService,
@@ -63,13 +71,45 @@ class _ProfileGateState extends State<ProfileGate> with WidgetsBindingObserver {
   Future<void>? _signingOut;
   bool _accessRevoked = false;
   bool _refreshingAccess = false;
+  bool _deletingAccount = false;
+  bool _deletionChecked = false;
+  late final AccountDeletion _accountDeletion;
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
     widget.inactiveUserEvents?.addListener(_markAccessRevoked);
-    _profileFuture = widget.profileService.getCurrentProfile();
+    _accountDeletion = AccountDeletion(
+      profileService: widget.profileService,
+      authService: widget.authService,
+      registration: widget.deviceRegistration,
+      reporter: widget.devicePositionReporter,
+    );
+    _profileFuture = _loadInitialProfile();
+  }
+
+  Future<UserProfile?> _loadInitialProfile() async {
+    final pending = await _accountDeletion.restore();
+    if (!mounted) return null;
+
+    _deletionChecked = true;
+
+    if (pending) {
+      widget.pushController?.setReady(false);
+      setState(() => _deletingAccount = true);
+      return null;
+    }
+
+    return widget.profileService.getCurrentProfile();
+  }
+
+  Future<void> _openAccountDeletion() async {
+    widget.pushController?.setReady(false);
+    Navigator.of(context).popUntil((route) => route.isFirst);
+
+    if (!mounted) return;
+    setState(() => _deletingAccount = true);
   }
 
   @override
@@ -97,8 +137,9 @@ class _ProfileGateState extends State<ProfileGate> with WidgetsBindingObserver {
   }
 
   void _markAccessRevoked() {
-    if (!mounted) return;
+    if (!mounted || _deletingAccount) return;
 
+    widget.pushController?.setReady(false);
     Navigator.of(context).popUntil((route) => route.isFirst);
 
     setState(() {
@@ -107,14 +148,14 @@ class _ProfileGateState extends State<ProfileGate> with WidgetsBindingObserver {
   }
 
   Future<void> _refreshAccessStatus() async {
-    if (_refreshingAccess) return;
+    if (_refreshingAccess || _deletingAccount || !_deletionChecked) return;
 
     _refreshingAccess = true;
 
     try {
       final profile = await widget.profileService.getCurrentProfile();
 
-      if (!mounted) return;
+      if (!mounted || _deletingAccount) return;
 
       setState(() {
         _accessRevoked = profile?.status == 'suspended';
@@ -132,7 +173,7 @@ class _ProfileGateState extends State<ProfileGate> with WidgetsBindingObserver {
     setState(() {
       _profileWasJustCreated = true;
       _latestProfile = null;
-      _profileFuture = widget.profileService.getCurrentProfile();
+      _profileFuture = _loadInitialProfile();
     });
   }
 
@@ -168,14 +209,24 @@ class _ProfileGateState extends State<ProfileGate> with WidgetsBindingObserver {
   /// [resumeDevices] : la déconnexion part de l'accueil, où l'enregistrement
   /// et le GPS tournent et doivent reprendre si l'utilisateur annule.
   Future<void> _signOut({bool resumeDevices = false}) {
-    return _signingOut ??= showDialog<void>(
-      context: context,
-      barrierDismissible: false,
-      builder: (_) => SignOutDialog(
-        onSignOut: _runSignOut,
-        onCancel: () => _cancelSignOut(resumeDevices: resumeDevices),
-      ),
-    ).whenComplete(() => _signingOut = null);
+    widget.pushController?.setReady(false);
+    return _signingOut ??=
+        showDialog<void>(
+          context: context,
+          barrierDismissible: false,
+          builder: (_) => SignOutDialog(
+            onSignOut: _runSignOut,
+            onCancel: () => _cancelSignOut(resumeDevices: resumeDevices),
+          ),
+        ).whenComplete(() {
+          _signingOut = null;
+          if (mounted &&
+              !widget.deviceRegistration.isSigningOut &&
+              !_accessRevoked &&
+              !_deletingAccount) {
+            widget.pushController?.setReady(resumeDevices);
+          }
+        });
   }
 
   /// Échec puis « Annuler » : on reste sur ce compte. Hors de l'accueil, rien
@@ -200,13 +251,37 @@ class _ProfileGateState extends State<ProfileGate> with WidgetsBindingObserver {
     return FutureBuilder<UserProfile?>(
       future: _profileFuture,
       builder: (context, snapshot) {
+        widget.pushController?.setReady(
+          !_deletingAccount &&
+              !_accessRevoked &&
+              snapshot.connectionState == ConnectionState.done &&
+              !snapshot.hasError &&
+              snapshot.data?.status == 'active' &&
+              !_showAlertsOnboarding &&
+              _signingOut == null,
+        );
         late final int step;
         late final Widget screen;
 
-        if (_accessRevoked || snapshot.data?.status == 'suspended') {
+        if (_deletingAccount) {
+          step = 5;
+          screen = AccountDeletionScreen(
+            deletion: _accountDeletion,
+            onCancel: () => setState(() => _deletingAccount = false),
+            onDone: () {
+              if (!mounted) return;
+              widget.pushController?.setReady(false);
+              setState(() {
+                _latestProfile = null;
+              });
+              Navigator.of(context).popUntil((route) => route.isFirst);
+            },
+          );
+        } else if (_accessRevoked || snapshot.data?.status == 'suspended') {
           step = 4;
           screen = SuspendedAccountScreen(
             onSignOut: () => unawaited(_signOut()),
+            onDeleteAccount: () => unawaited(_openAccountDeletion()),
           );
         } else if (snapshot.connectionState == ConnectionState.waiting) {
           if (_profileWasJustCreated) {
@@ -271,6 +346,10 @@ class _ProfileGateState extends State<ProfileGate> with WidgetsBindingObserver {
             child: DevicePositionTracker(
               reporter: widget.devicePositionReporter,
               child: HomeScreen(
+                alertService: widget.alertService,
+                pushController: widget.pushController,
+                profileService: widget.profileService,
+                onDeleteAccount: _openAccountDeletion,
                 profile: _latestProfile ?? profile,
                 onUserInactive: () => unawaited(_refreshAccessStatus()),
                 onSignOut: () => _signOut(resumeDevices: true),

@@ -59,8 +59,9 @@ lib/
 │   └── sensors/       cap et inclinaison du téléphone
 └── features/          une fonctionnalité par dossier
     ├── auth/          connexion, inscription, vérification de l’e-mail
-    ├── profile/       création du profil, préférences, écran d’alertes
-    ├── home/          accueil (la carte + accès au profil)
+    ├── profile/       création du profil, préférences et onboarding alertes
+    ├── home/          accueil et orchestration carte/profil/alertes
+    ├── alerts/        historique, parsing FCM et navigation des alertes
     ├── map/           carte, boussole, mode signalement
     ├── reports/       formulaire et envoi des signalements
     └── camera/        prise de photo, mesures et estimation de position
@@ -87,6 +88,9 @@ AuthGate          (session Firebase)
     ├── AlertsOnboardingScreen   une seule fois, après la création du profil
     └── HomeScreen → MapScreen
                      ├── ProfileScreen (bouton profil)
+                     ├── AlertsScreen (bouton alertes)
+                     │   └── AlertReportScreen
+                     │       └── retour à la MapScreen principale ciblée
                      ├── ReportComposerSheet (bouton +, signalement manuel)
                      └── CameraScreen (bouton appareil photo)
                          └── ReportComposerSheet → ReportPhotoViewer
@@ -246,6 +250,53 @@ envoyé au backend avec l’enregistrement du téléphone (voir NW-116).
 - `ProfileGate` n’a pas de test automatisé : le parcours a été vérifié à la
   main sur iPhone.
 
+## Historique et navigation des alertes — NW-125
+
+L’historique des alertes du compte est chargé depuis
+`GET /api/v1/users/me/alerts` avec pagination.
+
+Lorsqu’une alerte est ouverte depuis l’historique ou depuis une notification
+FCM, le mobile relit le signalement avec `GET /api/v1/reports/{report_id}`.
+Le contenu du push ne constitue donc pas la source de vérité du signalement.
+
+L’action « Voir sur la carte » utilise la `MapScreen` principale existante et
+la centre sur la position courante du signalement relue auprès du backend.
+
+Si un signalement est en cours de création ou de positionnement, la fiche de
+l’alerte peut être consultée mais le recentrage de la carte est refusé jusqu’à
+ce que l’utilisateur termine ou annule le signalement en cours.
+
+Si une notification distincte est sélectionnée alors qu’une autre fiche
+d’alerte est déjà ouverte, la nouvelle fiche est ouverte immédiatement
+au-dessus de la précédente. Le bouton Retour revient à la fiche précédente.
+Les doublons représentant le même événement restent dédupliqués.
+
+Le champ `data` du message FCM utilise uniquement des valeurs chaîne.
+
+Champs obligatoires :
+
+- `alert_id`
+- `report_id`
+- `report_version`
+- `category`
+- `position_dms`
+- `distance_m`
+- `expires_at`
+
+Champs facultatifs :
+
+- `position`
+- `alerted_at`
+
+`position_dms` contient la position en degrés, minutes et secondes.
+`position`, lorsqu’il est fourni, contient un Point GeoJSON sérialisé.
+
+Si `position` est absent, le mobile reconstruit les coordonnées à partir de
+`position_dms`. S’il est présent, il doit être valide et cohérent avec
+`position_dms` ; sinon le payload est rejeté.
+
+Un signalement expiré, retiré ou introuvable n’est pas ouvert sur la carte.
+
 ## Couche des signalements — NW-114
 
 Les signalements actifs sont affichés par-dessus le fond Mapbox, dans une
@@ -320,12 +371,12 @@ demande le moins de tuiles possible : aucune au-delà du zoom 12 (Mapbox
 agrandit celles du zoom 12, qui placent déjà un badge à 2 m près), pas de
 préchargement des zooms inférieurs, et un délai réseau pendant les gestes et
 animations. Une tuile refusée en 429 n'affiche pas le
-bandeau : Mapbox la redemande lui-même quelques secondes plus tard. Un 503
-affiche le bandeau, car le backend répond aussi 503 quand la base ou le
-stockage sont en panne, et Mapbox ne transmet que le code HTTP. Or nginx
-répond 503 par défaut quand l'appareil dépasse 30 connexions : ajouter
-`limit_conn_status 429;` dans `deploy/web/nginx.conf` réserverait 503 aux
-vraies pannes.
+bandeau : Mapbox la redemande lui-même quelques secondes plus tard. nginx
+répond maintenant 429 aussi lorsque la limite de 30 connexions est atteinte.
+Un 503 affiche le bandeau, car il indique une panne du backend ou d'une de ses
+dépendances, et Mapbox ne transmet que le code HTTP. Le backend réutilise ses
+connexions PostgreSQL pour réduire le temps de traitement des tuiles ; les 429
+restent possibles pendant une forte rafale.
 
 ### Position de l'utilisateur
 
