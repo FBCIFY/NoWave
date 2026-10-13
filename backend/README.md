@@ -118,6 +118,7 @@ Les deux clés acceptent aussi les variantes `SCW_ACCESS_KEY_FILE` et
 - `POST /api/v1/users/me` crée le profil de l’utilisateur vérifié.
 - `PATCH /api/v1/users/me` modifie le profil.
 - `DELETE /api/v1/users/me` supprime le profil.
+- `GET /api/v1/users/me/alerts` liste l'historique des alertes reçues.
 
 Les conflits de création de profil renvoient `409` avec un code distinct :
 `user_already_exists` si l'UID Firebase possède déjà un profil,
@@ -219,6 +220,39 @@ rasters, hors buffers et mémoire du processus. Le conteneur API reste limité �
 RSS sous concurrence. Les doublures des tests ne prouvent pas les droits
 Scaleway réels ni la lecture d'une URL expirée : voir la recette du déploiement.
 
+### Alertes de publication
+
+Une publication, manuelle ou photo, écrit ses alertes dans la transaction du
+signalement. Après l'insertion du rapport (et de ses lignes photo), le dépôt
+appelle la sélection des destinataires avec le même curseur, puis écrit une
+ligne `alert_history` par utilisateur et une ligne `notifications` `pending`
+par appareil. Version, catégorie, position et instant (`reports.created_at`)
+sont copiés de la ligne du rapport. Si une écriture échoue, tout est annulé,
+signalement compris. Un rejeu du même `client_report_id` ne crée ni
+signalement ni alerte.
+
+En attendant NW-122, la sélection est une doublure qui renvoie `[]` : la
+publication fonctionne, mais aucune alerte n'est créée. NW-122 remplace la
+valeur par défaut de `select_recipients` dans `PostgreSQLReportRepository`.
+Aucun `NOTIFY` n'est émis : le worker d'envoi (NW-123) interroge les tâches
+`pending` dont `next_attempt_at` est passé, une fois la transaction committée.
+Le rôle runtime reçoit `INSERT` sur `notifications` et `SELECT, INSERT` sur
+`alert_history` (`runtime_permissions.py`, appliqué par la migration de
+déploiement).
+
+`GET /api/v1/users/me/alerts?page=1&limit=20` exige un profil actif et renvoie
+les alertes de l'utilisateur, de la plus récente à la plus ancienne, avec la
+même pagination que les listes admin :
+
+```json
+{"items":[{"id":"…","report_id":"…","report_version":1,"category":"pollution","position":{"type":"Point","coordinates":[5.37,43.29]},"distance_m":1250.5,"alerted_at":"2026-09-13T10:00:03Z"}],"page":1,"limit":20,"total":1,"pages":1}
+```
+
+Chaque entrée est un instantané de la version alertée : elle ne change pas si
+le signalement est modifié, retiré ou expiré, et reste listée même si le push a
+échoué ou a été purgé. `id` est aussi l'`alert_id` du push. Il n'y a pas d'état
+lu/non lu. La suppression du compte supprime son historique.
+
 ### Modération
 
 Les routes `/api/v1/admin` exigent un profil actif de rôle `admin` : sinon
@@ -248,7 +282,7 @@ version du signalement n'est pas incrémentée, aucune nouvelle alerte n'est don
 produite. Une photo masquée conserve son statut d'upload et ne reçoit plus
 d'URL de lecture. Un compte suspendu conserve ses signalements, mais
 `get_current_identity` lui refuse toute route authentifiée : il ne peut plus
-publier ni envoyer de position. Le futur worker d'alertes devra en plus ignorer
+publier ni envoyer de position. Le worker d'envoi (NW-123) devra en plus ignorer
 les comptes suspendus et les signalements retirés au moment de l'envoi.
 
 #### Lectures administrateur
