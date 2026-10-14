@@ -118,6 +118,7 @@ Les deux clés acceptent aussi les variantes `SCW_ACCESS_KEY_FILE` et
 - `POST /api/v1/users/me` crée le profil de l’utilisateur vérifié.
 - `PATCH /api/v1/users/me` modifie le profil.
 - `DELETE /api/v1/users/me` supprime le profil.
+- `GET /api/v1/users/me/alerts` liste l'historique des alertes reçues.
 
 Les conflits de création de profil renvoient `409` avec un code distinct :
 `user_already_exists` si l'UID Firebase possède déjà un profil,
@@ -219,6 +220,38 @@ rasters, hors buffers et mémoire du processus. Le conteneur API reste limité �
 RSS sous concurrence. Les doublures des tests ne prouvent pas les droits
 Scaleway réels ni la lecture d'une URL expirée : voir la recette du déploiement.
 
+### Alertes de publication
+
+Une publication, manuelle ou photo, écrit ses alertes dans la transaction du
+signalement. Après l'insertion du rapport (et de ses lignes photo), le dépôt
+appelle la sélection des destinataires avec le même curseur, puis écrit une
+ligne `alert_history` par utilisateur et une ligne `notifications` `pending`
+par appareil. Version, catégorie, position et instant (`reports.created_at`)
+sont copiés de la ligne du rapport. Si une écriture échoue, tout est annulé,
+signalement compris. Un rejeu du même `client_report_id` ne crée ni
+signalement ni alerte.
+
+La sélection PostGIS NW-122 est branchée par défaut dans
+`PostgreSQLReportRepository`.
+Aucun `NOTIFY` n'est émis : le worker d'envoi (NW-123) interroge les tâches
+`pending` dont `next_attempt_at` est passé, une fois la transaction committée.
+Le rôle runtime reçoit `INSERT` sur `notifications` et `SELECT, INSERT` sur
+`alert_history` (`runtime_permissions.py`, appliqué par la migration de
+déploiement).
+
+`GET /api/v1/users/me/alerts?page=1&limit=20` exige un profil actif et renvoie
+les alertes de l'utilisateur, de la plus récente à la plus ancienne, avec la
+même pagination que les listes admin :
+
+```json
+{"items":[{"id":"…","report_id":"…","report_version":1,"category":"pollution","position":{"type":"Point","coordinates":[5.37,43.29]},"distance_m":1250.5,"alerted_at":"2026-09-13T10:00:03Z"}],"page":1,"limit":20,"total":1,"pages":1}
+```
+
+Chaque entrée est un instantané de la version alertée : elle ne change pas si
+le signalement est modifié, retiré ou expiré, et reste listée même si le push a
+échoué ou a été purgé. `id` est aussi l'`alert_id` du push. Il n'y a pas d'état
+lu/non lu. La suppression du compte supprime son historique.
+
 ### Modération
 
 Les routes `/api/v1/admin` exigent un profil actif de rôle `admin` : sinon
@@ -248,7 +281,7 @@ version du signalement n'est pas incrémentée, aucune nouvelle alerte n'est don
 produite. Une photo masquée conserve son statut d'upload et ne reçoit plus
 d'URL de lecture. Un compte suspendu conserve ses signalements, mais
 `get_current_identity` lui refuse toute route authentifiée : il ne peut plus
-publier ni envoyer de position. Le futur worker d'alertes devra en plus ignorer
+publier ni envoyer de position. Le worker d'envoi (NW-123) devra en plus ignorer
 les comptes suspendus et les signalements retirés au moment de l'envoi.
 
 #### Lectures administrateur
@@ -405,3 +438,81 @@ Avant de démarrer cette version, appliquer les migrations et les droits runtime
 comme d'habitude (`deploy/hostinger/migrate.py` en production). Le rôle runtime
 dispose seulement de SELECT sur `map_cache_revision` ; son invalidation passe
 par le trigger, sans droit d'écriture direct pour l'API.
+
+## NW-122 — Sélection des destinataires
+
+La fonction `select_alert_recipients(cursor, report_id)` utilise le curseur de
+publication. Elle retourne les `AlertRecipient` du contrat NW-118 : utilisateur,
+distance minimale en mètres et identifiants des appareils éligibles distincts.
+Elle ne committe rien et n'ouvre pas de connexion. Les alertes et le signalement
+sont donc toujours enregistrés ou annulés ensemble.
+
+La sélection utilise PostGIS sur les colonnes geography, dans un rayon inclusif
+de 18 520 mètres autour de la position finale du signalement. Elle exclut
+auteur, utilisateurs inactifs ou sans consentement, appareils inactifs, tokens
+vides et positions absentes ou de précision hors de [0, 50] mètres. Aucun filtre
+sur le cap, l'âge de la position ou la dernière activité n'est appliqué. Tous les
+appareils éligibles sont retenus ; la distance utilisateur est leur minimum.
+Un signalement absent, retiré ou expiré ne sélectionne personne.
+
+La sélection par défaut de `PostgreSQLReportRepository` est réelle. Les tests
+peuvent toujours injecter une fonction respectant la même signature.
+
+## NW-123 — Worker FCM
+
+Le worker lit la table `notifications` après commit. Il démarre avec
+`python -m app.workers.notifications`, ou en développement avec
+`docker compose --profile alerts up -d notifications`. Le profil `alerts`
+réutilise la connexion PostgreSQL et le secret Firebase du backend. Le compte
+de service doit pouvoir envoyer des messages au projet Firebase de l'app.
+Aucun service de file supplémentaire ni changement de schéma n'est nécessaire.
+
+Chaque tentative a sa transaction. Le worker verrouille l'utilisateur et le
+signalement en lecture partagée, puis l'appareil et la notification en écriture,
+toujours dans cet ordre. Les lignes occupées sont ignorées avec `SKIP LOCKED`.
+Les contrôles de version, visibilité, expiration, consentement, activité et
+propriété précèdent l'envoi ; les verrous restent détenus pendant cet envoi.
+Une modification concurrente de ces informations attend donc la fin de la
+tentative. Les positions ne sont pas recalculées : les destinataires et la
+distance de l'historique sont ceux de la publication.
+
+Les identifiants sont conservés à chaque tentative : `notifications.id` identifie
+la tâche par appareil et `alert_history.id` fournit l'`alert_id` partagé entre
+les appareils de l'utilisateur. Le payload contient aussi `report_id`,
+`report_version`, `category`, `distance_m`, `position_dms`, `position` (GeoJSON
+encodé), `alerted_at` et `expires_at`. Toutes les valeurs `data` sont des chaînes.
+Le TTL Android utilise la durée restante au départ de l'appel ; APNs reçoit
+l'expiration absolue. Le mobile vérifie également `expires_at`.
+
+Le transport HTTP v1 ne réessaie pas un envoi de lui-même. Ses délais sont de
+3 secondes pour la connexion et 10 secondes pour les opérations de lecture et
+d'écriture ; le renouvellement OAuth se fait avant de prendre les verrous SQL.
+Le SDK Firebase sert à charger les identifiants, pas à envoyer les messages :
+ses retries automatiques ne correspondent pas au calendrier du ticket.
+
+Après un échec temporaire, les délais sont de 1, 5, 15, 30 puis 60 minutes,
+et restent à 60 minutes pour les tentatives suivantes. `Retry-After`, en secondes
+ou en date HTTP, peut allonger ce délai. Si la prochaine tentative atteint
+l'expiration, la tâche passe en `failed` sans nouvel envoi. Une erreur permanente
+passe également en `failed`. Seul `UNREGISTERED` efface le token ; une erreur
+de payload ou de configuration ne désactive pas l'appareil. Les pannes réseau,
+quotas et erreurs serveur sont temporaires. Les problèmes d'identifiants sont
+temporisés et journalisés sans secret ; un refus OAuth 401 force leur
+renouvellement avant la prochaine tentative.
+
+`sent` signifie que FCM a accepté le message, pas que le téléphone l'a reçu.
+Un arrêt entre l'acceptation FCM et le commit peut provoquer un nouvel envoi,
+avec les mêmes identifiants. La déduplication mobile et les identifiants de
+notification Android/APNs limitent les doublons ; une livraison exactement une
+fois n'est pas garantie. `attempt_count` compte les résultats de tentatives
+enregistrés en base, pas les appels perdus lors d'un crash.
+
+Les tâches expirées sont clôturées même si les identifiants FCM sont indisponibles.
+La purge s'exécute au démarrage puis chaque heure, par lots de 500. Elle supprime
+les tâches `sent` et `failed` dont `updated_at` (instant de transition terminale)
+date de plus de sept jours. Elle ne touche pas `alert_history`. Les lots pleins
+sont suivis d'un autre passage après une seconde. SIGTERM/SIGINT arrêtent le
+worker après l'opération courante, sans commencer une nouvelle tentative.
+
+Les tests et limites de la validation locale sont décrits dans
+[`docs/NW-122-NW-123.md`](../docs/NW-122-NW-123.md).

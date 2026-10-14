@@ -274,17 +274,6 @@ def test_device_routes_work_with_runtime_role(
                 (role_name,),
             ).fetchone()[0]
 
-            assert not admin.execute(
-                """
-                SELECT has_table_privilege(
-                    %s,
-                    'nowave.notifications',
-                    'INSERT'
-                )
-                """,
-                (role_name,),
-            ).fetchone()[0]
-
         finally:
             app.dependency_overrides.clear()
 

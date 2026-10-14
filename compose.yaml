@@ -72,6 +72,21 @@ services:
       backend:
         condition: service_started
 
+  notifications:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    profiles: [alerts]
+    environment: *backend-environment
+    secrets:
+      - firebase_service_account
+    command: [python, -m, app.workers.notifications]
+    restart: unless-stopped
+    stop_grace_period: 30s
+    depends_on:
+      backend:
+        condition: service_started
+
 volumes:
   nowave_database:
     name: nowave-database
