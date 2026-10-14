@@ -1,5 +1,6 @@
 from concurrent.futures import ThreadPoolExecutor
 from datetime import UTC, datetime, timedelta
+from pathlib import Path
 from threading import Event
 from uuid import uuid4
 from types import SimpleNamespace
@@ -600,6 +601,7 @@ SendNotifications(repository, Sender()).run_once()
             "TEST_NOTIFICATION_ID": str(job["notification"]),
         },
         capture_output=True,
+        cwd=Path(__file__).resolve().parents[2],
         timeout=10,
     )
     assert child.returncode == -9
@@ -638,6 +640,7 @@ def test_worker_handles_missing_credentials_and_sigterm(jobs, tmp_path):
         },
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
+        cwd=Path(__file__).resolve().parents[2],
     )
     try:
         readable, _, _ = select.select([child.stderr], [], [], 5)
