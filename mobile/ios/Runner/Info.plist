@@ -36,7 +36,7 @@
 	<key>NSCameraUsageDescription</key>
 	<string>NoWave utilise la caméra pour photographier un objet ou un événement signalé en mer.</string>
 	<key>NSLocationWhenInUseUsageDescription</key>
-	<string>NoWave utilise votre position pour vous situer sur la carte maritime et afficher vos coordonnées.</string>
+	<string>NoWave utilise votre position pour vous situer sur la carte maritime, afficher vos coordonnées et, si vous activez les alertes, vous prévenir des dangers signalés autour de vous, même app en arrière-plan.</string>
 	<key>UIApplicationSceneManifest</key>
 	<dict>
 		<key>UIApplicationSupportsMultipleScenes</key>
@@ -63,6 +63,7 @@
 	<key>UIBackgroundModes</key>
 	<array>
 		<string>fetch</string>
+		<string>location</string>
 		<string>remote-notification</string>
 	</array>
 	<key>UILaunchStoryboardName</key>

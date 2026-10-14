@@ -67,17 +67,22 @@ class _FakeDeviceRegistration implements DeviceRegistration {
   Future<void> unregister() => throw UnimplementedError();
 }
 
-/// Faux GPS : [canWatch] simule l'autorisation, [positions] le flux.
+/// Faux GPS : [canWatch] simule l'autorisation, [positions] le flux et
+/// [backgroundRequests] le mode demandé à chaque abonnement.
 class _FakeLocationService extends LocationService {
   bool canWatch = true;
   final StreamController<Position> positions =
       StreamController<Position>.broadcast();
+  final List<bool> backgroundRequests = [];
 
   @override
   Future<bool> canWatchPosition() async => canWatch;
 
   @override
-  Stream<Position> watchPosition() => positions.stream;
+  Stream<Position> watchDevicePosition({required bool background}) {
+    backgroundRequests.add(background);
+    return positions.stream;
+  }
 }
 
 Position _position({
@@ -194,6 +199,17 @@ void main() {
     },
   );
 
+  test('start pendant le suivi écoute le GPS sans attendre le tick', () async {
+    location.canWatch = false;
+    await reporter.start();
+    location.canWatch = true;
+    await reporter.start();
+    await emit(_position());
+
+    expect(location.positions.hasListener, isTrue);
+    expect(devices.positions, hasLength(1));
+  });
+
   test('404 : réenregistre le téléphone puis renvoie la mesure', () async {
     devices.errors.add(_error(404));
     await reporter.start();
@@ -245,6 +261,64 @@ void main() {
 
     expect(location.positions.hasListener, isFalse);
     expect(devices.positions, isEmpty);
+  });
+
+  test('app masquée sans arrière-plan : le suivi s’arrête', () async {
+    await reporter.start();
+    await reporter.appHidden();
+    await emit(_position());
+    await reporter.tick();
+
+    expect(location.backgroundRequests, [false]);
+    expect(location.positions.hasListener, isFalse);
+    expect(devices.positions, isEmpty);
+  });
+
+  test('app masquée avec arrière-plan : le suivi continue', () async {
+    await reporter.setBackground(true);
+    await reporter.start();
+    await emit(_position(second: 0));
+    await reporter.appHidden();
+    await emit(_position(second: 10));
+    await reporter.tick();
+
+    expect(location.backgroundRequests, [true]);
+    expect(location.positions.hasListener, isTrue);
+    expect(devices.positions.map((p) => p.measuredAt.second), [0, 10]);
+  });
+
+  test('app masquée : se réabonne au GPS au retour dans l’app', () async {
+    await reporter.setBackground(true);
+    await reporter.start();
+    await reporter.appHidden();
+    location.positions.addError(StateError('GPS coupé'));
+    await pumpEventQueue();
+
+    await reporter.tick();
+    expect(location.positions.hasListener, isFalse);
+
+    await reporter.start();
+    await reporter.tick();
+    expect(location.positions.hasListener, isTrue);
+    expect(location.backgroundRequests, [true, true]);
+  });
+
+  test('changer de mode relance l’abonnement au GPS en cours', () async {
+    await reporter.start();
+    await reporter.setBackground(true);
+    await reporter.setBackground(false);
+    await emit(_position());
+
+    expect(location.backgroundRequests, [false, true, false]);
+    expect(location.positions.hasListener, isTrue);
+    expect(devices.positions, hasLength(1));
+  });
+
+  test('changer de mode à l’arrêt n’abonne pas au GPS', () async {
+    await reporter.setBackground(true);
+
+    expect(location.backgroundRequests, isEmpty);
+    expect(location.positions.hasListener, isFalse);
   });
 
   test('une reprise pendant la déconnexion ne relance pas le GPS', () async {

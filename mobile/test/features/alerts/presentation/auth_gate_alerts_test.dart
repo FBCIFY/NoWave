@@ -12,6 +12,7 @@ import 'package:blueway/features/auth/data/auth_service.dart';
 import 'package:blueway/features/auth/presentation/auth_gate.dart';
 import 'package:blueway/features/auth/presentation/login_screen.dart';
 import 'package:blueway/features/camera/data/position_estimate_service.dart';
+import 'package:blueway/features/home/presentation/home_screen.dart';
 import 'package:blueway/features/map/data/report_tiles.dart';
 import 'package:blueway/features/map/presentation/map_screen.dart';
 import 'package:blueway/features/profile/data/profile_service.dart';
@@ -54,14 +55,27 @@ class _Registration extends Fake implements DeviceRegistration {
 }
 
 class _Reporter extends Fake implements DevicePositionReporter {
+  int stops = 0;
   @override
   Future<void> start() async {}
   @override
-  Future<void> stop() async {}
+  Future<void> stop() async => stops++;
+  @override
+  Future<void> setBackground(bool enabled) async {}
+  @override
+  Future<void> appHidden() async {}
 }
 
 void main() {
-  Future<({FakeAlertPushSource source, _Auth auth, List<String> calls})> mount(
+  Future<
+    ({
+      FakeAlertPushSource source,
+      _Auth auth,
+      List<String> calls,
+      _Reporter reporter,
+    })
+  >
+  mount(
     WidgetTester tester, {
     bool initial = false,
     bool suspended = false,
@@ -74,6 +88,7 @@ void main() {
     if (initial) source.initial = pushMessage();
     final controller = AlertPushController(source: source, now: () => testNow);
     final calls = <String>[];
+    final reporter = _Reporter();
     final client = MockClient((request) async {
       calls.add(request.url.path);
       if (request.url.path.endsWith('/alerts')) {
@@ -149,7 +164,7 @@ void main() {
             getIdToken: auth.getIdToken,
           ),
           deviceRegistration: _Registration(),
-          devicePositionReporter: _Reporter(),
+          devicePositionReporter: reporter,
           alertService: AlertService(
             apiService: api,
             getIdToken: auth.getIdToken,
@@ -159,7 +174,7 @@ void main() {
       ),
     );
     await tester.pump();
-    return (source: source, auth: auth, calls: calls);
+    return (source: source, auth: auth, calls: calls, reporter: reporter);
   }
 
   testWidgets(
@@ -266,6 +281,38 @@ void main() {
     ]);
     await tester.pumpWidget(const SizedBox.shrink());
   });
+
+  testWidgets(
+    'retour dans l’app : l’accueil reste affiché et le suivi GPS continue',
+    (tester) async {
+      final f = await mount(tester);
+      f.auth.changes.add(_User('user-a'));
+      await tester.pumpAndSettle();
+
+      final home = tester.state(find.byType(HomeScreen));
+      f.calls.clear();
+
+      for (final state in [
+        AppLifecycleState.inactive,
+        AppLifecycleState.hidden,
+        AppLifecycleState.paused,
+        AppLifecycleState.hidden,
+        AppLifecycleState.inactive,
+        AppLifecycleState.resumed,
+      ]) {
+        tester.binding.handleAppLifecycleStateChanged(state);
+      }
+      await tester.pumpAndSettle();
+
+      // Le profil est relu au retour, sans recréer l'accueil : l'ancien suivi
+      // GPS arrêterait sinon le nouveau en disparaissant.
+      expect(f.calls, contains('/api/v1/users/me'));
+      expect(tester.state(find.byType(HomeScreen)), same(home));
+      expect(f.reporter.stops, 0);
+
+      await tester.pumpWidget(const SizedBox.shrink());
+    },
+  );
 
   testWidgets(
     'Voir sur la carte reste bloqué pendant un signalement en cours',

@@ -518,18 +518,29 @@ compte qui l'enregistre.
 
 ### Position GPS
 
-Tant que l'application est visible, `DevicePositionReporter` envoie la
-dernière mesure GPS à `PUT /api/v1/devices/current/position`, avec l'en-tête
-`X-Installation-ID`, au plus une fois toutes les 60 s. La première mesure part
-dès qu'elle arrive. Le serveur ne garde que la dernière position, sans
-historique.
+Tant que l'application est visible, et aussi en arrière-plan si les alertes
+sont activées, `DevicePositionReporter` envoie la dernière mesure GPS à
+`PUT /api/v1/devices/current/position`, avec l'en-tête `X-Installation-ID`, au
+plus une fois toutes les 60 s. La première mesure part dès qu'elle arrive. Le
+serveur ne garde que la dernière position, sans historique.
 
 - une mesure dont la précision dépasse 50 m n'est pas envoyée ;
 - en dessous de 1 m/s (environ 2 nœuds), le cap est envoyé à `null` ;
 - la position vient du GPS : déplacer la carte ne la change pas ;
 - l'application ne demande pas la localisation pour ce suivi : sans
-  autorisation, rien n'est envoyé ;
-- en arrière-plan, le suivi s'arrête ; il reprend au retour ;
+  autorisation, rien n'est envoyé. Le suivi revérifie à chaque retour dans
+  l'app, dont la fermeture de la fenêtre d'autorisation ;
+- en arrière-plan, le suivi s'arrête si les alertes sont désactivées
+  (`notifications_enabled`) ; il reprend au retour ;
+- alertes activées, il continue en arrière-plan (NW-159) : bandeau bleu sur
+  iOS, notification « NoWave suit votre position » sur Android. Il suffit de
+  l'autorisation « Lorsque l'app est active » : le suivi démarre app ouverte et
+  ne s'arrête pas en passant en arrière-plan. Si le flux GPS se coupe en
+  arrière-plan, il ne reprend qu'au retour dans l'app ;
+- carte, caméra et suivi partagent un seul flux GPS (`LocationService`) :
+  geolocator n'en garde qu'un par app, avec les réglages du premier abonné.
+  Le suivi relance ce flux avec ses réglages d'arrière-plan ; la carte ignore
+  les positions tant que l'app est cachée ;
 - sans réseau, la mesure est gardée pour l'envoi suivant ;
 - un 404 (appareil inactif) relance l'enregistrement, puis l'envoi ;
 - un 409 (mesure plus ancienne que celle du serveur) abandonne la mesure.
@@ -581,5 +592,8 @@ deux comptes réels et après relancement sont à consigner dans NW-128.
   prochain retour dans l'application, ou au prochain envoi de position (404) ;
 - sur le simulateur iOS, il n'y a pas de token APNs : le téléphone est
   enregistré avec un token `null` ;
-- aucune position n'est envoyée en arrière-plan ;
+- le suivi en arrière-plan s'arrête si l'utilisateur ferme l'app depuis le
+  sélecteur d'apps, ou si le système la ferme (mémoire) : il ne reprend qu'à la
+  réouverture. GPS haute précision et réveil du processeur (Android) : la
+  batterie baisse plus vite ;
 - tests sur iPhone et Android en cours.
