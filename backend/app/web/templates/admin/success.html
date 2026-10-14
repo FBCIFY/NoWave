@@ -1,0 +1,6 @@
+{% extends 'admin/base.html' %}
+{% block title %}Action effectuée{% endblock %}
+{% block content %}
+<h1>Action effectuée</h1><div role="status" class="success"><p>{{ action.label }} : le service a confirmé la réussite.</p><p>Cible : <span class="identifier">{{ target_id }}</span></p></div>
+<div class="actions"><a href="{{ request.url_for('admin_reports' if action.collection == 'reports' else 'admin_users').path }}">Retour à la liste</a><a href="{{ request.url_for('admin_audit').path }}">Consulter l’audit</a></div>
+{% endblock %}

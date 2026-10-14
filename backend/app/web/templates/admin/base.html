@@ -5,61 +5,274 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="robots" content="noindex, nofollow">
   <title>{% block title %}Administration{% endblock %} · NoWave</title>
+
   {# Inline only: the site CSP allows inline styles but no inline script. #}
   <style>
     :root { color-scheme: light dark; }
+
     body {
       margin: 0;
       font-family: system-ui, -apple-system, sans-serif;
       background: #f4f6f8;
       color: #1b2430;
     }
+
+    a { color: #0b5c8e; }
+
     header {
       display: flex;
       align-items: center;
-      justify-content: space-between;
-      padding: 12px 16px;
+      gap: 20px;
+      flex-wrap: wrap;
+      padding: 12px 20px;
       background: #0b3d5c;
       color: #fff;
     }
-    main { max-width: 960px; margin: 0 auto; padding: 24px 16px; }
+
+    header strong { white-space: nowrap; }
+
+    header nav {
+      display: flex;
+      gap: 14px;
+      flex: 1;
+      flex-wrap: wrap;
+    }
+
+    header a {
+      color: #fff;
+      text-decoration: none;
+    }
+
+    header a:hover,
+    header a:focus {
+      text-decoration: underline;
+    }
+
+    header form {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin: 0;
+    }
+
+    header button { margin: 0; }
+
+    main {
+      max-width: 1180px;
+      margin: 0 auto;
+      padding: 24px 16px 48px;
+    }
+
     .card {
-      max-width: 400px;
-      margin: 48px auto;
+      margin: 24px 0;
       padding: 24px;
       background: #fff;
       border-radius: 8px;
       box-shadow: 0 1px 4px rgba(0, 0, 0, 0.12);
     }
-    label { display: block; margin: 12px 0 4px; font-weight: 600; }
-    input[type=email], input[type=password] {
+
+    .login-card {
+      max-width: 400px;
+      margin: 48px auto;
+    }
+
+    label {
+      display: block;
+      margin: 12px 0 4px;
+      font-weight: 600;
+    }
+
+    input[type=email],
+    input[type=password],
+    textarea {
       box-sizing: border-box;
       width: 100%;
       padding: 8px;
       font: inherit;
     }
+
+    textarea { resize: vertical; }
+
     button {
       margin-top: 16px;
       padding: 8px 16px;
       font: inherit;
       cursor: pointer;
     }
-    header button { margin: 0; }
+
+    .actions {
+      display: flex;
+      gap: 12px;
+      flex-wrap: wrap;
+      align-items: center;
+    }
+
+    .actions a {
+      display: inline-block;
+      padding: 7px 10px;
+    }
+
+    .confirmation {
+      display: flex;
+      align-items: flex-start;
+      gap: 8px;
+      font-weight: 400;
+    }
+
+    .confirmation input {
+      margin-top: 4px;
+    }
+
+    .table-scroll {
+      overflow-x: auto;
+      margin: 20px 0;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      background: #fff;
+    }
+
+    caption {
+      text-align: left;
+      font-weight: 700;
+      margin-bottom: 8px;
+    }
+
+    th,
+    td {
+      padding: 10px 12px;
+      border-bottom: 1px solid #d8dee5;
+      text-align: left;
+      vertical-align: top;
+    }
+
+    th { white-space: nowrap; }
+
+    td small {
+      display: block;
+      margin-top: 4px;
+      opacity: 0.7;
+    }
+
+    dl {
+      display: grid;
+      grid-template-columns: minmax(150px, 220px) 1fr;
+      gap: 8px 20px;
+    }
+
+    dt { font-weight: 700; }
+    dd { margin: 0; }
+
+    .identifier {
+      font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+      overflow-wrap: anywhere;
+    }
+
+    .preserve {
+      white-space: pre-wrap;
+      overflow-wrap: anywhere;
+    }
+
+    .pagination {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      flex-wrap: wrap;
+      margin: 24px 0;
+    }
+
     .error {
       padding: 8px 12px;
       background: #fdecea;
       color: #8a1c13;
       border-radius: 4px;
     }
+
+    .success {
+      padding: 8px 12px;
+      background: #e7f5ec;
+      color: #175c2d;
+      border-radius: 4px;
+    }
+
+    .empty { font-style: italic; }
+
+    @media (max-width: 700px) {
+      header {
+        align-items: flex-start;
+        flex-direction: column;
+      }
+
+      header form {
+        width: 100%;
+        justify-content: space-between;
+      }
+
+      dl {
+        grid-template-columns: 1fr;
+      }
+
+      dd {
+        margin-bottom: 8px;
+      }
+    }
+
     @media (prefers-color-scheme: dark) {
-      body { background: #12171d; color: #e6e9ed; }
-      .card { background: #1c232b; }
-      .error { background: #4a1c18; color: #ffd9d4; }
+      body {
+        background: #12171d;
+        color: #e6e9ed;
+      }
+
+      a { color: #8dccf2; }
+
+      .card,
+      table {
+        background: #1c232b;
+      }
+
+      th,
+      td {
+        border-bottom-color: #39434e;
+      }
+
+      .error {
+        background: #4a1c18;
+        color: #ffd9d4;
+      }
+
+      .success {
+        background: #173d25;
+        color: #d9ffe5;
+      }
     }
   </style>
 </head>
+
 <body>
-  {% block header %}{% endblock %}
+  {% block header %}
+    {% if admin %}
+    <header>
+      <strong>NoWave · Administration</strong>
+
+      <nav aria-label="Navigation administration">
+        <a href="/admin">Accueil</a>
+        <a href="/admin/reports">Signalements</a>
+        <a href="/admin/users">Utilisateurs</a>
+        <a href="/admin/audit">Audit</a>
+      </nav>
+
+      <form method="post" action="/admin/logout">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+        <span>{{ admin.username }}</span>
+        <button type="submit">Se déconnecter</button>
+      </form>
+    </header>
+    {% endif %}
+  {% endblock %}
+
   <main>
     {% block content %}{% endblock %}
   </main>
