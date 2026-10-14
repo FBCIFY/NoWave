@@ -48,6 +48,7 @@ void main() {
       listen(location.watchPosition(), map);
 
       expect(geolocator.started.single, isNot(isA<AppleSettings>()));
+      expect(geolocator.started.single!.distanceFilter, 0);
 
       listen(location.watchDevicePosition(background: true));
 
@@ -56,11 +57,30 @@ void main() {
       final settings = geolocator.started.last as AppleSettings;
       expect(settings.allowBackgroundLocationUpdates, isTrue);
       expect(settings.pauseLocationUpdatesAutomatically, isFalse);
+      expect(
+        settings.distanceFilter,
+        LocationService.backgroundDistanceFilterM,
+      );
 
       geolocator.emit(testPosition());
       await pumpEventQueue();
 
       expect(map, hasLength(1));
+    },
+  );
+
+  test(
+    'sur Android, le suivi en arrière-plan filtre aussi la distance',
+    () async {
+      debugDefaultTargetPlatformOverride = TargetPlatform.android;
+      listen(location.watchDevicePosition(background: true));
+
+      final settings = geolocator.started.single as AndroidSettings;
+      expect(settings.foregroundNotificationConfig, isNotNull);
+      expect(
+        settings.distanceFilter,
+        LocationService.backgroundDistanceFilterM,
+      );
     },
   );
 
@@ -78,6 +98,7 @@ void main() {
 
       expect(geolocator.started, hasLength(2));
       expect(geolocator.started.last, isNot(isA<AppleSettings>()));
+      expect(geolocator.started.last!.distanceFilter, 0);
     },
   );
 }

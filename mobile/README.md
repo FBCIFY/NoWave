@@ -549,6 +549,11 @@ serveur ne garde que la dernière position, sans historique.
   l'autorisation « Lorsque l'app est active » : le suivi démarre app ouverte et
   ne s'arrête pas en passant en arrière-plan. Si le flux GPS se coupe en
   arrière-plan, il ne reprend qu'au retour dans l'app ;
+- alertes activées, le GPS ne transmet une mesure qu'après 50 m de
+  déplacement (`distanceFilter`, `LocationService.backgroundDistanceFilterM`) :
+  un téléphone immobile n'envoie plus sa position, le backend garde la
+  dernière. Le flux étant partagé, ce filtre vaut aussi app ouverte : le halo
+  de la carte et la position de la caméra suivent par pas de 50 m ;
 - carte, caméra et suivi partagent un seul flux GPS (`LocationService`) :
   geolocator n'en garde qu'un par app, avec les réglages du premier abonné.
   Le suivi relance ce flux avec ses réglages d'arrière-plan ; la carte ignore

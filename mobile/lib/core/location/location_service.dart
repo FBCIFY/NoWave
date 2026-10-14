@@ -10,6 +10,11 @@ class LocationService {
   /// commun.
   static final _positions = _SharedPositionStream();
 
+  /// Distance minimale entre deux mesures avec les réglages d'arrière-plan :
+  /// un téléphone immobile ne réveille plus l'app à chaque mesure et
+  /// n'envoie plus sa position toutes les minutes.
+  static const backgroundDistanceFilterM = 50;
+
   /// Récupère la position une fois, en demandant l'autorisation si besoin.
   ///
   /// Lève une [StateError] avec un message prêt à afficher si la localisation
@@ -72,8 +77,10 @@ class LocationService {
     return _positions.stream;
   }
 
-  // Sans distanceFilter : chaque mesure, même immobile. Le halo de la carte
-  // rétrécit quand la précision s'améliore.
+  // Sans arrière-plan, pas de distanceFilter : chaque mesure, même immobile,
+  // et le halo de la carte rétrécit quand la précision s'améliore. Avec les
+  // alertes, le flux garde les réglages d'arrière-plan app ouverte aussi :
+  // une mesure tous les [backgroundDistanceFilterM] m.
   static LocationSettings _settings({required bool background}) {
     if (!background) {
       return const LocationSettings(accuracy: LocationAccuracy.high);
@@ -81,6 +88,7 @@ class LocationService {
     return switch (defaultTargetPlatform) {
       TargetPlatform.iOS => AppleSettings(
         accuracy: LocationAccuracy.high,
+        distanceFilter: backgroundDistanceFilterM,
         activityType: ActivityType.otherNavigation,
         // Sinon iOS coupe le GPS d'un bateau au mouillage et ne le relance
         // pas tant que l'app reste en arrière-plan.
@@ -90,6 +98,7 @@ class LocationService {
       ),
       TargetPlatform.android => AndroidSettings(
         accuracy: LocationAccuracy.high,
+        distanceFilter: backgroundDistanceFilterM,
         // Service de premier plan : Android garde l'app et le GPS actifs,
         // écran éteint compris (wake lock).
         foregroundNotificationConfig: const ForegroundNotificationConfig(
