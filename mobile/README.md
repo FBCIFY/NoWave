@@ -344,6 +344,9 @@ elle redonne d'abord le token, puis rebranche le réseau : Mapbox redemande les
 tuiles périmées sans tomber en 401. Si le token tarde plus de 5 s (réseau
 faible), le réseau est rebranché sans l'attendre. Pendant la coupure, les
 erreurs de chargement ne sont pas signalées : ni bandeau, ni écran d'erreur.
+Les appels à `OfflineSwitch` passent un par un, et un appel refusé est retenté
+après 5 s : un retour rapide dans l'app ne laisse jamais Mapbox coupé. Si la
+coupure est refusée, les erreurs de tuiles restent signalées.
 
 ### État de la couche — NW-152
 

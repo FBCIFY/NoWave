@@ -22,8 +22,18 @@ class _FakeMap {
   /// Token qui n'arrive qu'à l'appel de [finishAuthorize].
   Completer<void>? blockedAuthorize;
 
-  /// Réseau de Mapbox coupé (false) ou rebranché (true), dans l'ordre.
+  /// Appels au réseau de Mapbox, coupure (false) ou rebranchement (true),
+  /// dans l'ordre, échecs compris.
   final network = <bool>[];
+
+  /// Réseau de Mapbox après le dernier appel réussi.
+  bool mapboxConnected = true;
+
+  /// Appel au réseau qui ne se termine qu'à l'appel de [finishNetwork].
+  Completer<void>? blockedNetwork;
+
+  /// Nombre de prochains appels au réseau refusés par Mapbox.
+  int failNetwork = 0;
 
   late final controller = ReportLayerController(
     install: () async {
@@ -43,7 +53,16 @@ class _FakeMap {
       final blocked = blockedAuthorize;
       if (blocked != null) await blocked.future;
     },
-    connectNetwork: (connected) async => network.add(connected),
+    connectNetwork: (connected) async {
+      network.add(connected);
+      final blocked = blockedNetwork;
+      if (blocked != null) await blocked.future;
+      if (failNetwork > 0) {
+        failNetwork--;
+        throw Exception('OfflineSwitch indisponible');
+      }
+      mapboxConnected = connected;
+    },
   );
 
   ReportLayerStatus get status => controller.status.value;
@@ -51,6 +70,12 @@ class _FakeMap {
   void finishInstall() {
     final blocked = blockedInstall;
     blockedInstall = null;
+    blocked?.complete();
+  }
+
+  void finishNetwork() {
+    final blocked = blockedNetwork;
+    blockedNetwork = null;
     blocked?.complete();
   }
 
@@ -405,6 +430,57 @@ void main() {
 
       expect(map.status, ReportLayerStatus.installed);
       expect(map.authorizations, 0);
+    });
+
+    testLayer('coupure lente puis retour : rebranché après la coupure', (
+      tester,
+    ) async {
+      await install(tester);
+      map.blockedNetwork = Completer();
+      map.controller.pause();
+      map.controller.resume();
+      await tester.pump();
+      expect(map.network, [false], reason: 'un appel à la fois');
+      expect(map.controller.networkCut, isTrue);
+
+      map.finishNetwork();
+      await tester.pump();
+      expect(map.network, [false, true]);
+      expect(map.mapboxConnected, isTrue);
+      expect(map.controller.networkCut, isFalse);
+    });
+
+    testLayer('coupure refusée : les erreurs de tuiles comptent', (
+      tester,
+    ) async {
+      await install(tester);
+      map.failNetwork = 1;
+      map.controller.pause();
+      await tester.pump();
+      expect(map.controller.networkCut, isFalse);
+
+      map.controller.tileError(_tileError503, tile: '12/1/1');
+      expect(map.status, ReportLayerStatus.unavailable);
+
+      await tester.pump(ReportLayerController.networkRetryDelay);
+      expect(map.network, [false, false]);
+      expect(map.mapboxConnected, isFalse);
+      expect(map.controller.networkCut, isTrue);
+    });
+
+    testLayer('rebranchement refusé : retenté', (tester) async {
+      await install(tester);
+      map.controller.pause();
+      map.failNetwork = 1;
+      map.controller.resume();
+      await tester.pump();
+      expect(map.network, [false, true]);
+      expect(map.controller.networkCut, isTrue, reason: 'toujours coupé');
+
+      await tester.pump(ReportLayerController.networkRetryDelay);
+      expect(map.network, [false, true, true]);
+      expect(map.mapboxConnected, isTrue);
+      expect(map.controller.networkCut, isFalse);
     });
 
     testWidgets('carte fermée en arrière-plan : réseau rebranché', (

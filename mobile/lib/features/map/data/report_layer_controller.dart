@@ -32,7 +32,9 @@ enum ReportLayerStatus {
 /// - Seul un 401 (token expiré) fait redonner le token.
 /// - En arrière-plan, Mapbox est coupé du réseau : les alertes gardent l'app
 ///   en vie (NW-159), et il redemanderait sinon les tuiles visibles toutes
-///   les 15 s. Au retour, le token est redonné avant de le rebrancher.
+///   les 15 s. Au retour, le token est redonné avant de le rebrancher. Un
+///   seul appel à Mapbox à la fois, et un appel en échec est retenté : le
+///   réseau finit toujours dans le dernier état demandé.
 class ReportLayerController {
   ReportLayerController({
     required this._install,
@@ -72,6 +74,11 @@ class ReportLayerController {
   @visibleForTesting
   static const reconnectTimeout = Duration(seconds: 5);
 
+  /// Attente avant de retenter une coupure ou un rebranchement refusé par
+  /// Mapbox.
+  @visibleForTesting
+  static const networkRetryDelay = Duration(seconds: 5);
+
   final ValueNotifier<ReportLayerStatus> _status = ValueNotifier(
     ReportLayerStatus.pending,
   );
@@ -88,11 +95,22 @@ class ReportLayerController {
   Timer? _retryTimer;
   bool _paused = false;
   bool _disposed = false;
-  bool _networkCut = false;
 
-  /// Mapbox coupé du réseau par [pause] : ses requêtes en cours échouent
-  /// sans que le réseau ou le serveur soient en panne.
-  bool get networkCut => _networkCut;
+  /// Réseau de Mapbox demandé : coupé par [pause], rebranché ensuite.
+  bool _networkWanted = true;
+
+  /// Dernier état confirmé par Mapbox, connecté au démarrage.
+  bool _networkConnected = true;
+
+  /// Appel à Mapbox en cours : les suivants attendent qu'il se termine.
+  bool _changingNetwork = false;
+
+  Timer? _networkRetry;
+
+  /// Mapbox coupé du réseau par [pause], ou en cours de coupure ou de
+  /// rebranchement : ses requêtes échouent sans que le réseau ou le serveur
+  /// soient en panne. Faux si Mapbox a refusé la coupure.
+  bool get networkCut => !_networkConnected || _changingNetwork;
 
   /// Token envoyé il y a moins de [authorizeInterval].
   Timer? _authorizeCooldown;
@@ -166,7 +184,7 @@ class ReportLayerController {
   /// Une tuile des signalements a échoué ; [message] est celui de Mapbox,
   /// [tile] identifie la tuile (`z/x/y`) quand Mapbox la donne.
   void tileError(String message, {String? tile}) {
-    if (_networkCut || isRateLimited(message)) return;
+    if (networkCut || isRateLimited(message)) return;
     if (tile != null) _recentlyFailedTiles.add(tile);
     _recentTileError?.cancel();
     _recentTileError = Timer(recoveryQuietPeriod, _endRecentTileError);
@@ -198,6 +216,7 @@ class ReportLayerController {
   void dispose() {
     _disposed = true;
     // Carte fermée en arrière-plan : la prochaine doit retrouver le réseau.
+    // Un rebranchement refusé reste retenté après la fermeture.
     _setNetwork(connected: true);
     _retryTimer?.cancel();
     _authorizeCooldown?.cancel();
@@ -275,13 +294,34 @@ class ReportLayerController {
   }
 
   void _setNetwork({required bool connected}) {
-    if (_networkCut == !connected) return;
-    _networkCut = !connected;
-    unawaited(
-      _connectNetwork(connected).catchError((Object error) {
-        debugPrint('Réseau de Mapbox non modifié : $error');
-      }),
-    );
+    _networkWanted = connected;
+    unawaited(_applyNetwork());
+  }
+
+  /// Applique à Mapbox le dernier état demandé, un appel à la fois : un
+  /// retour dans l'app pendant la coupure rebranche le réseau juste après
+  /// elle. Un appel en échec est retenté après [networkRetryDelay].
+  Future<void> _applyNetwork() async {
+    if (_changingNetwork) return;
+    _networkRetry?.cancel();
+    _networkRetry = null;
+    if (_networkConnected == _networkWanted) return;
+    _changingNetwork = true;
+    try {
+      while (_networkConnected != _networkWanted) {
+        final connected = _networkWanted;
+        await _connectNetwork(connected);
+        _networkConnected = connected;
+      }
+    } catch (error) {
+      debugPrint('Réseau de Mapbox non modifié : $error');
+      _networkRetry = Timer(networkRetryDelay, () {
+        _networkRetry = null;
+        unawaited(_applyNetwork());
+      });
+    } finally {
+      _changingNetwork = false;
+    }
   }
 
   void _endRecentTileError() {
