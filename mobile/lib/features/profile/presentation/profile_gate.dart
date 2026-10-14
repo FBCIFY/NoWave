@@ -283,7 +283,11 @@ class _ProfileGateState extends State<ProfileGate> with WidgetsBindingObserver {
             onSignOut: () => unawaited(_signOut()),
             onDeleteAccount: () => unawaited(_openAccountDeletion()),
           );
-        } else if (snapshot.connectionState == ConnectionState.waiting) {
+        } else if (snapshot.connectionState == ConnectionState.waiting &&
+            // Rafraîchi au retour dans l'app : le profil affiché reste à
+            // l'écran. Recréer l'accueil relancerait la carte, et l'ancien
+            // suivi GPS arrêterait le nouveau en disparaissant.
+            !snapshot.hasData) {
           if (_profileWasJustCreated) {
             step = 1;
             screen = ProfileSetupScreen(
@@ -345,6 +349,7 @@ class _ProfileGateState extends State<ProfileGate> with WidgetsBindingObserver {
             registration: widget.deviceRegistration,
             child: DevicePositionTracker(
               reporter: widget.devicePositionReporter,
+              runInBackground: (_latestProfile ?? profile).notificationsEnabled,
               child: HomeScreen(
                 alertService: widget.alertService,
                 pushController: widget.pushController,

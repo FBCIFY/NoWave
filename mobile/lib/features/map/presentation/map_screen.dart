@@ -139,6 +139,9 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
   /// tuiles quand l'app n'est plus visible.
   AppLifecycleListener? _lifecycleListener;
 
+  /// App en arrière-plan, entre [_pauseMapUpdates] et [_resumeMapUpdates].
+  bool _hidden = false;
+
   /// Renouvellement périodique du token des tuiles ; arrêté en arrière-plan.
   Timer? _reportTilesTokenTimer;
 
@@ -405,6 +408,7 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
 
   /// L'app n'est plus visible : ni battement ni renouvellement du token.
   void _pauseMapUpdates() {
+    _hidden = true;
     widget.reportTiles?.stopPulse();
     _reportTilesTokenTimer?.cancel();
     _reportLayer.pause();
@@ -414,6 +418,7 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
   /// avant que Mapbox ne redemande les tuiles ; la couche manquante est
   /// réinstallée.
   void _resumeMapUpdates() {
+    _hidden = false;
     _syncHeatmapPulse();
     _reportLayer.resume();
     _startReportTilesTokenRenewal();
@@ -806,39 +811,33 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
         setState(followUser);
       }
 
-      _positionSubscription ??=
-          geo.Geolocator.getPositionStream(
-            locationSettings: const geo.LocationSettings(
-              accuracy: geo.LocationAccuracy.high,
-              // Chaque position, même immobile : le halo doit rétrécir
-              // quand la précision s'améliore.
-              distanceFilter: 0,
-            ),
-          ).listen(
-            (position) {
-              if (!mounted) return;
-              _showAccuracyHalo(position);
-              final previous = _position;
-              _position = position;
-              // L'écran ne se redessine que si les coordonnées affichées
-              // changent, soit environ tous les 30 m.
-              if (_locationError == null &&
-                  previous != null &&
-                  _sameDisplayedCoordinates(previous, position)) {
-                return;
-              }
-              setState(() => _locationError = null);
-            },
-            onError: (Object _) {
-              if (!mounted) return;
-              setState(() {
-                _locationError = 'Position indisponible pour le moment.';
-              });
-            },
-            onDone: () {
-              _positionSubscription = null;
-            },
-          );
+      // Flux partagé avec le suivi des alertes (NW-159), qui peut continuer
+      // en arrière-plan : la carte ignore alors les positions.
+      _positionSubscription ??= _locationService.watchPosition().listen(
+        (position) {
+          if (!mounted || _hidden) return;
+          _showAccuracyHalo(position);
+          final previous = _position;
+          _position = position;
+          // L'écran ne se redessine que si les coordonnées affichées
+          // changent, soit environ tous les 30 m.
+          if (_locationError == null &&
+              previous != null &&
+              _sameDisplayedCoordinates(previous, position)) {
+            return;
+          }
+          setState(() => _locationError = null);
+        },
+        onError: (Object _) {
+          if (!mounted) return;
+          setState(() {
+            _locationError = 'Position indisponible pour le moment.';
+          });
+        },
+        onDone: () {
+          _positionSubscription = null;
+        },
+      );
     } on StateError catch (error) {
       if (!mounted) return;
 
