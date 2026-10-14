@@ -30,11 +30,22 @@ enum ReportLayerStatus {
 ///   tuile. Toute autre erreur, 503 compris, rend la couche indisponible
 ///   jusqu'à ce qu'une tuile se charge sans erreur.
 /// - Seul un 401 (token expiré) fait redonner le token.
+/// - En arrière-plan, Mapbox est coupé du réseau : les alertes gardent l'app
+///   en vie (NW-159), et il redemanderait sinon les tuiles visibles toutes
+///   les 15 s. Au retour, le token est redonné avant de le rebrancher.
 class ReportLayerController {
-  ReportLayerController({required this._install, required this._authorize});
+  ReportLayerController({
+    required this._install,
+    required this._authorize,
+    required this._connectNetwork,
+  });
 
   final Future<void> Function() _install;
   final Future<void> Function() _authorize;
+
+  /// Coupe (false) ou rebranche (true) le réseau de Mapbox, fond de carte
+  /// compris.
+  final Future<void> Function(bool connected) _connectNetwork;
 
   /// Attentes avant chaque nouvelle tentative d'installation ; la dernière
   /// se répète.
@@ -56,6 +67,11 @@ class ReportLayerController {
   @visibleForTesting
   static const recoveryQuietPeriod = Duration(seconds: 2);
 
+  /// Attente maximale du token au retour dans l'app avant de rebrancher
+  /// Mapbox : avec un réseau faible, le fond de carte ne reste pas coupé.
+  @visibleForTesting
+  static const reconnectTimeout = Duration(seconds: 5);
+
   final ValueNotifier<ReportLayerStatus> _status = ValueNotifier(
     ReportLayerStatus.pending,
   );
@@ -72,6 +88,11 @@ class ReportLayerController {
   Timer? _retryTimer;
   bool _paused = false;
   bool _disposed = false;
+  bool _networkCut = false;
+
+  /// Mapbox coupé du réseau par [pause] : ses requêtes en cours échouent
+  /// sans que le réseau ou le serveur soient en panne.
+  bool get networkCut => _networkCut;
 
   /// Token envoyé il y a moins de [authorizeInterval].
   Timer? _authorizeCooldown;
@@ -103,21 +124,33 @@ class ReportLayerController {
     unawaited(_runInstall());
   }
 
-  /// L'app n'est plus visible : plus de nouvelle tentative.
+  /// L'app n'est plus visible : plus de nouvelle tentative, et plus de
+  /// requête de Mapbox.
   void pause() {
     _paused = true;
     _retryTimer?.cancel();
     _retryTimer = null;
+    _setNetwork(connected: false);
   }
 
-  /// Retour dans l'app : réinstalle si besoin, sinon redonne le token.
+  /// Retour dans l'app : réinstalle si besoin, sinon redonne le token, puis
+  /// rebranche le réseau. Mapbox redemande alors aussitôt les tuiles
+  /// périmées : avec le token d'abord, elles ne tombent pas en 401 après un
+  /// long arrière-plan. Au-delà de [reconnectTimeout], on rebranche sans lui.
   void resume() {
     _paused = false;
     if (_status.value == ReportLayerStatus.notInstalled) {
+      // L'installation redonne elle-même le token avant d'ajouter la source.
+      _setNetwork(connected: true);
       _retryNow();
-    } else {
-      _sendToken();
+      return;
     }
+    unawaited(
+      _sendToken().timeout(reconnectTimeout, onTimeout: () {}).whenComplete(() {
+        // Repartie en arrière-plan entre-temps : le réseau reste coupé.
+        if (!_paused && !_disposed) _setNetwork(connected: true);
+      }),
+    );
   }
 
   /// Renouvellement périodique du token, qui sert aussi de tentative
@@ -126,14 +159,14 @@ class ReportLayerController {
     if (_status.value == ReportLayerStatus.notInstalled) {
       _retryNow();
     } else {
-      _sendToken();
+      unawaited(_sendToken());
     }
   }
 
   /// Une tuile des signalements a échoué ; [message] est celui de Mapbox,
   /// [tile] identifie la tuile (`z/x/y`) quand Mapbox la donne.
   void tileError(String message, {String? tile}) {
-    if (isRateLimited(message)) return;
+    if (_networkCut || isRateLimited(message)) return;
     if (tile != null) _recentlyFailedTiles.add(tile);
     _recentTileError?.cancel();
     _recentTileError = Timer(recoveryQuietPeriod, _endRecentTileError);
@@ -143,7 +176,9 @@ class ReportLayerController {
     }
     // Un 401 vient d'un token expiré : on le redonne, sans insister. Un
     // nouveau token ne change rien à un 403 ou à une panne.
-    if (isUnauthorized(message) && _authorizeCooldown == null) _sendToken();
+    if (isUnauthorized(message) && _authorizeCooldown == null) {
+      unawaited(_sendToken());
+    }
   }
 
   /// Une tuile des signalements s'est chargée ; [tile] comme pour
@@ -162,6 +197,8 @@ class ReportLayerController {
 
   void dispose() {
     _disposed = true;
+    // Carte fermée en arrière-plan : la prochaine doit retrouver le réseau.
+    _setNetwork(connected: true);
     _retryTimer?.cancel();
     _authorizeCooldown?.cancel();
     _recentTileError?.cancel();
@@ -230,11 +267,19 @@ class ReportLayerController {
     });
   }
 
-  void _sendToken() {
+  Future<void> _sendToken() {
     _startAuthorizeCooldown();
+    return _authorize().catchError((Object error) {
+      debugPrint('Token des signalements non renouvelé : $error');
+    });
+  }
+
+  void _setNetwork({required bool connected}) {
+    if (_networkCut == !connected) return;
+    _networkCut = !connected;
     unawaited(
-      _authorize().catchError((Object error) {
-        debugPrint('Token des signalements non renouvelé : $error');
+      _connectNetwork(connected).catchError((Object error) {
+        debugPrint('Réseau de Mapbox non modifié : $error');
       }),
     );
   }

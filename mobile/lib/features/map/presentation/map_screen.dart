@@ -135,8 +135,8 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
   /// retour au premier plan.
   double? _cameraZoom;
 
-  /// Coupe le battement de la heatmap et le renouvellement du token des
-  /// tuiles quand l'app n'est plus visible.
+  /// Coupe le battement de la heatmap, le renouvellement du token des
+  /// tuiles et le réseau de Mapbox quand l'app n'est plus visible.
   AppLifecycleListener? _lifecycleListener;
 
   /// App en arrière-plan, entre [_pauseMapUpdates] et [_resumeMapUpdates].
@@ -149,6 +149,7 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
   late final ReportLayerController _reportLayer = ReportLayerController(
     install: _installReportTiles,
     authorize: _authorizeReportTiles,
+    connectNetwork: OfflineSwitch.shared.setMapboxStackConnected,
   );
 
   /// Halo de précision du GPS, sous le curseur et sous les signalements :
@@ -345,6 +346,8 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
       _reportLayer.tileError(event.message, tile: _tileKey(event.tileId));
       return;
     }
+    // Réseau coupé en arrière-plan : la carte n'est pas en panne.
+    if (_reportLayer.networkCut) return;
 
     setState(() {
       _mapError = 'Impossible de charger la carte. Vérifiez votre connexion et réessayez.';
@@ -406,7 +409,8 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
     await reportTiles.authorize(map);
   }
 
-  /// L'app n'est plus visible : ni battement ni renouvellement du token.
+  /// L'app n'est plus visible : ni battement, ni renouvellement du token,
+  /// ni réseau pour Mapbox.
   void _pauseMapUpdates() {
     _hidden = true;
     widget.reportTiles?.stopPulse();
@@ -415,8 +419,8 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
   }
 
   /// Retour dans l'app : le token a pu expirer entre-temps, on le renouvelle
-  /// avant que Mapbox ne redemande les tuiles ; la couche manquante est
-  /// réinstallée.
+  /// avant de rebrancher Mapbox, qui redemande alors les tuiles ; la couche
+  /// manquante est réinstallée.
   void _resumeMapUpdates() {
     _hidden = false;
     _syncHeatmapPulse();
