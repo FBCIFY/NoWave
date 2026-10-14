@@ -269,7 +269,8 @@ class ReportTiles {
     // Le backend sert les tuiles avec `max-age=15` : Mapbox redemande
     // lui-même celles qui sont visibles une fois expirées, et les remplace
     // sans effacer les badges. Les signalements publiés, expirés ou retirés
-    // apparaissent ou disparaissent donc en 15 s environ.
+    // apparaissent ou disparaissent donc en 15 s environ. En arrière-plan,
+    // la carte coupe le réseau de Mapbox pour l'en empêcher.
     //
     // Le proxy donne aux tuiles un budget séparé de 30 requêtes/s (rafale
     // de 50) et limite toujours chaque IP à 30 connexions. On garde le

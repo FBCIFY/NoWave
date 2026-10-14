@@ -336,6 +336,18 @@ les badges : un signalement publié, retiré ou expiré apparaît ou disparaît 
 en continu, l'application redonne le token Firebase à Mapbox toutes les
 4 minutes et au retour au premier plan, pour qu'il n'expire jamais.
 
+En arrière-plan, les alertes gardent l'application en vie (NW-159). Mapbox
+continuerait alors de redemander les tuiles visibles toutes les 15 s : jusqu'à
+76 requêtes par minute mesurées sur iPhone. La carte coupe donc le réseau de
+Mapbox (`OfflineSwitch`) quand l'application passe en arrière-plan. Au retour,
+elle redonne d'abord le token, puis rebranche le réseau : Mapbox redemande les
+tuiles périmées sans tomber en 401. Si le token tarde plus de 5 s (réseau
+faible), le réseau est rebranché sans l'attendre. Pendant la coupure, les
+erreurs de chargement ne sont pas signalées : ni bandeau, ni écran d'erreur.
+Les appels à `OfflineSwitch` passent un par un, et un appel refusé est retenté
+après 5 s : un retour rapide dans l'app ne laisse jamais Mapbox coupé. Si la
+coupure est refusée, les erreurs de tuiles restent signalées.
+
 ### État de la couche — NW-152
 
 `ReportLayerController` (`lib/features/map/data/report_layer_controller.dart`)
