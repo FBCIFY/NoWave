@@ -68,7 +68,12 @@ class _Reporter extends Fake implements DevicePositionReporter {
 
 void main() {
   setUp(() => SharedPreferences.setMockInitialValues({}));
-  Future<({FakeAlertPushSource source, _Auth auth, List<String> calls})> mount(
+  Future<({
+    FakeAlertPushSource source,
+    _Auth auth,
+    List<String> calls,
+    _Reporter reporter,
+  })> mount(
     WidgetTester tester, {
     bool initial = false,
     bool suspended = false,
