@@ -10,9 +10,9 @@ import 'device_registration.dart';
 import 'device_service.dart';
 
 /// Envoie la position GPS du téléphone au backend, au plus une fois par
-/// [interval], tant que l'app est ouverte, et aussi en arrière-plan après
-/// [setBackground]. Le backend s'en sert pour choisir qui reçoit les alertes
-/// à proximité.
+/// [interval] et seulement après [minDistanceM] de déplacement, tant que
+/// l'app est ouverte, et aussi en arrière-plan après [setBackground]. Le
+/// backend s'en sert pour choisir qui reçoit les alertes à proximité.
 ///
 /// Ne demande jamais l'autorisation de localisation : tant qu'elle manque,
 /// chaque tick revérifie, sans rien afficher.
@@ -21,6 +21,13 @@ class DevicePositionReporter {
 
   /// En dessous (≈ 2 nœuds), le cap GPS n'a pas de sens : on envoie `null`.
   static const double minSpeedForHeadingMs = 1;
+
+  /// En dessous de cette distance avec la dernière position envoyée, une
+  /// mesure ne part pas, sauf si elle est au moins deux fois plus précise :
+  /// un téléphone immobile n'envoie plus sa position toutes les [interval].
+  /// Le flux GPS, lui, n'est pas filtré : carte et caméra reçoivent chaque
+  /// mesure.
+  static const double minDistanceM = 50;
 
   final DeviceService _devices;
   final DeviceRegistration _registration;
@@ -40,6 +47,10 @@ class DevicePositionReporter {
 
   /// Dernière mesure exploitable pas encore envoyée.
   DevicePosition? _pending;
+
+  /// Dernière mesure acceptée par le backend, oubliée à [stop] : la première
+  /// mesure après [start] part toujours.
+  DevicePosition? _lastSent;
 
   /// Vrai jusqu'à la première mesure après [start], envoyée sans attendre.
   bool _sendNextNow = false;
@@ -79,6 +90,7 @@ class DevicePositionReporter {
     _subscription = null;
     await subscription?.cancel();
     await _sending;
+    _lastSent = null;
   }
 
   /// Garde ou non le suivi quand l'app passe en arrière-plan. Un abonnement
@@ -166,7 +178,23 @@ class DevicePositionReporter {
     }
     final measurement = _pending!;
     _pending = null;
+    if (!_isWorthSending(measurement)) return Future.value();
     return _sending = _send(measurement).whenComplete(() => _sending = null);
+  }
+
+  /// Vrai si [measurement] est à au moins [minDistanceM] de la dernière
+  /// position envoyée, ou au moins deux fois plus précise qu'elle.
+  bool _isWorthSending(DevicePosition measurement) {
+    final last = _lastSent;
+    if (last == null) return true;
+    final distance = Geolocator.distanceBetween(
+      last.latitude,
+      last.longitude,
+      measurement.latitude,
+      measurement.longitude,
+    );
+    return distance >= minDistanceM ||
+        measurement.accuracyM <= last.accuracyM / 2;
   }
 
   Future<void> _send(DevicePosition measurement) async {
@@ -185,6 +213,7 @@ class DevicePositionReporter {
         if (!_running || _registration.isSigningOut) return;
         await _devices.sendPosition(measurement);
       }
+      _lastSent = measurement;
     } on ApiException catch (error) {
       // 409 (mesure plus ancienne que celle du backend) ou autre refus :
       // renvoyer la même mesure ne changerait rien.
