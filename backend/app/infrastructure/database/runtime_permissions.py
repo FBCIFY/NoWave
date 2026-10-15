@@ -38,10 +38,18 @@ def grant_runtime_table_permissions(connection, role_name="nowave_runtime"):
         ).format(role)
     )
 
+    # Publications write notifications and alert_history (NW-118).
     connection.execute(
         sql.SQL(
-            "GRANT SELECT, UPDATE, DELETE "
+            "GRANT SELECT, INSERT, UPDATE, DELETE "
             "ON nowave.notifications TO {}"
+        ).format(role)
+    )
+
+    connection.execute(
+        sql.SQL(
+            "GRANT SELECT, INSERT "
+            "ON nowave.alert_history TO {}"
         ).format(role)
     )
 

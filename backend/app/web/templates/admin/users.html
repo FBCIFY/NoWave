@@ -1,0 +1,12 @@
+{% extends 'admin/base.html' %}
+{% block title %}Utilisateurs{% endblock %}
+{% block content %}
+<h1>Utilisateurs</h1><p>Consultez les comptes et gérez leur suspension.</p>
+{% if result.items %}<div class="table-scroll"><table><caption>Comptes enregistrés</caption>
+<thead><tr><th scope="col">Utilisateur</th><th scope="col">Adresse e-mail</th><th scope="col">Rôle</th><th scope="col">Statut</th><th scope="col">Actions</th></tr></thead>
+<tbody>{% for item in result.items %}<tr><td>{{ item.username }}<small>{{ item.id }}</small></td><td>{{ item.email or 'Non renseignée' }}</td><td>{{ item.role.value }}</td><td>{{ item.status.value }}</td><td class="actions">
+<a href="{{ request.url_for('admin_action', collection='users', target_id=item.id, action_name='suspend').path }}">Suspendre</a>
+<a href="{{ request.url_for('admin_action', collection='users', target_id=item.id, action_name='reactivate').path }}">Réactiver</a>
+</td></tr>{% endfor %}</tbody></table></div>{% else %}<p class="empty">Aucun utilisateur sur cette page.</p>{% endif %}
+{% include 'admin/pagination.html' %}
+{% endblock %}

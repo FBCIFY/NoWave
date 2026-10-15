@@ -5,6 +5,8 @@ import 'package:flutter_test/flutter_test.dart';
 
 const _tileError503 = 'Failed to load tile: HTTP status code 503';
 const _tileError429 = 'Failed to load tile: HTTP status code 429';
+const _tileError401 = 'Failed to load tile: HTTP status code 401';
+const _tileErrorOffline = 'Failed to load tile: connection error';
 
 /// Carte simulée : chaque installation réussit ou échoue selon [failInstall].
 class _FakeMap {
@@ -16,6 +18,22 @@ class _FakeMap {
 
   /// Installation qui ne se termine qu'à l'appel de [finishInstall].
   Completer<void>? blockedInstall;
+
+  /// Token qui n'arrive qu'à l'appel de [finishAuthorize].
+  Completer<void>? blockedAuthorize;
+
+  /// Appels au réseau de Mapbox, coupure (false) ou rebranchement (true),
+  /// dans l'ordre, échecs compris.
+  final network = <bool>[];
+
+  /// Réseau de Mapbox après le dernier appel réussi.
+  bool mapboxConnected = true;
+
+  /// Appel au réseau qui ne se termine qu'à l'appel de [finishNetwork].
+  Completer<void>? blockedNetwork;
+
+  /// Nombre de prochains appels au réseau refusés par Mapbox.
+  int failNetwork = 0;
 
   late final controller = ReportLayerController(
     install: () async {
@@ -30,7 +48,21 @@ class _FakeMap {
         _running--;
       }
     },
-    authorize: () async => authorizations++,
+    authorize: () async {
+      authorizations++;
+      final blocked = blockedAuthorize;
+      if (blocked != null) await blocked.future;
+    },
+    connectNetwork: (connected) async {
+      network.add(connected);
+      final blocked = blockedNetwork;
+      if (blocked != null) await blocked.future;
+      if (failNetwork > 0) {
+        failNetwork--;
+        throw Exception('OfflineSwitch indisponible');
+      }
+      mapboxConnected = connected;
+    },
   );
 
   ReportLayerStatus get status => controller.status.value;
@@ -39,6 +71,23 @@ class _FakeMap {
     final blocked = blockedInstall;
     blockedInstall = null;
     blocked?.complete();
+  }
+
+  void finishNetwork() {
+    final blocked = blockedNetwork;
+    blockedNetwork = null;
+    blocked?.complete();
+  }
+
+  /// Termine le token en attente, en échec si [error] est donné.
+  void finishAuthorize({Object? error}) {
+    final blocked = blockedAuthorize;
+    blockedAuthorize = null;
+    if (error == null) {
+      blocked?.complete();
+    } else {
+      blocked?.completeError(error);
+    }
   }
 }
 
@@ -53,6 +102,12 @@ void main() {
       await body(tester);
       map.controller.dispose();
     });
+  }
+
+  Future<void> install(WidgetTester tester) async {
+    map.controller.styleLoaded();
+    await tester.pump();
+    expect(map.status, ReportLayerStatus.installed);
   }
 
   group('installation', () {
@@ -116,6 +171,7 @@ void main() {
 
       expect(map.installs, 2);
       expect(map.status, ReportLayerStatus.installed);
+      expect(map.network, [false, true]);
     });
 
     testLayer('le renouvellement du token retente l’installation', (
@@ -176,12 +232,6 @@ void main() {
   });
 
   group('tuiles', () {
-    Future<void> install(WidgetTester tester) async {
-      map.controller.styleLoaded();
-      await tester.pump();
-      expect(map.status, ReportLayerStatus.installed);
-    }
-
     testLayer('429 ignorée : Mapbox redemande la tuile', (tester) async {
       await install(tester);
       await tester.pump(ReportLayerController.authorizeInterval);
@@ -267,13 +317,13 @@ void main() {
       await tester.pump(ReportLayerController.authorizeInterval);
 
       for (var i = 0; i < 20; i++) {
-        map.controller.tileError('Failed to load tile: HTTP status code 401');
+        map.controller.tileError(_tileError401);
         await tester.pump(const Duration(seconds: 1));
       }
       expect(map.authorizations, 1);
 
       await tester.pump(const Duration(seconds: 10));
-      map.controller.tileError('Failed to load tile: HTTP status code 401');
+      map.controller.tileError(_tileError401);
       expect(map.authorizations, 2);
     });
 
@@ -286,7 +336,7 @@ void main() {
       map.controller.tileError(_tileError429);
       expect(map.authorizations, 0);
 
-      map.controller.tileError('Failed to load tile: HTTP status code 401');
+      map.controller.tileError(_tileError401);
       expect(map.authorizations, 1);
     });
 
@@ -300,6 +350,149 @@ void main() {
       await tester.pump();
 
       expect(map.status, ReportLayerStatus.installed);
+    });
+  });
+
+  group('arrière-plan', () {
+    testLayer('réseau coupé, puis rebranché après le token au retour', (
+      tester,
+    ) async {
+      await install(tester);
+      map.controller.pause();
+      expect(map.network, [false]);
+      expect(map.controller.networkCut, isTrue);
+
+      map.blockedAuthorize = Completer();
+      map.controller.resume();
+      await tester.pump();
+      expect(map.authorizations, 1);
+      expect(map.network, [false], reason: 'aucune tuile avant le token');
+
+      map.finishAuthorize();
+      await tester.pump();
+      expect(map.network, [false, true]);
+      expect(map.controller.networkCut, isFalse);
+    });
+
+    testLayer('token en échec : réseau rebranché quand même', (tester) async {
+      await install(tester);
+      map.controller.pause();
+
+      map.blockedAuthorize = Completer();
+      map.controller.resume();
+      map.finishAuthorize(error: Exception('hors ligne'));
+      await tester.pump();
+
+      expect(map.network, [false, true]);
+    });
+
+    testLayer('token trop lent : réseau rebranché sans l\'attendre', (
+      tester,
+    ) async {
+      await install(tester);
+      map.controller.pause();
+
+      map.blockedAuthorize = Completer();
+      map.controller.resume();
+      await tester.pump(
+        ReportLayerController.reconnectTimeout - const Duration(seconds: 1),
+      );
+      expect(map.network, [false]);
+
+      await tester.pump(const Duration(seconds: 1));
+      expect(map.network, [false, true]);
+      expect(map.controller.networkCut, isFalse);
+    });
+
+    testLayer('repartie en arrière-plan avant le token : réseau coupé', (
+      tester,
+    ) async {
+      await install(tester);
+      map.controller.pause();
+
+      map.blockedAuthorize = Completer();
+      map.controller.resume();
+      map.controller.pause();
+      map.finishAuthorize();
+      await tester.pump();
+
+      expect(map.network, [false]);
+      expect(map.controller.networkCut, isTrue);
+    });
+
+    testLayer('erreurs dues à la coupure ignorées', (tester) async {
+      await install(tester);
+      await tester.pump(ReportLayerController.authorizeInterval);
+      map.controller.pause();
+
+      map.controller.tileError(_tileErrorOffline, tile: '12/1/1');
+      map.controller.tileError(_tileError401, tile: '12/1/2');
+
+      expect(map.status, ReportLayerStatus.installed);
+      expect(map.authorizations, 0);
+    });
+
+    testLayer('coupure lente puis retour : rebranché après la coupure', (
+      tester,
+    ) async {
+      await install(tester);
+      map.blockedNetwork = Completer();
+      map.controller.pause();
+      map.controller.resume();
+      await tester.pump();
+      expect(map.network, [false], reason: 'un appel à la fois');
+      expect(map.controller.networkCut, isTrue);
+
+      map.finishNetwork();
+      await tester.pump();
+      expect(map.network, [false, true]);
+      expect(map.mapboxConnected, isTrue);
+      expect(map.controller.networkCut, isFalse);
+    });
+
+    testLayer('coupure refusée : les erreurs de tuiles comptent', (
+      tester,
+    ) async {
+      await install(tester);
+      map.failNetwork = 1;
+      map.controller.pause();
+      await tester.pump();
+      expect(map.controller.networkCut, isFalse);
+
+      map.controller.tileError(_tileError503, tile: '12/1/1');
+      expect(map.status, ReportLayerStatus.unavailable);
+
+      await tester.pump(ReportLayerController.networkRetryDelay);
+      expect(map.network, [false, false]);
+      expect(map.mapboxConnected, isFalse);
+      expect(map.controller.networkCut, isTrue);
+    });
+
+    testLayer('rebranchement refusé : retenté', (tester) async {
+      await install(tester);
+      map.controller.pause();
+      map.failNetwork = 1;
+      map.controller.resume();
+      await tester.pump();
+      expect(map.network, [false, true]);
+      expect(map.controller.networkCut, isTrue, reason: 'toujours coupé');
+
+      await tester.pump(ReportLayerController.networkRetryDelay);
+      expect(map.network, [false, true, true]);
+      expect(map.mapboxConnected, isTrue);
+      expect(map.controller.networkCut, isFalse);
+    });
+
+    testWidgets('carte fermée en arrière-plan : réseau rebranché', (
+      tester,
+    ) async {
+      final closed = _FakeMap();
+      closed.controller.pause();
+
+      closed.controller.dispose();
+      await tester.pump();
+
+      expect(closed.network, [false, true]);
     });
   });
 

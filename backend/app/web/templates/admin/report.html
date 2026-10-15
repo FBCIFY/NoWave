@@ -1,0 +1,102 @@
+{% extends 'admin/base.html' %}
+{% block title %}Détail du signalement{% endblock %}
+{% block content %}
+<a href="{{ request.url_for('admin_reports').path }}">← Signalements</a>
+
+<h1>Détail du signalement</h1>
+<p class="identifier">{{ item.id }}</p>
+
+<section class="card">
+  <h2>Informations</h2>
+  <dl>
+    <dt>Catégorie</dt>
+    <dd>{{ item.category.value }}</dd>
+
+    <dt>Statut</dt>
+    <dd>{{ item.status.value }}</dd>
+
+    <dt>Version</dt>
+    <dd>{{ item.version }}</dd>
+
+    <dt>Description</dt>
+    <dd class="preserve">{{ item.description or 'Aucune description' }}</dd>
+
+    <dt>Mode de positionnement</dt>
+    <dd>{{ item.positioning_mode.value }}</dd>
+
+    <dt>Observé le</dt>
+    <dd>{{ item.observed_at }}</dd>
+
+    <dt>Expiration</dt>
+    <dd>{{ item.expires_at }}</dd>
+
+    <dt>Position</dt>
+    <dd>{{ item.longitude }}, {{ item.latitude }}</dd>
+
+    <dt>Retiré le</dt>
+    <dd>{{ item.removed_at or 'Non retiré' }}</dd>
+
+    <dt>Photo</dt>
+    <dd>
+      {% if item.photo_status %}
+        {{ item.photo_status.value }}
+        {% if item.photo_hidden_at %}
+          — masquée le {{ item.photo_hidden_at }}
+        {% endif %}
+      {% else %}
+        Aucune photo
+      {% endif %}
+    </dd>
+  </dl>
+</section>
+
+<section class="card">
+  <h2>Auteur</h2>
+  <dl>
+    <dt>Utilisateur</dt>
+    <dd>{{ item.author_username or 'Utilisateur supprimé' }}</dd>
+
+    <dt>E-mail</dt>
+    <dd>{{ item.author_email or 'Non disponible' }}</dd>
+
+    <dt>Statut</dt>
+    <dd>{{ item.author_status.value if item.author_status else 'Compte supprimé' }}</dd>
+  </dl>
+</section>
+
+<section class="card">
+  <h2>Bateau</h2>
+  {% if item.boat_name or item.boat_type %}
+    <dl>
+      <dt>Nom</dt>
+      <dd>{{ item.boat_name or 'Non renseigné' }}</dd>
+
+      <dt>Type</dt>
+      <dd>{{ item.boat_type.value if item.boat_type else 'Non renseigné' }}</dd>
+    </dl>
+  {% else %}
+    <p>Aucun bateau renseigné.</p>
+  {% endif %}
+</section>
+
+<section class="card">
+  <h2>Modération</h2>
+  <p>Chaque action nécessite un motif et une confirmation.</p>
+
+  <div class="actions">
+    <a href="{{ request.url_for('admin_action', collection='reports', target_id=item.id, action_name='remove').path }}">
+      Retirer le signalement
+    </a>
+
+    <a href="{{ request.url_for('admin_action', collection='reports', target_id=item.id, action_name='restore').path }}">
+      Restaurer le signalement
+    </a>
+
+    {% if item.photo_status and item.photo_status.value == 'uploaded' and not item.photo_hidden_at %}
+    <a href="{{ request.url_for('admin_action', collection='reports', target_id=item.id, action_name='hide-photo').path }}">
+      Masquer la photo
+    </a>
+    {% endif %}
+  </div>
+</section>
+{% endblock %}

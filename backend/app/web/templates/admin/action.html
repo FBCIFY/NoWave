@@ -1,0 +1,14 @@
+{% extends 'admin/base.html' %}
+{% block title %}{{ action.label }}{% endblock %}
+{% block content %}
+<h1>{{ action.label }}</h1><p>Cible : <strong class="identifier">{{ target_id }}</strong></p>
+{% if error %}<div role="alert" class="error"><p>{{ error }}</p>{% if uncertain %}<p>Le résultat de l’action n’est pas confirmé. Consultez l’état actuel et l’audit avant de recommencer.</p>{% endif %}</div>{% endif %}
+<form method="post" class="card">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+  <label for="reason">Motif obligatoire</label>
+  <p id="reason-help">Expliquez précisément la raison de cette action.</p>
+  <textarea id="reason" name="reason" rows="5" required aria-describedby="reason-help">{{ reason }}</textarea>
+  <label class="confirmation"><input type="checkbox" name="confirmed" value="yes" required> Je confirme « {{ action.label }} » pour l’identifiant ci-dessus.</label>
+  <div class="actions"><button type="submit">Confirmer l’action</button><a href="{{ request.url_for('admin_reports' if action.collection == 'reports' else 'admin_users').path }}">Annuler et revenir à la liste</a></div>
+</form>
+{% endblock %}

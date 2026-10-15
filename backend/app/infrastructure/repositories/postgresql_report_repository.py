@@ -1,6 +1,10 @@
-from uuid import UUID
+from collections.abc import Callable
+from uuid import UUID, uuid4
+
+from psycopg import Cursor
 
 from app.application.ports.report_repository import ReportRepository
+from app.domain.alert import AlertRecipient
 from app.domain.positioning import (
     PositionEstimateResult,
     PositioningMeasurements,
@@ -14,9 +18,24 @@ from app.domain.report import (
 from app.domain.report_photo import UploadStatus
 from app.domain.report_positioning import StoredReportPositioning
 from app.infrastructure.database.connection import database_connection
+from app.infrastructure.repositories.postgresql_alert_recipient_repository import (
+    select_alert_recipients,
+)
+
+
+AlertRecipientSelector = Callable[
+    [Cursor, UUID],
+    list[AlertRecipient],
+]
 
 
 class PostgreSQLReportRepository(ReportRepository):
+    def __init__(
+        self,
+        select_recipients: AlertRecipientSelector = select_alert_recipients,
+    ):
+        self.select_recipients = select_recipients
+
     def get_by_client_report_id(
         self,
         author_id: UUID,
@@ -65,6 +84,14 @@ class PostgreSQLReportRepository(ReportRepository):
         self,
         report: Report,
     ) -> Report | None:
+        """
+        Crée le rapport manuel et ses alertes
+        dans une seule transaction.
+
+        Si le même client_report_id existe déjà,
+        aucune nouvelle ligne n'est créée.
+        """
+
         with database_connection() as connection:
             with connection.cursor() as cursor:
                 row = self._insert_report(
@@ -73,8 +100,13 @@ class PostgreSQLReportRepository(ReportRepository):
                     ignore_client_conflict=True,
                 )
 
-        if row is None:
-            return None
+                if row is None:
+                    return None
+
+                self._insert_alerts(
+                    cursor=cursor,
+                    report_id=report.id,
+                )
 
         return self._row_to_report(row)
 
@@ -85,8 +117,8 @@ class PostgreSQLReportRepository(ReportRepository):
         estimate: PositionEstimateResult,
     ) -> Report | None:
         """
-        Crée le rapport photo et ses deux lignes enfants
-        dans une seule transaction.
+        Crée le rapport photo, ses deux lignes enfants
+        et ses alertes dans une seule transaction.
 
         Si le même client_report_id existe déjà,
         aucune nouvelle ligne n'est créée.
@@ -113,6 +145,11 @@ class PostgreSQLReportRepository(ReportRepository):
                 self._insert_pending_photo(
                     cursor=cursor,
                     report=report,
+                )
+
+                self._insert_alerts(
+                    cursor=cursor,
+                    report_id=report.id,
                 )
 
         return self._row_to_report(row)
@@ -398,6 +435,113 @@ class PostgreSQLReportRepository(ReportRepository):
         cursor.execute(
             query,
             values,
+        )
+
+    def _insert_alerts(
+        self,
+        cursor,
+        report_id: UUID,
+    ) -> None:
+        """
+        Une ligne alert_history par destinataire et une ligne
+        notifications par appareil, sur le curseur du rapport :
+        si une écriture échoue, le rapport est annulé aussi.
+
+        Version, catégorie, position et instant T sont copiés
+        de la ligne du rapport. Pas de NOTIFY : le worker
+        (NW-123) interroge les tâches pending après le commit.
+        """
+
+        recipients = self.select_recipients(
+            cursor,
+            report_id,
+        )
+
+        if not recipients:
+            return
+
+        history_query = """
+            INSERT INTO nowave.alert_history (
+                id,
+                user_id,
+                report_id,
+                report_version,
+                category,
+                position,
+                distance_m,
+                alerted_at
+            )
+            SELECT
+                %s,
+                %s,
+                id,
+                version,
+                category,
+                final_position,
+                %s,
+                created_at
+            FROM nowave.reports
+            WHERE id = %s
+            ON CONFLICT ON CONSTRAINT alert_history_recipient_key
+            DO NOTHING
+        """
+
+        cursor.executemany(
+            history_query,
+            [
+                (
+                    uuid4(),
+                    recipient.user_id,
+                    recipient.distance_m,
+                    report_id,
+                )
+                for recipient in recipients
+            ],
+        )
+
+        notification_query = """
+            INSERT INTO nowave.notifications (
+                id,
+                report_id,
+                device_id,
+                report_version,
+                status,
+                attempt_count,
+                next_attempt_at,
+                sent_at,
+                last_error_code,
+                created_at,
+                updated_at
+            )
+            SELECT
+                %s,
+                id,
+                %s,
+                version,
+                'pending',
+                0,
+                created_at,
+                NULL,
+                NULL,
+                created_at,
+                created_at
+            FROM nowave.reports
+            WHERE id = %s
+            ON CONFLICT ON CONSTRAINT notifications_delivery_key
+            DO NOTHING
+        """
+
+        cursor.executemany(
+            notification_query,
+            [
+                (
+                    uuid4(),
+                    device_id,
+                    report_id,
+                )
+                for recipient in recipients
+                for device_id in recipient.device_ids
+            ],
         )
 
     def _row_to_report(

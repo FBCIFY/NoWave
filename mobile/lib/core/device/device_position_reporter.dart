@@ -10,8 +10,9 @@ import 'device_registration.dart';
 import 'device_service.dart';
 
 /// Envoie la position GPS du téléphone au backend, au plus une fois par
-/// [interval], tant que l'app est ouverte. Le backend s'en sert pour choisir
-/// qui reçoit les alertes à proximité.
+/// [interval] et seulement après [minDistanceM] de déplacement, tant que
+/// l'app est ouverte, et aussi en arrière-plan après [setBackground]. Le
+/// backend s'en sert pour choisir qui reçoit les alertes à proximité.
 ///
 /// Ne demande jamais l'autorisation de localisation : tant qu'elle manque,
 /// chaque tick revérifie, sans rien afficher.
@@ -20,6 +21,13 @@ class DevicePositionReporter {
 
   /// En dessous (≈ 2 nœuds), le cap GPS n'a pas de sens : on envoie `null`.
   static const double minSpeedForHeadingMs = 1;
+
+  /// En dessous de cette distance avec la dernière position envoyée, une
+  /// mesure ne part pas, sauf si elle est au moins deux fois plus précise :
+  /// un téléphone immobile n'envoie plus sa position toutes les [interval].
+  /// Le flux GPS, lui, n'est pas filtré : carte et caméra reçoivent chaque
+  /// mesure.
+  static const double minDistanceM = 50;
 
   final DeviceService _devices;
   final DeviceRegistration _registration;
@@ -30,8 +38,19 @@ class DevicePositionReporter {
   StreamSubscription<Position>? _subscription;
   bool _subscribing = false;
 
+  /// Suivi gardé quand l'app passe en arrière-plan (alertes activées).
+  bool _background = false;
+
+  /// App en arrière-plan, suivi gardé : pas de nouvel abonnement au GPS
+  /// avant le retour dans l'app, ni iOS ni Android ne le démarrent sans elle.
+  bool _hidden = false;
+
   /// Dernière mesure exploitable pas encore envoyée.
   DevicePosition? _pending;
+
+  /// Dernière mesure acceptée par le backend, oubliée à [stop] : la première
+  /// mesure après [start] part toujours.
+  DevicePosition? _lastSent;
 
   /// Vrai jusqu'à la première mesure après [start], envoyée sans attendre.
   bool _sendNextNow = false;
@@ -47,9 +66,12 @@ class DevicePositionReporter {
 
   DevicePositionReporter._(this._devices, this._registration, this._location);
 
-  /// Démarre le suivi. Sans effet s'il tourne déjà.
+  /// Démarre le suivi, ou le reprend au retour dans l'app. S'il tourne déjà,
+  /// écoute le GPS sans attendre le tick si l'autorisation vient d'arriver.
   Future<void> start() {
-    if (_running || _registration.isSigningOut) return Future.value();
+    _hidden = false;
+    if (_registration.isSigningOut) return Future.value();
+    if (_running) return _listen();
     _running = true;
     _sendNextNow = true;
     _timer = Timer.periodic(interval, (_) => unawaited(tick()));
@@ -60,6 +82,7 @@ class DevicePositionReporter {
   /// plus rien ne part vers le backend.
   Future<void> stop() async {
     _running = false;
+    _hidden = false;
     _timer?.cancel();
     _timer = null;
     _pending = null;
@@ -67,6 +90,27 @@ class DevicePositionReporter {
     _subscription = null;
     await subscription?.cancel();
     await _sending;
+    _lastSent = null;
+  }
+
+  /// Garde ou non le suivi quand l'app passe en arrière-plan. Un abonnement
+  /// au GPS en cours est relancé avec les nouveaux réglages.
+  Future<void> setBackground(bool enabled) async {
+    if (_background == enabled) return;
+    _background = enabled;
+    final subscription = _subscription;
+    if (subscription == null) return;
+    _subscription = null;
+    await subscription.cancel();
+    await _listen();
+  }
+
+  /// L'app passe en arrière-plan : le suivi s'arrête, sauf après
+  /// [setBackground] où il continue sur l'abonnement au GPS en cours.
+  Future<void> appHidden() {
+    if (!_background) return stop();
+    _hidden = true;
+    return Future.value();
   }
 
   /// Écoute le GPS si ce n'est pas déjà fait, puis envoie la mesure en
@@ -79,6 +123,7 @@ class DevicePositionReporter {
 
   Future<void> _listen() async {
     if (!_running ||
+        _hidden ||
         _registration.isSigningOut ||
         _subscription != null ||
         _subscribing) {
@@ -88,13 +133,15 @@ class DevicePositionReporter {
     try {
       if (!await _location.canWatchPosition() ||
           !_running ||
+          _hidden ||
           _registration.isSigningOut) {
         return;
       }
-      _subscription = _location.watchPosition().listen(
+      final positions = _location.watchDevicePosition(background: _background);
+      _subscription = positions.listen(
         _onPosition,
         // Flux coupé (GPS désactivé, autorisation retirée) : on se réabonne
-        // au prochain tick.
+        // au prochain tick, ou au retour dans l'app.
         onError: (Object error) {
           debugPrint('Suivi GPS interrompu : $error');
           unawaited(_subscription?.cancel());
@@ -131,7 +178,23 @@ class DevicePositionReporter {
     }
     final measurement = _pending!;
     _pending = null;
+    if (!_isWorthSending(measurement)) return Future.value();
     return _sending = _send(measurement).whenComplete(() => _sending = null);
+  }
+
+  /// Vrai si [measurement] est à au moins [minDistanceM] de la dernière
+  /// position envoyée, ou au moins deux fois plus précise qu'elle.
+  bool _isWorthSending(DevicePosition measurement) {
+    final last = _lastSent;
+    if (last == null) return true;
+    final distance = Geolocator.distanceBetween(
+      last.latitude,
+      last.longitude,
+      measurement.latitude,
+      measurement.longitude,
+    );
+    return distance >= minDistanceM ||
+        measurement.accuracyM <= last.accuracyM / 2;
   }
 
   Future<void> _send(DevicePosition measurement) async {
@@ -150,6 +213,7 @@ class DevicePositionReporter {
         if (!_running || _registration.isSigningOut) return;
         await _devices.sendPosition(measurement);
       }
+      _lastSent = measurement;
     } on ApiException catch (error) {
       // 409 (mesure plus ancienne que celle du backend) ou autre refus :
       // renvoyer la même mesure ne changerait rien.

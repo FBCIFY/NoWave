@@ -67,21 +67,30 @@ class _FakeDeviceRegistration implements DeviceRegistration {
   Future<void> unregister() => throw UnimplementedError();
 }
 
-/// Faux GPS : [canWatch] simule l'autorisation, [positions] le flux.
+/// Faux GPS : [canWatch] simule l'autorisation, [positions] le flux et
+/// [backgroundRequests] le mode demandé à chaque abonnement.
 class _FakeLocationService extends LocationService {
   bool canWatch = true;
   final StreamController<Position> positions =
       StreamController<Position>.broadcast();
+  final List<bool> backgroundRequests = [];
 
   @override
   Future<bool> canWatchPosition() async => canWatch;
 
   @override
-  Stream<Position> watchPosition() => positions.stream;
+  Stream<Position> watchDevicePosition({required bool background}) {
+    backgroundRequests.add(background);
+    return positions.stream;
+  }
 }
 
+const _latitude = 43.2965;
+
+/// Sans [latitude], chaque seconde de [second] déplace la mesure d'environ
+/// 110 m vers le nord, au-delà de [DevicePositionReporter.minDistanceM].
 Position _position({
-  double latitude = 43.2965,
+  double? latitude,
   double accuracy = 8,
   double heading = 90,
   double speed = 0,
@@ -89,7 +98,7 @@ Position _position({
 }) {
   return Position(
     longitude: 5.3698,
-    latitude: latitude,
+    latitude: latitude ?? _latitude + second * 0.001,
     timestamp: DateTime.utc(2026, 10, 5, 8, 30, second),
     accuracy: accuracy,
     altitude: 0,
@@ -135,7 +144,7 @@ void main() {
     await emit(_position());
 
     expect(devices.positions, hasLength(1));
-    expect(devices.positions.single.latitude, 43.2965);
+    expect(devices.positions.single.latitude, _latitude);
     expect(devices.positions.single.accuracyM, 8);
     expect(
       devices.positions.single.measuredAt,
@@ -158,6 +167,69 @@ void main() {
       expect(devices.positions.map((p) => p.measuredAt.second), [0, 20]);
     },
   );
+
+  group('moins de 50 m', () {
+    test('immobile : la mesure ne part pas', () async {
+      await reporter.start();
+      await emit(_position(latitude: _latitude, second: 0));
+      // Environ 45 m plus au nord.
+      await emit(_position(latitude: _latitude + 0.0004, second: 10));
+      await reporter.tick();
+
+      expect(devices.positions.map((p) => p.measuredAt.second), [0]);
+    });
+
+    test('à 50 m ou plus, la mesure part au tick', () async {
+      await reporter.start();
+      await emit(_position(latitude: _latitude, second: 0));
+      // Environ 56 m plus au nord.
+      await emit(_position(latitude: _latitude + 0.0005, second: 10));
+      await reporter.tick();
+
+      expect(devices.positions.map((p) => p.measuredAt.second), [0, 10]);
+    });
+
+    test('deux fois plus précise, la mesure part même immobile', () async {
+      await reporter.start();
+      await emit(_position(latitude: _latitude, accuracy: 40, second: 0));
+      await emit(_position(latitude: _latitude, accuracy: 20, second: 10));
+      await reporter.tick();
+      await emit(_position(latitude: _latitude, accuracy: 15, second: 20));
+      await reporter.tick();
+
+      expect(devices.positions.map((p) => p.accuracyM), [40, 20]);
+    });
+
+    test('une mesure pas envoyée ne compte pas', () async {
+      devices.errors.add(TimeoutException('pas de réseau'));
+      await reporter.start();
+      await emit(_position(latitude: _latitude, second: 0));
+      await emit(_position(latitude: _latitude, second: 10));
+      await reporter.tick();
+
+      expect(devices.positions.map((p) => p.measuredAt.second), [0, 10]);
+    });
+
+    test('changer de mode garde la dernière position envoyée', () async {
+      await reporter.start();
+      await emit(_position(latitude: _latitude, second: 0));
+      await reporter.setBackground(true);
+      await emit(_position(latitude: _latitude, second: 10));
+      await reporter.tick();
+
+      expect(devices.positions, hasLength(1));
+    });
+
+    test('après stop puis start, la première mesure repart', () async {
+      await reporter.start();
+      await emit(_position(latitude: _latitude, second: 0));
+      await reporter.stop();
+      await reporter.start();
+      await emit(_position(latitude: _latitude, second: 10));
+
+      expect(devices.positions.map((p) => p.measuredAt.second), [0, 10]);
+    });
+  });
 
   test('ignore une mesure trop imprécise', () async {
     await reporter.start();
@@ -193,6 +265,17 @@ void main() {
       expect(devices.positions, hasLength(1));
     },
   );
+
+  test('start pendant le suivi écoute le GPS sans attendre le tick', () async {
+    location.canWatch = false;
+    await reporter.start();
+    location.canWatch = true;
+    await reporter.start();
+    await emit(_position());
+
+    expect(location.positions.hasListener, isTrue);
+    expect(devices.positions, hasLength(1));
+  });
 
   test('404 : réenregistre le téléphone puis renvoie la mesure', () async {
     devices.errors.add(_error(404));
@@ -245,6 +328,64 @@ void main() {
 
     expect(location.positions.hasListener, isFalse);
     expect(devices.positions, isEmpty);
+  });
+
+  test('app masquée sans arrière-plan : le suivi s’arrête', () async {
+    await reporter.start();
+    await reporter.appHidden();
+    await emit(_position());
+    await reporter.tick();
+
+    expect(location.backgroundRequests, [false]);
+    expect(location.positions.hasListener, isFalse);
+    expect(devices.positions, isEmpty);
+  });
+
+  test('app masquée avec arrière-plan : le suivi continue', () async {
+    await reporter.setBackground(true);
+    await reporter.start();
+    await emit(_position(second: 0));
+    await reporter.appHidden();
+    await emit(_position(second: 10));
+    await reporter.tick();
+
+    expect(location.backgroundRequests, [true]);
+    expect(location.positions.hasListener, isTrue);
+    expect(devices.positions.map((p) => p.measuredAt.second), [0, 10]);
+  });
+
+  test('app masquée : se réabonne au GPS au retour dans l’app', () async {
+    await reporter.setBackground(true);
+    await reporter.start();
+    await reporter.appHidden();
+    location.positions.addError(StateError('GPS coupé'));
+    await pumpEventQueue();
+
+    await reporter.tick();
+    expect(location.positions.hasListener, isFalse);
+
+    await reporter.start();
+    await reporter.tick();
+    expect(location.positions.hasListener, isTrue);
+    expect(location.backgroundRequests, [true, true]);
+  });
+
+  test('changer de mode relance l’abonnement au GPS en cours', () async {
+    await reporter.start();
+    await reporter.setBackground(true);
+    await reporter.setBackground(false);
+    await emit(_position());
+
+    expect(location.backgroundRequests, [false, true, false]);
+    expect(location.positions.hasListener, isTrue);
+    expect(devices.positions, hasLength(1));
+  });
+
+  test('changer de mode à l’arrêt n’abonne pas au GPS', () async {
+    await reporter.setBackground(true);
+
+    expect(location.backgroundRequests, isEmpty);
+    expect(location.positions.hasListener, isFalse);
   });
 
   test('une reprise pendant la déconnexion ne relance pas le GPS', () async {
