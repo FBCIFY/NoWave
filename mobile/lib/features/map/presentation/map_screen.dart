@@ -14,6 +14,7 @@ import '../../../core/location/coordinate_formatter.dart';
 import '../../../core/location/location_service.dart';
 import '../../../core/map/accuracy_halo.dart';
 import '../../../core/map/map_config.dart';
+import '../../../core/map/marine/marine_map_controller.dart';
 import '../../../core/sensors/device_orientation_service.dart';
 import '../../camera/domain/photo_report_draft.dart';
 import '../../reports/data/manual_report_service.dart';
@@ -22,6 +23,7 @@ import '../../reports/domain/manual_report.dart';
 import '../../reports/domain/report_detail.dart';
 import '../../reports/presentation/report_composer_sheet.dart';
 import '../../reports/presentation/report_detail_sheet.dart';
+import '../data/port_layer.dart';
 import '../data/report_layer_controller.dart';
 import '../data/report_tiles.dart';
 import 'widgets/map_notice_banner.dart';
@@ -105,6 +107,7 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
   bool _isLocating = false;
   String? _locationError;
   MapboxMap? _mapboxMap;
+  final _marineMap = MarineMapController();
   String? _mapError;
   bool _reportComposerOpen = false;
   CameraState? _cameraBeforeReport;
@@ -334,6 +337,18 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
     );
     if (!mounted) return;
 
+    // La bathymétrie est facultative : son indisponibilité ne doit
+    // pas masquer le fond de carte Mapbox.
+    if (event.sourceId == MarineMapController.bathymetrySourceId) {
+      return;
+    }
+
+    // Les infrastructures portuaires sont un enrichissement facultatif.
+    // Leur indisponibilité ne doit jamais masquer le fond Mapbox.
+    if (event.sourceId == PortLayer.sourceId) {
+      return;
+    }
+
     // Une tuile de signalements en échec ne doit pas cacher le fond de
     // carte, qui reste utilisable.
     if (event.sourceId == ReportTiles.sourceId) {
@@ -431,6 +446,42 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
   void _handleMapLoaded(MapLoadedEventData event) {
     if (!mounted || _mapError == null) return;
     setState(() => _mapError = null);
+  }
+
+  /// Installe l'habillage marin sans bloquer la carte en cas d'échec.
+  Future<void> _installMarineMap() async {
+    final map = _mapboxMap;
+    if (map == null) return;
+
+    try {
+      await _marineMap.install(map);
+    } catch (error) {
+      // La bathymétrie est un enrichissement visuel :
+      // son indisponibilité ne doit jamais bloquer la carte NoWave.
+      debugPrint('Habillage marin non installé : $error');
+    }
+  }
+
+  Future<void> _installMarineLayers() async {
+    // L'ordre est volontaire :
+    //
+    // 1. bathymétrie ;
+    // 2. infrastructures portuaires.
+    //
+    // Les docks et la bathymétrie utilisent tous les deux le slot BOTTOM.
+    // Les ports sont donc ajoutés après la bathymétrie afin de rester
+    // visibles au-dessus de celle-ci.
+    await _installMarineMap();
+
+    final map = _mapboxMap;
+    if (map == null) return;
+
+    try {
+      await PortLayer.addTo(map);
+    } catch (error) {
+      // Comme la bathymétrie, les données portuaires sont facultatives.
+      debugPrint('Couche portuaire non installée : $error');
+    }
   }
 
   /// Installe la couche des signalements ; une erreur remonte au
@@ -1281,6 +1332,7 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
                 },
                 onMapLoadedListener: _handleMapLoaded,
                 onStyleLoadedListener: (_) {
+                  unawaited(_installMarineLayers());
                   _showAccuracyHalo();
                   unawaited(_showSelectedReport());
                   if (widget.reportTiles != null) _reportLayer.styleLoaded();

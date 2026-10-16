@@ -6,6 +6,10 @@ from fastapi import APIRouter, Depends, HTTPException, Path, Query, Response
 from app.api.dependencies.auth import get_current_identity
 from app.application.services.map_query import MapQueryService
 from app.domain.report import ReportCategory
+from app.infrastructure.adapters.emodnet_bathymetry import (
+    BathymetryUnavailable,
+    fetch_bathymetry_tile,
+)
 from app.infrastructure.repositories.postgresql_map_tile_repository import (
     PostgreSQLMapTileRepository,
 )
@@ -48,5 +52,38 @@ def get_map_tile(
         headers={
             "Cache-Control": "private, max-age=15, must-revalidate",
             "Vary": "Authorization",
+        },
+    )
+
+
+@router.get("/bathymetry/{z}/{x}/{y}.png")
+def get_bathymetry_tile(
+    z: Annotated[int, Path(ge=0, le=14)],
+    x: Annotated[int, Path(ge=0)],
+    y: Annotated[int, Path(ge=0)],
+) -> Response:
+    """Return one visual bathymetry tile in Web Mercator."""
+
+    tile_count = 1 << z
+
+    if x >= tile_count or y >= tile_count:
+        raise HTTPException(
+            status_code=422,
+            detail="Tile coordinates must be within the selected zoom level.",
+        )
+
+    try:
+        tile = fetch_bathymetry_tile(z, x, y)
+    except BathymetryUnavailable as error:
+        raise HTTPException(
+            status_code=503,
+            detail="Bathymetry temporarily unavailable.",
+        ) from error
+
+    return Response(
+        content=tile,
+        media_type="image/png",
+        headers={
+            "Cache-Control": "public, max-age=86400",
         },
     )

@@ -20,12 +20,13 @@ Créer le fichier local depuis l’exemple :
 cp .env.example.json .env.json
 ```
 
-Compléter ensuite les trois valeurs :
+Compléter ensuite les valeurs :
 
 ```json
 {
   "MAPBOX_ACCESS_TOKEN": "jeton-public-mapbox",
   "MAPTILER_STYLE_URL": "https://api.maptiler.com/maps/ocean-v4/style.json?key=cle-maptiler",
+  "BATHYMETRY_TILES_URL": "URL_XYZ_OU_WMS_DE_LA_BATHYMETRIE",
   "API_BASE_URL": "https://adresse-du-backend/"
 }
 ```

@@ -65,3 +65,51 @@ def test_map_tile_requires_authentication():
     response = TestClient(app).get("/api/v1/map/tiles/0/0/0.mvt")
 
     assert response.status_code == 401
+
+
+def test_bathymetry_tile_is_public_png(monkeypatch):
+    expected_tile = b"fake png bytes"
+
+    monkeypatch.setattr(
+        "app.api.routes.map_tiles.fetch_bathymetry_tile",
+        lambda z, x, y: expected_tile,
+    )
+
+    response = TestClient(app).get(
+        "/api/v1/map/bathymetry/8/131/94.png"
+    )
+
+    assert response.status_code == 200
+    assert response.content == expected_tile
+    assert response.headers["content-type"] == "image/png"
+    assert response.headers["cache-control"] == "public, max-age=86400"
+
+
+def test_bathymetry_tile_rejects_coordinates_outside_zoom():
+    response = TestClient(app).get(
+        "/api/v1/map/bathymetry/2/4/0.png"
+    )
+
+    assert response.status_code == 422
+
+
+def test_bathymetry_tile_returns_503_when_provider_is_unavailable(
+    monkeypatch,
+):
+    from app.infrastructure.adapters.emodnet_bathymetry import (
+        BathymetryUnavailable,
+    )
+
+    def fail(z, x, y):
+        raise BathymetryUnavailable("test")
+
+    monkeypatch.setattr(
+        "app.api.routes.map_tiles.fetch_bathymetry_tile",
+        fail,
+    )
+
+    response = TestClient(app).get(
+        "/api/v1/map/bathymetry/8/131/94.png"
+    )
+
+    assert response.status_code == 503
