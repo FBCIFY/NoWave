@@ -1,0 +1,10 @@
+$ sha256sum mobile/build/app/outputs/flutter-apk/app-debug.apk
+95749a5b8149eb437583a63461f5f9608c8d88798761cdbd101cf2527c8cb6de  mobile/build/app/outputs/flutter-apk/app-debug.apk
+exit=0
+$ /home/palms/Android/Sdk/build-tools/36.0.0/aapt dump badging mobile/build/app/outputs/flutter-apk/app-debug.apk
+package: name='fr.blueway.app' versionCode='1' versionName='1.0.0' platformBuildVersionName='16' platformBuildVersionCode='36' compileSdkVersion='36' compileSdkVersionCodename='16'
+sdkVersion:'24'
+targetSdkVersion:'36'
+application-label:'NoWave'
+native-code: 'arm64-v8a' 'armeabi-v7a' 'x86_64'
+exit=0
