@@ -6,6 +6,10 @@ from fastapi import APIRouter, Depends, HTTPException, Path, Query, Response
 from app.api.dependencies.auth import get_current_identity
 from app.application.services.map_query import MapQueryService
 from app.domain.report import ReportCategory
+from app.domain.marine import MarineFamily
+from app.domain.marine_tile import Tile
+from app.domain.marine import ProviderUnavailable
+from app.infrastructure.marine.runtime import get_marine_service
 from app.infrastructure.adapters.emodnet_bathymetry import (
     BathymetryUnavailable,
     fetch_bathymetry_tile,
@@ -16,6 +20,59 @@ from app.infrastructure.repositories.postgresql_map_tile_repository import (
 
 
 router = APIRouter(prefix="/map", tags=["map"])
+
+
+@router.get("/seamarks/{z}/{x}/{y}.pbf")
+async def get_seamark_tile(
+    z: Annotated[int, Path(ge=0, le=14)],
+    x: Annotated[int, Path(ge=0)],
+    y: Annotated[int, Path(ge=0)],
+) -> Response:
+    return await _marine_tile(z, x, y, MarineFamily.SEAMARKS)
+
+
+@router.get("/port-infrastructure/{z}/{x}/{y}.pbf")
+async def get_port_infrastructure_tile(
+    z: Annotated[int, Path(ge=0, le=14)],
+    x: Annotated[int, Path(ge=0)],
+    y: Annotated[int, Path(ge=0)],
+) -> Response:
+    return await _marine_tile(z, x, y, MarineFamily.PORTS)
+
+
+async def _marine_tile(z, x, y, family):
+    try:
+        tile = Tile(z, x, y)
+    except ValueError as error:
+        raise HTTPException(
+            status_code=422, detail="Invalid marine XYZ tile."
+        ) from error
+    try:
+        result = await get_marine_service().get_tile(tile, family)
+    except ProviderUnavailable as error:
+        raise HTTPException(
+            status_code=503, detail="Marine data temporarily unavailable."
+        ) from error
+    return Response(
+        content=result.content,
+        media_type="application/vnd.mapbox-vector-tile",
+        headers={
+            "Cache-Control": f"public, max-age={15 if result.failures else 300}",
+            "X-NoWave-Marine-Status": "degraded" if result.failures else "ok",
+            "X-NoWave-Marine-Sources": ",".join(result.sources),
+            "Link": '</api/v1/map/marine-sources>; rel="describedby"',
+        },
+    )
+
+
+@router.get("/marine-sources")
+def get_marine_sources():
+    from app.infrastructure.marine.sources import SOURCES
+
+    return {
+        "usage": "Display only; not for navigation. Modified and merged by NoWave.",
+        "sources": SOURCES,
+    }
 
 
 @router.get("/tiles/{z}/{x}/{y}.mvt")

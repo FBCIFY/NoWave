@@ -1,0 +1,522 @@
+[
+  {
+    "scale": "overview",
+    "rank": 1,
+    "layer": 3,
+    "kind": "buoy_lateral",
+    "name": "Overview.Buoy_Lateral_point",
+    "bounds": [
+      -176.5696319,
+      5.345699800000149,
+      171.174987799999,
+      70.4088333
+    ]
+  },
+  {
+    "scale": "overview",
+    "rank": 1,
+    "layer": 4,
+    "kind": "buoy_safe_water",
+    "name": "Overview.Buoy_Safe_Water_point",
+    "bounds": [
+      -163.5021031,
+      9.4331302999999,
+      -69.92494110000008,
+      60.3224128000002
+    ]
+  },
+  {
+    "scale": "overview",
+    "rank": 1,
+    "layer": 5,
+    "kind": "buoy_special_purpose",
+    "name": "Overview.Buoy_Special_Purpose_General_point",
+    "bounds": [
+      -177.75,
+      7.28478340000038,
+      179.836666699999,
+      71.5675741
+    ]
+  },
+  {
+    "scale": "overview",
+    "rank": 1,
+    "layer": 11,
+    "kind": "topmark",
+    "name": "Overview.Topmark_point",
+    "bounds": [
+      -157.88000169999899,
+      6.979950000000829,
+      160.9685328,
+      57.7342315999995
+    ]
+  },
+  {
+    "scale": "overview",
+    "rank": 1,
+    "layer": 49,
+    "kind": "construction",
+    "name": "Overview.Shoreline_Construction_line",
+    "bounds": [
+      -177.3314297,
+      5.27232499999991,
+      178.3321142,
+      71.3750634000007
+    ]
+  },
+  {
+    "scale": "general",
+    "rank": 2,
+    "layer": 3,
+    "kind": "buoy_cardinal",
+    "name": "General.Buoy_Cardinal_point",
+    "bounds": [
+      -84.8364943,
+      45.812529999999995,
+      -83.32864,
+      47.0928285
+    ]
+  },
+  {
+    "scale": "general",
+    "rank": 2,
+    "layer": 4,
+    "kind": "buoy_isolated_danger",
+    "name": "General.Buoy_Isolated_Danger_point",
+    "bounds": [
+      -94.4018686,
+      28.3558515,
+      -68.701317,
+      45.5362773
+    ]
+  },
+  {
+    "scale": "general",
+    "rank": 2,
+    "layer": 5,
+    "kind": "buoy_lateral",
+    "name": "General.Buoy_Lateral_point",
+    "bounds": [
+      -160.6537089,
+      7.35389190000001,
+      134.422699,
+      60.706002
+    ]
+  },
+  {
+    "scale": "general",
+    "rank": 2,
+    "layer": 6,
+    "kind": "buoy_safe_water",
+    "name": "General.Buoy_Safe_Water_point",
+    "bounds": [
+      -163.5021031,
+      24.4448766,
+      -69.9249411,
+      60.3224128
+    ]
+  },
+  {
+    "scale": "general",
+    "rank": 2,
+    "layer": 7,
+    "kind": "buoy_special_purpose",
+    "name": "General.Buoy_Special_Purpose_General_point",
+    "bounds": [
+      -177.7030556,
+      2.03333329999998,
+      179.8366667,
+      71.56666
+    ]
+  },
+  {
+    "scale": "general",
+    "rank": 2,
+    "layer": 13,
+    "kind": "topmark",
+    "name": "General.Topmark_point",
+    "bounds": [
+      -124.2704328,
+      6.98321679999998,
+      158.1903839,
+      46.167649999999995
+    ]
+  },
+  {
+    "scale": "general",
+    "rank": 2,
+    "layer": 59,
+    "kind": "construction",
+    "name": "General.Shoreline_Construction_line",
+    "bounds": [
+      -177.3314297,
+      13.4184612,
+      178.3321142,
+      71.3750634
+    ]
+  },
+  {
+    "scale": "coastal",
+    "rank": 3,
+    "layer": 4,
+    "kind": "buoy_isolated_danger",
+    "name": "Coastal.Buoy_Isolated_Danger_point",
+    "bounds": [
+      -123.0146331,
+      9.42361110000002,
+      -67.7742169,
+      48.7648267
+    ]
+  },
+  {
+    "scale": "coastal",
+    "rank": 3,
+    "layer": 5,
+    "kind": "buoy_lateral",
+    "name": "Coastal.Buoy_Lateral_point",
+    "bounds": [
+      -176.5696319,
+      -14.3238761,
+      171.1749878,
+      70.4088333
+    ]
+  },
+  {
+    "scale": "coastal",
+    "rank": 3,
+    "layer": 6,
+    "kind": "buoy_safe_water",
+    "name": "Coastal.Buoy_Safe_Water_point",
+    "bounds": [
+      -163.5021031,
+      9.42833330000002,
+      145.6746989,
+      60.3224128
+    ]
+  },
+  {
+    "scale": "coastal",
+    "rank": 3,
+    "layer": 7,
+    "kind": "buoy_special_purpose",
+    "name": "Coastal.Buoy_Special_Purpose_General_point",
+    "bounds": [
+      -177.7376986,
+      -14.368,
+      179.8366667,
+      71.56666
+    ]
+  },
+  {
+    "scale": "coastal",
+    "rank": 3,
+    "layer": 15,
+    "kind": "topmark",
+    "name": "Coastal.Topmark_point",
+    "bounds": [
+      -157.8800017,
+      6.98321679999998,
+      160.9685328,
+      57.7342316
+    ]
+  },
+  {
+    "scale": "coastal",
+    "rank": 3,
+    "layer": 71,
+    "kind": "construction",
+    "name": "Coastal.Shoreline_Construction_line",
+    "bounds": [
+      -177.9424572,
+      -14.364694,
+      179.29960899999998,
+      71.3750634
+    ]
+  },
+  {
+    "scale": "coastal",
+    "rank": 3,
+    "layer": 105,
+    "kind": "construction",
+    "name": "Coastal.Shoreline_Construction_area",
+    "bounds": [
+      -161.4816403,
+      5.335244699999979,
+      177.547322,
+      60.5817379
+    ]
+  },
+  {
+    "scale": "approach",
+    "rank": 4,
+    "layer": 6,
+    "kind": "buoy_cardinal",
+    "name": "Approach.Buoy_Cardinal_point",
+    "bounds": [
+      -123.3017511,
+      41.715298299999596,
+      -66.6610892000008,
+      48.6501246000007
+    ]
+  },
+  {
+    "scale": "approach",
+    "rank": 4,
+    "layer": 7,
+    "kind": "buoy_isolated_danger",
+    "name": "Approach.Buoy_Isolated_Danger_point",
+    "bounds": [
+      -170.6874283,
+      -14.2717967000008,
+      -65.4440964000005,
+      48.7648267000004
+    ]
+  },
+  {
+    "scale": "approach",
+    "rank": 4,
+    "layer": 8,
+    "kind": "buoy_lateral",
+    "name": "Approach.Buoy_Lateral_point",
+    "bounds": [
+      -177.3663333,
+      -14.323876099999298,
+      171.174987799999,
+      70.4088333
+    ]
+  },
+  {
+    "scale": "approach",
+    "rank": 4,
+    "layer": 9,
+    "kind": "buoy_safe_water",
+    "name": "Approach.Buoy_Safe_Water_point",
+    "bounds": [
+      -163.5089444,
+      9.4105481000006,
+      145.6746989,
+      60.3224128000002
+    ]
+  },
+  {
+    "scale": "approach",
+    "rank": 4,
+    "layer": 10,
+    "kind": "buoy_special_purpose",
+    "name": "Approach.Buoy_Special_Purpose_General_point",
+    "bounds": [
+      -174.18550000000002,
+      -14.368000000000398,
+      179.01244720000102,
+      71.5666600000004
+    ]
+  },
+  {
+    "scale": "approach",
+    "rank": 4,
+    "layer": 18,
+    "kind": "topmark",
+    "name": "Approach.Topmark_point",
+    "bounds": [
+      -157.88000169999899,
+      9.40111260000049,
+      160.9685328,
+      58.4305882999997
+    ]
+  },
+  {
+    "scale": "approach",
+    "rank": 4,
+    "layer": 89,
+    "kind": "construction",
+    "name": "Approach.Shoreline_Construction_line",
+    "bounds": [
+      -178.296463000001,
+      -14.364693999999899,
+      179.29960899999998,
+      71.3750634000007
+    ]
+  },
+  {
+    "scale": "approach",
+    "rank": 4,
+    "layer": 143,
+    "kind": "construction",
+    "name": "Approach.Shoreline_Construction_area",
+    "bounds": [
+      -177.200609,
+      5.318577800000639,
+      177.547322,
+      64.50130499999979
+    ]
+  },
+  {
+    "scale": "approach",
+    "rank": 4,
+    "layer": 178,
+    "kind": "dock",
+    "name": "Approach.Dock_Area",
+    "bounds": [
+      -94.82128519999969,
+      29.2085719999995,
+      -81.01440700000059,
+      42.2885774000006
+    ]
+  },
+  {
+    "scale": "harbour",
+    "rank": 5,
+    "layer": 4,
+    "kind": "buoy_cardinal",
+    "name": "Harbor.Buoy_Cardinal_point",
+    "bounds": [
+      -123.266614,
+      8.80648389999999,
+      -66.6610892,
+      48.625947
+    ]
+  },
+  {
+    "scale": "harbour",
+    "rank": 5,
+    "layer": 5,
+    "kind": "buoy_isolated_danger",
+    "name": "Harbor.Buoy_Isolated_Danger_point",
+    "bounds": [
+      -170.6874283,
+      -14.2717967,
+      -65.4440964,
+      48.7648267
+    ]
+  },
+  {
+    "scale": "harbour",
+    "rank": 5,
+    "layer": 6,
+    "kind": "buoy_lateral",
+    "name": "Harbor.Buoy_Lateral_point",
+    "bounds": [
+      -177.3663333,
+      -14.3238761,
+      171.1749878,
+      70.4088333
+    ]
+  },
+  {
+    "scale": "harbour",
+    "rank": 5,
+    "layer": 7,
+    "kind": "buoy_safe_water",
+    "name": "Harbor.Buoy_Safe_Water_point",
+    "bounds": [
+      -163.5037875,
+      8.8623781,
+      145.6746989,
+      60.3224128
+    ]
+  },
+  {
+    "scale": "harbour",
+    "rank": 5,
+    "layer": 8,
+    "kind": "buoy_special_purpose",
+    "name": "Harbor.Buoy_Special_Purpose_General_point",
+    "bounds": [
+      -174.18550000000002,
+      -14.368,
+      169.6381382,
+      71.56666
+    ]
+  },
+  {
+    "scale": "harbour",
+    "rank": 5,
+    "layer": 16,
+    "kind": "topmark",
+    "name": "Harbor.Topmark_point",
+    "bounds": [
+      -157.8800017,
+      6.060024300000009,
+      169.6162762,
+      58.4305883
+    ]
+  },
+  {
+    "scale": "harbour",
+    "rank": 5,
+    "layer": 85,
+    "kind": "construction",
+    "name": "Harbor.Shoreline_Construction_line",
+    "bounds": [
+      -178.296463000001,
+      -14.364693999999899,
+      179.29960899999998,
+      71.3750634000007
+    ]
+  },
+  {
+    "scale": "harbour",
+    "rank": 5,
+    "layer": 138,
+    "kind": "construction",
+    "name": "Harbor.Shoreline_Construction_area",
+    "bounds": [
+      -177.200609,
+      5.318577800000639,
+      179.2757568,
+      64.5013139999992
+    ]
+  },
+  {
+    "scale": "harbour",
+    "rank": 5,
+    "layer": 173,
+    "kind": "dock",
+    "name": "Harbor.Dock_Area",
+    "bounds": [
+      -94.8212852,
+      29.208572,
+      -81.01440699999999,
+      42.2885774
+    ]
+  },
+  {
+    "scale": "berthing",
+    "rank": 6,
+    "layer": 3,
+    "kind": "buoy_lateral",
+    "name": "Berthing.Buoy_Lateral_point",
+    "bounds": [
+      -176.5696319,
+      7.16734459999998,
+      171.1749878,
+      70.4088333
+    ]
+  },
+  {
+    "scale": "berthing",
+    "rank": 6,
+    "layer": 38,
+    "kind": "construction",
+    "name": "Berthing.Shoreline_Construction_line",
+    "bounds": [
+      -159.5908387,
+      17.7134419,
+      166.6201137,
+      59.607991999999996
+    ]
+  },
+  {
+    "scale": "berthing",
+    "rank": 6,
+    "layer": 62,
+    "kind": "construction",
+    "name": "Berthing.Shoreline_Construction_area",
+    "bounds": [
+      -161.4816403,
+      5.335244699999979,
+      177.547322,
+      60.5817379
+    ]
+  }
+]

@@ -19,9 +19,8 @@ class MarineMapController {
     defaultValue: '',
   );
 
-  /// Bleu profond utilisé pour l'océan à l'échelle mondiale.
-  /// Il reprend la teinte générale de la référence visuelle NoWave.
-  static const String deepWaterColor = '#DEF2FB';
+  /// Fond marin accordé aux zones côtières claires du raster.
+  static const String deepWaterColor = '#E6F7FD';
 
   Future<void> install(MapboxMap map) async {
     final style = map.style;
@@ -70,7 +69,17 @@ class MarineMapController {
           id: bathymetryLayerId,
           sourceId: bathymetrySourceId,
           slot: LayerSlot.BOTTOM,
-          rasterOpacity: 1.0,
+          // L'emprise régionale EMODnet ne doit pas former un rectangle
+          // contrasté sur le globe. Les détails apparaissent progressivement.
+          rasterOpacityExpression: const [
+            'interpolate',
+            ['linear'],
+            ['zoom'],
+            4,
+            0.0,
+            7,
+            1.0,
+          ],
           rasterFadeDuration: 150,
           rasterResampling: RasterResampling.LINEAR,
         ),

@@ -94,19 +94,19 @@ EMODNET_COLORS = [
 
 
 def test_recolor_orders_source_colors_from_light_shallows_to_dark_depths():
-    source = Image.new("RGB", (len(EMODNET_COLORS), 1))
-    source.putdata(EMODNET_COLORS)
+    source = Image.new("RGB", (len(EMODNET_COLORS) * 16, 1))
+    source.putdata([color for color in EMODNET_COLORS for _ in range(16)])
 
     result = Image.open(BytesIO(recolor_bathymetry_png(png_bytes(source))))
-    colors = [result.getpixel((x, 0)) for x in range(result.width)]
+    colors = [result.getpixel((x * 16 + 8, 0)) for x in range(len(EMODNET_COLORS))]
     luminances = [
         0.2126 * red + 0.7152 * green + 0.0722 * blue
         for red, green, blue, _ in colors
     ]
 
     assert all(a > b for a, b in zip(luminances, luminances[1:]))
-    assert colors[0][:3] == (222, 242, 251)
-    assert colors[-1][:3] == (12, 47, 80)
+    assert colors[0][:3] == (230, 247, 253)
+    assert colors[-1][:3] == (30, 111, 168)
     assert all(red < green < blue and alpha == 255 for red, green, blue, alpha in colors)
 
 
@@ -128,9 +128,9 @@ def test_recolor_produces_a_continuous_blue_gradient():
         all(0 <= a - b <= 1 for a, b in zip(left, right))
         for left, right in zip(colors, colors[1:])
     )
-    # Ce segment reste entre #215B86 et #4389B5.
+    # Ce segment se situe dans les bleus soutenus de la nouvelle palette.
     assert all(
-        33 <= red <= 67 and 91 <= green <= 137 and 134 <= blue <= 181
+        30 <= red <= 143 and 111 <= green <= 208 and 168 <= blue <= 238
         for red, green, blue in colors
     )
 
@@ -190,4 +190,30 @@ def test_fetch_caches_the_final_recolored_png(monkeypatch):
     assert requests[0]["srs"] == "EPSG:3857"
     assert requests[0]["transparent"] == "true"
     result = Image.open(BytesIO(first))
-    assert result.getpixel((0, 0)) == (12, 47, 80, 127)
+    assert result.getpixel((0, 0))[3] == 127
+    assert all(abs(a - b) <= 2 for a, b in zip(result.getpixel((0, 0))[:3], (30, 111, 168)))
+
+
+def test_smoothing_softens_depth_edges_without_darkening_transparent_coast():
+    def tile(transparent_rgb):
+        image = Image.new("RGBA", (32, 4), (*transparent_rgb, 0))
+        for y in range(4):
+            for x in range(16):
+                image.putpixel((x, y), (0, 0, 62, 255))
+        return Image.open(BytesIO(recolor_bathymetry_png(png_bytes(image))))
+
+    black, white = tile((0, 0, 0)), tile((255, 255, 255))
+    # RGB values in the no-data pixels must never tint the adjacent water.
+    assert black.getpixel((15, 2)) == white.getpixel((15, 2))
+    assert black.getpixel((15, 2))[3] == 255
+    assert black.getpixel((16, 2))[3] == 0
+    assert all(abs(a - b) <= 2 for a, b in zip(black.getpixel((15, 2))[:3], (30, 111, 168)))
+
+    source = Image.new("RGB", (32, 4), EMODNET_COLORS[0])
+    for y in range(4):
+        for x in range(16, 32):
+            source.putpixel((x, y), EMODNET_COLORS[-1])
+    result = Image.open(BytesIO(recolor_bathymetry_png(png_bytes(source))))
+    assert result.getpixel((0, 2)) != result.getpixel((15, 2))
+    assert result.getpixel((15, 2)) != result.getpixel((16, 2))
+    assert result.getpixel((16, 2)) != result.getpixel((31, 2))

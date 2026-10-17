@@ -1,8 +1,10 @@
 import 'package:mapbox_maps_flutter/mapbox_maps_flutter.dart';
 
+import 'marine_tiles.dart';
+
 /// Habillage NoWave des infrastructures portuaires.
 ///
-/// Source : tuiles vectorielles OpenStreetMap Shortbread.
+/// Source : fusion NoWave des sources officielles et OSM Shortbread.
 ///
 /// Hiérarchie visuelle :
 /// - bassins : très discrets ;
@@ -21,23 +23,41 @@ class PortLayer {
   static const String _groyneLayerId = 'nowave-port-groynes';
   static const String _pierLayerId = 'nowave-port-piers';
 
-  static const String _tileUrl =
-      'https://vector.openstreetmap.org/shortbread_v1/{z}/{x}/{y}.mvt';
+  static final String tilesUrl = MarineTiles.template('port-infrastructure');
+  static Future<void>? _installing;
 
   static Future<void> addTo(MapboxMap map) async {
+    final pending = _installing;
+    if (pending != null) {
+      try {
+        await pending;
+      } catch (_) {
+        /* Le style peut avoir changé. */
+      }
+      return addTo(map);
+    }
+    final install = _install(map);
+    _installing = install;
+    try {
+      await install;
+    } finally {
+      _installing = null;
+    }
+  }
+
+  static Future<void> _install(MapboxMap map) async {
     final style = map.style;
 
     if (!await style.styleSourceExists(sourceId)) {
       await style.addSource(
         VectorSource(
           id: sourceId,
-          tiles: const [_tileUrl],
-          minzoom: 0,
+          tiles: [tilesUrl],
+          minzoom: 10,
           maxzoom: 14,
           prefetchZoomDelta: 0,
-          attribution:
-              '<a href="https://www.openstreetmap.org/copyright">'
-              '© OpenStreetMap contributors</a>',
+          tileNetworkRequestsDelay: 0.25,
+          attribution: MarineTiles.attribution,
         ),
       );
     }

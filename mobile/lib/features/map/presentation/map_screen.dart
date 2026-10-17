@@ -15,6 +15,7 @@ import '../../../core/location/location_service.dart';
 import '../../../core/map/accuracy_halo.dart';
 import '../../../core/map/map_config.dart';
 import '../../../core/map/marine/marine_map_controller.dart';
+import '../../../core/map/marine/water_texture_layer.dart';
 import '../../../core/sensors/device_orientation_service.dart';
 import '../../camera/domain/photo_report_draft.dart';
 import '../../reports/data/manual_report_service.dart';
@@ -23,10 +24,12 @@ import '../../reports/domain/manual_report.dart';
 import '../../reports/domain/report_detail.dart';
 import '../../reports/presentation/report_composer_sheet.dart';
 import '../../reports/presentation/report_detail_sheet.dart';
+import '../data/buoy_layer.dart';
 import '../data/port_layer.dart';
 import '../data/report_layer_controller.dart';
 import '../data/report_tiles.dart';
 import 'widgets/map_notice_banner.dart';
+import 'widgets/map_zoom_badge.dart';
 import 'widgets/report_marker.dart';
 
 /// Nord en haut, carte tournée selon le cap du téléphone, ou rotation libre
@@ -108,6 +111,8 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
   String? _locationError;
   MapboxMap? _mapboxMap;
   final _marineMap = MarineMapController();
+  final _waterTexture = WaterTextureLayer();
+  final _buoyLayer = BuoyLayer();
   String? _mapError;
   bool _reportComposerOpen = false;
   CameraState? _cameraBeforeReport;
@@ -137,6 +142,7 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
   /// Dernier zoom connu, pour relancer le battement de la heatmap au
   /// retour au premier plan.
   double? _cameraZoom;
+  final _displayedZoom = ValueNotifier<double>(7);
 
   /// Coupe le battement de la heatmap, le renouvellement du token des
   /// tuiles et le réseau de Mapbox quand l'app n'est plus visible.
@@ -215,7 +221,9 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
   /// Un geste de l'utilisateur coupe le suivi GPS ; une rotation au doigt
   /// passe la boussole en mode manuel.
   void _handleMapCameraChange(CameraChangedEventData event) {
+    if (!mounted) return;
     _cameraZoom = event.cameraState.zoom;
+    _displayedZoom.value = event.cameraState.zoom;
     _syncHeatmapPulse();
     _syncLocationPuck().ignore();
     final bearing = event.cameraState.bearing;
@@ -249,6 +257,7 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
     required bool editing,
   }) async {
     try {
+      final bottom = MediaQuery.viewPaddingOf(context).bottom + 4;
       await Future.wait([
         map.logo.updateSettings(
           LogoSettings(
@@ -257,7 +266,7 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
                 : OrnamentPosition.BOTTOM_LEFT,
             marginLeft: 16,
             marginTop: editing ? 64 : 4,
-            marginBottom: 4,
+            marginBottom: bottom,
           ),
         ),
         map.attribution.updateSettings(
@@ -267,7 +276,7 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
                 : OrnamentPosition.BOTTOM_RIGHT,
             marginRight: 16,
             marginTop: editing ? 64 : 4,
-            marginBottom: 4,
+            marginBottom: bottom,
           ),
         ),
       ]);
@@ -343,9 +352,17 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
       return;
     }
 
+    // Une panne de la décoration ne masque jamais la carte.
+    if (event.sourceId == WaterTextureLayer.sourceId) return;
+
     // Les infrastructures portuaires sont un enrichissement facultatif.
     // Leur indisponibilité ne doit jamais masquer le fond Mapbox.
     if (event.sourceId == PortLayer.sourceId) {
+      return;
+    }
+
+    // Une panne du fournisseur de bouées ne masque aucune autre couche.
+    if (event.sourceId == BuoyLayer.sourceId) {
       return;
     }
 
@@ -466,10 +483,12 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
     // L'ordre est volontaire :
     //
     // 1. bathymétrie ;
-    // 2. infrastructures portuaires.
+    // 2. texture d’eau ;
+    // 3. infrastructures portuaires ;
+    // 4. bouées (slot TOP, sous les reports sans slot).
     //
-    // Les docks et la bathymétrie utilisent tous les deux le slot BOTTOM.
-    // Les ports sont donc ajoutés après la bathymétrie afin de rester
+    // La bathymétrie, la texture et les docks utilisent le slot BOTTOM.
+    // Les ports sont donc ajoutés après ces fonds afin de rester
     // visibles au-dessus de celle-ci.
     await _installMarineMap();
 
@@ -477,10 +496,22 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
     if (map == null) return;
 
     try {
+      await _waterTexture.addTo(map);
+    } catch (error) {
+      debugPrint('Texture d’eau non installée : $error');
+    }
+
+    try {
       await PortLayer.addTo(map);
     } catch (error) {
       // Comme la bathymétrie, les données portuaires sont facultatives.
       debugPrint('Couche portuaire non installée : $error');
+    }
+
+    try {
+      await _buoyLayer.addTo(map);
+    } catch (error) {
+      debugPrint('Couche bouées non installée : $error');
     }
   }
 
@@ -788,17 +819,16 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
     }
   }
 
-  /// Zoom sur l'utilisateur au lancement et à chaque recentrage.
-  static const _userZoom = 14.0;
+  /// Vue locale utile à chaque appui sur le bouton GPS.
+  static const _userZoom = 15.5;
 
-  /// Durée maximale du vol vers l'utilisateur au recentrage : Mapbox
-  /// raccourcit l'animation quand la distance est faible.
-  static const _recenterMaxDuration = Duration(milliseconds: 1200);
+  /// Vol lisible depuis le globe, interruptible par un geste.
+  static const _recenterDuration = Duration(milliseconds: 2200);
 
-  /// Centre la carte sur l'utilisateur puis le suit à chaque nouvelle position.
-  /// [animated] : vol jusqu'à l'utilisateur (bouton), sinon saut direct
-  /// (lancement de la carte).
-  Future<void> _locate({bool animated = false}) async {
+  /// Met à jour le GPS et le curseur. Au démarrage, la caméra reste libre.
+  /// [recenter] déclenche un vol ponctuel, sans suivi permanent.
+  Future<void> _locate({bool recenter = false}) async {
+    if (_isLocating) return;
     setState(() {
       _isLocating = true;
       _locationError = null;
@@ -820,50 +850,31 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
 
       if (!mounted) return;
 
-      CameraState? previousCamera;
-      if (_positionSubscription != null) {
-        try {
-          previousCamera = await _mapboxMap?.getCameraState();
-        } catch (_) {
-          // Pas de caméra précédente : valeurs par défaut ci-dessous.
-        }
-      }
-
-      if (!mounted) return;
-
-      void followUser() {
-        _isFollowing = true;
-        _viewport = FollowPuckViewportState(
-          // Toujours le zoom du lancement : après un dézoom sur le globe,
-          // recentrer doit aussi ramener au niveau de la rue.
-          zoom: _userZoom,
-          bearing: switch (_orientationMode) {
-            _MapOrientationMode.north =>
-              const FollowPuckViewportStateBearingConstant(0),
-            _MapOrientationMode.heading =>
-              FollowPuckViewportStateBearingConstant(
-                _selectedBearing ?? previousCamera?.bearing ?? _cameraBearing,
-              ),
-            _MapOrientationMode.manual =>
-              FollowPuckViewportStateBearingConstant(
-                previousCamera?.bearing ?? _cameraBearing,
-              ),
-          },
-          pitch: previousCamera?.pitch ?? 60,
-        );
-      }
-
-      if (animated) {
-        // Mapbox marque cette animation du viewport comme expérimentale.
-        // ignore: experimental_member_use
-        setStateWithViewportAnimation(
-          followUser,
-          transition: const DefaultViewportTransition(
-            maxDuration: _recenterMaxDuration,
+      final map = _mapboxMap;
+      if (recenter && map != null && !_reportComposerOpen && !_hidden) {
+        final camera = await map.getCameraState();
+        if (!mounted || _reportComposerOpen || _hidden) return;
+        setState(() {
+          _isFollowing = false;
+          _viewport = const IdleViewportState();
+        });
+        await WidgetsBinding.instance.endOfFrame;
+        if (!mounted || _reportComposerOpen || _hidden) return;
+        await map.flyTo(
+          CameraOptions(
+            center: Point(
+              coordinates: Position(position.longitude, position.latitude),
+            ),
+            zoom: _userZoom,
+            pitch: 0,
+            bearing: _orientationMode == _MapOrientationMode.north
+                ? 0
+                : camera.bearing,
+          ),
+          MapAnimationOptions(
+            duration: _reduceMotion ? 0 : _recenterDuration.inMilliseconds,
           ),
         );
-      } else {
-        setState(followUser);
       }
 
       // Flux partagé avec le suivi des alertes (NW-159), qui peut continuer
@@ -1275,6 +1286,7 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
     _reportMarkerDropTimer?.cancel();
     _noticeTimer?.cancel();
     _selectedExpiryTimer?.cancel();
+    _displayedZoom.dispose();
     _reportPoint.dispose();
     _reportMarkerLifted.dispose();
     final subscription = _positionSubscription;
@@ -1327,6 +1339,9 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
                 onMapCreated: (map) {
                   setState(() => _mapboxMap = map);
                   unawaited(MapConfig.hideDefaultOrnaments(map));
+                  unawaited(
+                    _positionMapOrnaments(map, editing: _reportComposerOpen),
+                  );
                   _addReportInteractions(map);
                   if (_selectedReport == null) unawaited(_locate());
                 },
@@ -1385,29 +1400,38 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
                       Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Expanded(
                             child: Align(
                               alignment: Alignment.centerLeft,
-                              child: Container(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 12,
-                                  vertical: 9,
-                                ),
-                                decoration: BoxDecoration(
-                                  color: const Color(0xFFF6F8FA)
-                                      .withValues(alpha: 0.90),
-                                  borderRadius: BorderRadius.circular(14),
-                                ),
-                                child: Text(
-                                  gpsLabel,
-                                  maxLines: 2,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: const TextStyle(
-                                    color: Color(0xFF243243),
-                                    fontSize: 12,
+                              child: Column(
+                                mainAxisSize: MainAxisSize.min,
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 12,
+                                      vertical: 9,
+                                    ),
+                                    decoration: BoxDecoration(
+                                      color: const Color(0xFFF6F8FA)
+                                          .withValues(alpha: 0.90),
+                                      borderRadius: BorderRadius.circular(14),
+                                    ),
+                                    child: Text(
+                                      gpsLabel,
+                                      maxLines: 2,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: const TextStyle(
+                                        color: Color(0xFF243243),
+                                        fontSize: 12,
+                                      ),
+                                    ),
                                   ),
-                                ),
+                                  const SizedBox(height: 4),
+                                  MapZoomBadge(zoom: _displayedZoom),
+                                ],
                               ),
                             ),
                           ),
@@ -1532,7 +1556,7 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
                           ? null
                           : () {
                               AppHaptics.selection();
-                              unawaited(_locate(animated: true));
+                              unawaited(_locate(recenter: true));
                             },
                       icon: _isLocating
                           ? const SizedBox(

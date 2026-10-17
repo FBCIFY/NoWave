@@ -40,12 +40,12 @@ _EMODNET_RAMP = (
 )
 
 _NOWAVE_RAMP = (
-    (222, 242, 251),  # #DEF2FB
-    (184, 222, 242),  # #B8DEF2
-    (119, 183, 216),  # #77B7D8
-    (67, 137, 181),   # #4389B5
-    (33, 91, 134),    # #215B86
-    (12, 47, 80),     # #0C2F50
+    (230, 247, 253),  # #E6F7FD
+    (210, 240, 251),  # #D2F0FB
+    (183, 228, 247),  # #B7E4F7
+    (143, 208, 238),  # #8FD0EE
+    (92, 179, 223),   # #5CB3DF
+    (30, 111, 168),   # #1E6FA8
 )
 
 # Demi-circonférence du monde en Web Mercator EPSG:3857.
@@ -134,6 +134,15 @@ def recolor_bathymetry_png(content: bytes) -> bytes:
                 raise BathymetryUnavailable("Expected an EMODnet PNG tile")
             rgba = source.convert("RGBA")
         recolored = rgba.convert("RGB").filter(_blue_color_lut())
+        recolored.putalpha(rgba.getchannel("A"))
+        # Adoucissement visuel subpixel, sans mélanger le noir/blanc des
+        # pixels sans données à la côte. L'alpha source reste strictement
+        # inchangé : ce lissage ne modifie ni l'emprise ni les profondeurs.
+        recolored = (
+            recolored.convert("RGBa")
+            .filter(ImageFilter.GaussianBlur(radius=0.65))
+            .convert("RGBA")
+        )
         recolored.putalpha(rgba.getchannel("A"))
         output = BytesIO()
         recolored.save(output, format="PNG")

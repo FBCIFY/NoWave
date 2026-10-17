@@ -1,0 +1,21 @@
+{
+  "retrieved_at": "2026-10-16",
+  "shom_url": "https://services.data.shom.fr/INSPIRE/wfs",
+  "shom_classes": [
+    "au_exclusive_economic_zone",
+    "au_territorial_sea"
+  ],
+  "shom_attribution": "Shom, Espaces maritimes de souverainet\u00e9 et de juridiction, Licence Ouverte 2.0",
+  "noaa_url": "https://encdirect.noaa.gov/arcgis/rest/services/encdirect",
+  "noaa_coverage_counts": {
+    "overview": 26,
+    "general": 103,
+    "coastal": 371,
+    "approach": 1319,
+    "harbour": 4486,
+    "berthing": 65
+  },
+  "noaa_layer_count": 40,
+  "noaa_license": "CC0 1.0; NOAA Office of Coast Survey",
+  "routing_only": "Simplified, buffered masks, not legal boundaries. Global fallbacks always retained."
+}

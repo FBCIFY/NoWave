@@ -43,6 +43,7 @@ flutter:
   # tool/make_location_puck.py.
   assets:
     - assets/models/location_puck.glb
+    - assets/icons/buoys/
 
   # Raleway, la police du logo NoWave (licence OFL dans le même dossier).
   # Embarquée plutôt que téléchargée : elle reste disponible hors réseau.
