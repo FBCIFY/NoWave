@@ -6,7 +6,6 @@ import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart' as geo;
 import 'package:mapbox_maps_flutter/mapbox_maps_flutter.dart';
-import 'package:precise_compass/precise_compass.dart';
 import 'package:uuid/uuid.dart';
 
 import '../../../core/haptics/app_haptics.dart';
@@ -91,7 +90,7 @@ class MapScreen extends StatefulWidget {
 class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
   final _locationService = LocationService();
   StreamSubscription<geo.Position>? _positionSubscription;
-  StreamSubscription<CompassReading>? _headingSubscription;
+  StreamSubscription<double>? _headingSubscription;
 
   geo.Position? _position;
   double? _deviceHeading;
@@ -171,11 +170,10 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
     _startReportTilesTokenRenewal();
     _reportLayer.status.addListener(_handleReportLayerStatus);
     WidgetsBinding.instance.addObserver(this);
-    _headingSubscription = DeviceOrientationService().readings.listen(
-      (reading) {
+    _headingSubscription = DeviceOrientationService().mapHeadings.listen(
+      (heading) {
         if (!mounted) return;
-        final heading = reading.headingTrue ?? reading.headingMagnetic;
-        if (heading == null || !heading.isFinite) return;
+        if (!heading.isFinite) return;
         _deviceHeading = heading;
         _setCompassTurnsForHeading(heading);
       },

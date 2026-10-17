@@ -5,6 +5,8 @@ import android.hardware.Sensor
 import android.hardware.SensorEvent
 import android.hardware.SensorEventListener
 import android.hardware.SensorManager
+import android.hardware.display.DisplayManager
+import android.view.Display
 import io.flutter.plugin.common.EventChannel
 
 /**
@@ -18,9 +20,12 @@ import io.flutter.plugin.common.EventChannel
 class RotationMatrixStreamHandler(context: Context) : EventChannel.StreamHandler {
     private val sensorManager =
         context.getSystemService(Context.SENSOR_SERVICE) as SensorManager
+    private val display = (context.getSystemService(Context.DISPLAY_SERVICE) as DisplayManager)
+        .getDisplay(Display.DEFAULT_DISPLAY)
     private var listener: SensorEventListener? = null
 
     override fun onListen(arguments: Any?, events: EventChannel.EventSink) {
+        stop()
         val sensor = sensorManager.getDefaultSensor(Sensor.TYPE_ROTATION_VECTOR)
             ?: sensorManager.getDefaultSensor(Sensor.TYPE_GEOMAGNETIC_ROTATION_VECTOR)
         if (sensor == null) {
@@ -35,7 +40,12 @@ class RotationMatrixStreamHandler(context: Context) : EventChannel.StreamHandler
                 val vector =
                     if (event.values.size > 4) event.values.copyOfRange(0, 4) else event.values
                 SensorManager.getRotationMatrixFromVector(matrix, vector)
-                events.success(matrix.map { it.toDouble() })
+                // La caméra conserve la matrice brute (-Z, NW-150). Seul le cap
+                // de carte interprète la rotation de l'écran côté Dart.
+                events.success(mapOf(
+                    "matrix" to matrix.map { it.toDouble() },
+                    "displayRotation" to (display?.rotation ?: 0),
+                ))
             }
 
             override fun onAccuracyChanged(sensor: Sensor, accuracy: Int) {}
@@ -45,6 +55,10 @@ class RotationMatrixStreamHandler(context: Context) : EventChannel.StreamHandler
     }
 
     override fun onCancel(arguments: Any?) {
+        stop()
+    }
+
+    fun stop() {
         listener?.let { sensorManager.unregisterListener(it) }
         listener = null
     }
