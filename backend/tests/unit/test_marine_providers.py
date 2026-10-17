@@ -32,7 +32,7 @@ def tile_at(lon, lat, z=12):
 FIXTURES = Path(__file__).parents[1] / "fixtures/marine"
 
 
-def test_real_shom_attributes_linked_topmarks_and_cardinal_beacon_exclusion():
+def test_real_shom_attributes_linked_topmarks_and_cardinal_beacons():
     data = json.loads((FIXTURES / "shom.json").read_text())
     tops = {f["properties"]["inspireid"]: f for f in data["topmar"]}
     for code, kind in CLASSES.items():
@@ -43,7 +43,7 @@ def test_real_shom_attributes_linked_topmarks_and_cardinal_beacon_exclusion():
                 assert mark.topmark_shape and mark.topmark_color
             assert mark.geometry.x > 5 and mark.geometry.y > 43
             assert mark.navigation_system == "IALA_A"
-    assert data["bcncar"] and "bcncar" not in CLASSES
+    assert data["bcncar"] and CLASSES["bcncar"] == "beacon_cardinal"
 
 
 def test_real_noaa_region_b_and_s57_quay_semantics():
@@ -83,7 +83,7 @@ def test_shom_adapter_contract_offline(tmp_path):
             tile_at(5.93, 43.09), MarineFamily.SEAMARKS
         )
         assert not result.failures and result.features
-        assert all(f.type.startswith("buoy_") for f in result.features)
+        assert all(f.type.startswith(("buoy_", "beacon_")) for f in result.features)
         assert any(f.topmark_shape for f in result.features)
         await http.close()
 
@@ -233,7 +233,7 @@ def test_real_fallback_mvt_coordinates_types_and_dock_semantics(tmp_path):
         http = MarineHTTP(tmp_path / "fallback.sqlite", httpx.MockTransport(handler))
         tile = Tile(12, 2115, 1503)
         aids = await OpenWatersProvider(http).fetch(tile, MarineFamily.SEAMARKS)
-        assert aids.features and all(f.type.startswith("buoy_") for f in aids.features)
+        assert aids.features and all(f.type.startswith(("buoy_", "beacon_")) for f in aids.features)
         assert {"buoy_lateral", "buoy_safe_water", "buoy_special_purpose"} <= {
             f.type for f in aids.features
         }

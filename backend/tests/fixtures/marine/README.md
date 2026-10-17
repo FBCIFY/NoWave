@@ -5,8 +5,8 @@ Minimal real provider responses, fetched 2026-10-16 (longitude/latitude).
   bbox `5.85,43.04,6.0,43.15`, EPSG:4326, outputFormat=json.
   [Dataset / Licence Ouverte 2.0](https://diffusion.shom.fr/donnees/balisage_maritime.html).
   Attribution: Shom, https://dx.doi.org/10.17183/DOI_BALISAGE_MARITIME.
-  Only sample features and their linked topmarks retained. `bcncar` is diagnostic,
-  excluded from the production output and mobile rendering.
+  Only sample features and their linked topmarks retained. `bcncar`, initially
+  diagnostic, is now included in the fixed-aid extension; it remains outside the buoy renderer.
 * `noaa.json`: NOAA ENC Direct, `enc_harbour/MapServer/{6,138}/query`,
   f=geojson, bbox `-80.2,25.73,-80.1,25.83`, outSR=4326, outFields=*.
   [Dataset / CC0](https://repository.library.noaa.gov/view/noaa/71555).
@@ -37,3 +37,21 @@ ci-dessus : © IGN BD TOPO édition WFS 2026-06-15, Licence Ouverte 2.0 ;
 du décodage MVT/GeoJSON et du retrait de l'altitude IGN. Les IDs Shortbread désignent
 des fragments de tuile. Le test vérifie ces correspondances de haute confiance et
 la conservation de la géométrie officielle avec les deux provenances.
+
+
+`fixed-aids.json`: real SHOM WFS excerpts (`bcncar`, `bcnlat`, `bcnspp`,
+`lights`, `lndmrk`) for bbox 5.85,43.04,6.0,43.15, and NOAA ENC Direct
+`enc_harbour/MapServer/{1,11,26}/query`, bbox -80.3,25.6,-80.05,25.9,
+fetched 2026-10-17 with the same GeoJSON/CRS84 parameters described above.
+SHOM Licence Ouverte 2.0 / DOI BALISAGE_MARITIME; NOAA ENC CC0 1.0.
+Contains qualified Cape Cépet / Cape Florida tower-light-support examples,
+a non-lighthouse landmark, actual IALA B green-port/red-starboard beacons,
+and raw light attributes. No coordinates or nautical attributes invented.
+The encoder unit test explicitly relocates a copy into its tile solely to
+isolate encoding; that copy is never an integration fixture or display data.
+
+Sparse classes additionally checked 2026-10-17: SHOM `bcnisd` GetFeature
+maxFeatures=1 without bbox (Caye Ronde, Martinique) and NOAA harbour layer 2
+query resultRecordCount=1 without envelope (Buttonwood Harbor). The same licences
+apply. These real excerpts validate isolated-danger / safe-water semantics even
+though those fixed classes are absent from the four local validation tiles.

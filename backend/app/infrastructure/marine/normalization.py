@@ -1,5 +1,6 @@
 """S-57 Edition 3.1 attributes, not the different S-101 enumerations."""
 
+import math
 import re
 from dataclasses import replace
 
@@ -77,7 +78,89 @@ CLASSES = {
     "boylat": "buoy_lateral",
     "boysaw": "buoy_safe_water",
     "boyspp": "buoy_special_purpose",
+    "bcncar": "beacon_cardinal",
+    "bcnisd": "beacon_isolated_danger",
+    "bcnlat": "beacon_lateral",
+    "bcnspp": "beacon_special_purpose",
+    "lights": "light",
+    "lndmrk": "lighthouse",
 }
+
+
+BEACON_SHAPES = {
+    1: "stake",
+    2: "withy",
+    3: "beacon_tower",
+    4: "lattice_beacon",
+    5: "pile",
+    6: "cairn",
+    7: "buoyant_beacon",
+}
+
+
+def number(value):
+    try:
+        result = float(value)
+        return result if math.isfinite(result) and result >= 0 else None
+    except (TypeError, ValueError):
+        return None
+
+
+def lighthouse_structure(feature):
+    """S-57 UOC 12.3.2: a tower explicitly serving as a light support.
+
+    A named landmark, tall building, light range or function 'lighting' alone
+    cannot establish a lighthouse. Other landmark categories are not imported.
+    """
+    p = attributes(feature)
+    categories = {v.strip().lower() for v in text(p.get("catlmk")).split(",")}
+    functions = {v.strip().lower() for v in text(p.get("functn")).split(",")}
+    return bool(categories & {"17", "tower"} and functions & {"33", "light support"})
+
+
+def light_attributes(feature):
+    p = attributes(feature)
+    return dict(
+        light_color=codes(p.get("colour"), COLORS),
+        # Keep the real S-57 LITCHR code/label, SIGGRP and SIGPER; no text overlay.
+        light_character=text(p.get("litchr")),
+        light_range=number(p.get("valnmr")),
+        light_group=text(p.get("siggrp")),
+        light_period=number(p.get("sigper")),
+    )
+
+
+def osm_light_attributes(p):
+    details = tuple(
+        (k, text(v))
+        for k, v in sorted(p.items())
+        if re.fullmatch(
+            r"seamark:light(?::[0-9]+)?:(colour|character|range|group|period)", k
+        )
+    )
+    colors = []
+    for key, value in details:
+        if key.endswith(":colour"):
+            for color in value.split(";"):
+                if color.strip() and color.strip() not in colors:
+                    colors.append(color.strip())
+    return dict(
+        light_color="_".join(colors),
+        light_character=text(p.get("seamark:light:character")),
+        light_range=number(p.get("seamark:light:range")),
+        light_group=text(p.get("seamark:light:group")),
+        light_period=number(p.get("seamark:light:period")),
+        light_details=details,
+    )
+
+
+def attach_light(mark, light):
+    sid = text(attributes(light).get("inspireid")) or text(light.get("id"))
+    return replace(
+        mark,
+        **light_attributes(light),
+        provenance=(*mark.provenance, f"{mark.source}:light:{sid}"),
+    )
 
 
 def text(value):
@@ -144,13 +227,20 @@ def seamark(feature, feature_type, *, source, dataset, priority, scale=""):
         ),
         type=feature_type,
         category=codes(p.get("catcam"), CARDINAL)
-        if feature_type == "buoy_cardinal"
+        if feature_type in {"buoy_cardinal", "beacon_cardinal"}
         else codes(p.get("catlam"), LATERAL)
-        if feature_type == "buoy_lateral"
+        if feature_type in {"buoy_lateral", "beacon_lateral"}
+        else codes(p.get("catlmk"), {17: "tower"})
+        if feature_type == "lighthouse"
+        else text(p.get("catlit"))
+        if feature_type == "light"
         else text(p.get("catspm")),
         color=codes(p.get("colour"), COLORS),
         color_pattern=codes(p.get("colpat"), PATTERNS),
-        shape=codes(p.get("boyshp"), SHAPES),
+        shape=codes(p.get("bcnshp"), BEACON_SHAPES)
+        if feature_type.startswith("beacon_")
+        else codes(p.get("boyshp"), SHAPES),
+        **(light_attributes(feature) if feature_type == "light" else {}),
         navigation_system=system,
     )
 

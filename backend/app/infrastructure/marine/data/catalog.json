@@ -15,7 +15,17 @@
     "harbour": 4486,
     "berthing": 65
   },
-  "noaa_layer_count": 40,
+  "noaa_layer_count": 69,
   "noaa_license": "CC0 1.0; NOAA Office of Coast Survey",
-  "routing_only": "Simplified, buffered masks, not legal boundaries. Global fallbacks always retained."
+  "routing_only": "Simplified, buffered masks, not legal boundaries. Global fallbacks always retained.",
+  "fixed_aids_verified_at": "2026-10-17",
+  "shom_fixed_classes": [
+    "bcncar",
+    "bcnisd",
+    "bcnlat",
+    "bcnspp",
+    "lights",
+    "lndmrk"
+  ],
+  "lighthouse_qualification": "LNDMRK CATLMK=17/tower and FUNCTN=33/light support only"
 }

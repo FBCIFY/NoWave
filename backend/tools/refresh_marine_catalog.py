@@ -108,6 +108,14 @@ async def refresh(directory):
                 kind = None
                 if ".Buoy_" in n:
                     kind = KINDS.get(n.split(".Buoy_")[1].removesuffix("_point"))
+                elif ".Beacon_" in n:
+                    kind = KINDS.get(n.split(".Beacon_")[1].removesuffix("_point"))
+                    kind = kind.replace("buoy_", "beacon_") if kind else None
+                elif n.endswith(".Light_point"):
+                    kind = "light"
+                elif n.endswith(".Landmark_point"):
+                    # Provider retains only CATLMK=tower + FUNCTN=light support.
+                    kind = "lighthouse"
                 elif n.endswith(".Topmark_point"):
                     kind = "topmark"
                 elif n.endswith(

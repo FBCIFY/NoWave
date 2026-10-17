@@ -25,6 +25,7 @@ import '../../reports/domain/report_detail.dart';
 import '../../reports/presentation/report_composer_sheet.dart';
 import '../../reports/presentation/report_detail_sheet.dart';
 import '../data/buoy_layer.dart';
+import '../data/fixed_aid_layer.dart';
 import '../data/port_layer.dart';
 import '../data/report_layer_controller.dart';
 import '../data/report_tiles.dart';
@@ -113,6 +114,7 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
   final _marineMap = MarineMapController();
   final _waterTexture = WaterTextureLayer();
   final _buoyLayer = BuoyLayer();
+  final _fixedAidLayer = FixedAidLayer();
   String? _mapError;
   bool _reportComposerOpen = false;
   CameraState? _cameraBeforeReport;
@@ -485,7 +487,8 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
     // 1. bathymétrie ;
     // 2. texture d’eau ;
     // 3. infrastructures portuaires ;
-    // 4. bouées (slot TOP, sous les reports sans slot).
+    // 4. bouées (slot TOP, sous les reports sans slot) ;
+    // 5. aides fixes insérées sous les bouées dans le même slot.
     //
     // La bathymétrie, la texture et les docks utilisent le slot BOTTOM.
     // Les ports sont donc ajoutés après ces fonds afin de rester
@@ -512,6 +515,12 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
       await _buoyLayer.addTo(map);
     } catch (error) {
       debugPrint('Couche bouées non installée : $error');
+    }
+
+    try {
+      await _fixedAidLayer.addTo(map);
+    } catch (error) {
+      debugPrint('Aides fixes non installées : $error');
     }
   }
 

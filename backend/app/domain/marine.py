@@ -31,6 +31,10 @@ BUOY_TYPES = frozenset(
 )
 
 
+BEACON_TYPES = frozenset(t.replace("buoy_", "beacon_") for t in BUOY_TYPES)
+SEAMARK_TYPES = BUOY_TYPES | BEACON_TYPES | {"lighthouse", "light"}
+
+
 @dataclass(frozen=True, kw_only=True)
 class MarineFeature:
     id: str
@@ -67,6 +71,12 @@ class SeamarkFeature(MarineFeature):
     topmark_color: str = ""
     navigation_system: Literal["IALA_A", "IALA_B", ""] = ""
     inferred_fields: tuple[str, ...] = ()
+    light_color: str = ""
+    light_character: str = ""
+    light_range: float | None = None
+    light_group: str = ""
+    light_period: float | None = None
+    light_details: tuple[tuple[str, str], ...] = ()
 
     def __post_init__(self):
         super().__post_init__()

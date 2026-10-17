@@ -9,6 +9,7 @@ from shapely.ops import transform
 
 from app.domain.marine import (
     BUOY_TYPES,
+    SEAMARK_TYPES,
     MarineFamily,
     PortInfrastructureFeature,
     ProviderBatch,
@@ -20,6 +21,9 @@ from app.domain.marine import ProviderUnavailable
 from app.infrastructure.marine.normalization import (
     CLASSES,
     attach_topmark,
+    attach_light,
+    lighthouse_structure,
+    osm_light_attributes,
     attributes,
     infrastructure,
     seamark,
@@ -73,7 +77,11 @@ class OpenWatersProvider:
         features = []
         for f in layer.get("features", []):
             p = f["properties"]
-            if p.get("type") not in BUOY_TYPES or f["geometry"]["type"] != "Point":
+            feature_type = p.get("type")
+            if feature_type in {"light_major", "light_minor"}:
+                feature_type = "light"
+            # Do not promote major lights or generic towers to lighthouses.
+            if feature_type not in SEAMARK_TYPES or f["geometry"]["type"] != "Point":
                 continue
             geometry = transform(
                 lambda x, y: unproject(
@@ -100,12 +108,34 @@ class OpenWatersProvider:
                     "name",
                 )
             }
+            props["type"] = feature_type
+            # The upstream normalized light_range may contain a default of 9 M.
+            # Only an explicit source tag is a measured/published range here.
+            light = osm_light_attributes(p)
+            if feature_type.startswith("beacon_"):
+                # Open Waters can synthesize conventional colours/patterns.
+                # New fixed marks require actual source tags to qualify them.
+                for key, tag in [
+                    ("color", "colour"),
+                    ("color_pattern", "colour_pattern"),
+                ]:
+                    if not p.get(f"seamark:{feature_type}:{tag}"):
+                        props[key] = ""
             system = {
                 "iala-a": "IALA_A",
                 "iala-b": "IALA_B",
                 "IALA_A": "IALA_A",
                 "IALA_B": "IALA_B",
-            }.get(p.get("navigation_system") or p.get("seamark:system"), "")
+            }.get(
+                p.get("navigation_system")
+                or p.get("seamark:system")
+                or (
+                    p.get(f"seamark:{feature_type}:system")
+                    if feature_type.startswith("beacon_")
+                    else None
+                ),
+                "",
+            )
             # Preserve real lateral colors even when OSM has no system tag;
             # don't infer a side or region from a phone's position.
             features.append(
@@ -125,6 +155,7 @@ class OpenWatersProvider:
                         if p.get(key) and not p.get(raw)
                     ),
                     **props,
+                    **light,
                 )
             )
         return ProviderBatch(tuple(features))
@@ -234,16 +265,22 @@ class ShomProvider:
         )
         layers = dict(results)
         tops = {attributes(f).get("inspireid"): f for f in layers.get("topmar", [])}
+        lights = {attributes(f).get("inspireid"): f for f in layers.get("lights", [])}
         features = []
         for code, feature_type in CLASSES.items():
             for f in layers.get(code, []):
                 try:
+                    if feature_type == "lighthouse" and not lighthouse_structure(f):
+                        continue
                     buoy = seamark(
                         f, feature_type, source=self.id, dataset=code, priority=100
                     )
                     top = tops.get(attributes(f).get("topmar"))
                     if top:
                         buoy = attach_topmark(buoy, top)
+                    light = lights.get(attributes(f).get("lights"))
+                    if light:
+                        buoy = attach_light(buoy, light)
                     features.append(buoy)
                 except (ValueError, KeyError, TypeError):
                     failures.append(code + ":invalid-feature")
@@ -289,7 +326,7 @@ class NoaaProvider:
     async def fetch(self, tile, family):
         query_tile = tile.parent()
         kinds = (
-            BUOY_TYPES | {"topmark"}
+            SEAMARK_TYPES | {"topmark"}
             if family == MarineFamily.SEAMARKS
             else {"construction", "dock"}
         )
@@ -299,11 +336,13 @@ class NoaaProvider:
             if l["kind"] in kinds
             and box(*l["bounds"]).intersects(box(*query_tile.query_bounds))
         ]
+        # Preserve the request budget of the existing buoy/topmark classes.
+        layers.sort(key=lambda l: l["kind"] not in BUOY_TYPES | {"topmark"})
         indexed = {f"{l['scale']}:{l['layer']}": l for l in layers}
         results, failures = await collect(
             (key, self._layer(query_tile, layer)) for key, layer in indexed.items()
         )
-        tops = {}
+        tops, lights = {}, {}
         for key, features in results:
             layer = indexed[key]
             if layer["kind"] == "topmark":
@@ -317,6 +356,17 @@ class NoaaProvider:
                             tuple(f["geometry"]["coordinates"]),
                         )
                     ] = f
+            if layer["kind"] == "light":
+                for f in features:
+                    p = attributes(f)
+                    lights.setdefault(
+                        (
+                            layer["scale"],
+                            p.get("dsnm"),
+                            tuple(f["geometry"]["coordinates"]),
+                        ),
+                        [],
+                    ).append(f)
         features = []
         for key, raw in results:
             layer = indexed[key]
@@ -324,6 +374,8 @@ class NoaaProvider:
                 continue
             for f in raw:
                 try:
+                    if layer["kind"] == "lighthouse" and not lighthouse_structure(f):
+                        continue
                     options = dict(
                         source=self.id,
                         dataset=key,
@@ -342,6 +394,17 @@ class NoaaProvider:
                         )
                         if top:
                             result = attach_topmark(result, top)
+                        linked = lights.get(
+                            (
+                                layer["scale"],
+                                p.get("dsnm"),
+                                tuple(f["geometry"]["coordinates"]),
+                            ),
+                            [],
+                        )
+                        # Several sectors at one point are not one combined light.
+                        if layer["kind"] != "light" and len(linked) == 1:
+                            result = attach_light(result, linked[0])
                     else:
                         result = infrastructure(f, layer["kind"], **options)
                     # DSNM is genuine chart-cell provenance, not an object identity.

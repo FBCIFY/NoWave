@@ -29,6 +29,15 @@ def _point_match(a, b, ga, gb):
         "topmark_color",
         "navigation_system",
     )
+    if a.type in {"light", "lighthouse"}:
+        # Distinct colocated light colours/characteristics may be real sectors.
+        fields += (
+            "light_color",
+            "light_character",
+            "light_range",
+            "light_group",
+            "light_period",
+        )
     fields = tuple(
         f for f in fields if f not in a.inferred_fields and f not in b.inferred_fields
     )

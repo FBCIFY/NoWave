@@ -46,10 +46,10 @@ cartographique mondial ni tâche de préchargement OSM n'est créé.
 
 | Autorité / pays | Jeu et famille | Accès vectoriel / formats | Couverture, actualisation | Licence et redistribution | État NoWave |
 |---|---|---|---|---|---|
-| SHOM / France | [Balisage maritime](https://diffusion.shom.fr/donnees/balisage_maritime.html), aides | WFS ouvert; téléchargements SHP, GML, GPKG | ZEE française métropole/outre-mer; actualisation régulière, aucune date de révision par objet publiée dans le flux testé | Licence Ouverte 2.0; copie, adaptation, cache et redistribution y compris tuiles autorisés avec source/date lorsqu'elle existe | **Intégré**, cinq types de bouées et topmarks associés |
+| SHOM / France | [Balisage maritime](https://diffusion.shom.fr/donnees/balisage_maritime.html), aides | WFS ouvert; téléchargements SHP, GML, GPKG | ZEE française métropole/outre-mer; actualisation régulière, aucune date de révision par objet publiée dans le flux testé | Licence Ouverte 2.0; copie, adaptation, cache et redistribution y compris tuiles autorisés avec source/date lorsqu'elle existe | **Intégré**, bouées, balises fixes réellement publiées, feux et tours qualifiées comme phares ; topmarks et liens de feux associés |
 | SHOM / France | [Informations portuaires](https://diffusion.shom.fr/donnees/informations-portuaires.html), ports | WFS/SHP accessibles | Métropole/outre-mer; page produit: juin 2021 | Licence Ouverte 2.0; attribution « Shom, 2021. Informations portuaires » | **Non intégré**: BERTHS est un poste d'amarrage, HRBARE une zone administrative, FLODOC un dock de mise à sec; aucun n'est une géométrie générique de quai/digue à substituer aux styles actuels |
 | IGN / France | [BD TOPO](https://www.data.gouv.fr/datasets/bd-topo-r), `construction_lineaire`, nature=Quai, ports | [WFS 2.0](https://cartes.gouv.fr/aide/fr/guides-utilisateur/utiliser-les-services-de-la-geoplateforme/diffusion/wfs/), GeoJSON 3D; extraction 2D explicite | Métropole, DROM, SPM, St-Martin/St-Barthélemy; flux observé: **2026-06-15**; ne pas confondre les autres éditions/BD TOPO Express avec ce flux | Licence Ouverte 2.0, attribution IGN + jeu + édition; transformation/cache/redistribution permis | **Intégré**, uniquement ouvrages en service, sous-types conservés |
-| NOAA / USA | [ENC Direct to GIS](https://nauticalcharts.noaa.gov/data/gis-data-and-services.html), aides | ArcGIS REST query, GeoJSON; classes réelles du catalogue embarqué | Emprises ENC, territoires compris; service déclare une mise à jour hebdomadaire; données de base ENC, pas une garantie de correction nautique instantanée | [ENC CC0 1.0](https://repository.library.noaa.gov/view/noaa/71555), redistribution et dérivés libres, crédit NOAA conservé | **Intégré**, cinq types + topmarks réellement colocalisés dans la même cellule |
+| NOAA / USA | [ENC Direct to GIS](https://nauticalcharts.noaa.gov/data/gis-data-and-services.html), aides | ArcGIS REST query, GeoJSON; classes réelles du catalogue embarqué | Emprises ENC, territoires compris; service déclare une mise à jour hebdomadaire; données de base ENC, pas une garantie de correction nautique instantanée | [ENC CC0 1.0](https://repository.library.noaa.gov/view/noaa/71555), redistribution et dérivés libres, crédit NOAA conservé | **Intégré**, bouées, balises du catalogue vérifié, feux et phares qualifiés ; topmarks/feux joints uniquement à colocalisation exacte dans la même cellule |
 | NOAA / USA | Même service, ports | SLCONS point/ligne/surface et DOCARE existent; NoWave utilise lignes/surfaces SLCONS et DOCARE | Six gammes overview/general/coastal/approach/harbour/berthing; les classes absentes à une échelle ne sont pas inventées | Même jeu CC0 | **Intégré**, mapping S-57 vérifié, fusion entre échelles |
 | CHS / Canada | [ENC Maritime Chart Service](https://open.canada.ca/data/en/dataset/12b769c8-48b8-4562-80fb-4a2e5ee9b45b), aides | WMS et SOE ArcGIS accessibles; couches symboliques 6/1; les URLs de query vectoriel testées renvoient `Invalid URL` | Atlantique/Pacifique/Arctique/Grands Lacs selon ENC; catalogue: hebdomadaire | **Ce service** est catalogué OGL Canada. Cela n'ouvre pas les fichiers ENC vendus séparément | **Non intégré**, pas d'extraction exhaustive vectorielle validée |
 | CHS / Canada | Même service, ports | Couche d'affichage 1, mêmes limites techniques | Idem | Idem pour le service; [ENC / produits dérivés](https://charts.gc.ca/copyright-droitdauteur/index-eng.html) nécessitent leurs propres accords | **Non intégré**, OSM conservé; aucun faux adapter |
@@ -59,7 +59,7 @@ cartographique mondial ni tâche de préchargement OSM n'est créé.
 | AHO / Australie | Même collection, ports | Les ENC peuvent contenir les ouvrages, aucun flux libre de redistribution vérifié ici | Selon produit | Idem, pas d'accord obtenu | **Non intégré**, OSM |
 | LINZ / NZ | Hydrographic LDS, aides | WFS/export vectoriel existent, [clé API nécessaire](https://www.linz.govt.nz/guidance/data-service/linz-data-service-guide/web-services); requête sans clé: HTTP 400 | Selon couche/échelle, pas de complétude déduite du catalogue général | Licence à vérifier **par couche**; aucune donnée de cette famille n'est redistribuée par NoWave ici | **Non intégré**, aucune clé configurée disponible lors de la validation |
 | LINZ / NZ | [Shoreline construction polygon 50611](https://data.linz.govt.nz/layer/50611-shoreline-construction-polygon-hydro-122k-190k/), ports | Polygones SLCONS WGS84, WFS/export via LDS | 1:22k–1:90k, 36 objets; page consultée: 13 avril 2023 | Cette couche spécifiquement: CC BY 4.0; transformation/cache/tuiles permis avec crédit, modifications signalées | **Non intégré**, clé absente; ne pas généraliser cette licence aux autres couches LINZ |
-| Open Waters / monde | [Seamap](https://github.com/openwatersio/seamap), aides | XYZ MVT `seamark`, z0–14 | Compilation OSM mondiale, régénérations annoncées hebdomadaires; instantané réellement consulté enregistré dans les preuves | Tuiles CC BY 4.0 + attribution OSM/ODbL; le code GPL et les autres illustrations du projet ne sont pas incorporés | **Intégré**, fallback permanent des cinq types |
+| Open Waters / monde | [Seamap](https://github.com/openwatersio/seamap), aides | XYZ MVT `seamark`, z0–14 | Compilation OSM mondiale, régénérations annoncées hebdomadaires; instantané réellement consulté enregistré dans les preuves | Tuiles CC BY 4.0 + attribution OSM/ODbL; le code GPL et les autres illustrations du projet ne sont pas incorporés | **Intégré**, fallback permanent bouées/balises/feux présents ; un feu majeur ne devient pas un phare |
 | OSM / monde | [Shortbread vector tiles](https://operations.osmfoundation.org/policies/vector/), ports | XYZ MVT `water_polygons`, `pier_lines`, `pier_polygons`, z0–14 | Mondial, disponibilité sans SLA; date de mise à jour par objet non fournie | ODbL; attribution et partage de la base dérivée. Politique serveur distincte: cache ≥7 jours, User-Agent joignable, aucun bulk/offline préchargé | **Intégré**, fallback permanent |
 
 Les masques de routage SHOM dérivent du jeu séparé
@@ -174,7 +174,7 @@ la couche de lignes; la géométrie d'origine reste dans la couche canonique.
 Les cinq bouées gardent les PNG Temaki locaux, tailles, collisions et slot TOP.
 IALA B inverse les couleurs attendues des latérales/chenaux préférés. Sans système
 renseigné, la couleur publiée est dessinée sans supposer IALA A; avec un système
-connu, une contradiction reste neutre. Aucun feu/phare/beacon n'est ajouté au rendu.
+connu, une contradiction reste neutre. Les aides fixes sont désormais affichées par `FixedAidLayer`, sous les bouées, avec six couches partageant cette même source. Voir le rapport `docs/test-reports/fixed-aids.md` pour les seuils et qualifications vérifiés.
 
 Flutter utilise `API_BASE_URL` pour NoWave; `MARINE_API_BASE_URL` peut isoler le
 backend cartographique local pendant la validation. Configuration d'APK réelle:
@@ -236,5 +236,35 @@ sur le fallback z14, distinctement des omissions dues au zoom z12.
 CHS, AMSA, AHO et LINZ ne sont pas annoncés comme intégrés. Une clé LINZ et un
 contrat réel par couche sont nécessaires avant toute activation ultérieure.
 Une cardinalité manquante peut être un `beacon_cardinal`: les preuves distinguent
-ces objets fixes des bouées, sans élargir le filtre Flutter. Aucun dataset n'est une
+ces objets fixes des bouées, désormais affiché par une couche distincte, sans élargir le filtre des bouées. Aucun dataset n'est une
 carte nautique certifiée, et aucune source n'est déclarée exhaustive.
+
+
+## Extension aides fixes — 17 octobre 2026
+
+Contrat `SeamarkFeature` étendu avec `light_color`, `light_character` (code/label
+S-57 conservé pour les sources officielles), `light_range`, groupe/période et
+attributs OSM lumineux bruts numérotés. Aucune géométrie de secteur ajoutée.
+SHOM : `bcncar`, `bcnisd`, `bcnlat`, `bcnspp`, `lights`, `lndmrk` vérifiés au WFS ;
+pas de `bcnsaw` publié dans ce service. NOAA : 29 entrées de catalogue supplémentaires,
+classes `Beacon_*`, `Light_point`, `Landmark_point` réellement présentes par échelle.
+Un landmark n'est retenu comme phare que pour CATLMK=17/tower ET FUNCTN=33/light support
+(S-57 UOC 12.3.2). Les autres tours, bâtiments ou amers restent exclus.
+
+Open Waters : `beacon_*`, `light_major`/`light_minor` réellement observés ; les deux
+derniers deviennent `light`, jamais automatiquement `lighthouse`. Pas de portée
+synthétique de 9 M importée ; seules les valeurs OSM explicites sont utilisées.
+Les nouveaux beacons n'emploient pas de couleurs/motifs calculés par défaut pour
+être qualifiés. Le système IALA explicite de leurs tags est conservé ; absence = inconnu.
+CHS/AMSA/AHO/LINZ restent non intégrés pour les motifs documentés dans la matrice.
+
+Aucun objet sous z10 ; phares à z10, feux de portée explicitement ≥10 M à z11,
+balises cardinales/danger à z12, autres balises à z13, autres feux à z14. Les six
+couches `top` sont insérées sous la couche des bouées ; overlap et ignore-placement
+restent false. Source prioritaire puis portée départagent les aides fixes. Les
+couleurs, tailles et expressions des bouées sont inchangées. Les conflits de
+caractère/couleur/portée de feux ne sont pas fusionnés en un faux feu unique.
+
+Les supports non qualifiés (petits points) se placent sous les feux : une lumière
+réellement renseignée peut ainsi rester visible sur un support inconnu, sans
+déplacer sa géométrie ni masquer une bouée. Les balises qualifiées gardent leur priorité.

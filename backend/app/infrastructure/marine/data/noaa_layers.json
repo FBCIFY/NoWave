@@ -518,5 +518,382 @@
       177.547322,
       60.5817379
     ]
+  },
+  {
+    "scale": "overview",
+    "rank": 1,
+    "layer": 1,
+    "kind": "beacon_lateral",
+    "name": "Overview.Beacon_Lateral_point",
+    "bounds": [
+      -176.629504,
+      5.3240244999997195,
+      171.290328999999,
+      65.2730499999998
+    ]
+  },
+  {
+    "scale": "overview",
+    "rank": 1,
+    "layer": 2,
+    "kind": "beacon_special_purpose",
+    "name": "Overview.Beacon_Special_Purpose_General_point",
+    "bounds": [
+      -178.49114,
+      1.02997710000091,
+      171.3808764,
+      70.6576593000009
+    ]
+  },
+  {
+    "scale": "overview",
+    "rank": 1,
+    "layer": 8,
+    "kind": "light",
+    "name": "Overview.Light_point",
+    "bounds": [
+      -178.49114,
+      5.326024699999829,
+      179.836666699999,
+      71.50800000000001
+    ]
+  },
+  {
+    "scale": "overview",
+    "rank": 1,
+    "layer": 16,
+    "kind": "lighthouse",
+    "name": "Overview.Landmark_point",
+    "bounds": [
+      -178.652991000001,
+      5.33017760000075,
+      179.306036,
+      71.3853610999995
+    ]
+  },
+  {
+    "scale": "general",
+    "rank": 2,
+    "layer": 1,
+    "kind": "beacon_lateral",
+    "name": "General.Beacon_Lateral_point",
+    "bounds": [
+      -165.4396261,
+      6.9978304,
+      167.4720612,
+      64.4928617
+    ]
+  },
+  {
+    "scale": "general",
+    "rank": 2,
+    "layer": 2,
+    "kind": "beacon_special_purpose",
+    "name": "General.Beacon_Special_Purpose_General_point",
+    "bounds": [
+      -178.49114,
+      6.898983499999989,
+      167.7291333,
+      70.5107108
+    ]
+  },
+  {
+    "scale": "general",
+    "rank": 2,
+    "layer": 10,
+    "kind": "light",
+    "name": "General.Light_point",
+    "bounds": [
+      -178.49114,
+      2.03333329999998,
+      179.8366667,
+      71.50800000000001
+    ]
+  },
+  {
+    "scale": "general",
+    "rank": 2,
+    "layer": 21,
+    "kind": "lighthouse",
+    "name": "General.Landmark_point",
+    "bounds": [
+      -177.3796403,
+      7.347692699999979,
+      174.0619027,
+      71.3852942
+    ]
+  },
+  {
+    "scale": "coastal",
+    "rank": 3,
+    "layer": 1,
+    "kind": "beacon_lateral",
+    "name": "Coastal.Beacon_Lateral_point",
+    "bounds": [
+      -176.629504,
+      -14.2831353,
+      171.29032899999999,
+      65.27305
+    ]
+  },
+  {
+    "scale": "coastal",
+    "rank": 3,
+    "layer": 2,
+    "kind": "beacon_safe_water",
+    "name": "Coastal.Beacon_Safe_Water_point",
+    "bounds": [
+      -90.2058234,
+      26.91855,
+      -76.250868,
+      37.3365127
+    ]
+  },
+  {
+    "scale": "coastal",
+    "rank": 3,
+    "layer": 3,
+    "kind": "beacon_special_purpose",
+    "name": "Coastal.Beacon_Special_Purpose_General_point",
+    "bounds": [
+      -178.49114,
+      -14.289769999999999,
+      173.2288698,
+      70.6576593
+    ]
+  },
+  {
+    "scale": "coastal",
+    "rank": 3,
+    "layer": 10,
+    "kind": "light",
+    "name": "Coastal.Light_point",
+    "bounds": [
+      -178.49114,
+      -14.368,
+      179.8366667,
+      71.50800000000001
+    ]
+  },
+  {
+    "scale": "coastal",
+    "rank": 3,
+    "layer": 24,
+    "kind": "lighthouse",
+    "name": "Coastal.Landmark_point",
+    "bounds": [
+      -178.6534134,
+      -14.3540368,
+      179.6172582,
+      71.3853611
+    ]
+  },
+  {
+    "scale": "approach",
+    "rank": 4,
+    "layer": 1,
+    "kind": "beacon_cardinal",
+    "name": "Approach.Beacon_Cardinal_point",
+    "bounds": [
+      -132.981529999999,
+      41.183725299999395,
+      -72.0872166999998,
+      55.2137509999993
+    ]
+  },
+  {
+    "scale": "approach",
+    "rank": 4,
+    "layer": 2,
+    "kind": "beacon_isolated_danger",
+    "name": "Approach.Beacon_Isolated_Danger_point",
+    "bounds": [
+      -134.804169999999,
+      5.3456867000004396,
+      162.957313499999,
+      58.4305882999997
+    ]
+  },
+  {
+    "scale": "approach",
+    "rank": 4,
+    "layer": 3,
+    "kind": "beacon_lateral",
+    "name": "Approach.Beacon_Lateral_point",
+    "bounds": [
+      -176.6297043,
+      -14.2831353000001,
+      171.290328999999,
+      65.27308500000069
+    ]
+  },
+  {
+    "scale": "approach",
+    "rank": 4,
+    "layer": 4,
+    "kind": "beacon_safe_water",
+    "name": "Approach.Beacon_Safe_Water_point",
+    "bounds": [
+      -176.6189958,
+      -0.370548900000358,
+      -76.2508679999992,
+      56.482548300000396
+    ]
+  },
+  {
+    "scale": "approach",
+    "rank": 4,
+    "layer": 5,
+    "kind": "beacon_special_purpose",
+    "name": "Approach.Beacon_Special_Purpose_General_point",
+    "bounds": [
+      -178.49114,
+      -64.7782943999991,
+      173.22886979999902,
+      71.35938499999969
+    ]
+  },
+  {
+    "scale": "approach",
+    "rank": 4,
+    "layer": 13,
+    "kind": "light",
+    "name": "Approach.Light_point",
+    "bounds": [
+      -178.49114,
+      -14.3728506000007,
+      179.01244720000102,
+      71.5079999999998
+    ]
+  },
+  {
+    "scale": "approach",
+    "rank": 4,
+    "layer": 28,
+    "kind": "lighthouse",
+    "name": "Approach.Landmark_point",
+    "bounds": [
+      -178.653413399999,
+      -64.77445400000029,
+      179.6172582,
+      71.3853610999995
+    ]
+  },
+  {
+    "scale": "harbour",
+    "rank": 5,
+    "layer": 1,
+    "kind": "beacon_lateral",
+    "name": "Harbor.Beacon_Lateral_point",
+    "bounds": [
+      -176.6297043,
+      -14.2831353,
+      171.29032899999999,
+      65.273085
+    ]
+  },
+  {
+    "scale": "harbour",
+    "rank": 5,
+    "layer": 2,
+    "kind": "beacon_safe_water",
+    "name": "Harbor.Beacon_Safe_Water_point",
+    "bounds": [
+      -176.6189958,
+      -0.370548900000017,
+      -76.250868,
+      56.4825483
+    ]
+  },
+  {
+    "scale": "harbour",
+    "rank": 5,
+    "layer": 3,
+    "kind": "beacon_special_purpose",
+    "name": "Harbor.Beacon_Special_Purpose_General_point",
+    "bounds": [
+      -178.49114,
+      -64.7782944,
+      174.0671305,
+      71.359385
+    ]
+  },
+  {
+    "scale": "harbour",
+    "rank": 5,
+    "layer": 11,
+    "kind": "light",
+    "name": "Harbor.Light_point",
+    "bounds": [
+      -178.49114,
+      -14.3728506,
+      171.3750153,
+      71.50800000000001
+    ]
+  },
+  {
+    "scale": "harbour",
+    "rank": 5,
+    "layer": 26,
+    "kind": "lighthouse",
+    "name": "Harbor.Landmark_point",
+    "bounds": [
+      -178.653026,
+      -64.77445399999999,
+      179.306036,
+      71.3853611
+    ]
+  },
+  {
+    "scale": "berthing",
+    "rank": 6,
+    "layer": 1,
+    "kind": "beacon_lateral",
+    "name": "Berthing.Beacon_Lateral_point",
+    "bounds": [
+      -176.629504,
+      7.107166800000019,
+      171.29032899999999,
+      65.27305
+    ]
+  },
+  {
+    "scale": "berthing",
+    "rank": 6,
+    "layer": 2,
+    "kind": "beacon_special_purpose",
+    "name": "Berthing.Beacon_Special_Purpose_General_point",
+    "bounds": [
+      -178.0477617,
+      1.0299771,
+      171.3808764,
+      70.6576593
+    ]
+  },
+  {
+    "scale": "berthing",
+    "rank": 6,
+    "layer": 6,
+    "kind": "light",
+    "name": "Berthing.Light_point",
+    "bounds": [
+      -176.6604697,
+      5.3260247,
+      171.3750153,
+      71.3352256
+    ]
+  },
+  {
+    "scale": "berthing",
+    "rank": 6,
+    "layer": 13,
+    "kind": "lighthouse",
+    "name": "Berthing.Landmark_point",
+    "bounds": [
+      -178.652991,
+      5.33206630000001,
+      179.306036,
+      71.3853611
+    ]
   }
 ]
