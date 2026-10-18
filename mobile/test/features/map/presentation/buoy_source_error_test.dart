@@ -3,6 +3,7 @@ import 'package:blueway/core/map/marine/marine_map_controller.dart';
 import 'package:blueway/core/map/marine/water_texture_layer.dart';
 import 'package:blueway/features/map/data/buoy_layer.dart';
 import 'package:blueway/features/map/data/port_layer.dart';
+import 'package:blueway/features/map/data/hydrography_layer.dart';
 import 'package:blueway/features/map/presentation/map_screen.dart';
 import 'package:flutter/widgets.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -21,6 +22,10 @@ void main() {
         (MapLoadErrorType.TILE, MarineMapController.bathymetrySourceId),
         (MapLoadErrorType.SOURCE, WaterTextureLayer.sourceId),
         (MapLoadErrorType.TILE, WaterTextureLayer.sourceId),
+        for (final source in HydrographyLayer.sourceIds) ...[
+          (MapLoadErrorType.TILE, source),
+          (MapLoadErrorType.SOURCE, source),
+        ],
       ]) {
         widget.onMapLoadErrorListener!(
           MapLoadingErrorEventData.fromJson({

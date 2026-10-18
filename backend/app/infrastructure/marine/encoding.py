@@ -5,7 +5,13 @@ import json
 
 import mapbox_vector_tile
 from shapely import get_dimensions
-from shapely.geometry import GeometryCollection, MultiLineString, MultiPolygon, box
+from shapely.geometry import (
+    GeometryCollection,
+    MultiLineString,
+    MultiPolygon,
+    MultiPoint,
+    box,
+)
 from shapely.ops import transform
 
 from app.domain.marine import MarineFamily, SeamarkFeature
@@ -33,7 +39,13 @@ def clip_geometry(geometry, clip):
         return GeometryCollection()
     if len(parts) == 1:
         return parts[0]
-    return MultiPolygon(parts) if dimension == 2 else MultiLineString(parts)
+    return (
+        MultiPolygon(parts)
+        if dimension == 2
+        else MultiLineString(parts)
+        if dimension == 1
+        else MultiPoint(parts)
+    )
 
 
 def properties(feature):
@@ -47,6 +59,10 @@ def properties(feature):
 
 
 def encode_tile(tile, family, features):
+    if family in {MarineFamily.CONTOURS, MarineFamily.SOUNDINGS, MarineFamily.HAZARDS}:
+        from app.infrastructure.marine.hydro_encoding import encode_hydro_tile
+
+        return encode_hydro_tile(tile, family, features)
     bounds = tile.mercator_bounds
     span = bounds[2] - bounds[0]
     clip = box(*bounds).buffer(span * 64 / 4096)

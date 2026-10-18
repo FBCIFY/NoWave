@@ -1,7 +1,11 @@
+import asyncio
+from contextlib import suppress
 from typing import Annotated
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, Path, Query, Response
+from fastapi import APIRouter, Depends, HTTPException, Path, Query, Request, Response
+from fastapi.responses import JSONResponse
+from starlette.concurrency import run_in_threadpool
 
 from app.api.dependencies.auth import get_current_identity
 from app.application.services.map_query import MapQueryService
@@ -9,7 +13,8 @@ from app.domain.report import ReportCategory
 from app.domain.marine import MarineFamily
 from app.domain.marine_tile import Tile
 from app.domain.marine import ProviderUnavailable
-from app.infrastructure.marine.runtime import get_marine_service
+from app.infrastructure.marine.runtime import get_marine_service, get_coastline_mask
+from app.infrastructure.marine.coastline import apply_ocean_mask, has_raster_data
 from app.infrastructure.adapters.emodnet_bathymetry import (
     BathymetryUnavailable,
     fetch_bathymetry_tile,
@@ -40,6 +45,46 @@ async def get_port_infrastructure_tile(
     return await _marine_tile(z, x, y, MarineFamily.PORTS)
 
 
+@router.get("/depth-contours/{z}/{x}/{y}.pbf")
+async def get_depth_contour_tile(
+    z: Annotated[int, Path(ge=0, le=16)],
+    x: Annotated[int, Path(ge=0)],
+    y: Annotated[int, Path(ge=0)],
+) -> Response:
+    return await _marine_tile(z, x, y, MarineFamily.CONTOURS)
+
+
+@router.get("/soundings/{z}/{x}/{y}.pbf")
+async def get_sounding_tile(
+    request: Request,
+    z: Annotated[int, Path(ge=0, le=16)],
+    x: Annotated[int, Path(ge=0)],
+    y: Annotated[int, Path(ge=0)],
+) -> Response:
+    # ASGI does not automatically cancel route work on HTTP disconnect.
+    work = asyncio.create_task(_marine_tile(z, x, y, MarineFamily.SOUNDINGS))
+    try:
+        while not work.done():
+            if await request.is_disconnected():
+                raise HTTPException(status_code=499, detail="Tile request cancelled.")
+            await asyncio.wait({work}, timeout=0.1)
+        return await work
+    finally:
+        if not work.done():
+            work.cancel()
+            with suppress(asyncio.CancelledError):
+                await work
+
+
+@router.get("/underwater-hazards/{z}/{x}/{y}.pbf")
+async def get_underwater_hazard_tile(
+    z: Annotated[int, Path(ge=0, le=16)],
+    x: Annotated[int, Path(ge=0)],
+    y: Annotated[int, Path(ge=0)],
+) -> Response:
+    return await _marine_tile(z, x, y, MarineFamily.HAZARDS)
+
+
 async def _marine_tile(z, x, y, family):
     try:
         tile = Tile(z, x, y)
@@ -50,15 +95,35 @@ async def _marine_tile(z, x, y, family):
     try:
         result = await get_marine_service().get_tile(tile, family)
     except ProviderUnavailable as error:
+        if family == MarineFamily.SOUNDINGS:
+            # The application's generic exception handler drops custom headers.
+            # Keep its JSON error contract, with an explicit non-cacheable 503.
+            return JSONResponse(
+                status_code=503,
+                content={
+                    "error": {
+                        "code": "http_503",
+                        "message": "Marine data temporarily unavailable.",
+                        "details": None,
+                    }
+                },
+                headers={
+                    "Cache-Control": "no-store",
+                    "X-NoWave-Marine-Status": "unavailable",
+                },
+            )
         raise HTTPException(
-            status_code=503, detail="Marine data temporarily unavailable."
+            status_code=503,
+            detail="Marine data temporarily unavailable.",
         ) from error
     return Response(
         content=result.content,
         media_type="application/vnd.mapbox-vector-tile",
         headers={
-            "Cache-Control": f"public, max-age={15 if result.failures else 300}",
-            "X-NoWave-Marine-Status": "degraded" if result.failures else "ok",
+            "Cache-Control": "no-store"
+            if family == MarineFamily.SOUNDINGS
+            else f"public, max-age={15 if result.failures else 300}",
+            "X-NoWave-Marine-Status": "degraded" if result.failures else result.status,
             "X-NoWave-Marine-Sources": ",".join(result.sources),
             "Link": '</api/v1/map/marine-sources>; rel="describedby"',
         },
@@ -114,7 +179,7 @@ def get_map_tile(
 
 
 @router.get("/bathymetry/{z}/{x}/{y}.png")
-def get_bathymetry_tile(
+async def get_bathymetry_tile(
     z: Annotated[int, Path(ge=0, le=14)],
     x: Annotated[int, Path(ge=0)],
     y: Annotated[int, Path(ge=0)],
@@ -130,8 +195,13 @@ def get_bathymetry_tile(
         )
 
     try:
-        tile = fetch_bathymetry_tile(z, x, y)
-    except BathymetryUnavailable as error:
+        raw = await run_in_threadpool(fetch_bathymetry_tile, z, x, y)
+        if await run_in_threadpool(has_raster_data, raw):
+            mask = await get_coastline_mask().get_mask(Tile(z, x, y))
+            tile = await run_in_threadpool(apply_ocean_mask, raw, mask)
+        else:
+            tile = raw  # No marine colour: no coastline download or decoding.
+    except (BathymetryUnavailable, ProviderUnavailable, OSError, ValueError) as error:
         raise HTTPException(
             status_code=503,
             detail="Bathymetry temporarily unavailable.",
@@ -142,5 +212,6 @@ def get_bathymetry_tile(
         media_type="image/png",
         headers={
             "Cache-Control": "public, max-age=86400",
+            "Link": '</api/v1/map/marine-sources>; rel="describedby"',
         },
     )

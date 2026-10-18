@@ -25,25 +25,65 @@ Compléter ensuite les valeurs :
 ```json
 {
   "MAPBOX_ACCESS_TOKEN": "jeton-public-mapbox",
-  "MAPTILER_STYLE_URL": "https://api.maptiler.com/maps/ocean-v4/style.json?key=cle-maptiler",
-  "BATHYMETRY_TILES_URL": "URL_XYZ_OU_WMS_DE_LA_BATHYMETRIE",
-  "API_BASE_URL": "https://adresse-du-backend/"
+  "API_BASE_URL": "https://api.example.com/"
 }
 ```
 
-`API_BASE_URL` doit se terminer par `/`. Pour un backend lancé sur le poste de
-développement, utiliser :
+`API_BASE_URL` est l’unique adresse du backend NoWave. `ApiConfig` génère
+les routes du profil, des signalements, des photos, des alertes et de toutes
+les familles cartographiques : bathymétrie, isobathes, sondes, dangers, balises
+et ports. Les crédits marins pointent également vers ce backend. Les services
+Firebase et Mapbox conservent leurs adresses propres. Les photos sont téléchargées
+depuis les URLs signées retournées par le backend, sans token Firebase envoyé au
+stockage.
+
+Le slash final est facultatif. Un préfixe tel que `https://api.example.com/proxy/`
+est conservé devant `api/v1/...`. HTTP et HTTPS sont acceptés ; une adresse
+absente ou invalide produit une erreur explicite, sans repli vers localhost.
+Les placeholders Mapbox `{z}/{x}/{y}` et les versions de cache existantes
+(`coast-1`, `depths-4`, etc.) sont conservés.
+
+Aucune variable propre à une famille marine n’est nécessaire. Les anciennes
+variables `MARINE_API_BASE_URL` et `BATHYMETRY_TILES_URL`, si elles restent dans
+un ancien fichier privé, ne sont plus lues. Ne pas les passer aux builds.
+`MAPTILER_STYLE_URL` n’est plus utilisé : la carte utilise Mapbox Standard.
+Le jeton Mapbox reste nécessaire ; les clés des fournisseurs marins restent
+sur le backend.
+
+Pour un backend de développement, choisir l’adresse adaptée :
 
 - Android Emulator : `http://10.0.2.2:8000/`
 - simulateur iOS : `http://127.0.0.1:8000/`
-- téléphone physique : `http://<adresse-ip-du-poste>:8000/`
+- téléphone physique : adresse du poste sur le même réseau, ou reverse USB.
 
-Le téléphone physique et le poste doivent être sur le même réseau. Une
-modification de `.env.json` nécessite un redémarrage complet de `flutter run`.
-Le fichier `.env.json` ne doit jamais être ajouté à Git.
+Exemple de recette USB sur le LGN, avec un backend local **complet** :
 
-`MAPTILER_STYLE_URL` n’est plus lu par l’application : la carte utilise le
-style Mapbox Standard.
+```bash
+adb -s AV5PJV6328H03108 reverse tcp:8004 tcp:8004
+flutter build apk --debug --dart-define-from-file=.env.json \
+  --dart-define=API_BASE_URL=http://127.0.0.1:8004/
+```
+
+Ce choix redirige **aussi** le profil, les signalements et les autres requêtes
+NoWave vers le local. Le backend ciblé doit avoir sa base applicative, sa
+configuration Firebase et les routes marines réellement disponibles. Un
+serveur capable de servir seulement les tuiles ne suffit pas au parcours
+complet de l’app. Ne pas utiliser de proxy implicite ou deux bases différentes.
+
+Pour une APK distante, utiliser l’adresse de l’environnement déployé dans le
+fichier privé et construire sans surcharge d’adresse :
+
+```bash
+flutter build apk --debug --dart-define-from-file=.env.json
+```
+
+Une compilation réussie ne prouve pas que les routes marines sont déployées.
+Vérifier `/health`, les endpoints réels et leurs formats ; un 404 requiert un
+déploiement backend autorisé, sans substitution silencieuse vers le local.
+
+Une modification de configuration exige une reconstruction et un redémarrage
+complet. Le fichier privé `.env.json` reste ignoré par Git ; ne jamais le
+versionner, ni mettre de token Firebase dans un exemple ou un journal.
 
 ## Organisation du code
 

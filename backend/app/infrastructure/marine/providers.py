@@ -295,7 +295,9 @@ class NoaaProvider:
         self.http = http
 
     def covers(self, tile, family):
-        return COVERAGE[self.id].intersects(box(*tile.query_bounds))
+        return family in {MarineFamily.SEAMARKS, MarineFamily.PORTS} and COVERAGE[
+            self.id
+        ].intersects(box(*tile.query_bounds))
 
     async def _layer(self, tile, layer):
         url = f"{self.base_url}/enc_{layer['scale']}/MapServer/{layer['layer']}/query"

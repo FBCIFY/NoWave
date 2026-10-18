@@ -4,13 +4,17 @@ import cairosvg
 
 ASSETS = Path(__file__).resolve().parents[1] / 'assets/icons/fixed-aids'
 COLORS = {'red': '#D52E35', 'green': '#00834B', 'yellow': '#F5CB28',
-          'white': '#F2F0DA', 'default': '#91A5B0', 'black': '#20262C'}
+          'white': '#F2F0DA', 'grey': '#808991', 'default': '#91A5B0', 'black': '#20262C'}
 BANDS = {'red': ['red'], 'green': ['green'], 'yellow': ['yellow'],
          'north': ['black', 'yellow'], 'east': ['black', 'yellow', 'black'],
          'south': ['yellow', 'black'], 'west': ['yellow', 'black', 'yellow'],
          'isolated-danger': ['black', 'red', 'black'], 'safe-water': ['red', 'white'],
          'preferred-port': ['green', 'red', 'green'],
-         'preferred-starboard': ['red', 'green', 'red']}
+         'preferred-starboard': ['red', 'green', 'red'],
+         'green-white': ['green', 'white'], 'white-green': ['white', 'green'],
+         'red-white': ['red', 'white'], 'white-red': ['white', 'red'],
+         'green-grey': ['green', 'grey'], 'grey-green': ['grey', 'green'],
+         'red-grey': ['red', 'grey'], 'grey-red': ['grey', 'red']}
 
 def save(name, body, size=24):
     svg = f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {size} {size}">{body}</svg>'

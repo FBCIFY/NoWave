@@ -10,6 +10,14 @@ Lights: 36×36 at density 3 (12 logical px). The neutral fallback reuses the sma
 existing dark dot, without implying an unqualified category.
 
 Upright narrow supports with a foot distinguish beacons from floating buoys.
+Four fixed lateral variants preserve published horizontal green/white or
+red/white bands and their order. They require a lateral category consistent
+with the declared IALA A/B system; a light colour alone never selects them.
+The Môle Bérouard SHOM beacon is a verified green/white, starboard, IALA A case.
+Four further variants preserve published red/grey and green/grey horizontal
+bands (including reversed order), with the same strict lateral/IALA checks.
+The SHOM Antibes marks FR000002555800001 and FR000002556200001 are verified
+green/grey starboard and red/grey port cases; grey is never replaced by white.
 Cardinal topmarks: north both up, south both down, east bases together, west
 points together. The support band colours follow the existing qualified buoy
 rules; these are abstract display symbols, not replicas of physical shapes.

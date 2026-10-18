@@ -27,7 +27,7 @@ class Tile:
 
     def __post_init__(self):
         if not (
-            0 <= self.z <= 14
+            0 <= self.z <= 16
             and 0 <= self.x < 1 << self.z
             and 0 <= self.y < 1 << self.z
         ):

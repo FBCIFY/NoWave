@@ -349,7 +349,7 @@ void main() {
     tester,
   ) async {
     final map = TestMap();
-    final buoy = BuoyLayer();
+    final buoy = BuoyLayer(apiBaseUrl: 'https://api.example.com/gateway/');
     await tester.runAsync(() async {
       await Future.wait([buoy.addTo(map), buoy.addTo(map)]);
       await buoy.addTo(map);
@@ -357,7 +357,9 @@ void main() {
       expect(map.style.sourceAdds, 1);
       expect(map.style.layerAdds, 1);
       final source = map.style.sources[BuoyLayer.sourceId] as Map;
-      expect(source['tiles'], [BuoyLayer.tilesUrl]);
+      expect(source['tiles'], [
+        BuoyLayer.tilesUrl(apiBaseUrl: 'https://api.example.com/gateway/'),
+      ]);
       expect(source['url'], isNull);
       expect(source['maxzoom'], 14);
       expect(source['attribution'], contains('Open Waters: Seamap'));
@@ -376,7 +378,7 @@ void main() {
 
   testWidgets('une installation refusée reste retentable', (tester) async {
     final map = TestMap();
-    final buoy = BuoyLayer();
+    final buoy = BuoyLayer(apiBaseUrl: 'https://api.example.com/gateway/');
     await tester.runAsync(() async {
       map.style.rejectSource = true;
       await expectLater(buoy.addTo(map), throwsA(isA<PlatformException>()));

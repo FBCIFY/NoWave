@@ -8,7 +8,14 @@ from app.domain.marine import ProviderUnavailable
 
 
 @pytest.mark.parametrize(
-    "family,layer", [("seamarks", "seamark"), ("port-infrastructure", "pier_lines")]
+    "family,layer",
+    [
+        ("seamarks", "seamark"),
+        ("port-infrastructure", "pier_lines"),
+        ("depth-contours", "depth_contour"),
+        ("soundings", "sounding"),
+        ("underwater-hazards", "underwater_hazard"),
+    ],
 )
 def test_public_marine_endpoints_return_valid_mvt_and_degradation_metadata(
     monkeypatch, family, layer
@@ -31,7 +38,9 @@ def test_public_marine_endpoints_return_valid_mvt_and_degradation_metadata(
     assert response.status_code == 200
     assert layer in mapbox_vector_tile.decode(response.content)
     assert response.headers["content-type"] == "application/vnd.mapbox-vector-tile"
-    assert response.headers["cache-control"] == "public, max-age=15"
+    assert response.headers["cache-control"] == (
+        "no-store" if family == "soundings" else "public, max-age=15"
+    )
     assert response.headers["x-nowave-marine-status"] == "degraded"
     assert response.headers["x-nowave-marine-sources"] == "osm"
     assert seen[0][0].x == 2115
@@ -67,5 +76,16 @@ def test_source_licenses_are_public_and_include_every_integrated_dataset():
     response = TestClient(app).get("/api/v1/map/marine-sources")
     data = response.json()
     assert "not for navigation" in data["usage"]
-    assert {s["id"] for s in data["sources"]} == {"shom", "noaa", "osm", "openwaters", "ign"}
+    assert {s["id"] for s in data["sources"]} == {
+        "shom",
+        "noaa",
+        "osm",
+        "openwaters",
+        "ign",
+        "shom-hazards",
+        "shom-surveys",
+        "emodnet-contours",
+        "emodnet-dtm-2024",
+        "osm-coastline-mask",
+    }
     assert all(s["license_url"] and s["attribution"] for s in data["sources"])

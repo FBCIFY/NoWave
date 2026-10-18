@@ -55,3 +55,23 @@ maxFeatures=1 without bbox (Caye Ronde, Martinique) and NOAA harbour layer 2
 query resultRecordCount=1 without envelope (Buttonwood Harbor). The same licences
 apply. These real excerpts validate isolated-danger / safe-water semantics even
 though those fixed classes are absent from the four local validation tiles.
+
+`hydrography-real.json` : extraits publics réels du 17 octobre 2026 : NOAA ENC
+harbour (104,76,34,36,33,99,156,158), Shom EPAVES_BDD_WFS (wrecks, obstrn),
+EMODnet WFS emodnet:contours. NOAA CC0; Shom épaves/obstructions CC BY-SA 4.0;
+EMODnet produit UE CC BY 4.0. Métadonnées/limites et requêtes reproductibles dans
+`docs/architecture/hydrography.md`. Les cas synthétiques restent dans les tests
+Python; ce fichier n'est pas une injection de données dans le runtime.
+
+## Littoral et audit des aides — 18 octobre 2026
+
+`coastline-real.json` conserve les polygones `ocean` décodés des tuiles OSM
+Shortbread 6/33/23, 9/264/187 et 12/2116/1503, collectées pour cette correction.
+Coordonnées MVT locales, axe Y vers le nord, extent publié conservé. Données
+© OpenStreetMap contributors, ODbL 1.0 ; schéma Shortbread. Aucun champ de
+profondeur n'est créé. Les réponses complètes restent dans les preuves locales.
+
+`seamarks-coast-audit.json` contient 22 objets officiels réellement reçus pendant
+l'audit (SHOM Balisage, Licence Ouverte 2.0 ; NOAA ENC Direct, registre CC0 1.0).
+Chaque entrée garde le feature original, sa zone, son dataset et les propriétés
+normalisées attendues. Les tests conservent leur géométrie jusqu'au MVT.

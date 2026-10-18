@@ -31,6 +31,7 @@ import '../data/report_layer_controller.dart';
 import '../data/report_tiles.dart';
 import 'widgets/map_notice_banner.dart';
 import 'widgets/map_zoom_badge.dart';
+import '../data/hydrography_layer.dart';
 import 'widgets/report_marker.dart';
 
 /// Nord en haut, carte tournée selon le cap du téléphone, ou rotation libre
@@ -113,6 +114,7 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
   MapboxMap? _mapboxMap;
   final _marineMap = MarineMapController();
   final _waterTexture = WaterTextureLayer();
+  final _hydrographyLayer = HydrographyLayer();
   final _buoyLayer = BuoyLayer();
   final _fixedAidLayer = FixedAidLayer();
   String? _mapError;
@@ -224,6 +226,8 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
   /// passe la boussole en mode manuel.
   void _handleMapCameraChange(CameraChangedEventData event) {
     if (!mounted) return;
+    final map = _mapboxMap;
+    if (map != null) _hydrographyLayer.invalidateContourLabels(map);
     _cameraZoom = event.cameraState.zoom;
     _displayedZoom.value = event.cameraState.zoom;
     _syncHeatmapPulse();
@@ -356,6 +360,7 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
 
     // Une panne de la décoration ne masque jamais la carte.
     if (event.sourceId == WaterTextureLayer.sourceId) return;
+    if (HydrographyLayer.sourceIds.contains(event.sourceId)) return;
 
     // Les infrastructures portuaires sont un enrichissement facultatif.
     // Leur indisponibilité ne doit jamais masquer le fond Mapbox.
@@ -486,7 +491,7 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
     //
     // 1. bathymétrie ;
     // 2. texture d’eau ;
-    // 3. infrastructures portuaires ;
+    // 3. courbes / sondes, dangers TOP ; puis infrastructures portuaires ;
     // 4. bouées (slot TOP, sous les reports sans slot) ;
     // 5. aides fixes insérées sous les bouées dans le même slot.
     //
@@ -502,6 +507,12 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
       await _waterTexture.addTo(map);
     } catch (error) {
       debugPrint('Texture d’eau non installée : $error');
+    }
+
+    try {
+      await _hydrographyLayer.addTo(map);
+    } catch (error) {
+      debugPrint('Hydrographie non installée : $error');
     }
 
     try {
@@ -1364,6 +1375,20 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
                 onMapLoadErrorListener: _handleMapLoadError,
                 onSourceDataLoadedListener: _handleSourceDataLoaded,
                 onCameraChangeListener: _handleMapCameraChange,
+                onRenderFrameFinishedListener: (event) {
+                  // Placement can finish before unrelated network tiles do.
+                  if (!event.placementChanged) return;
+                  final map = _mapboxMap;
+                  if (map != null) {
+                    unawaited(_hydrographyLayer.synchronizeContourLabels(map));
+                  }
+                },
+                onMapIdleListener: (_) {
+                  final map = _mapboxMap;
+                  if (map != null) {
+                    unawaited(_hydrographyLayer.synchronizeContourLabels(map));
+                  }
+                },
                 onScrollListener: _handleMapGesture,
                 onZoomListener: _handleMapGesture,
                 styleUri: MapConfig.styleUrl,

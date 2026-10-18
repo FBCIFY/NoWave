@@ -14,6 +14,9 @@ from shapely.geometry.base import BaseGeometry
 class MarineFamily(StrEnum):
     SEAMARKS = "seamarks"
     PORTS = "port-infrastructure"
+    CONTOURS = "depth-contours"
+    SOUNDINGS = "soundings"
+    HAZARDS = "underwater-hazards"
 
 
 class ProviderUnavailable(RuntimeError):
@@ -118,7 +121,9 @@ class PortInfrastructureFeature(MarineFeature):
             raise ValueError("Unsupported infrastructure geometry")
 
 
-Feature = SeamarkFeature | PortInfrastructureFeature
+# Providers also return the specialized HydroFeature subclasses. The common
+# base keeps this extensible contract free of circular domain imports.
+Feature = MarineFeature
 
 
 @dataclass(frozen=True)

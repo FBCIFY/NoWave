@@ -1,5 +1,6 @@
-import 'package:flutter/foundation.dart';
 import 'package:mapbox_maps_flutter/mapbox_maps_flutter.dart';
+
+import '../../api/api_config.dart';
 
 /// Habillage marin commun de la carte NoWave.
 ///
@@ -7,22 +8,27 @@ import 'package:mapbox_maps_flutter/mapbox_maps_flutter.dart';
 /// Les informations de profondeur exploitables seront ajoutées séparément
 /// avec des courbes bathymétriques vectorielles.
 class MarineMapController {
+  MarineMapController({
+    String? bathymetryTilesUrl,
+    this.apiBaseUrl = ApiConfig.baseUrl,
+  }) : _tilesUrl = bathymetryTilesUrl;
+
+  final String? _tilesUrl;
+  final String apiBaseUrl;
   static const String bathymetrySourceId = 'nowave-bathymetry';
   static const String bathymetryLayerId = 'nowave-bathymetry-raster';
-
-  /// URL des tuiles bathymétriques.
-  ///
-  /// Elle reste extérieure au code pour pouvoir changer de fournisseur
-  /// ou passer plus tard à nos propres tuiles sans modifier l'application.
-  static const String _bathymetryTilesUrl = String.fromEnvironment(
-    'BATHYMETRY_TILES_URL',
-    defaultValue: '',
-  );
 
   /// Fond marin accordé aux zones côtières claires du raster.
   static const String deepWaterColor = '#E6F7FD';
 
   Future<void> install(MapboxMap map) async {
+    final tilesUrl =
+        _tilesUrl ??
+        ApiConfig.tileTemplate(
+          'bathymetry',
+          extension: 'png',
+          baseUrl: apiBaseUrl,
+        );
     final style = map.style;
 
     // Vue globe lorsque le niveau de zoom le permet.
@@ -37,20 +43,18 @@ class MarineMapController {
       deepWaterColor,
     );
 
-    if (_bathymetryTilesUrl.trim().isEmpty) {
-      debugPrint(
-        'Bathymétrie visuelle désactivée : '
-        'BATHYMETRY_TILES_URL absent.',
-      );
-      return;
-    }
+    // Une injection vide permet toujours de désactiver le raster dans un test.
+    if (tilesUrl.trim().isEmpty) return;
 
     // Source ajoutée une seule fois par chargement du style.
     if (!await style.styleSourceExists(bathymetrySourceId)) {
       await style.addSource(
         RasterSource(
           id: bathymetrySourceId,
-          tiles: [_bathymetryTilesUrl],
+          // Separate clipped coast tiles from the previous unmasked cache.
+          tiles: [
+            ApiConfig.withQueryParameters(tilesUrl, {'v': 'coast-1'}),
+          ],
           tileSize: 256,
           minzoom: 0,
           maxzoom: 14,

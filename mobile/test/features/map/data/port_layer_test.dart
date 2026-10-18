@@ -44,11 +44,14 @@ void main() {
 
   test('NoWave fournit les deux familles sans URL nationale dans Flutter', () {
     expect(
-      PortLayer.tilesUrl,
+      PortLayer.tilesUrl(apiBaseUrl: 'https://api.example.com/gateway/'),
       endsWith('/api/v1/map/port-infrastructure/{z}/{x}/{y}.pbf'),
     );
     expect(
-      MarineTiles.template('seamarks'),
+      MarineTiles.template(
+        'seamarks',
+        apiBaseUrl: 'https://api.example.com/gateway/',
+      ),
       endsWith('/api/v1/map/seamarks/{z}/{x}/{y}.pbf'),
     );
     for (final credit in [
@@ -59,7 +62,10 @@ void main() {
       'ODbL',
       'CC BY 4.0',
     ]) {
-      expect(MarineTiles.attribution, contains(credit));
+      expect(
+        MarineTiles.attribution(apiBaseUrl: 'https://api.example.com/gateway/'),
+        contains(credit),
+      );
     }
   });
 
@@ -67,11 +73,16 @@ void main() {
     'ports : installation concurrente, reload et styles validés conservés',
     () async {
       final map = PortTestMap();
-      await Future.wait([PortLayer.addTo(map), PortLayer.addTo(map)]);
+      await Future.wait([
+        PortLayer.addTo(map, apiBaseUrl: 'https://api.example.com/gateway/'),
+        PortLayer.addTo(map, apiBaseUrl: 'https://api.example.com/gateway/'),
+      ]);
       expect(map.style.adds, 1);
       expect(map.style.layers.length, 5);
       final source = map.style.sources[PortLayer.sourceId] as Map;
-      expect(source['tiles'], [PortLayer.tilesUrl]);
+      expect(source['tiles'], [
+        PortLayer.tilesUrl(apiBaseUrl: 'https://api.example.com/gateway/'),
+      ]);
       expect(source['maxzoom'], 14);
       final layers = map.style.layers.values.toList();
       expect(layers.map((l) => l['source-layer']).toSet(), {
@@ -103,7 +114,10 @@ void main() {
       );
       map.style.sources.clear();
       map.style.layers.clear();
-      await PortLayer.addTo(map);
+      await PortLayer.addTo(
+        map,
+        apiBaseUrl: 'https://api.example.com/gateway/',
+      );
       expect(map.style.adds, 2);
       expect(map.style.layers.length, 5);
     },
@@ -111,9 +125,12 @@ void main() {
 
   test('une source refusée peut être réinstallée', () async {
     final map = PortTestMap()..style.reject = true;
-    await expectLater(PortLayer.addTo(map), throwsA(isA<PlatformException>()));
+    await expectLater(
+      PortLayer.addTo(map, apiBaseUrl: 'https://api.example.com/gateway/'),
+      throwsA(isA<PlatformException>()),
+    );
     map.style.reject = false;
-    await PortLayer.addTo(map);
+    await PortLayer.addTo(map, apiBaseUrl: 'https://api.example.com/gateway/');
     expect(map.style.layers.length, 5);
   });
 }

@@ -104,18 +104,7 @@ class ApiService {
   }
 
   Uri _resolveUri(String path) {
-    final baseUri = Uri.tryParse(_baseUrl);
-
-    if (baseUri == null ||
-        !baseUri.hasAuthority ||
-        baseUri.host.isEmpty ||
-        (baseUri.scheme != 'http' && baseUri.scheme != 'https')) {
-      throw StateError(
-        'API_BASE_URL doit être une adresse HTTP ou HTTPS valide',
-      );
-    }
-
-    return baseUri.resolve(path);
+    return ApiConfig.resolve(path, baseUrl: _baseUrl);
   }
 
   String _readResponse(http.Response response) {

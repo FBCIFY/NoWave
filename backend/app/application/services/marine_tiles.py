@@ -18,6 +18,7 @@ class MarineTileResult:
     content: bytes
     failures: tuple[str, ...] = ()
     sources: tuple[str, ...] = ()
+    status: str = "ok"
 
 
 class MarineTileService:
@@ -33,18 +34,46 @@ class MarineTileService:
         self._flights = [asyncio.Lock() for _ in range(64)]
 
     def select(self, tile, family):
-        return tuple(p for p in self.providers if p.covers(tile, family))
+        candidates = tuple(p for p in self.providers if p.covers(tile, family))
+        if family != MarineFamily.SOUNDINGS:
+            return candidates
+        # Geographic selection, never a transport fallback. Keep the European
+        # MVP exclusively EMODnet; restore ENC observations in NOAA coverage.
+        emodnet = tuple(p for p in candidates if p.id == "emodnet-dtm-2024")
+        return emodnet or tuple(p for p in candidates if p.id == "noaa-soundings")
 
     async def get_tile(self, tile: Tile, family: MarineFamily):
+        from app.infrastructure.marine.hydro_encoding import MIN_ZOOM
+
+        started = time.monotonic()
         key = (tile, family)
         async with self._flights[hash(key) % len(self._flights)]:
             cached = self._cache.get(key)
             if cached and cached[0] > time.monotonic():
                 self._cache.move_to_end(key)
                 return cached[1]
-            if tile.z < 10:
-                return MarineTileResult(self.encoder(tile, family, []))
+            if tile.z < MIN_ZOOM.get(family, 10):
+                return MarineTileResult(
+                    self.encoder(tile, family, []),
+                    status="below-minzoom"
+                    if family == MarineFamily.SOUNDINGS
+                    else "ok",
+                )
             providers = self.select(tile, family)
+            if (
+                family == MarineFamily.SOUNDINGS
+                and not providers
+                and not any(p.id == "emodnet-dtm-2024" for p in self.providers)
+            ):
+                raise ProviderUnavailable("EMODnet depth provider disabled")
+            if (
+                family == MarineFamily.SOUNDINGS
+                and providers
+                and all(tile.z < getattr(p, "min_zoom", 12) for p in providers)
+            ):
+                return MarineTileResult(
+                    self.encoder(tile, family, []), status="below-minzoom"
+                )
 
             async def fetch(provider):
                 try:
@@ -60,9 +89,15 @@ class MarineTileService:
                     logger.warning(
                         "Marine provider %s unavailable: %s",
                         provider.id,
-                        type(exc).__name__,
+                        getattr(exc, "reason", type(exc).__name__),
                     )
-                    return ProviderBatch(failures=(provider.id + ":unavailable",))
+                    return ProviderBatch(
+                        failures=(
+                            getattr(exc, "reason", "unavailable")
+                            if family == MarineFamily.SOUNDINGS
+                            else provider.id + ":unavailable",
+                        )
+                    )
 
             batches = await asyncio.gather(*(fetch(p) for p in providers))
             failures = tuple(
@@ -74,7 +109,17 @@ class MarineTileService:
             )
             successful = [p.id for p, b in zip(providers, batches) if not b.failures]
             fallback = "openwaters" if family == MarineFamily.SEAMARKS else "osm"
-            if fallback not in successful and not any(b.features for b in batches):
+            hydro = family in MIN_ZOOM
+            if (
+                hydro
+                and providers
+                and not successful
+                and not any(b.features for b in batches)
+            ) or (
+                not hydro
+                and fallback not in successful
+                and not any(b.features for b in batches)
+            ):
                 # Never cache a transport failure as a successful empty ocean.
                 raise ProviderUnavailable("No marine source available")
             features = [f for batch in batches for f in batch.features]
@@ -89,7 +134,29 @@ class MarineTileService:
                 self.encoder(tile, family, merged.features),
                 failures,
                 tuple(sorted({f.source for f in merged.features})),
+                (
+                    "outside-coverage"
+                    if not providers
+                    else "empty"
+                    if not merged.features
+                    else "ok"
+                )
+                if family == MarineFamily.SOUNDINGS
+                else "ok",
             )
+            if hydro:
+                logger.info(
+                    "Hydro tile %s/%s/%s/%s features=%s bytes=%s ms=%.1f providers=%s failures=%s",
+                    family.value,
+                    tile.z,
+                    tile.x,
+                    tile.y,
+                    len(merged.features),
+                    len(result.content),
+                    (time.monotonic() - started) * 1000,
+                    len(providers),
+                    len(failures),
+                )
             if cached:
                 self._bytes -= len(cached[1].content)
                 self._cache.pop(key)

@@ -1,14 +1,19 @@
 import 'package:flutter/services.dart';
 import 'package:mapbox_maps_flutter/mapbox_maps_flutter.dart';
 
+import '../../../core/api/api_config.dart';
 import 'marine_tiles.dart';
 
 /// Bouées seules, normalisées et fusionnées par le backend NoWave.
 /// Les symboles locaux dérivent de Temaki buoy (CC0), voir assets/icons/buoys.
 class BuoyLayer {
+  BuoyLayer({this.apiBaseUrl = ApiConfig.baseUrl});
+
+  final String apiBaseUrl;
   static const sourceId = 'nowave-buoys';
   static const layerId = 'nowave-buoy-symbols';
-  static final tilesUrl = MarineTiles.template('seamarks');
+  static String tilesUrl({String apiBaseUrl = ApiConfig.baseUrl}) =>
+      MarineTiles.template('seamarks', apiBaseUrl: apiBaseUrl);
   static const sourceLayer = 'seamark';
 
   static const _neutral = 'nowave-buoy-neutral';
@@ -73,13 +78,13 @@ class BuoyLayer {
       await style.addSource(
         VectorSource(
           id: sourceId,
-          tiles: [tilesUrl],
+          tiles: [tilesUrl(apiBaseUrl: apiBaseUrl)],
           // Les cinq types de bouées sont affichés dès z10, overzoom après z14.
           minzoom: 10,
           maxzoom: 14,
           prefetchZoomDelta: 0,
           tileNetworkRequestsDelay: 0.25,
-          attribution: MarineTiles.attribution,
+          attribution: MarineTiles.attribution(apiBaseUrl: apiBaseUrl),
         ),
       );
     }

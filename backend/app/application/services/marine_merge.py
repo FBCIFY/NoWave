@@ -9,6 +9,7 @@ from shapely.ops import transform
 from shapely.strtree import STRtree
 
 from app.domain.marine import MergeResult, SeamarkFeature
+from app.domain.hydrography import HydroFeature, UnderwaterHazard
 from app.domain.marine_tile import project
 
 
@@ -61,6 +62,36 @@ def _point_match(a, b, ga, gb):
         or (distance <= 15 and equal >= 3 and a.color)
     )
     return bool(match), not match and distance <= 15
+
+
+def _hydro_match(a, b, ga, gb):
+    # Unknown datum never establishes equivalence on its own.
+    if isinstance(a, UnderwaterHazard) and a.hazard_type != b.hazard_type:
+        return False, False
+    for field in (
+        "value_m",
+        "vertical_datum",
+        "sounding_datum",
+        "quality",
+        "accuracy",
+        "source_attributes",
+        "name",
+        "unit_original",
+        "value_original",
+        "horizontal_accuracy",
+        "derivation",
+    ):
+        if getattr(a, field) != getattr(b, field):
+            return False, False
+    if isinstance(a, UnderwaterHazard) and any(
+        getattr(a, field) != getattr(b, field)
+        for field in ("category", "water_level", "least_depth")
+    ):
+        return False, False
+    identity = a.id == b.id or bool(set(a.external_ids) & set(b.external_ids))
+    return bool(
+        identity and ga.geom_type == gb.geom_type and ga.equals_exact(gb, 0.01)
+    ), False
 
 
 def _line_angle(line):
@@ -179,7 +210,11 @@ def merge_features(features, bounds) -> MergeResult:
                 if feature.id != candidate.id:
                     continue
             matcher = (
-                _point_match if isinstance(feature, SeamarkFeature) else _port_match
+                _hydro_match
+                if isinstance(feature, HydroFeature)
+                else _point_match
+                if isinstance(feature, SeamarkFeature)
+                else _port_match
             )
             matched, ambiguous = matcher(
                 feature, candidate, geometries[i], geometries[j]

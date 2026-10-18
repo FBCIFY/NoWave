@@ -176,11 +176,16 @@ IALA B inverse les couleurs attendues des latérales/chenaux préférés. Sans s
 renseigné, la couleur publiée est dessinée sans supposer IALA A; avec un système
 connu, une contradiction reste neutre. Les aides fixes sont désormais affichées par `FixedAidLayer`, sous les bouées, avec six couches partageant cette même source. Voir le rapport `docs/test-reports/fixed-aids.md` pour les seuils et qualifications vérifiés.
 
-Flutter utilise `API_BASE_URL` pour NoWave; `MARINE_API_BASE_URL` peut isoler le
-backend cartographique local pendant la validation. Configuration d'APK réelle:
-`flutter build apk --debug --dart-define-from-file=.env.json --dart-define=MARINE_API_BASE_URL=http://127.0.0.1:8001/`.
-Les erreurs des deux sources facultatives restent non bloquantes et les installations
-sont sérialisées/idempotentes après reload. Reports, GPS et bathymétrie ne changent pas.
+Flutter utilise uniquement `API_BASE_URL`, via `ApiConfig`, pour les services
+applicatifs, le raster et toutes les familles MVT. Les URLs et le lien de
+métadonnées sont générés avec le même préfixe de backend. Exemple USB :
+`flutter build apk --debug --dart-define-from-file=.env.json --dart-define=API_BASE_URL=http://127.0.0.1:8004/`.
+Ce choix déplace aussi profil et signalements : le serveur local doit donc
+fournir les services applicatifs et leurs dépendances. Aucun backend marine
+séparé ni fallback local implicite. Les installations restent
+sérialisées/idempotentes après reload ; les règles GPS, styles et caches ne
+changent pas. Les anciens rapports conservent leurs commandes historiques,
+qui ne constituent plus des instructions de build actuelles.
 Les crédits visibles conservent les liens SHOM/IGN/NOAA/Open Waters/OSM et les licences,
 avec indication de transformation NoWave. Le menu natif Mapbox extrait les liens HTML :
 la mention « données transformées, ne pas utiliser pour la navigation » est donc un lien
@@ -268,3 +273,38 @@ caractère/couleur/portée de feux ne sont pas fusionnés en un faux feu unique.
 Les supports non qualifiés (petits points) se placent sous les feux : une lumière
 réellement renseignée peut ainsi rester visible sur un support inconnu, sans
 déplacer sa géométrie ni masquer une bouée. Les balises qualifiées gardent leur priorité.
+
+## Extension hydrographique
+
+Les courbes, sondes et dangers sous-marins disposent de trois endpoints et modèles
+séparés. Voir [le contrat hydrographique](hydrography.md) pour les sources réellement
+exploitables, le seuil exact Z12, les unités/datum et les limites du repli EMODnet.
+Cette extension ne modifie pas la normalisation ou les styles des bouées/aides fixes.
+
+## Masque littoral raster — correction du 18 octobre 2026
+
+Le proxy PNG conserve le WMS EMODnet et sa palette. Après recoloration, son
+alpha est intersecté avec les surfaces `ocean` et les bassins/canaux publiés
+par les tuiles OSM Shortbread. Les polygones d'îles restent des trous. Aucune
+profondeur n'est calculée à partir du masque ; aucun seuil de profondeur ne
+déplace le littoral.
+
+`CoastlineMask` réutilise le client `MarineHTTP` et son cache HTTP OSM durable
+(expiration respectée, minimum sept jours). Les masques PNG sont mémorisés en
+RAM : 512 entrées, 8 Mio au plus. Décodage MVT/rastérisation dans un thread,
+suréchantillonnage ×4, moyenne de couverture limitée aux centres de pixels
+situés dans l'eau ; RGB conservé, alpha jamais augmenté. Pas d'érosion des
+bords de tuiles. Une panne du masque renvoie 503 plutôt qu'un raster non masqué.
+Un PNG complètement transparent évite toute requête de masque supplémentaire.
+
+La source Flutter garde son ID, son slot, son opacité et son overzoom ; seul
+le paramètre `v=coast-1` invalide les anciennes tuiles natives non masquées.
+La texture reste découpée par les polygones d'eau Mapbox Streets existants.
+Ces deux géométries cartographiques peuvent différer dans leurs détails ;
+elles ne constituent pas une côte hydrographique à une hauteur de marée donnée.
+Attribution OSM/ODbL dans le registre public et dans les attributions de la carte.
+
+Les balises fixes à bandes grises utilisent les mêmes conditions de classe,
+motif horizontal, catégorie et IALA que les variantes blanches. Le gris publié
+par SHOM n'est jamais remplacé par du blanc. Les seuils de zoom, collisions,
+fusion, GPS et signalements conservent leurs comportements existants.

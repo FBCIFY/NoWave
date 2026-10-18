@@ -8,6 +8,53 @@ import 'package:blueway/core/api/api_service.dart';
 import 'package:blueway/core/api/api_exception.dart';
 
 void main() {
+  test(
+    'base sans slash, préfixe et paramètres conservés dans le client',
+    () async {
+      final client = MockClient((request) async {
+        expect(
+          request.url.toString(),
+          'https://api.example.com/proxy/api/v1/users/me?tenant=eu&detail=full',
+        );
+        expect(request.headers['authorization'], 'Bearer unit-token');
+        return http.Response('{}', 200);
+      });
+      addTearDown(client.close);
+      final api = ApiService(
+        client: client,
+        baseUrl: 'https://api.example.com/proxy?tenant=eu',
+      );
+      await api.get(
+        '/api/v1/users/me?detail=full',
+        headers: {'Authorization': 'Bearer unit-token'},
+      );
+    },
+  );
+
+  test(
+    'un chemin absolu ne peut transmettre le token à un fournisseur',
+    () async {
+      var sent = false;
+      final client = MockClient((request) async {
+        sent = true;
+        return http.Response('{}', 200);
+      });
+      addTearDown(client.close);
+      final api = ApiService(
+        client: client,
+        baseUrl: 'https://api.example.com/',
+      );
+      await expectLater(
+        api.get(
+          'https://api.mapbox.com/tiles',
+          headers: {'Authorization': 'Bearer unit-token'},
+        ),
+        throwsArgumentError,
+      );
+      expect(sent, isFalse);
+    },
+  );
+
   test('get retourne le contenu pour une réponse HTTP 200', () async {
     final client = MockClient((request) async {
       expect(request.method, 'GET');

@@ -32,6 +32,14 @@ class FixedAidLayer {
     'safe-water',
     'preferred-port',
     'preferred-starboard',
+    'green-white',
+    'white-green',
+    'red-white',
+    'white-red',
+    'green-grey',
+    'grey-green',
+    'red-grey',
+    'grey-red',
   ];
   static const _lightColors = ['default', 'red', 'green', 'yellow', 'white'];
   Future<Map<String, Uint8List>>? _images;
@@ -124,8 +132,60 @@ class FixedAidLayer {
     _lightImage('lighthouse'),
     'light',
     _lightImage('light'),
-    _beaconExpression(BuoyLayer.imageExpression()),
+    _fixedBeaconImage(),
   ];
+
+  static List<Object> _fixedBeaconImage() {
+    final fallback = _beaconExpression(BuoyLayer.imageExpression());
+    List<Object> banded(String color) => [
+      'all',
+      [
+        '==',
+        ['get', 'type'],
+        'beacon_lateral',
+      ],
+      [
+        '==',
+        ['get', 'color_pattern'],
+        'horizontal',
+      ],
+      [
+        'match',
+        ['get', 'navigation_system'],
+        'IALA_A',
+        [
+          '==',
+          ['get', 'category'],
+          color == 'green' ? 'starboard' : 'port',
+        ],
+        'IALA_B',
+        [
+          '==',
+          ['get', 'category'],
+          color == 'green' ? 'port' : 'starboard',
+        ],
+        false,
+      ],
+    ];
+    return [
+      'case',
+      for (final color in ['green', 'red']) ...[
+        banded(color),
+        [
+          'match',
+          ['get', 'color'],
+          for (final background in ['white', 'grey']) ...[
+            '${color}_$background',
+            'nowave-beacon-$color-$background',
+            '${background}_$color',
+            'nowave-beacon-$background-$color',
+          ],
+          fallback,
+        ],
+      ],
+      fallback,
+    ];
+  }
 
   static List<Object> _lightImage(String kind) => [
     'match',
@@ -156,11 +216,7 @@ class FixedAidLayer {
             true,
             false,
           ],
-          [
-            '==',
-            _beaconExpression(BuoyLayer.imageExpression()),
-            'nowave-beacon-neutral',
-          ],
+          ['==', _fixedBeaconImage(), 'nowave-beacon-neutral'],
         ],
         false,
       ),
@@ -250,11 +306,7 @@ class FixedAidLayer {
             specs[i].$2,
             // Un support inconnu ne doit pas masquer son feu qualifié.
             if (i == 3 || i == 4)
-              [
-                '!=',
-                _beaconExpression(BuoyLayer.imageExpression()),
-                'nowave-beacon-neutral',
-              ],
+              ['!=', _fixedBeaconImage(), 'nowave-beacon-neutral'],
           ],
           iconImageExpression: imageExpression(),
           iconSizeExpression: specs[i].$3

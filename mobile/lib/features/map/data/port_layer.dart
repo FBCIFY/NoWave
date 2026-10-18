@@ -1,5 +1,6 @@
 import 'package:mapbox_maps_flutter/mapbox_maps_flutter.dart';
 
+import '../../../core/api/api_config.dart';
 import 'marine_tiles.dart';
 
 /// Habillage NoWave des infrastructures portuaires.
@@ -23,10 +24,14 @@ class PortLayer {
   static const String _groyneLayerId = 'nowave-port-groynes';
   static const String _pierLayerId = 'nowave-port-piers';
 
-  static final String tilesUrl = MarineTiles.template('port-infrastructure');
+  static String tilesUrl({String apiBaseUrl = ApiConfig.baseUrl}) =>
+      MarineTiles.template('port-infrastructure', apiBaseUrl: apiBaseUrl);
   static Future<void>? _installing;
 
-  static Future<void> addTo(MapboxMap map) async {
+  static Future<void> addTo(
+    MapboxMap map, {
+    String apiBaseUrl = ApiConfig.baseUrl,
+  }) async {
     final pending = _installing;
     if (pending != null) {
       try {
@@ -34,9 +39,9 @@ class PortLayer {
       } catch (_) {
         /* Le style peut avoir changé. */
       }
-      return addTo(map);
+      return addTo(map, apiBaseUrl: apiBaseUrl);
     }
-    final install = _install(map);
+    final install = _install(map, apiBaseUrl);
     _installing = install;
     try {
       await install;
@@ -45,19 +50,19 @@ class PortLayer {
     }
   }
 
-  static Future<void> _install(MapboxMap map) async {
+  static Future<void> _install(MapboxMap map, String apiBaseUrl) async {
     final style = map.style;
 
     if (!await style.styleSourceExists(sourceId)) {
       await style.addSource(
         VectorSource(
           id: sourceId,
-          tiles: [tilesUrl],
+          tiles: [tilesUrl(apiBaseUrl: apiBaseUrl)],
           minzoom: 10,
           maxzoom: 14,
           prefetchZoomDelta: 0,
           tileNetworkRequestsDelay: 0.25,
-          attribution: MarineTiles.attribution,
+          attribution: MarineTiles.attribution(apiBaseUrl: apiBaseUrl),
         ),
       );
     }

@@ -162,6 +162,63 @@ void main() {
     expect(image({'type': 'lighthouse'}), 'nowave-lighthouse-default');
   });
 
+  test(
+    'balises fixes à bandes blanches : côtés IALA vérifiés, jamais un feu seul',
+    () {
+      for (final system in ['IALA_A', 'IALA_B']) {
+        for (final color in ['green', 'red']) {
+          final side = (color == 'green') == (system == 'IALA_A')
+              ? 'starboard'
+              : 'port';
+          for (final bands in [
+            '${color}_white',
+            'white_$color',
+            '${color}_grey',
+            'grey_$color',
+          ]) {
+            expect(
+              image({
+                'type': 'beacon_lateral',
+                'category': side,
+                'color': bands,
+                'color_pattern': 'horizontal',
+                'navigation_system': system,
+              }),
+              'nowave-beacon-${bands.replaceAll('_', '-')}',
+            );
+          }
+        }
+      }
+      expect(
+        image({
+          'type': 'light',
+          'light_color': 'green',
+          'color': 'green_white',
+          'category': 'starboard',
+          'navigation_system': 'IALA_A',
+        }),
+        'nowave-light-green',
+      );
+      for (final extra in [
+        {'category': 'port'},
+        {'navigation_system': ''},
+        {'color_pattern': ''},
+      ]) {
+        expect(
+          image({
+            'type': 'beacon_lateral',
+            'category': 'starboard',
+            'color': 'green_white',
+            'color_pattern': 'horizontal',
+            'navigation_system': 'IALA_A',
+            ...extra,
+          }),
+          'nowave-beacon-neutral',
+        );
+      }
+    },
+  );
+
   test('seuils et priorité ne changent pas les bouées', () {
     final layers = FixedAidLayer.layers();
     expect(layers.map((l) => l.minZoom), [13, 14, 11, 13, 12, 10]);
@@ -223,7 +280,7 @@ void main() {
       final map = AidMap();
       final aid = FixedAidLayer();
       await Future.wait([aid.addTo(map), aid.addTo(map)]);
-      expect(map.style.images.length, 22);
+      expect(map.style.images.length, 30);
       expect(map.style.layers.length, 6);
       map.style.images.clear();
       map.style.layers.clear();
@@ -231,7 +288,7 @@ void main() {
       await expectLater(aid.addTo(map), throwsA(isA<PlatformException>()));
       map.style.reject = false;
       await aid.addTo(map);
-      expect(map.style.images.length, 22);
+      expect(map.style.images.length, 30);
       expect(map.style.layers.length, 6);
     });
   });

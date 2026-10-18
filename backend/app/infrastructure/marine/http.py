@@ -23,7 +23,10 @@ class MarineHTTP:
     MAX_BODY = 8 * 1024 * 1024
     MAX_CACHE = 512 * 1024 * 1024
 
-    def __init__(self, cache_path: Path | None = None, transport=None):
+    def __init__(
+        self, cache_path: Path | None = None, transport=None, *, persistent_cache=True
+    ):
+        self.persistent_cache = persistent_cache
         directory = Path(
             os.getenv("MARINE_CACHE_DIR", str(Path.home() / ".cache/nowave/marine"))
         )
@@ -35,12 +38,13 @@ class MarineHTTP:
             limits=httpx.Limits(max_connections=12, max_keepalive_connections=8),
             headers={"User-Agent": "NoWave/1.0 marine display (https://no-wave.fr)"},
         )
-        self._semaphore = asyncio.Semaphore(8)
+        self._semaphore = asyncio.Semaphore(8 if persistent_cache else 4)
         self._flights = [asyncio.Lock() for _ in range(64)]
         self._database = None
         self._backoff: dict[str, float] = {}
         self._ign_gate = asyncio.Lock()
         self._ign_next_request = 0.0
+        self.metrics = {"cache_hits": 0, "network_requests": 0}
 
     def _db(self):
         if self._database is None:
@@ -62,28 +66,38 @@ class MarineHTTP:
         self, url: str, *, params=None, ttl=21600, osm=False, vector_tile=False
     ) -> bytes:
         if osm:
+            if not self.persistent_cache:
+                raise ProviderUnavailable("OSM requires its persistent HTTP cache")
             ttl = max(ttl, 604800)
         request = self._client.build_request("GET", url, params=params)
         key = hashlib.sha256(str(request.url).encode()).hexdigest()
         async with self._flights[int(key[:8], 16) % len(self._flights)]:
             try:
-                db = self._db()
+                # Numeric NOAA soundings use this existing client without any
+                # database or second cache. Other providers retain their policy.
+                db = self._db() if self.persistent_cache else None
                 now = time.time()
-                row = db.execute(
-                    "SELECT expires, body FROM responses WHERE key=?", (key,)
-                ).fetchone()
+                row = (
+                    db.execute(
+                        "SELECT expires, body FROM responses WHERE key=?", (key,)
+                    ).fetchone()
+                    if db is not None
+                    else None
+                )
                 if row and row[0] > now:
+                    self.metrics["cache_hits"] += 1
                     return row[1]
                 host = request.url.host
                 if self._backoff.get(host, 0) > now:
                     raise ProviderUnavailable("Upstream cooling down")
-                db.execute("DELETE FROM responses WHERE expires <= ?", (now,))
-                used = db.execute(
-                    "SELECT COALESCE(SUM(length(body)),0) FROM responses"
-                ).fetchone()[0]
-                db.commit()
-                if used + self.MAX_BODY > self.MAX_CACHE:
-                    raise ProviderUnavailable("Marine HTTP cache is full")
+                if db is not None:
+                    db.execute("DELETE FROM responses WHERE expires <= ?", (now,))
+                    used = db.execute(
+                        "SELECT COALESCE(SUM(length(body)),0) FROM responses"
+                    ).fetchone()[0]
+                    db.commit()
+                    if used + self.MAX_BODY > self.MAX_CACHE:
+                        raise ProviderUnavailable("Marine HTTP cache is full")
                 async with self._semaphore:
                     if host == "data.geopf.fr":
                         # Below the published 30 requests/s/IP. This process
@@ -96,6 +110,7 @@ class MarineHTTP:
                     async with self._client.stream(
                         "GET", url, params=params
                     ) as response:
+                        self.metrics["network_requests"] += 1
                         if response.status_code in (429, 503):
                             # No retries per tile; avoid multiplying pressure on failure.
                             retry_after = response.headers.get("retry-after", "")
@@ -150,11 +165,12 @@ class MarineHTTP:
                         raise ProviderUnavailable(
                             "Upstream did not return a feature collection"
                         )
-                db.execute(
-                    "INSERT OR REPLACE INTO responses VALUES (?,?,?)",
-                    (key, now + ttl, content),
-                )
-                db.commit()
+                if db is not None:
+                    db.execute(
+                        "INSERT OR REPLACE INTO responses VALUES (?,?,?)",
+                        (key, now + ttl, content),
+                    )
+                    db.commit()
                 return content
             except (
                 httpx.HTTPError,
