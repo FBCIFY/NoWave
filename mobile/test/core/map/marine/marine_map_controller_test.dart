@@ -89,6 +89,7 @@ void main() {
       expect(source['volatile'], true);
       expect(source['prefetch-zoom-delta'], 0);
       expect(layer['slot'], 'bottom');
+      expect(layer['minzoom'], 4); // No marine tile requests in globe view.
       expect(layer['maxzoom'], isNull); // Z14 tiles remain eligible at Z17+.
       expect(layer['paint']['raster-opacity'], [
         'interpolate',

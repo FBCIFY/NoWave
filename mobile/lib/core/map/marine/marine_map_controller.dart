@@ -73,6 +73,7 @@ class MarineMapController {
           id: bathymetryLayerId,
           sourceId: bathymetrySourceId,
           slot: LayerSlot.BOTTOM,
+          minZoom: 4,
           // L'emprise régionale EMODnet ne doit pas former un rectangle
           // contrasté sur le globe. Les détails apparaissent progressivement.
           rasterOpacityExpression: const [

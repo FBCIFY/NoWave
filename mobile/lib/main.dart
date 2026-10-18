@@ -33,6 +33,7 @@ Future<void> main() async {
   await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
 
   MapboxOptions.setAccessToken(MapConfig.accessToken);
+  await MapConfig.prepareStyle();
 
   // Services créés une seule fois, puis transmis aux écrans qui en ont besoin.
   final authService = AuthService();

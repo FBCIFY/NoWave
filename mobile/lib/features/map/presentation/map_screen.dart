@@ -13,6 +13,8 @@ import '../../../core/haptics/app_haptics.dart';
 import '../../../core/location/coordinate_formatter.dart';
 import '../../../core/location/location_service.dart';
 import '../../../core/map/accuracy_halo.dart';
+import '../../../core/map/globe_presentation.dart';
+import '../../../core/map/globe_style.dart';
 import '../../../core/map/map_config.dart';
 import '../../../core/map/marine/marine_map_controller.dart';
 import '../../../core/map/marine/water_texture_layer.dart';
@@ -29,6 +31,7 @@ import '../data/fixed_aid_layer.dart';
 import '../data/port_layer.dart';
 import '../data/report_layer_controller.dart';
 import '../data/report_tiles.dart';
+import 'widgets/globe_moon.dart';
 import 'widgets/map_notice_banner.dart';
 import 'widgets/map_zoom_badge.dart';
 import '../data/hydrography_layer.dart';
@@ -113,6 +116,7 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
   String? _locationError;
   MapboxMap? _mapboxMap;
   final _marineMap = MarineMapController();
+  final _globePresentation = GlobePresentation();
   final _waterTexture = WaterTextureLayer();
   final _hydrographyLayer = HydrographyLayer();
   final _buoyLayer = BuoyLayer();
@@ -146,7 +150,7 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
   /// Dernier zoom connu, pour relancer le battement de la heatmap au
   /// retour au premier plan.
   double? _cameraZoom;
-  final _displayedZoom = ValueNotifier<double>(7);
+  final _displayedZoom = ValueNotifier<double>(GlobeStyle.initialZoom);
 
   /// Coupe le battement de la heatmap, le renouvellement du token des
   /// tuiles et le réseau de Mapbox quand l'app n'est plus visible.
@@ -230,6 +234,9 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
     if (map != null) _hydrographyLayer.invalidateContourLabels(map);
     _cameraZoom = event.cameraState.zoom;
     _displayedZoom.value = event.cameraState.zoom;
+    if (map != null) {
+      unawaited(_globePresentation.synchronize(map, event.cameraState.zoom));
+    }
     _syncHeatmapPulse();
     _syncLocationPuck().ignore();
     final bearing = event.cameraState.bearing;
@@ -359,6 +366,7 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
     }
 
     // Une panne de la décoration ne masque jamais la carte.
+    if (GlobeStyle.isDecorativeSource(event.sourceId)) return;
     if (event.sourceId == WaterTextureLayer.sourceId) return;
     if (HydrographyLayer.sourceIds.contains(event.sourceId)) return;
 
@@ -1288,9 +1296,14 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
   );
 
   ViewportState _viewport = CameraViewportState(
-    center: Point(coordinates: Position(-4.49, 48.38)),
-    zoom: 7,
-    pitch: 60,
+    center: Point(
+      coordinates: Position(
+        GlobeStyle.initialLongitude,
+        GlobeStyle.initialLatitude,
+      ),
+    ),
+    zoom: GlobeStyle.initialZoom,
+    pitch: 0,
   );
 
   @override
@@ -1356,6 +1369,12 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
               onPointerUp: (_) => _mapTouchActive = false,
               onPointerCancel: (_) => _mapTouchActive = false,
               child: MapWidget(
+                // The default HEIGHT_ONLY constraint locks latitude near
+                // the equator at the minimum zoom on tall phone screens.
+                mapOptions: MapOptions(
+                  constrainMode: ConstrainMode.NONE,
+                  pixelRatio: mediaQuery.devicePixelRatio,
+                ),
                 onMapCreated: (map) {
                   setState(() => _mapboxMap = map);
                   unawaited(MapConfig.hideDefaultOrnaments(map));
@@ -1367,6 +1386,13 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
                 },
                 onMapLoadedListener: _handleMapLoaded,
                 onStyleLoadedListener: (_) {
+                  _globePresentation.styleLoaded();
+                  final map = _mapboxMap;
+                  if (map != null) {
+                    unawaited(
+                      _globePresentation.synchronize(map, _displayedZoom.value),
+                    );
+                  }
                   unawaited(_installMarineLayers());
                   _showAccuracyHalo();
                   unawaited(_showSelectedReport());
@@ -1396,6 +1422,7 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
               ),
             ),
           ),
+          Positioned.fill(child: GlobeMoon(zoom: _displayedZoom)),
           if (_mapError != null)
             Positioned.fill(
               child: ColoredBox(

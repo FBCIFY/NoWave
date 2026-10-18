@@ -1,0 +1,17 @@
+{
+  "clouds": {
+    "url": "https://eoimages.gsfc.nasa.gov/images/imagerecords/57000/57747/cloud_combined_2048.jpg",
+    "sha256": "daddaad84d7a33bbbc86cdda3f591099f57cee8607b7bcf3b67eb7e4f7a1c793"
+  },
+  "moon": {
+    "url": "https://svs.gsfc.nasa.gov/vis/a000000/a004700/a004720/lroc_color_poles_1k.jpg",
+    "sha256": "b246064f217f8d479df78c49c7c8595a8f5fbda008a72fd539978d2e121e0109"
+  },
+  "outputs": {
+    "moon.png": "d7ea352e9fd46bbe5712012eeb013d6b8be412a6be90d7c399aa265b40b5c66f",
+    "ne.png": "477d7fb63d093d48b8cda5fd3bd25c2826253e4519749e80fa46be0e9efdf4e6",
+    "nw.png": "ccd61559048902b3e90bc731814f47c4989609ba83eec663d3e05ead7a1e7f72",
+    "se.png": "3a700aa0be162d4146605383182dc0c22034d51cc248267e7c5c87e931930343",
+    "sw.png": "0d9ad833465eeec551fb1b1e336d6b7b1afbdca8edd5ae0f6f0e1e3a7965a750"
+  }
+}

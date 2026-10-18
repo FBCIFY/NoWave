@@ -1,4 +1,5 @@
 import 'package:blueway/app/app.dart';
+import 'package:blueway/core/map/globe_style.dart';
 import 'package:blueway/core/map/marine/marine_map_controller.dart';
 import 'package:blueway/core/map/marine/water_texture_layer.dart';
 import 'package:blueway/features/map/data/buoy_layer.dart';
@@ -16,6 +17,8 @@ void main() {
       await tester.pumpWidget(const MyApp(home: MapScreen()));
       final widget = tester.widget<MapWidget>(find.byType(MapWidget));
       for (final (type, source) in [
+        (MapLoadErrorType.SOURCE, GlobeStyle.satelliteSource),
+        (MapLoadErrorType.TILE, 'nowave-clouds-ne'),
         (MapLoadErrorType.SOURCE, BuoyLayer.sourceId),
         (MapLoadErrorType.TILE, BuoyLayer.sourceId),
         (MapLoadErrorType.TILE, PortLayer.sourceId),

@@ -102,8 +102,12 @@ void main() {
     'le badge Z suit les événements caméra sans remplacer les coordonnées',
     (tester) async {
       await tester.pumpWidget(const MaterialApp(home: MapScreen()));
-      expect(find.text('Z 7.0'), findsOneWidget);
+      expect(find.text('Z 0.7'), findsOneWidget);
       final map = tester.widget<MapWidget>(find.byType(MapWidget));
+      expect(map.mapOptions?.constrainMode, ConstrainMode.NONE);
+      final viewport = map.viewport as CameraViewportState;
+      expect(viewport.center?.coordinates.lng, 15);
+      expect(viewport.center?.coordinates.lat, 12);
       for (final zoom in [2.0, 11.8, 15.5, 17.0]) {
         map.onCameraChangeListener!(
           CameraChangedEventData.fromJson({
