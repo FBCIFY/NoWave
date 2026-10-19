@@ -67,6 +67,7 @@ void main() {
       tester.widget<MapScreen>(find.byType(MapScreen)).focusController!;
 
   Future<void> mount(WidgetTester tester) async {
+    await prepareFocusMarkers(tester);
     push.setSession('user-a');
     push.setReady(true);
     await push.start();

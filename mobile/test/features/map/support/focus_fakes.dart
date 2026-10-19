@@ -3,6 +3,7 @@ import 'dart:convert';
 
 import 'package:blueway/core/location/location_service.dart';
 import 'package:blueway/features/reports/domain/report_detail.dart';
+import 'package:blueway/features/map/presentation/report_marker.dart';
 import 'package:blueway/features/reports/domain/manual_report.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:geolocator/geolocator.dart' as geo;
@@ -10,12 +11,13 @@ import 'package:mapbox_maps_flutter/mapbox_maps_flutter.dart' as mb;
 
 ReportDetail focusReport({
   String id = 'report-a',
+  ReportCategory category = ReportCategory.pollution,
   double longitude = 5.373,
   double latitude = 43.29,
   DateTime? expires,
 }) => ReportDetail(
   id: id,
-  category: ReportCategory.pollution,
+  category: category,
   description: 'Backend position',
   longitude: longitude,
   latitude: latitude,
@@ -62,7 +64,48 @@ class FocusGps extends Fake implements LocationService {
   }
 }
 
+Future<void> prepareFocusMarkers(WidgetTester tester) async {
+  await tester.runAsync(() async {
+    for (final category in ReportCategory.values) {
+      await ReportMarker.paintCategory(category);
+    }
+  });
+}
+
 class FocusStyle extends Fake implements mb.StyleManager {
+  final images = <String, mb.MbxImage>{};
+  final imageRegistrations = <String>[];
+  final layerOrder = <String>[];
+  Future<void>? imageGate;
+
+  @override
+  Future<void> addStyleImage(
+    String id,
+    double scale,
+    mb.MbxImage image,
+    bool sdf,
+    List<mb.ImageStretches?> stretchX,
+    List<mb.ImageStretches?> stretchY,
+    mb.ImageContent? content,
+  ) async {
+    if (imageGate != null) await imageGate;
+    expectSync(image.data.length, 4 * image.width * image.height);
+    expectSync(scale, ReportMarker.pixelRatio);
+    images[id] = image;
+    imageRegistrations.add(id);
+  }
+
+  @override
+  Future<void> moveStyleLayer(String id, mb.LayerPosition? position) async {
+    layerOrder.remove(id);
+    layerOrder.add(id);
+  }
+
+  @override
+  Future<void> removeStyleSource(String id) async {
+    sources.remove(id);
+  }
+
   final sources = <String, Map<String, dynamic>>{};
   final layers = <String, Map<String, dynamic>>{};
   bool failSelection = false;
@@ -101,6 +144,7 @@ class FocusStyle extends Fake implements mb.StyleManager {
     final layer = jsonDecode(properties) as Map<String, dynamic>;
     expectSync(layers.containsKey(layer['id']), false);
     layers[layer['id'] as String] = layer;
+    layerOrder.add(layer['id'] as String);
   }
 
   @override
@@ -115,6 +159,7 @@ class FocusStyle extends Fake implements mb.StyleManager {
   @override
   Future<void> removeStyleLayer(String id) async {
     layers.remove(id);
+    layerOrder.remove(id);
   }
 }
 
