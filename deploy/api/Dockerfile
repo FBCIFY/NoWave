@@ -1,7 +1,9 @@
 FROM python:3.12-alpine@sha256:4c47124a8391cb7a9f571164147d154777cf012a4ece5f86097130d7a4478111 AS builder
 WORKDIR /build
 COPY backend/requirements.lock ./
-RUN apk upgrade --no-cache && pip install --no-cache-dir --require-hashes --prefix=/install -r requirements.lock
+RUN apk upgrade --no-cache \
+    && apk add --no-cache build-base \
+    && pip install --no-cache-dir --require-hashes --prefix=/install -r requirements.lock
 
 FROM python:3.12-alpine@sha256:4c47124a8391cb7a9f571164147d154777cf012a4ece5f86097130d7a4478111
 ARG NOWAVE_VERSION=development
