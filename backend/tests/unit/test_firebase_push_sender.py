@@ -29,11 +29,17 @@ def sender_with_response(status, body, headers=None):
 def test_acceptance_payload_and_expiration():
     sender, requests = sender_with_response(200, {"name": "projects/test/messages/1"})
     now = datetime.now(UTC)
-    message = delivery(expires_at=now + timedelta(seconds=120))
+    message = delivery(
+        expires_at=now + timedelta(seconds=120), description="Filet dérivant"
+    )
     try:
         assert sender.send(message, now) == "projects/test/messages/1"
         payload = json.loads(requests[0].content)["message"]
         assert payload["data"] == message.data()
+        assert payload["notification"] == {
+            "title": "Pollution · 0,5 NM",
+            "body": "« Filet dérivant »",
+        }
         assert payload["android"]["ttl"] == "120s"
         assert payload["apns"]["headers"]["apns-expiration"] == str(
             int(message.expires_at.timestamp())

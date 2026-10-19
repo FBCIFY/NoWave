@@ -5,7 +5,16 @@ from uuid import UUID
 
 import pytest
 
-from app.domain.notification import coordinate_dms, next_attempt_at, parse_retry_after
+from app.domain.notification import (
+    CATEGORY_LABELS,
+    DEFAULT_NOTIFICATION_BODY,
+    NOTIFICATION_DESCRIPTION_MAX,
+    coordinate_dms,
+    nautical_miles,
+    next_attempt_at,
+    parse_retry_after,
+)
+from app.domain.report import ReportCategory
 from backend.tests.notification_helpers import delivery
 
 
@@ -46,6 +55,71 @@ def test_retry_after_can_extend_but_not_shorten_delay():
 )
 def test_dms_matches_mobile_rounding(value, expected):
     assert coordinate_dms(value, "N", "S") == expected
+
+
+@pytest.mark.parametrize(
+    "meters,expected",
+    [
+        (0, "< 0,1 NM"),
+        (185, "< 0,1 NM"),
+        (186, "0,1 NM"),
+        (2222.4, "1,2 NM"),
+        (18_446, "10,0 NM"),
+        (18_520, "10 NM"),
+    ],
+)
+def test_nautical_miles_matches_mobile_format(meters, expected):
+    assert nautical_miles(meters) == expected
+
+
+def test_every_report_category_has_a_label():
+    assert set(CATEGORY_LABELS) == {category.value for category in ReportCategory}
+
+
+@pytest.mark.parametrize(
+    "category,expected",
+    [
+        ("marine_animal", "Animal marin · 1,2 NM"),
+        ("obstruction", "Obstacle · 1,2 NM"),
+        ("pollution", "Pollution · 1,2 NM"),
+        ("unknown", "Signalement · 1,2 NM"),
+    ],
+)
+def test_title_shows_category_and_distance(category, expected):
+    assert delivery(category=category, distance_m=2222.4).title() == expected
+
+
+@pytest.mark.parametrize("description", [None, "", " \n\t "])
+def test_body_without_description_is_the_default_text(description):
+    assert delivery(description=description).body() == DEFAULT_NOTIFICATION_BODY
+
+
+def test_body_quotes_the_description_on_one_line():
+    message = delivery(description="  Filet\n dérivant\r\nprès de la bouée ")
+    assert message.body() == "« Filet dérivant près de la bouée »"
+
+
+def test_body_shortens_long_descriptions():
+    exact = "a" * NOTIFICATION_DESCRIPTION_MAX
+    assert delivery(description=exact).body() == f"« {exact} »"
+    long = "Filet dérivant " + "x" * 250
+    assert delivery(description=long).body() == (
+        "« " + long[: NOTIFICATION_DESCRIPTION_MAX - 1] + "… »"
+    )
+
+
+@pytest.mark.parametrize("description", [None, "Filet dérivant"])
+def test_notification_text_leaves_out_the_position(description):
+    message = delivery(description=description)
+    shown = message.title() + message.body()
+    assert "°" not in shown
+    assert message.data()["position_dms"] not in shown
+
+
+def test_description_stays_out_of_repr_and_data():
+    message = delivery(description="Commentaire privé")
+    assert "Commentaire privé" not in repr(message)
+    assert "Commentaire privé" not in json.dumps(message.data(), ensure_ascii=False)
 
 
 def test_payload_uses_history_identity_and_only_strings():
