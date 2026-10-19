@@ -8,7 +8,7 @@ from app.config.settings import get_settings
 
 
 config = context.config
-if config.config_file_name:
+if config.config_file_name and config.attributes.get("connection") is None:
     fileConfig(config.config_file_name)
 
 target_metadata = None
