@@ -3,6 +3,9 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:precise_compass/precise_compass.dart';
 
+import 'android_map_headings.dart';
+import 'android_rotation_service.dart';
+
 /// Flux continu du cap (par rapport au nord géographique), du tangage et du
 /// roulis du téléphone. Utilisé par la boussole de la carte et par la caméra.
 class DeviceOrientationService {
@@ -21,6 +24,21 @@ class DeviceOrientationService {
   );
 
   Stream<CompassReading> get readings => _shared.readings;
+
+  static final _androidMapHeadings = AndroidMapHeadings(
+    _shared.readings,
+    AndroidRotationService.samples,
+  );
+
+  /// Cap de carte : convention de posture Mapbox sur Android. Le flux photo
+  /// [readings] reste distinct pour préserver l'axe optique NW-150.
+  Stream<double> get mapHeadings =>
+      defaultTargetPlatform == TargetPlatform.android
+      ? _androidMapHeadings.headings
+      : readings
+            .map((reading) => reading.headingTrue ?? reading.headingMagnetic)
+            .where((heading) => heading != null && heading.isFinite)
+            .cast<double>();
 }
 
 /// Relaie un flux de boussole à tous les abonnés, et le rouvre tant qu'il
