@@ -9,6 +9,7 @@ import 'package:blueway/core/notifications/alert_push_controller.dart';
 import 'package:blueway/features/alerts/data/alert_service.dart';
 import 'package:blueway/features/alerts/presentation/alert_report_screen.dart';
 import 'package:blueway/features/alerts/presentation/alerts_screen.dart';
+import 'package:blueway/features/map/presentation/map_screen.dart';
 import 'package:blueway/features/auth/data/auth_service.dart';
 import 'package:blueway/features/auth/presentation/auth_gate.dart';
 import 'package:blueway/features/auth/presentation/login_screen.dart';
@@ -244,7 +245,12 @@ void main() {
       f.source.taps.add(pushMessage());
       f.source.taps.add(pushMessage());
       await tester.pumpAndSettle();
-      expect(find.byType(AlertReportScreen), findsOneWidget);
+      expect(find.byType(AlertReportScreen), findsNothing);
+      expect(find.byType(MapScreen), findsOneWidget);
+      expect(
+        find.text('Ce signalement n’est plus disponible.'),
+        findsOneWidget,
+      );
       expect(
         f.requests.where((r) => r.url.path.contains('/reports/')),
         hasLength(1),
@@ -307,7 +313,12 @@ void main() {
       );
       await tester.tap(find.text('Annuler'));
       await tester.pumpAndSettle();
-      expect(find.byType(AlertReportScreen), findsOneWidget);
+      expect(find.byType(AlertReportScreen), findsNothing);
+      expect(find.byType(MapScreen), findsOneWidget);
+      expect(
+        find.text('Ce signalement n’est plus disponible.'),
+        findsOneWidget,
+      );
       expect(f.requests.where((r) => r.method == 'DELETE'), isEmpty);
       await tester.pumpWidget(const SizedBox.shrink());
     },

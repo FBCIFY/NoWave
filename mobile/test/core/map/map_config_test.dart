@@ -3,6 +3,13 @@ import 'package:mapbox_maps_flutter/mapbox_maps_flutter.dart';
 import 'package:blueway/core/map/map_config.dart';
 
 void main() {
+  test('sans cap fiable, repère neutre même à fort zoom', () {
+    final settings = MapConfig.locationPuckSettings(hasHeading: false);
+    expect(settings.enabled, true);
+    expect(settings.puckBearingEnabled, false);
+    expect(settings.locationPuck?.locationPuck2D, isA<DefaultLocationPuck2D>());
+    expect(settings.locationPuck?.locationPuck3D, isNull);
+  });
   test('de près, le curseur est la flèche 3D', () {
     final puck = MapConfig.locationPuckSettings().locationPuck;
 

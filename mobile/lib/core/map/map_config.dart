@@ -20,11 +20,12 @@ class MapConfig {
   /// flèche couvrirait toute une région.
   static LocationComponentSettings locationPuckSettings({
     bool zoomedOut = false,
+    bool hasHeading = true,
   }) => LocationComponentSettings(
     enabled: true,
-    puckBearingEnabled: true,
+    puckBearingEnabled: hasHeading,
     puckBearing: PuckBearing.HEADING,
-    locationPuck: zoomedOut
+    locationPuck: zoomedOut || !hasHeading
         ? LocationPuck(locationPuck2D: DefaultLocationPuck2D())
         : LocationPuck(
             locationPuck3D: LocationPuck3D(

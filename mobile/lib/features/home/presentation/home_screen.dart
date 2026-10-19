@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 
+import '../../../core/api/api_exception.dart';
 import '../../../core/notifications/alert_push_controller.dart';
 import '../../../core/notifications/notification_permission.dart';
 import '../../../core/notifications/push_notification_listener.dart';
@@ -57,9 +58,10 @@ class HomeScreen extends StatefulWidget {
 
 class _HomeScreenState extends State<HomeScreen> {
   final MapFocusController _mapFocusController = MapFocusController();
-
+  int _pushRequest = 0;
   @override
   void dispose() {
+    _pushRequest++;
     _mapFocusController.dispose();
     super.dispose();
   }
@@ -79,11 +81,110 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  /// Un tap explicite sur une nouvelle notification ouvre immédiatement
-  /// sa fiche, même si une autre fiche d'alerte est déjà affichée.
-  Future<void> _openReportFromPush(String reportId) {
-    unawaited(_openReport(reportId));
-    return Future<void>.value();
+  /// A push selects the main map; only the API supplies its actual position.
+  Future<void> _openReportFromPush(String reportId) async {
+    final request = ++_pushRequest;
+    final controller = widget.pushController;
+    final session = controller?.sessionEpoch;
+    bool current() =>
+        mounted &&
+        request == _pushRequest &&
+        (controller == null ||
+            (controller.ready && controller.sessionEpoch == session));
+    if (!current()) return;
+    if (_mapFocusController.isBlocked) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Terminez ou annulez votre signalement ; l’alerte sera ensuite affichée.',
+          ),
+        ),
+      );
+      await _mapFocusController.whenUnblocked;
+      if (!current()) return;
+    }
+    if (!mounted) return;
+    _mapFocusController.clear();
+    Navigator.of(context).popUntil((route) => route.isFirst);
+    final service = widget.reportDetailService;
+    if (service == null) {
+      throw const AlertOpenFailure('Chargement du signalement indisponible.');
+    }
+    final ReportDetail report;
+    try {
+      report = await service.fetchReport(reportId);
+    } catch (error) {
+      if (!current()) return;
+      if (error is ApiException && error.code == 'user_inactive') {
+        widget.onUserInactive?.call();
+      }
+      if (error is ReportNotFoundException) {
+        throw const AlertOpenFailure(
+          'Ce signalement n’est plus disponible.',
+          retryable: false,
+        );
+      }
+      if (error is ApiException &&
+          (error.statusCode == 401 || error.statusCode == 403)) {
+        throw const AlertOpenFailure(
+          'Vous n’avez pas accès à ce signalement. Vérifiez votre session.',
+          retryable: false,
+        );
+      }
+      throw const AlertOpenFailure(
+        'Impossible de charger le signalement. Vérifiez votre connexion.',
+      );
+    }
+    if (!current()) return;
+    if (!report.expiresAt.isAfter(DateTime.now())) {
+      throw const AlertOpenFailure(
+        'Ce signalement a expiré.',
+        retryable: false,
+      );
+    }
+    if (report.id != reportId ||
+        !report.latitude.isFinite ||
+        !report.longitude.isFinite ||
+        report.latitude.abs() > 90 ||
+        report.longitude.abs() > 180) {
+      throw const AlertOpenFailure(
+        'La position du signalement reçue est invalide.',
+      );
+    }
+    if (_mapFocusController.isBlocked) {
+      // The draft opened during HTTP. Wait without altering it, then re-read
+      // the report rather than applying a potentially stale response.
+      await _mapFocusController.whenUnblocked;
+      if (current()) await _openReportFromPush(reportId);
+      return;
+    }
+    try {
+      await _mapFocusController.focusAlert(report, isCurrent: current);
+    } on MapFocusBlocked {
+      await _mapFocusController.whenUnblocked;
+      if (current()) await _openReportFromPush(reportId);
+    } on ReportNotFoundException {
+      throw const AlertOpenFailure(
+        'Ce signalement a expiré.',
+        retryable: false,
+      );
+    }
+  }
+
+  void _openAlerts() {
+    if (!mounted ||
+        widget.alertService == null ||
+        widget.reportDetailService == null) {
+      return;
+    }
+    Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => AlertsScreen(
+          service: widget.alertService!,
+          onOpen: (alert) => _openReport(alert.reportId),
+        ),
+      ),
+    );
   }
 
   /// Le détail vient d'être relu auprès du backend par AlertReportScreen.
@@ -116,16 +217,7 @@ class _HomeScreenState extends State<HomeScreen> {
       onOpenAlerts:
           widget.alertService == null || widget.reportDetailService == null
           ? null
-          : () {
-              Navigator.of(context).push(
-                MaterialPageRoute<void>(
-                  builder: (_) => AlertsScreen(
-                    service: widget.alertService!,
-                    onOpen: (alert) => _openReport(alert.reportId),
-                  ),
-                ),
-              );
-            },
+          : _openAlerts,
       reportService: widget.reportService,
       reportTiles: widget.reportTiles,
       reportDetailService: widget.reportDetailService,
@@ -170,6 +262,7 @@ class _HomeScreenState extends State<HomeScreen> {
         : PushNotificationListener(
             controller: controller,
             onOpen: (push) => _openReportFromPush(push.alert.reportId),
+            onOpenHistory: _openAlerts,
             child: map,
           );
   }

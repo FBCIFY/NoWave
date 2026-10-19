@@ -250,7 +250,7 @@ envoyé au backend avec l’enregistrement du téléphone (voir NW-116).
 - `ProfileGate` n’a pas de test automatisé : le parcours a été vérifié à la
   main sur iPhone.
 
-## Historique et navigation des alertes — NW-125
+## Historique et navigation des alertes — NW-125, NW-163
 
 L’historique des alertes du compte est chargé depuis
 `GET /api/v1/users/me/alerts` avec pagination.
@@ -259,17 +259,35 @@ Lorsqu’une alerte est ouverte depuis l’historique ou depuis une notification
 FCM, le mobile relit le signalement avec `GET /api/v1/reports/{report_id}`.
 Le contenu du push ne constitue donc pas la source de vérité du signalement.
 
-L’action « Voir sur la carte » utilise la `MapScreen` principale existante et
-la centre sur la position courante du signalement relue auprès du backend.
+Un tap FCM (app ouverte via « Ouvrir », en arrière-plan ou arrêtée) revient
+directement à la `MapScreen` principale, sans ouvrir de fiche. Un repère violet
+identifie le signalement même si les tuiles MVT ne sont pas encore chargées.
+La caméra Mapbox calcule un cadrage du point API et de la dernière position GPS
+exploitable (moins de cinq minutes), avec des marges pour les contrôles. Le zoom
+varie avec les deux points et les dimensions réelles de la carte. Le suivi GPS
+reste arrêté ; zoom, déplacement et orientation restent libres. Le curseur GPS
+reste affiché : flèche si le cap est disponible, repère neutre sinon.
 
-Si un signalement est en cours de création ou de positionnement, la fiche de
-l’alerte peut être consultée mais le recentrage de la carte est refusé jusqu’à
-ce que l’utilisateur termine ou annule le signalement en cours.
+Sans GPS, la carte cadre seulement le signalement et affiche « Position
+indisponible — cadrage sur le signalement ». Une première position disponible
+ensuite provoque un seul nouveau cadrage, sauf si l’utilisateur a déjà touché
+la carte. Un délai GPS dépassé n’empêche pas cette reprise. Après un refus de
+permission, la disponibilité est revérifiée au retour dans l’application.
 
-Si une notification distincte est sélectionnée alors qu’une autre fiche
-d’alerte est déjà ouverte, la nouvelle fiche est ouverte immédiatement
-au-dessus de la précédente. Le bouton Retour revient à la fiche précédente.
-Les doublons représentant le même événement restent dédupliqués.
+Plusieurs notifications distinctes actualisent la sélection sur cette même
+carte, sans empiler de pages. Les doublons par `alert_id`,
+`report_id:report_version` ou `messageId` restent ignorés, même après un échec.
+Une erreur de chargement ou de cadrage propose une action explicite
+« Réessayer » ; aucune boucle de réouverture. Un signalement indisponible ou
+expiré affiche un message, avec accès à l’historique lorsqu’il est disponible.
+
+Toucher volontairement le repère ouvre `ReportDetailSheet`. L’historique
+conserve ses fiches et leur réessai HTTP. Leur action « Voir sur la carte »
+utilise la carte principale et la position du signalement relue auprès du backend.
+
+Pendant une création, un positionnement ou une prise de photo, le tap FCM attend
+la fin ou l’annulation du parcours et conserve le formulaire. Le recentrage
+volontaire depuis une fiche reste refusé tant que ce parcours est ouvert.
 
 Le champ `data` du message FCM utilise uniquement des valeurs chaîne.
 

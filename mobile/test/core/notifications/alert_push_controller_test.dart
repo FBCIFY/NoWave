@@ -124,7 +124,7 @@ void main() {
     },
   );
   test(
-    'deux événements distincts attendent la fermeture de la première route',
+    'deux événements distincts démarrent sans attendre le premier cadrage',
     () async {
       final route = Completer<void>();
       controller.setSession('user-a');
@@ -136,7 +136,7 @@ void main() {
       await controller.start();
       source.taps.add(pushMessage());
       source.taps.add(pushMessage(id: 'b', reportId: 'b'));
-      expect(opened, hasLength(1));
+      expect(opened, hasLength(2));
       route.complete();
       await flush();
       expect(opened, hasLength(2));
@@ -244,7 +244,7 @@ void main() {
     },
   );
   test(
-    'le callback de navigation échoué donne un message et reste dédupliqué',
+    'échec de navigation : doublon ignoré puis nouvelle tentative explicite',
     () async {
       await ready();
       controller.attach((_) async => throw StateError('navigation'));
@@ -255,6 +255,88 @@ void main() {
       source.taps.add(pushMessage());
       await flush();
       expect(opened, isEmpty);
+      expect(controller.canRetry, isTrue);
+      controller.retry();
+      await flush();
+      expect(opened, hasLength(1));
+      controller.retry();
+      source.taps.add(pushMessage());
+      await flush();
+      expect(opened, hasLength(1));
+    },
+  );
+
+  test('réessai après expiration : refus sans seconde navigation', () async {
+    await ready();
+    var attempts = 0;
+    controller.attach((_) async {
+      attempts++;
+      throw StateError('camera');
+    });
+    source.taps.add(pushMessage());
+    await flush();
+    expect(controller.canRetry, true);
+    now = now.add(const Duration(hours: 2));
+    controller.retry();
+    await flush();
+    expect(attempts, 1);
+    expect(controller.notice, contains('expiré'));
+    expect(controller.canRetry, false);
+  });
+
+  test('logout purge le réessai et ignore les taps sans compte', () async {
+    await ready();
+    controller.attach((_) async => throw StateError('camera'));
+    source.taps.add(pushMessage());
+    await flush();
+    controller.setSession(null);
+    controller.retry();
+    source.taps.add(pushMessage());
+    controller.setSession('user-b');
+    controller.setReady(true);
+    controller.attach(navigate);
+    await flush();
+    expect(controller.canRetry, false);
+    expect(opened, isEmpty);
+  });
+
+  test(
+    'un ancien échec ne remplace pas la sélection récente par un réessai',
+    () async {
+      await ready();
+      final old = Completer<void>();
+      controller.attach(
+        (push) =>
+            push.alert.reportId == 'report-a' ? old.future : navigate(push),
+      );
+      source.taps.add(pushMessage());
+      source.taps.add(pushMessage(id: 'b', reportId: 'report-b'));
+      await flush();
+      old.completeError(StateError('old camera'));
+      await flush();
+      expect(opened.single.alert.reportId, 'report-b');
+      expect(controller.canRetry, false);
+      expect(controller.notice, isNull);
+    },
+  );
+
+  test(
+    'signalement indisponible : message conservé sans réessai automatique',
+    () async {
+      await ready();
+      var attempts = 0;
+      controller.attach((_) async {
+        attempts++;
+        throw const AlertOpenFailure('Signalement retiré.', retryable: false);
+      });
+      source.taps.add(pushMessage());
+      await flush();
+      source.taps.add(pushMessage());
+      controller.retry();
+      await flush();
+      expect(attempts, 1);
+      expect(controller.notice, 'Signalement retiré.');
+      expect(controller.canRetry, false);
     },
   );
 }
