@@ -72,6 +72,7 @@ class FirebasePushSender(PushSender):
                     "apns-expiration": str(int(delivery.expires_at.timestamp())),
                     "apns-collapse-id": str(delivery.alert_id),
                 },
+                "payload": {"aps": {"sound": "default"}},
             },
         }
         try:

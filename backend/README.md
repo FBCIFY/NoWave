@@ -491,7 +491,8 @@ guillemets, sur une ligne : espaces et retours à la ligne réduits, 100
 caractères au plus. Sans commentaire, le texte reste « Un signalement à
 proximité. ». La position n'est pas affichée dans la notification ; elle reste
 dans `data` pour l'application. Le commentaire n'entre pas dans `data` : le
-contrat lu par Flutter ne change pas.
+contrat lu par Flutter ne change pas. Sur iOS, `aps.sound` vaut `default` : sans
+lui, APNs affiche la notification sans son. Android joue le son de son canal.
 
 Le transport HTTP v1 ne réessaie pas un envoi de lui-même. Ses délais sont de
 3 secondes pour la connexion et 10 secondes pour les opérations de lecture et

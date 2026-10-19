@@ -44,6 +44,7 @@ def test_acceptance_payload_and_expiration():
         assert payload["apns"]["headers"]["apns-expiration"] == str(
             int(message.expires_at.timestamp())
         )
+        assert payload["apns"]["payload"] == {"aps": {"sound": "default"}}
         assert requests[0].headers["Authorization"] == "Bearer access-token"
     finally:
         sender.close()
