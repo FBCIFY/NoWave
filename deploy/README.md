@@ -4,9 +4,28 @@ Le VPS héberge le site web, l’API FastAPI et PostgreSQL/PostGIS dans des cont
 
 ## Livraison
 
-Le workflow `.github/workflows/production.yml` exécute les tests web, API et base de données, puis les audits des dépendances et des quatre images Docker. Après un push sur `dev`, un résultat valide déclenche le déploiement de cette révision exacte sur le VPS. Les pull requests et les lancements manuels exécutent seulement la validation.
+Le workflow **NoWave CI** (`.github/workflows/checks.yml`) exécute une seule fois
+les contrôles Python, Flutter, PostGIS et web, dont le test HTTP du service Nginx
+autonome. Après leur réussite, il appelle `.github/workflows/production.yml`
+pour les audits des dépendances et des quatre images Docker. Un échec d'un
+contrôle ou d'un audit bloque la livraison.
+
+Après un push sur `dev`, un résultat valide déclenche le déploiement de cette
+révision exacte sur le VPS. Les pull requests vers `dev` et `main` et les
+lancements manuels exécutent seulement la validation. Pour une vérification
+manuelle, lancer **NoWave CI** dans GitHub Actions ; `production.yml` est un
+workflow appelé, sans déclencheur indépendant. Les livraisons sont sérialisées
+et ne sont pas annulées par un nouveau push.
 
 Le script `hostinger/ci-deploy.sh` reconstruit et audite les images sur le VPS, puis appelle `hostinger/deploy.sh`. Celui-ci effectue une sauvegarde, applique les migrations, démarre les services et vérifie la version sur l’adresse privée. Le tunnel est ensuite mis à jour et les routes publiques sont vérifiées.
+
+Les rapports JSON d’audit sont conservés dans `test-results/containers`. La base
+Trivy, son cache et les exports `.tar` des images sont temporaires : chaque export
+est supprimé après son analyse et le répertoire de travail est nettoyé à la fin du
+script, y compris en cas d’échec ou d’interruption SIGINT/SIGTERM. Un arrêt forcé
+(SIGKILL) ou une panne du serveur peut laisser un répertoire `.audit-*` à nettoyer
+après avoir vérifié qu’aucun audit ne l’utilise. Les images Docker restent disponibles
+pour le déploiement et le retour arrière.
 
 ## Protection et sauvegardes
 
