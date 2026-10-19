@@ -244,3 +244,92 @@ def test_suspended_user_returns_403(monkeypatch):
         response.json()["error"]["code"]
         == "user_inactive"
     )
+
+
+def test_certificate_outage_returns_503_then_recovers(monkeypatch):
+    from firebase_admin import auth
+
+    outcomes = [auth.CertificateFetchError("private certificate URL", cause=OSError("network")), verified_identity()]
+
+    class Adapter:
+        def verify_token(self, token):
+            outcome = outcomes.pop(0)
+            if isinstance(outcome, Exception):
+                raise outcome
+            return outcome
+
+    monkeypatch.setattr(auth_dependency, "FirebaseAuthAdapter", Adapter)
+    headers = {"Authorization": "Bearer valid-token"}
+    response = client.get("/authenticated", headers=headers)
+    assert response.status_code == 503
+    assert response.json() == {"detail": "Authentication service unavailable"}
+    assert client.get("/authenticated", headers=headers).status_code == 200
+
+
+import pytest
+from firebase_admin import auth as firebase_auth
+from firebase_admin.exceptions import UnavailableError
+from google.auth.exceptions import TransportError
+import requests
+
+
+@pytest.mark.parametrize("error", [
+    ValueError("bad token"),
+    firebase_auth.InvalidIdTokenError("invalid signature"),
+    firebase_auth.ExpiredIdTokenError("expired", cause=None),
+    firebase_auth.RevokedIdTokenError("revoked"),
+    firebase_auth.UserDisabledError("disabled"),
+    firebase_auth.UserNotFoundError("deleted"),
+])
+def test_rejected_identities_remain_401(monkeypatch, error):
+    class Adapter:
+        def verify_token(self, token):
+            raise error
+    monkeypatch.setattr(auth_dependency, "FirebaseAuthAdapter", Adapter)
+    response = client.get("/authenticated", headers={"Authorization": "Bearer private-token"})
+    assert response.status_code == 401
+    assert "private" not in response.text
+
+
+@pytest.mark.parametrize("error", [
+    UnavailableError("private details"), TransportError("private details"),
+    requests.Timeout("private details"),
+])
+def test_transport_and_provider_outages_are_503(monkeypatch, error):
+    class Adapter:
+        def verify_token(self, token):
+            raise error
+    monkeypatch.setattr(auth_dependency, "FirebaseAuthAdapter", Adapter)
+    response = client.get("/authenticated", headers={"Authorization": "Bearer private-token"})
+    assert response.status_code == 503
+    assert "private" not in response.text
+
+
+def test_initialization_outage_is_503(monkeypatch):
+    def fail():
+        raise OSError("private credential path")
+    monkeypatch.setattr(auth_dependency, "FirebaseAuthAdapter", fail)
+    response = client.get("/authenticated", headers={"Authorization": "Bearer token"})
+    assert response.status_code == 503
+    assert "private" not in response.text
+
+
+def test_unexpected_programming_error_is_not_a_401(monkeypatch):
+    class Adapter:
+        def verify_token(self, token):
+            raise RuntimeError("bug")
+    monkeypatch.setattr(auth_dependency, "FirebaseAuthAdapter", Adapter)
+    with pytest.raises(RuntimeError, match="bug"):
+        client.get("/authenticated", headers={"Authorization": "Bearer token"})
+
+
+def test_public_error_envelope_has_stable_unavailable_code(monkeypatch):
+    from app.main import app as api_app
+    class Adapter:
+        def verify_token(self, token):
+            raise firebase_auth.CertificateFetchError("private URL", cause=None)
+    monkeypatch.setattr(auth_dependency, "FirebaseAuthAdapter", Adapter)
+    response = TestClient(api_app).get("/api/v1/users/me", headers={"Authorization": "Bearer token"})
+    assert response.status_code == 503
+    assert response.json()["error"]["code"] == "authentication_unavailable"
+    assert "private" not in response.text
