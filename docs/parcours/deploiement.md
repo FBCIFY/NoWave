@@ -1,6 +1,6 @@
 # Parcours — Contrôles, VPS et release
 
-**Référence :** `dev@6b54aa8` (19/10/2026). Décision CON-026 **option A**. Propriétaire opérationnel : Brice, tickets NW-57 / NW-84.
+**Référence :** `dev@6b54aa8` (19/10/2026). Correctif [FIX T15 / NW-168](https://linear.app/blueway/issue/NW-168). Vérification documentaire attribuée à Jonathan ; référent opérationnel historique : Brice (NW-57 / NW-84).
 
 ## Processus observé
 
