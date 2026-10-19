@@ -30,6 +30,15 @@ Credit: NASA's Scientific Visualization Studio / Ernie Wright; LRO / LROC.
 The near-side color map is orthographically projected into a 128 × 128 PNG.
 The Moon's screen position is decorative and has no astronomical meaning.
 
+## Near-camera cloud passage
+
+`cloud-passage-atlas.png` contains three different 512 × 512 cloud banks derived
+from the same NASA grayscale mosaic, with transparent irregular margins and
+diffuse lighting encoded offline. It adds no weather API. These are decorative
+foreground planes during Z4.5–Z6.2; the geographic clouds above remain unchanged.
+Rebuild with `tool/prepare_cloud_passage.py`. Input hash, crop coordinates and
+output hash are recorded separately in `cloud-passage-provenance.json`.
+
 ## Usage and cost
 
 NASA content is generally available for factual/informational uses, with source

@@ -13,6 +13,7 @@ import '../../../core/haptics/app_haptics.dart';
 import '../../../core/location/coordinate_formatter.dart';
 import '../../../core/location/location_service.dart';
 import '../../../core/map/accuracy_halo.dart';
+import '../../../core/map/cloud_passage_controller.dart';
 import '../../../core/map/globe_presentation.dart';
 import '../../../core/map/globe_style.dart';
 import '../../../core/map/map_config.dart';
@@ -32,6 +33,7 @@ import '../data/port_layer.dart';
 import '../data/report_layer_controller.dart';
 import '../data/report_tiles.dart';
 import 'widgets/globe_moon.dart';
+import 'widgets/cloud_passage.dart';
 import 'widgets/map_notice_banner.dart';
 import 'widgets/map_zoom_badge.dart';
 import '../data/hydrography_layer.dart';
@@ -117,6 +119,7 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
   MapboxMap? _mapboxMap;
   final _marineMap = MarineMapController();
   final _globePresentation = GlobePresentation();
+  final _cloudPassage = CloudPassageController();
   final _waterTexture = WaterTextureLayer();
   final _hydrographyLayer = HydrographyLayer();
   final _buoyLayer = BuoyLayer();
@@ -234,6 +237,13 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
     if (map != null) _hydrographyLayer.invalidateContourLabels(map);
     _cameraZoom = event.cameraState.zoom;
     _displayedZoom.value = event.cameraState.zoom;
+    _cloudPassage.setCamera(
+      zoom: event.cameraState.zoom,
+      longitude: event.cameraState.center.coordinates.lng.toDouble(),
+      latitude: event.cameraState.center.coordinates.lat.toDouble(),
+      bearing: event.cameraState.bearing,
+      pitch: event.cameraState.pitch,
+    );
     if (map != null) {
       unawaited(_globePresentation.synchronize(map, event.cameraState.zoom));
     }
@@ -1320,6 +1330,7 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
     _noticeTimer?.cancel();
     _selectedExpiryTimer?.cancel();
     _displayedZoom.dispose();
+    _cloudPassage.dispose();
     _reportPoint.dispose();
     _reportMarkerLifted.dispose();
     final subscription = _positionSubscription;
@@ -1423,6 +1434,7 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
             ),
           ),
           Positioned.fill(child: GlobeMoon(zoom: _displayedZoom)),
+          Positioned.fill(child: CloudPassage(camera: _cloudPassage)),
           if (_mapError != null)
             Positioned.fill(
               child: ColoredBox(
