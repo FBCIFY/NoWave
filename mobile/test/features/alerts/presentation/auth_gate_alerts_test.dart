@@ -72,6 +72,7 @@ typedef _MountResult = ({
   List<String> calls,
   _Reporter reporter,
   AlertPushController controller,
+  List<String> responseOrder,
 });
 
 void main() {
@@ -82,6 +83,7 @@ void main() {
     bool suspended = false,
     bool reportAvailable = false,
     Completer<void>? holdReportResponse,
+    Completer<void>? holdProfileRefresh,
   }) async {
     SharedPreferences.setMockInitialValues({});
 
@@ -90,6 +92,7 @@ void main() {
     if (initial) source.initial = pushMessage();
     final controller = AlertPushController(source: source, now: () => testNow);
     final calls = <String>[];
+    final responseOrder = <String>[];
     final reporter = _Reporter();
     final client = MockClient((request) async {
       calls.add(request.url.path);
@@ -101,6 +104,7 @@ void main() {
         if (holdReportResponse != null) {
           await holdReportResponse.future;
         }
+        responseOrder.add('report');
         return http.Response(
           jsonEncode({
             'id': request.url.pathSegments.last,
@@ -125,6 +129,12 @@ void main() {
           }),
           200,
         );
+      }
+      if (request.url.path == '/api/v1/users/me' &&
+          calls.where((p) => p == '/api/v1/users/me').length == 2 &&
+          holdProfileRefresh != null) {
+        await holdProfileRefresh.future;
+        responseOrder.add('profile-refresh');
       }
       return http.Response(
         jsonEncode({
@@ -185,6 +195,7 @@ void main() {
       calls: calls,
       reporter: reporter,
       controller: controller,
+      responseOrder: responseOrder,
     );
   }
 
@@ -246,20 +257,30 @@ void main() {
     },
   );
 
-  testWidgets('NW-163 : notification conservee pendant refresh profil', (
+  testWidgets('NW-163 : profile refresh precedes FCM report response', (
     tester,
   ) async {
-    final holdReport = Completer<void>();
+    final profileGate = Completer<void>();
+    final reportGate = Completer<void>();
+
     final f = await mount(
       tester,
       reportAvailable: true,
-      holdReportResponse: holdReport,
+      holdReportResponse: reportGate,
+      holdProfileRefresh: profileGate,
     );
+
+    addTearDown(() {
+      if (!profileGate.isCompleted) profileGate.complete();
+      if (!reportGate.isCompleted) reportGate.complete();
+    });
 
     f.auth.changes.add(_User('user-a'));
     await tester.pumpAndSettle();
 
+    expect(f.controller.ready, isTrue);
     final generation = f.controller.sessionEpoch;
+    final mainMap = tester.state(find.byType(MapScreen));
 
     for (final state in [
       AppLifecycleState.inactive,
@@ -273,6 +294,7 @@ void main() {
     await tester.pump();
 
     expect(f.calls, contains('/api/v1/reports/report-a'));
+    expect(f.responseOrder, isEmpty);
 
     for (final state in [
       AppLifecycleState.hidden,
@@ -282,19 +304,37 @@ void main() {
       tester.binding.handleAppLifecycleStateChanged(state);
     }
 
-    await tester.pump();
-    await tester.pump();
+    for (var i = 0; i < 4; i++) {
+      await tester.pump();
+    }
 
+    expect(f.calls.where((p) => p == '/api/v1/users/me').length, 2);
+    expect(f.responseOrder, isEmpty);
+
+    // Le profil répond avant le signalement.
+    profileGate.complete();
+
+    for (var i = 0; i < 4; i++) {
+      await tester.pump();
+    }
+
+    expect(f.responseOrder, ['profile-refresh']);
+    expect(f.controller.ready, isTrue);
     expect(
       f.controller.sessionEpoch,
       generation,
-      reason: 'Le refresh profil ne doit pas annuler le tap FCM',
+      reason: 'Le rafraichissement du profil ne doit pas annuler le tap FCM',
     );
 
-    holdReport.complete();
+    expect(tester.state(find.byType(MapScreen)), same(mainMap));
+
+    // Le signalement peut maintenant terminer sa requête.
+    reportGate.complete();
     await tester.pumpAndSettle();
 
+    expect(f.responseOrder, ['profile-refresh', 'report']);
     expect(find.byType(MapScreen), findsOneWidget);
+    expect(find.byType(AlertReportScreen), findsNothing);
 
     final map = tester.widget<MapScreen>(find.byType(MapScreen));
     expect(map.focusController?.report?.id, 'report-a');
