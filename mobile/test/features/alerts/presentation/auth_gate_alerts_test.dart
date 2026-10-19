@@ -71,6 +71,7 @@ typedef _MountResult = ({
   _Auth auth,
   List<String> calls,
   _Reporter reporter,
+  AlertPushController controller,
 });
 
 void main() {
@@ -80,6 +81,7 @@ void main() {
     bool initial = false,
     bool suspended = false,
     bool reportAvailable = false,
+    Completer<void>? holdReportResponse,
   }) async {
     SharedPreferences.setMockInitialValues({});
 
@@ -96,6 +98,9 @@ void main() {
       }
       if (request.url.path.contains('/reports/')) {
         if (!reportAvailable) return http.Response('', 404);
+        if (holdReportResponse != null) {
+          await holdReportResponse.future;
+        }
         return http.Response(
           jsonEncode({
             'id': request.url.pathSegments.last,
@@ -174,7 +179,13 @@ void main() {
       ),
     );
     await tester.pump();
-    return (source: source, auth: auth, calls: calls, reporter: reporter);
+    return (
+      source: source,
+      auth: auth,
+      calls: calls,
+      reporter: reporter,
+      controller: controller,
+    );
   }
 
   testWidgets(
@@ -234,6 +245,62 @@ void main() {
       await tester.pumpWidget(const SizedBox.shrink());
     },
   );
+
+  testWidgets('NW-163 : notification conservee pendant refresh profil', (
+    tester,
+  ) async {
+    final holdReport = Completer<void>();
+    final f = await mount(
+      tester,
+      reportAvailable: true,
+      holdReportResponse: holdReport,
+    );
+
+    f.auth.changes.add(_User('user-a'));
+    await tester.pumpAndSettle();
+
+    final generation = f.controller.sessionEpoch;
+
+    for (final state in [
+      AppLifecycleState.inactive,
+      AppLifecycleState.hidden,
+      AppLifecycleState.paused,
+    ]) {
+      tester.binding.handleAppLifecycleStateChanged(state);
+    }
+
+    f.source.taps.add(pushMessage());
+    await tester.pump();
+
+    expect(f.calls, contains('/api/v1/reports/report-a'));
+
+    for (final state in [
+      AppLifecycleState.hidden,
+      AppLifecycleState.inactive,
+      AppLifecycleState.resumed,
+    ]) {
+      tester.binding.handleAppLifecycleStateChanged(state);
+    }
+
+    await tester.pump();
+    await tester.pump();
+
+    expect(
+      f.controller.sessionEpoch,
+      generation,
+      reason: 'Le refresh profil ne doit pas annuler le tap FCM',
+    );
+
+    holdReport.complete();
+    await tester.pumpAndSettle();
+
+    expect(find.byType(MapScreen), findsOneWidget);
+
+    final map = tester.widget<MapScreen>(find.byType(MapScreen));
+    expect(map.focusController?.report?.id, 'report-a');
+
+    await tester.pumpWidget(const SizedBox.shrink());
+  });
 
   testWidgets('compte suspendu ne reçoit pas de navigation depuis FCM', (
     tester,

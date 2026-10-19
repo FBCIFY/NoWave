@@ -254,7 +254,8 @@ class _ProfileGateState extends State<ProfileGate> with WidgetsBindingObserver {
         widget.pushController?.setReady(
           !_deletingAccount &&
               !_accessRevoked &&
-              snapshot.connectionState == ConnectionState.done &&
+              (snapshot.connectionState == ConnectionState.done ||
+                  snapshot.hasData) &&
               !snapshot.hasError &&
               snapshot.data?.status == 'active' &&
               !_showAlertsOnboarding &&
