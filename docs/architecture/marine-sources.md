@@ -176,13 +176,17 @@ IALA B inverse les couleurs attendues des latérales/chenaux préférés. Sans s
 renseigné, la couleur publiée est dessinée sans supposer IALA A; avec un système
 connu, une contradiction reste neutre. Les aides fixes sont désormais affichées par `FixedAidLayer`, sous les bouées, avec six couches partageant cette même source. Voir le rapport `docs/test-reports/fixed-aids.md` pour les seuils et qualifications vérifiés.
 
-Flutter utilise uniquement `API_BASE_URL`, via `ApiConfig`, pour les services
-applicatifs, le raster et toutes les familles MVT. Les URLs et le lien de
-métadonnées sont générés avec le même préfixe de backend. Exemple USB :
-`flutter build apk --debug --dart-define-from-file=.env.json --dart-define=API_BASE_URL=http://127.0.0.1:8004/`.
-Ce choix déplace aussi profil et signalements : le serveur local doit donc
-fournir les services applicatifs et leurs dépendances. Aucun backend marine
-séparé ni fallback local implicite. Les installations restent
+Flutter conserve `API_BASE_URL` pour les services applicatifs et les tuiles
+authentifiées `/api/v1/map/tiles/`. La variable facultative `MARINE_API_BASE_URL`
+sélectionne une connexion directe pour `bathymetry/`, `depth-contours/`,
+`soundings/`, `underwater-hazards/`, `seamarks/`, `port-infrastructure/` et le
+lien `marine-sources`, sous `/api/v1/map/`. Absente ou vide, elle conserve la
+base principale. Les deux bases réutilisent la validation et la construction
+d'URL d'`ApiConfig`, sans redirection globale de `/api/v1/map/` ni proxy HTTP.
+Exemple USB : `adb reverse tcp:8004 tcp:8004`, puis
+`flutter build apk --debug --no-pub --dart-define-from-file=.env.json --dart-define=API_BASE_URL=https://api.no-wave.fr/ --dart-define=MARINE_API_BASE_URL=http://127.0.0.1:8004/`.
+Les sources marines sont publiques ; le token Mapbox des signalements est
+limité à l'hôte principal. Les installations restent
 sérialisées/idempotentes après reload ; les règles GPS, styles et caches ne
 changent pas. Les anciens rapports conservent leurs commandes historiques,
 qui ne constituent plus des instructions de build actuelles.

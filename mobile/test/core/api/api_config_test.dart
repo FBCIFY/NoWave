@@ -2,6 +2,43 @@ import 'package:blueway/core/api/api_config.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  test('base marine facultative, sans changement de la base métier', () {
+    const configured = String.fromEnvironment('MARINE_API_BASE_URL');
+    expect(
+      ApiConfig.marineBaseUrl,
+      configured.trim().isEmpty ? ApiConfig.baseUrl : configured,
+    );
+    expect(
+      ApiConfig.endpoint(
+        'api/v1/map/tiles/{z}/{x}/{y}.mvt',
+        baseUrl: 'https://api.example.com/gateway/',
+      ),
+      'https://api.example.com/gateway/api/v1/map/tiles/{z}/{x}/{y}.mvt',
+    );
+  });
+
+  test(
+    'la base marine réutilise la validation commune sans repli silencieux',
+    () {
+      final base = ApiConfig.marineBaseUrl;
+      final parsed = Uri.tryParse(base.trim());
+      if (base.trim().isEmpty || parsed?.scheme == 'ftp') {
+        expect(
+          () => ApiConfig.endpoint('api/v1/map/marine-sources', baseUrl: base),
+          throwsStateError,
+        );
+      } else {
+        final metadata = Uri.parse(
+          ApiConfig.endpoint('api/v1/map/marine-sources', baseUrl: base),
+        );
+        expect(metadata.host, parsed!.host);
+        expect(metadata.scheme, parsed.scheme);
+        expect(metadata.path, endsWith('/api/v1/map/marine-sources'));
+        expect(metadata.queryParameters, parsed.queryParameters);
+      }
+    },
+  );
+
   for (final base in [
     'https://api.example.com',
     'https://api.example.com/',

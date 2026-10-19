@@ -10,7 +10,8 @@ import 'marine_tiles.dart';
 
 /// Contrat NoWave : courbes, échantillons ponctuels et dangers restent distincts.
 class HydrographyLayer {
-  HydrographyLayer({this.apiBaseUrl = ApiConfig.baseUrl});
+  HydrographyLayer({String? apiBaseUrl})
+    : apiBaseUrl = apiBaseUrl ?? ApiConfig.marineBaseUrl;
 
   final String apiBaseUrl;
   static const contourSourceId = 'nowave-depth-contours';
@@ -129,9 +130,7 @@ class HydrographyLayer {
     }
   }
 
-  static List<VectorSource> sources({
-    String apiBaseUrl = ApiConfig.baseUrl,
-  }) => [
+  static List<VectorSource> sources({String? apiBaseUrl}) => [
     for (final spec in [
       (contourSourceId, 'depth-contours', 12.0, 14.0),
       (soundingSourceId, 'soundings', 12.0, 16.0),

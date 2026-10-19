@@ -1,7 +1,15 @@
-/// Unique backend NoWave, fourni par l'environnement de compilation.
-/// Les fournisseurs cartographiques restent derrière ses routes publiques.
+/// Adresses NoWave fournies par l'environnement de compilation.
+/// La base marine facultative ne concerne que les sources publiques de carte.
 class ApiConfig {
   static const String baseUrl = String.fromEnvironment('API_BASE_URL');
+  static const String _marineBaseUrl = String.fromEnvironment(
+    'MARINE_API_BASE_URL',
+  );
+
+  /// Même validation et normalisation que la base principale dans [resolve].
+  /// Une valeur vide, y compris des espaces seuls, conserve le backend principal.
+  static String get marineBaseUrl =>
+      _marineBaseUrl.trim().isEmpty ? baseUrl : _marineBaseUrl;
 
   /// Résout un chemin applicatif sans perdre le préfixe du reverse proxy.
   /// Un appel métier ne peut pas rediriger son token vers une URL absolue.

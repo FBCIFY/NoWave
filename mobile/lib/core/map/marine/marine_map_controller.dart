@@ -8,10 +8,9 @@ import '../../api/api_config.dart';
 /// Les informations de profondeur exploitables seront ajoutées séparément
 /// avec des courbes bathymétriques vectorielles.
 class MarineMapController {
-  MarineMapController({
-    String? bathymetryTilesUrl,
-    this.apiBaseUrl = ApiConfig.baseUrl,
-  }) : _tilesUrl = bathymetryTilesUrl;
+  MarineMapController({String? bathymetryTilesUrl, String? apiBaseUrl})
+    : _tilesUrl = bathymetryTilesUrl,
+      apiBaseUrl = apiBaseUrl ?? ApiConfig.marineBaseUrl;
 
   final String? _tilesUrl;
   final String apiBaseUrl;

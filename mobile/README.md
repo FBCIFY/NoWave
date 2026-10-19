@@ -29,11 +29,15 @@ Compléter ensuite les valeurs :
 }
 ```
 
-`API_BASE_URL` est l’unique adresse du backend NoWave. `ApiConfig` génère
-les routes du profil, des signalements, des photos, des alertes et de toutes
-les familles cartographiques : bathymétrie, isobathes, sondes, dangers, balises
-et ports. Les crédits marins pointent également vers ce backend. Les services
-Firebase et Mapbox conservent leurs adresses propres. Les photos sont téléchargées
+`API_BASE_URL` est l’adresse principale du backend NoWave : profil,
+signalements, photos, alertes et tuiles authentifiées `/api/v1/map/tiles/`.
+`MARINE_API_BASE_URL` est facultative : renseignée, elle sélectionne un backend
+direct pour les seules sources publiques `bathymetry/`, `depth-contours/`,
+`soundings/`, `underwater-hazards/`, `seamarks/`, `port-infrastructure/` sous
+`/api/v1/map/`, ainsi que leurs crédits `/api/v1/map/marine-sources`.
+Absente, vide ou composée d’espaces, elle conserve `API_BASE_URL` pour ces sources.
+`ApiConfig` construit toutes les URL avec la même validation et normalisation.
+Les services Firebase et Mapbox conservent leurs adresses propres. Les photos sont téléchargées
 depuis les URLs signées retournées par le backend, sans token Firebase envoyé au
 stockage.
 
@@ -43,9 +47,10 @@ absente ou invalide produit une erreur explicite, sans repli vers localhost.
 Les placeholders Mapbox `{z}/{x}/{y}` et les versions de cache existantes
 (`coast-1`, `depths-4`, etc.) sont conservés.
 
-Aucune variable propre à une famille marine n’est nécessaire. Les anciennes
-variables `MARINE_API_BASE_URL` et `BATHYMETRY_TILES_URL`, si elles restent dans
-un ancien fichier privé, ne sont plus lues. Ne pas les passer aux builds.
+Il n’y a pas de routage global de `/api/v1/map/` : le client métier et la source
+de signalements restent sur `API_BASE_URL`. Le token utilisateur est réservé
+à cet hôte ; les sources publiques n’ajoutent pas d’en-tête d’authentification.
+L’ancienne variable `BATHYMETRY_TILES_URL` n’est pas lue. Ne pas la passer aux builds.
 `MAPTILER_STYLE_URL` n’est plus utilisé : la carte utilise Mapbox Standard.
 Le jeton Mapbox reste nécessaire ; les clés des fournisseurs marins restent
 sur le backend.
@@ -56,25 +61,28 @@ Pour un backend de développement, choisir l’adresse adaptée :
 - simulateur iOS : `http://127.0.0.1:8000/`
 - téléphone physique : adresse du poste sur le même réseau, ou reverse USB.
 
-Exemple de recette USB sur le LGN, avec un backend local **complet** :
+Exemple de recette USB sur le LGN, avec backend principal distant et données
+marines locales, sans proxy HTTP et sans modifier `.env.json` :
 
 ```bash
 adb -s AV5PJV6328H03108 reverse tcp:8004 tcp:8004
-flutter build apk --debug --dart-define-from-file=.env.json \
-  --dart-define=API_BASE_URL=http://127.0.0.1:8004/
+flutter run -d AV5PJV6328H03108 --debug --no-pub \
+  --dart-define-from-file=.env.json \
+  --dart-define=API_BASE_URL=https://api.no-wave.fr/ \
+  --dart-define=MARINE_API_BASE_URL=http://127.0.0.1:8004/
 ```
 
-Ce choix redirige **aussi** le profil, les signalements et les autres requêtes
-NoWave vers le local. Le backend ciblé doit avoir sa base applicative, sa
-configuration Firebase et les routes marines réellement disponibles. Un
-serveur capable de servir seulement les tuiles ne suffit pas au parcours
-complet de l’app. Ne pas utiliser de proxy implicite ou deux bases différentes.
+Le serveur marin doit déjà être disponible sur le poste au port 8004.
+`adb reverse` transporte cette connexion TCP par USB ; aucune requête métier
+ni aucun token utilisateur n’est redirigé vers le backend marin local.
+Le reverse USB est nécessaire tant que cet APK utilise `127.0.0.1:8004`.
 
-Pour une APK distante, utiliser l’adresse de l’environnement déployé dans le
-fichier privé et construire sans surcharge d’adresse :
+Pour une APK utilisant uniquement le backend principal, laisser la variable
+marine vide (surcharge explicite si un ancien fichier privé la renseigne) :
 
 ```bash
-flutter build apk --debug --dart-define-from-file=.env.json
+flutter build apk --debug --no-pub --dart-define-from-file=.env.json \
+  --dart-define=MARINE_API_BASE_URL=
 ```
 
 Une compilation réussie ne prouve pas que les routes marines sont déployées.

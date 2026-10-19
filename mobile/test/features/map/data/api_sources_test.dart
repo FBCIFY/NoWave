@@ -1,8 +1,11 @@
+import 'dart:convert';
+
 import 'package:blueway/core/api/api_config.dart';
 import 'package:blueway/core/map/marine/marine_map_controller.dart';
 import 'package:blueway/features/map/data/buoy_layer.dart';
 import 'package:blueway/features/map/data/fixed_aid_layer.dart';
 import 'package:blueway/features/map/data/hydrography_layer.dart';
+import 'package:blueway/features/map/data/marine_tiles.dart';
 import 'package:blueway/features/map/data/port_layer.dart';
 import 'package:blueway/features/map/data/report_tiles.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -115,7 +118,7 @@ void main() {
   );
 
   testWidgets(
-    'environnement : API_BASE_URL seule sélectionne toutes les sources',
+    'environnement : seules les sources publiques utilisent la base marine',
     (tester) async {
       if (ApiConfig.baseUrl.isEmpty) {
         expect(() => ApiConfig.resolve('api/v1/users/me'), throwsStateError);
@@ -128,15 +131,47 @@ void main() {
         await PortLayer.addTo(map);
         await BuoyLayer().addTo(map);
         await ReportTiles(getIdToken: () async => 'unit-token').addTo(map);
-        for (final source in map.style.sources.values) {
+        final routes = {
+          'nowave-bathymetry': 'bathymetry/{z}/{x}/{y}.png?v=coast-1',
+          'nowave-depth-contours': 'depth-contours/{z}/{x}/{y}.pbf?v=3',
+          'nowave-soundings': 'soundings/{z}/{x}/{y}.pbf?v=depths-4',
+          'nowave-underwater-hazards': 'underwater-hazards/{z}/{x}/{y}.pbf?v=3',
+          'nowave-osm-ports': 'port-infrastructure/{z}/{x}/{y}.pbf',
+          'nowave-buoys': 'seamarks/{z}/{x}/{y}.pbf',
+          'nowave-reports': 'tiles/{z}/{x}/{y}.mvt',
+        };
+        expect(map.style.sources.keys.toSet(), routes.keys.toSet());
+        for (final entry in routes.entries) {
+          final source = map.style.sources[entry.key]!;
           final url = (source['tiles'] as List).single as String;
+          final expectedBase = entry.key == 'nowave-reports'
+              ? ApiConfig.baseUrl
+              : ApiConfig.marineBaseUrl;
           expect(
             url,
-            startsWith('https://api.example.com/gateway/api/v1/map/'),
+            ApiConfig.endpoint(
+              'api/v1/map/${entry.value}',
+              baseUrl: expectedBase,
+            ),
           );
-          expect(url, isNot(contains('legacy.invalid')));
           expect(url, contains('{z}/{x}/{y}'));
         }
+        final metadata = ApiConfig.endpoint(
+          'api/v1/map/marine-sources',
+          baseUrl: ApiConfig.marineBaseUrl,
+        );
+        final metadataLink =
+            'href="${const HtmlEscape(HtmlEscapeMode.attribute).convert(metadata)}"';
+        expect(MarineTiles.attribution(), contains(metadataLink));
+        for (final source in map.style.sources.values) {
+          if (source['attribution'] != null) {
+            expect(source['attribution'], contains(metadataLink));
+          }
+        }
+        expect(map.httpService.hosts, [Uri.parse(ApiConfig.baseUrl).host]);
+        expect(map.httpService.headers, [
+          {'Authorization': 'Bearer unit-token'},
+        ]);
       });
     },
   );

@@ -7,12 +7,13 @@ import 'marine_tiles.dart';
 /// Bouées seules, normalisées et fusionnées par le backend NoWave.
 /// Les symboles locaux dérivent de Temaki buoy (CC0), voir assets/icons/buoys.
 class BuoyLayer {
-  BuoyLayer({this.apiBaseUrl = ApiConfig.baseUrl});
+  BuoyLayer({String? apiBaseUrl})
+    : apiBaseUrl = apiBaseUrl ?? ApiConfig.marineBaseUrl;
 
   final String apiBaseUrl;
   static const sourceId = 'nowave-buoys';
   static const layerId = 'nowave-buoy-symbols';
-  static String tilesUrl({String apiBaseUrl = ApiConfig.baseUrl}) =>
+  static String tilesUrl({String? apiBaseUrl}) =>
       MarineTiles.template('seamarks', apiBaseUrl: apiBaseUrl);
   static const sourceLayer = 'seamark';
 

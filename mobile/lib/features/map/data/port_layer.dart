@@ -24,14 +24,11 @@ class PortLayer {
   static const String _groyneLayerId = 'nowave-port-groynes';
   static const String _pierLayerId = 'nowave-port-piers';
 
-  static String tilesUrl({String apiBaseUrl = ApiConfig.baseUrl}) =>
+  static String tilesUrl({String? apiBaseUrl}) =>
       MarineTiles.template('port-infrastructure', apiBaseUrl: apiBaseUrl);
   static Future<void>? _installing;
 
-  static Future<void> addTo(
-    MapboxMap map, {
-    String apiBaseUrl = ApiConfig.baseUrl,
-  }) async {
+  static Future<void> addTo(MapboxMap map, {String? apiBaseUrl}) async {
     final pending = _installing;
     if (pending != null) {
       try {
@@ -41,7 +38,7 @@ class PortLayer {
       }
       return addTo(map, apiBaseUrl: apiBaseUrl);
     }
-    final install = _install(map, apiBaseUrl);
+    final install = _install(map, apiBaseUrl ?? ApiConfig.marineBaseUrl);
     _installing = install;
     try {
       await install;

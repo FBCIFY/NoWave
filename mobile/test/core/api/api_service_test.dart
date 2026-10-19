@@ -6,8 +6,39 @@ import 'dart:async';
 
 import 'package:blueway/core/api/api_service.dart';
 import 'package:blueway/core/api/api_exception.dart';
+import 'package:blueway/core/api/api_config.dart';
 
 void main() {
+  test(
+    'environnement : client métier et token restent sur API_BASE_URL',
+    () async {
+      if (ApiConfig.baseUrl.isEmpty) return;
+      final paths = [
+        'api/v1/users/me',
+        'api/v1/reports',
+        'api/v1/photos',
+        'api/v1/alerts',
+        'api/v1/map/tiles/12/2115/1503.mvt',
+        'api/v1/map/another-feature',
+      ];
+      final requests = <http.Request>[];
+      final client = MockClient((request) async {
+        requests.add(request);
+        return http.Response('{}', 200);
+      });
+      addTearDown(client.close);
+      final api = ApiService(client: client);
+      for (final path in paths) {
+        await api.get(path, headers: {'Authorization': 'Bearer unit-token'});
+      }
+      expect(requests, hasLength(paths.length));
+      for (var i = 0; i < paths.length; i++) {
+        expect(requests[i].url, ApiConfig.resolve(paths[i]));
+        expect(requests[i].headers['authorization'], 'Bearer unit-token');
+      }
+    },
+  );
+
   test(
     'base sans slash, préfixe et paramètres conservés dans le client',
     () async {
