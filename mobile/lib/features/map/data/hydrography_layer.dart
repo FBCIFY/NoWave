@@ -192,7 +192,7 @@ class HydrographyLayer {
         );
       }
     }
-    // MIDDLE après la texture BOTTOM, avant les ouvrages MIDDLE.
+    // MIDDLE au-dessus du fond BOTTOM, avant les ouvrages MIDDLE.
     // Dangers TOP, puis aides fixes et bouées TOP installées au-dessus.
     for (final layer in layers()) {
       if (!await style.styleLayerExists(layer.id)) await style.addLayer(layer);

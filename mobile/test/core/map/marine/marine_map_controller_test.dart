@@ -1,7 +1,6 @@
 import 'dart:convert';
 
 import 'package:blueway/core/map/marine/marine_map_controller.dart';
-import 'package:blueway/core/map/marine/water_texture_layer.dart';
 import 'package:blueway/features/map/data/hydrography_layer.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -134,28 +133,22 @@ void main() {
     expect(map.style.layers.length, 1);
   });
 
-  test(
-    'texture après raster, isobathes et chiffres au-dessus du fond',
-    () async {
-      final map = MarineMap();
-      await MarineMapController(bathymetryTilesUrl: local).install(map);
-      await WaterTextureLayer().addTo(map);
-      expect(map.style.layers.keys.toList(), [
-        MarineMapController.bathymetryLayerId,
-        WaterTextureLayer.layerId,
-      ]);
-      for (final layer
-          in HydrographyLayer.layers().whereType<LineLayer>().where(
-            (l) => l.sourceLayer == 'depth_contour',
-          )) {
-        expect(layer.slot, LayerSlot.MIDDLE);
-      }
-      expect(
-        (HydrographyLayer.layers().singleWhere(
-          (l) => l.id == 'nowave-depth-labels',
-        )).slot,
-        LayerSlot.MIDDLE,
-      );
-    },
-  );
+  test('raster en fond, isobathes et chiffres au-dessus', () async {
+    final map = MarineMap();
+    await MarineMapController(bathymetryTilesUrl: local).install(map);
+    expect(map.style.layers.keys.toList(), [
+      MarineMapController.bathymetryLayerId,
+    ]);
+    for (final layer in HydrographyLayer.layers().whereType<LineLayer>().where(
+      (l) => l.sourceLayer == 'depth_contour',
+    )) {
+      expect(layer.slot, LayerSlot.MIDDLE);
+    }
+    expect(
+      (HydrographyLayer.layers().singleWhere(
+        (l) => l.id == 'nowave-depth-labels',
+      )).slot,
+      LayerSlot.MIDDLE,
+    );
+  });
 }

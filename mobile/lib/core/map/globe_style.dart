@@ -81,8 +81,7 @@ class GlobeStyle {
         'maxzoom': 7,
         'prefetch-zoom-delta': 0,
       },
-      // Shared with WaterTextureLayer: real water polygons, never a full
-      // screen blue tint. Its existing installation remains idempotent.
+      // Real water polygons retain the globe's ocean tint without covering land.
       waterSource: {
         'type': 'vector',
         'url': 'mapbox://mapbox.mapbox-streets-v8',

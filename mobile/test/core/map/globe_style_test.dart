@@ -39,6 +39,11 @@ void main() {
       expect(basemap['id'], 'basemap');
       expect(basemap['url'], 'mapbox://styles/mapbox/standard');
       final sources = document['sources'] as Map;
+      expect(sources[GlobeStyle.waterSource]['type'], 'vector');
+      expect(
+        sources[GlobeStyle.waterSource]['url'],
+        'mapbox://mapbox.mapbox-streets-v8',
+      );
       expect(document['center'], [15.0, 12.0]);
       expect(document['zoom'], GlobeStyle.initialZoom);
       expect(

@@ -18,7 +18,6 @@ import '../../../core/map/globe_presentation.dart';
 import '../../../core/map/globe_style.dart';
 import '../../../core/map/map_config.dart';
 import '../../../core/map/marine/marine_map_controller.dart';
-import '../../../core/map/marine/water_texture_layer.dart';
 import '../../../core/sensors/device_orientation_service.dart';
 import '../../camera/domain/photo_report_draft.dart';
 import '../../reports/data/manual_report_service.dart';
@@ -120,7 +119,6 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
   final _marineMap = MarineMapController();
   final _globePresentation = GlobePresentation();
   final _cloudPassage = CloudPassageController();
-  final _waterTexture = WaterTextureLayer();
   final _hydrographyLayer = HydrographyLayer();
   final _buoyLayer = BuoyLayer();
   final _fixedAidLayer = FixedAidLayer();
@@ -377,7 +375,7 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
 
     // Une panne de la décoration ne masque jamais la carte.
     if (GlobeStyle.isDecorativeSource(event.sourceId)) return;
-    if (event.sourceId == WaterTextureLayer.sourceId) return;
+    if (event.sourceId == GlobeStyle.waterSource) return;
     if (HydrographyLayer.sourceIds.contains(event.sourceId)) return;
 
     // Les infrastructures portuaires sont un enrichissement facultatif.
@@ -508,24 +506,17 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
     // L'ordre est volontaire :
     //
     // 1. bathymétrie ;
-    // 2. texture d’eau ;
-    // 3. courbes / sondes, dangers TOP ; puis infrastructures portuaires ;
-    // 4. bouées (slot TOP, sous les reports sans slot) ;
-    // 5. aides fixes insérées sous les bouées dans le même slot.
+    // 2. courbes / sondes, dangers TOP ; puis infrastructures portuaires ;
+    // 3. bouées (slot TOP, sous les reports sans slot) ;
+    // 4. aides fixes insérées sous les bouées dans le même slot.
     //
-    // La bathymétrie, la texture et les docks utilisent le slot BOTTOM.
+    // La bathymétrie et les docks utilisent le slot BOTTOM.
     // Les ports sont donc ajoutés après ces fonds afin de rester
     // visibles au-dessus de celle-ci.
     await _installMarineMap();
 
     final map = _mapboxMap;
     if (map == null) return;
-
-    try {
-      await _waterTexture.addTo(map);
-    } catch (error) {
-      debugPrint('Texture d’eau non installée : $error');
-    }
 
     try {
       await _hydrographyLayer.addTo(map);
