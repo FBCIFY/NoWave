@@ -154,12 +154,18 @@ def test_success_uses_current_token_and_history_uuid(jobs):
         "UPDATE nowave.devices SET fcm_token = 'rotated-token' WHERE id = %s",
         (job["device"],),
     )
+    job["connection"].execute(
+        "UPDATE nowave.reports SET description = 'Filet dérivant' WHERE id = %s",
+        (job["report"],),
+    )
     job["connection"].commit()
     sender = RecordingPushSender()
     service = SendNotifications(repository_for(job), sender)
     assert service.run_once() == 1
     assert service.run_once() == 0
     message = sender.deliveries[0]
+    assert message.description == "Filet dérivant"
+    assert message.body() == "« Filet dérivant »"
     assert message.fcm_token == "rotated-token"
     assert message.alert_id == job["alert"]
     assert message.notification_id == job["notification"]
@@ -551,6 +557,8 @@ def test_publication_to_fcm_with_retry_and_shared_history(dsn, monkeypatch, mode
         assert worker.run_once() == 1
         assert len(received) == 3
         assert received[0]["data"] == received[2]["data"]
+        assert received[2]["notification"]["title"].startswith("Animal marin · ")
+        assert received[2]["notification"]["body"] == "Un signalement à proximité."
         assert len({message["data"]["alert_id"] for message in received}) == 1
         with psycopg.connect(dsn) as connection:
             assert (

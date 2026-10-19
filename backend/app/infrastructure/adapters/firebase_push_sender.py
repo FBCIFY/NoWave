@@ -60,8 +60,8 @@ class FirebasePushSender(PushSender):
             "token": delivery.fcm_token,
             "data": delivery.data(),
             "notification": {
-                "title": "Alerte NoWave",
-                "body": "Un signalement à proximité.",
+                "title": delivery.title(),
+                "body": delivery.body(),
             },
             "android": {
                 "ttl": f"{int(remaining)}s",

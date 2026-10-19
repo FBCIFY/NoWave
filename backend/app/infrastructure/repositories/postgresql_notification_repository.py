@@ -148,6 +148,7 @@ class PostgreSQLNotificationRepository:
                     expires_at=report["expires_at"],
                     attempt_count=notification["attempt_count"],
                     fcm_token=device["fcm_token"],
+                    description=report["description"],
                     **history,
                 )
                 yield NotificationAttempt(cursor, delivery)
