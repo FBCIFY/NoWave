@@ -1,22 +1,14 @@
 name: Production validation
 on:
-  workflow_dispatch:
-  push:
-    branches: [dev]
-  pull_request:
-    branches: [dev]
-    paths: [backend/**, web/**, deploy/**, .github/workflows/production.yml]
+  # Called only after the four checks have passed for the same revision.
+  workflow_call:
 permissions:
   contents: read
-concurrency:
-  group: production-${{ github.ref }}
-  cancel-in-progress: false
 jobs:
   validate:
+    name: Dependency and image audits
     runs-on: ubuntu-24.04
     timeout-minutes: 35
-    env:
-      NOWAVE_TEST_ADMIN_URL: postgresql://nowave_ci:ci-test-only@127.0.0.1:55433/nowave_ci
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -28,28 +20,22 @@ jobs:
         with:
           python-version: '3.12'
           cache: pip
-          cache-dependency-path: backend/requirements-test.txt
-      - name: Install locked dependencies
+          cache-dependency-path: |
+            backend/requirements.lock
+            backend/requirements-test.txt
+      - name: Install web dependencies and audit tool
         run: |
-          npm ci --prefix web
-          python -m pip install -r backend/requirements-test.txt pip-audit==2.10.1
-      - name: Web tests and dependency audit
+          npm ci --prefix web --ignore-scripts
+          python -m pip install pip-audit==2.10.1
+      - name: Web dependency audit
         working-directory: web
-        run: |
-          npm run format:check
-          npm test
-          npm run build
-          npm audit --audit-level=low
-      - name: API tests and dependency audit
-        run: |
-          ruff check backend deploy/hostinger
-          python -m pytest backend/tests/api backend/tests/unit -q --junitxml=test-results/api.xml
-          pip-audit --require-hashes --disable-pip -r backend/requirements.lock
-          pip-audit --disable-pip --no-deps -r backend/requirements-test.txt
-      - name: Migration and database tests in a disposable instance
-        run: |
-          docker compose -p nowave-ci -f compose.test.yaml up -d --build --wait database
-          python -m pytest backend/tests/database -q --junitxml=test-results/database.xml
+        run: npm audit --audit-level=low
+      - name: API production dependency audit
+        if: ${{ !cancelled() }}
+        run: pip-audit --require-hashes --disable-pip -r backend/requirements.lock
+      - name: Python test dependency audit
+        if: ${{ !cancelled() }}
+        run: pip-audit --disable-pip --no-deps -r backend/requirements-test.txt
       - name: Build exact revision and reject all active image vulnerabilities
         env:
           REVISION: ${{ github.sha }}
@@ -60,19 +46,19 @@ jobs:
         with:
           name: nowave-production-validation-${{ github.sha }}
           path: |
-            test-results/*.xml
             test-results/containers/*.json
             test-results/production-audit-ok
           retention-days: 14
-      - name: Remove disposable database
-        if: always()
-        run: docker compose -p nowave-ci -f compose.test.yaml down --volumes
 
   deploy:
+    name: Deploy to production
     if: github.event_name == 'push' && github.ref == 'refs/heads/dev'
     needs: validate
     runs-on: ubuntu-24.04
     timeout-minutes: 90
+    concurrency:
+      group: nowave-production
+      cancel-in-progress: false
     environment:
       name: production
       url: https://no-wave.fr
