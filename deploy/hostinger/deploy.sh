@@ -50,12 +50,15 @@ rollback() {
   trap - ERR
   echo 'Deployment failed. Database backup is preserved; no automatic data restore.' >&2
   if [[ -f "$root/config/release.rollback.env" ]]; then
-    "${compose[@]}" stop photo-cleanup || true
+    "${compose[@]}" stop notifications photo-cleanup || true
     cp "$root/config/release.rollback.env" "$root/config/release.env"
     cp "$root/config/compose.rollback.yaml" "$root/config/compose.yaml"
     "${compose[@]}" up -d --wait api web || true
     if "${compose[@]}" config --services | grep -qx photo-cleanup; then
       "${compose[@]}" up -d --wait photo-cleanup || true
+    fi
+    if "${compose[@]}" config --services | grep -qx notifications; then
+      "${compose[@]}" up -d --wait notifications || true
     fi
   fi
   exit "$status"
@@ -63,7 +66,8 @@ rollback() {
 trap rollback ERR
 "${compose[@]}" up -d --wait --wait-timeout 120 database
 "${compose[@]}" run --rm --no-deps migrate
-"${compose[@]}" up -d --wait --wait-timeout 90 api web photo-cleanup
+"${compose[@]}" up -d --wait --wait-timeout 90 api web photo-cleanup notifications
+bash "$source_root/deploy/hostinger/verify-notifications.sh" "$revision" "$("${compose[@]}" ps -q notifications)"
 bash "$source_root/deploy/hostinger/verify.sh" http://127.0.0.1:18080 "$revision"
 printf '%s\n' "$revision" > "$root/current-revision"
 install -m 0700 "$source_root/deploy/hostinger/backup.sh" "$root/config/backup.sh"

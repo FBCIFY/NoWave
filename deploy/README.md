@@ -19,6 +19,26 @@ Le script `hostinger/ci-deploy.sh` reconstruit et audite les images sur le VPS, 
 
 Pour que le déploiement automatique fonctionne, l’environnement GitHub `production` doit contenir la variable `NOWAVE_DEPLOY_HOST` et les secrets `NOWAVE_DEPLOY_SSH_KEY` et `NOWAVE_DEPLOY_KNOWN_HOSTS`. Ces accès ne sont pas fournis par le dépôt.
 
+## Notifications de proximité
+
+Le service `notifications` démarre avec le profil de production `api`, depuis
+la même image et la même révision que l’API. Il utilise uniquement les secrets
+PostgreSQL et Firebase existants et dispose d’un accès sortant à FCM. Le compte
+Firebase doit être autorisé à envoyer des messages au projet `blueway-dev`.
+Les secrets restent hors du dépôt. Aucun nouveau schéma ni migration ne sont requis.
+
+Le déploiement vérifie que le conteneur exécute le worker attendu à la bonne
+révision. Un échec déclenche le rollback ; les workers de la nouvelle version
+sont arrêtés avant de restaurer les services de la version précédente. Ce contrôle
+de processus ne prouve pas la disponibilité de FCM ni la réception sur téléphone.
+
+Pour le diagnostic, consulter les logs du service `notifications` et les compteurs
+de `nowave.notifications` par `status` et `last_error_code`, sans afficher de token.
+Des tâches `pending` à zéro tentative avec un worker absent indiquent que l’envoi
+n’a pas démarré, même si l’API est saine. Au démarrage, le worker reprend les tâches
+committées, revérifie leur éligibilité et clôture les tâches expirées sans les envoyer.
+`sent` signifie acceptation par FCM ; la réception doit être vérifiée sur un téléphone.
+
 ## Stockage photo NW-112
 
 Avant la première livraison avec les photos, créer un bucket Scaleway privé
