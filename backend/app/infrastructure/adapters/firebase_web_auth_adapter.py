@@ -1,11 +1,11 @@
 from datetime import timedelta
 
-import firebase_admin
 import httpx
 from firebase_admin import auth
 from firebase_admin.exceptions import FirebaseError
 
 from app.application.ports.web_auth_provider import WebAuthProvider
+from app.infrastructure.adapters.firebase_app import initialize_firebase
 from app.config.settings import ConfigurationError
 from app.domain.errors import (
     InvalidCredentialsError,
@@ -168,10 +168,3 @@ def firebase_error_code(response: httpx.Response) -> str | None:
     # For example "TOO_MANY_ATTEMPTS_TRY_LATER : Access to this account
     # has been temporarily disabled".
     return message.split(" ", 1)[0]
-
-
-def initialize_firebase() -> None:
-    try:
-        firebase_admin.get_app()
-    except ValueError:
-        firebase_admin.initialize_app()
