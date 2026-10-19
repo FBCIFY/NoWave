@@ -23,30 +23,15 @@ import '../../reports/presentation/report_composer_sheet.dart';
 import '../../reports/presentation/report_detail_sheet.dart';
 import '../data/report_layer_controller.dart';
 import '../data/report_tiles.dart';
+import 'map_alert_camera.dart';
+import 'map_focus_controller.dart';
+export 'map_focus_controller.dart';
 import 'widgets/map_notice_banner.dart';
 import 'widgets/report_marker.dart';
 
 /// Nord en haut, carte tournée selon le cap du téléphone, ou rotation libre
 /// faite au doigt.
 enum _MapOrientationMode { north, heading, manual }
-
-class MapFocusController extends ChangeNotifier {
-  ReportDetail? _report;
-  bool _blocked = false;
-
-  ReportDetail? get report => _report;
-
-  void setBlocked(bool blocked) {
-    _blocked = blocked;
-  }
-
-  bool focus(ReportDetail report) {
-    if (_blocked) return false;
-    _report = report;
-    notifyListeners();
-    return true;
-  }
-}
 
 /// Carte principale : position GPS, suivi de l'utilisateur, boussole et
 /// création d'un signalement.
@@ -70,6 +55,7 @@ class MapScreen extends StatefulWidget {
   /// Charge la fiche d'un signalement touché sur la carte.
   final ReportDetailService? reportDetailService;
   final VoidCallback? onUserInactive;
+  final LocationService? locationService;
 
   const MapScreen({
     super.key,
@@ -81,6 +67,7 @@ class MapScreen extends StatefulWidget {
     this.reportTiles,
     this.reportDetailService,
     this.onUserInactive,
+    this.locationService,
   });
 
   @override
@@ -88,7 +75,7 @@ class MapScreen extends StatefulWidget {
 }
 
 class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
-  final _locationService = LocationService();
+  late final _locationService = widget.locationService ?? LocationService();
   StreamSubscription<geo.Position>? _positionSubscription;
   StreamSubscription<double>? _headingSubscription;
 
@@ -129,6 +116,17 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
   Timer? _selectedExpiryTimer;
   bool _selectedExpired = false;
   ReportDetail? _selectedReport;
+  bool _detailOpen = false;
+  int _focusRevision = -1;
+  bool _focusWithUser = false;
+  bool _focusCameraPending = false;
+  bool _latePositionFocus = false;
+  bool _positionFallback = false;
+  bool _selectionTouched = false;
+  bool _styleReady = false;
+  Future<void>? _selectionWork;
+  bool _selectionDirty = false;
+  int _cameraFocusRevision = 0;
 
   /// Dernier zoom connu, pour relancer le battement de la heatmap au
   /// retour au premier plan.
@@ -158,11 +156,15 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
   /// Curseur affiché : point bleu de loin (true), flèche 3D de près (false),
   /// null avant la première position.
   bool? _puckZoomedOut;
+  bool? _puckHasHeading;
 
   @override
   void initState() {
     super.initState();
     widget.focusController?.addListener(_handleFocusRequest);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _handleFocusRequest();
+    });
     _lifecycleListener = AppLifecycleListener(
       onHide: _pauseMapUpdates,
       onShow: _resumeMapUpdates,
@@ -175,10 +177,12 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
         if (!mounted) return;
         if (!heading.isFinite) return;
         _deviceHeading = heading;
+        _syncLocationPuck().ignore();
         _setCompassTurnsForHeading(heading);
       },
       onError: (Object _) {
         _deviceHeading = null;
+        _syncLocationPuck().ignore();
       },
     );
   }
@@ -424,6 +428,19 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
     _syncHeatmapPulse();
     _reportLayer.resume();
     _startReportTilesTokenRenewal();
+    if (_focusWithUser &&
+        _selectedReport != null &&
+        _positionSubscription == null &&
+        !_isLocating) {
+      unawaited(
+        _locationService
+            .canWatchPosition()
+            .then((allowed) {
+              if (allowed && mounted && !_isLocating) unawaited(_locate());
+            })
+            .catchError((Object _) {}),
+      );
+    }
   }
 
   void _handleMapLoaded(MapLoadedEventData event) {
@@ -457,6 +474,16 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
   /// rapproche la carte. Les interactions restent valables après un
   /// changement de style, qui ne fait que recréer les couches.
   void _addReportInteractions(MapboxMap map) {
+    // Selection exists independently from the optional MVT source.
+    if (widget.reportDetailService != null) {
+      map.addInteraction(
+        TapInteraction(
+          FeaturesetDescriptor(layerId: 'alert-selected-point'),
+          (feature, _) => _openReportDetail(feature),
+          radius: _badgeTapRadius,
+        ),
+      );
+    }
     if (widget.reportTiles == null) return;
     map.addInteraction(
       TapInteraction(
@@ -482,13 +509,51 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
     if (oldWidget.focusController != widget.focusController) {
       oldWidget.focusController?.removeListener(_handleFocusRequest);
       widget.focusController?.addListener(_handleFocusRequest);
+      _focusRevision = -1;
+      _handleFocusRequest();
     }
   }
 
   void _handleFocusRequest() {
-    final report = widget.focusController?.report;
-    if (report == null) return;
-    unawaited(_focusSelectedReport(report));
+    final controller = widget.focusController;
+    if (controller == null || _focusRevision == controller.revision) return;
+    _focusRevision = controller.revision;
+    _cameraFocusRevision++;
+    final report = controller.report;
+    if (report == null && _selectedReport == null && controller.revision == 0) {
+      return;
+    }
+    _selectedExpiryTimer?.cancel();
+    setState(() {
+      _selectedReport = report;
+      _selectedExpired =
+          report != null && !report.expiresAt.isAfter(DateTime.now());
+      _focusWithUser = controller.includeUserPosition;
+      _focusCameraPending = report != null && !_selectedExpired;
+      _latePositionFocus = _focusWithUser && !MapAlertCamera.usable(_position);
+      _positionFallback = false;
+      _selectionTouched = false;
+      if (!_reportComposerOpen) {
+        _isFollowing = false;
+        _viewport = report != null && !_focusWithUser
+            ? CameraViewportState(
+                center: Point(
+                  coordinates: Position(report.longitude, report.latitude),
+                ),
+                zoom: 14,
+                pitch: 0,
+              )
+            : const IdleViewportState();
+      }
+    });
+    if (report != null) {
+      if (_selectedExpired) {
+        controller.fail(_focusRevision, const ReportNotFoundException());
+      } else {
+        _scheduleSelectedExpiry(report);
+      }
+    }
+    unawaited(_applySelection());
   }
 
   void _scheduleSelectedExpiry(ReportDetail report) {
@@ -500,63 +565,152 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
     _selectedExpiryTimer = Timer(remaining, () {
       if (!mounted || _selectedReport?.id != report.id) return;
 
-      setState(() => _selectedExpired = true);
-
-      final map = _mapboxMap;
-      if (map != null) {
-        unawaited(
-          map.style.removeStyleLayer('alert-selected-point').catchError((_) {}),
-        );
-      }
+      setState(() {
+        _selectedExpired = true;
+        _positionFallback = false;
+      });
+      _focusCameraPending = false;
+      widget.focusController?.fail(
+        _focusRevision,
+        const ReportNotFoundException(),
+      );
+      unawaited(_applySelection());
     });
   }
 
-  Future<void> _focusSelectedReport(ReportDetail report) async {
-    if (!mounted) return;
-
-    final expired = !report.expiresAt.isAfter(DateTime.now());
-
-    setState(() {
-      _selectedReport = report;
-      _selectedExpired = expired;
-      _isFollowing = false;
-      _viewport = CameraViewportState(
-        center: Point(coordinates: Position(report.longitude, report.latitude)),
-        zoom: 14,
-        pitch: 0,
-      );
-    });
-
-    _selectedExpiryTimer?.cancel();
-
-    if (expired) return;
-
-    _scheduleSelectedExpiry(report);
-
-    final map = _mapboxMap;
-    if (map == null) return;
-
+  Future<void> _applySelection() async {
+    _selectionDirty = true;
+    final pending = _selectionWork;
+    if (pending != null) return pending;
+    final work = _drainSelection();
+    _selectionWork = work;
     try {
-      await map.easeTo(
-        CameraOptions(
-          center: Point(
-            coordinates: Position(report.longitude, report.latitude),
-          ),
-          zoom: 14,
-          pitch: 0,
-        ),
-        MapAnimationOptions(duration: 350),
-      );
+      await work;
+    } finally {
+      _selectionWork = null;
+    }
+  }
 
-      await _showSelectedReport();
-    } catch (_) {
-      if (mounted) {
-        _showNotice(
-          'Impossible de centrer la carte sur ce signalement.',
-          MapNoticeKind.error,
-        );
+  bool _isCurrentFocus(int request) {
+    if (!mounted || request != _focusRevision) return false;
+    if (widget.focusController?.isCurrent(request) ?? true) return true;
+    widget.focusController?.clear();
+    return false;
+  }
+
+  /// Native mutations are serialized; an older fit can never restore a marker
+  /// after a more recent selection. A not-yet-created map retains the request.
+  Future<void> _drainSelection() async {
+    while (mounted && _selectionDirty && _styleReady && !_reportComposerOpen) {
+      final map = _mapboxMap;
+      if (map == null) return;
+      _selectionDirty = false;
+      final request = _focusRevision;
+      final cameraRequest = _cameraFocusRevision;
+      final report = _selectedReport;
+      try {
+        if (!_isCurrentFocus(request)) continue;
+        if (report == null || _selectedExpired) {
+          if (await map.style.styleLayerExists('alert-selected-point')) {
+            await map.style.removeStyleLayer('alert-selected-point');
+          }
+          continue;
+        }
+        await _showSelectedReport();
+        if (!_isCurrentFocus(request)) continue;
+        if (_focusCameraPending && !_selectionTouched) {
+          final withUser = _focusWithUser;
+          final position = _position;
+          if (withUser && MapAlertCamera.usable(position)) {
+            await _syncLocationPuck();
+          }
+          if (!mounted) return;
+          final camera = withUser
+              ? await MapAlertCamera.fit(
+                  map,
+                  report,
+                  position,
+                  MediaQuery.paddingOf(context),
+                )
+              : CameraOptions(
+                  center: Point(
+                    coordinates: Position(report.longitude, report.latitude),
+                  ),
+                  zoom: 14,
+                  pitch: 0,
+                );
+          if (!_isCurrentFocus(request) ||
+              cameraRequest != _cameraFocusRevision ||
+              _selectionTouched ||
+              _reportComposerOpen) {
+            continue;
+          }
+          setState(() {
+            _isFollowing = false;
+            _viewport = const IdleViewportState();
+          });
+          await WidgetsBinding.instance.endOfFrame;
+          if (!_isCurrentFocus(request) ||
+              cameraRequest != _cameraFocusRevision ||
+              _selectionTouched ||
+              _reportComposerOpen) {
+            continue;
+          }
+          await map.setCamera(camera);
+          if (!mounted ||
+              request != _focusRevision ||
+              cameraRequest != _cameraFocusRevision) {
+            continue;
+          }
+          _focusCameraPending = false;
+          setState(() {
+            _positionFallback = withUser && !MapAlertCamera.usable(position);
+          });
+          if (!_positionFallback) {
+            _latePositionFocus = false;
+          }
+        }
+        widget.focusController?.complete(request);
+      } catch (error) {
+        if (!mounted || request != _focusRevision) continue;
+        _focusCameraPending = false;
+        _latePositionFocus = false;
+        final reported = widget.focusController?.fail(request, error) ?? false;
+        if (!reported && _focusWithUser && _isCurrentFocus(request)) {
+          // The initial GPS fallback may already have completed. A failure of
+          // its one late GPS fit still needs an explicit recovery action.
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: const Text('Impossible de cadrer la carte.'),
+              action: SnackBarAction(
+                label: 'Réessayer',
+                onPressed: () {
+                  if (!_isCurrentFocus(request) || _selectedExpired) return;
+                  _cameraFocusRevision++;
+                  _focusCameraPending = true;
+                  _selectionTouched = false;
+                  unawaited(_applySelection());
+                },
+              ),
+            ),
+          );
+        }
       }
     }
+  }
+
+  void _positionForSelectedReport() {
+    if (!_focusWithUser ||
+        _selectedReport == null ||
+        !MapAlertCamera.usable(_position)) {
+      return;
+    }
+    if (_positionFallback) setState(() => _positionFallback = false);
+    if (!_latePositionFocus || _selectionTouched) return;
+    _latePositionFocus = false;
+    _cameraFocusRevision++;
+    _focusCameraPending = true;
+    unawaited(_applySelection());
   }
 
   /// Repère explicite de la sélection, indépendant du chargement des MVT.
@@ -574,35 +728,27 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
       },
     });
 
-    try {
-      if (!await map.style.styleSourceExists('alert-selected')) {
-        await map.style.addSource(
-          GeoJsonSource(id: 'alert-selected', data: data),
-        );
-      } else {
-        await map.style.setStyleSourceProperty('alert-selected', 'data', data);
-      }
+    if (!await map.style.styleSourceExists('alert-selected')) {
+      await map.style.addSource(
+        GeoJsonSource(id: 'alert-selected', data: data),
+      );
+    } else {
+      await map.style.setStyleSourceProperty('alert-selected', 'data', data);
+    }
 
-      if (!await map.style.styleLayerExists('alert-selected-point') &&
-          !_selectedExpired) {
-        await map.style.addLayer(
-          CircleLayer(
-            id: 'alert-selected-point',
-            sourceId: 'alert-selected',
-            circleRadius: 10,
-            circleColor: 0xFF7C3AED,
-            circleStrokeColor: 0xFFFFFFFF,
-            circleStrokeWidth: 3,
-          ),
-        );
-      }
-    } catch (_) {
-      if (mounted) {
-        _showNotice(
-          'Position sélectionnée indisponible sur la carte.',
-          MapNoticeKind.error,
-        );
-      }
+    if (!await map.style.styleLayerExists('alert-selected-point') &&
+        !_selectedExpired) {
+      await map.style.addLayer(
+        CircleLayer(
+          id: 'alert-selected-point',
+          sourceId: 'alert-selected',
+          circleRadius: 12,
+          circleColor: 0xFF7C3AED,
+          circleOpacity: 1,
+          circleStrokeColor: 0xFFFFFFFF,
+          circleStrokeWidth: 3,
+        ),
+      );
     }
   }
 
@@ -610,8 +756,9 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
   void _openReportDetail(FeaturesetFeature feature) {
     final service = widget.reportDetailService;
     final reportId = feature.properties['report_id'];
-    if (!mounted || _reportComposerOpen) return;
+    if (!mounted || _reportComposerOpen || _detailOpen) return;
     if (service == null || reportId is! String) return;
+    _detailOpen = true;
     AppHaptics.selection();
     final position = _position;
     unawaited(
@@ -623,7 +770,7 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
         userPosition: position == null
             ? null
             : (latitude: position.latitude, longitude: position.longitude),
-      ),
+      ).whenComplete(() => _detailOpen = false),
     );
   }
 
@@ -683,14 +830,19 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
   /// que quand le zoom franchit le seuil.
   Future<void> _syncLocationPuck() async {
     final map = _mapboxMap;
-    if (map == null || _position == null) return;
+    if (!mounted || map == null || _position == null) return;
+    final hasHeading = _deviceHeading != null;
     final zoomedOut =
         (_cameraZoom ?? _userZoom) < MapConfig.detailedPuckMinZoom;
-    if (zoomedOut == _puckZoomedOut) return;
+    if (zoomedOut == _puckZoomedOut && hasHeading == _puckHasHeading) return;
     _puckZoomedOut = zoomedOut;
+    _puckHasHeading = hasHeading;
     try {
       await map.location.updateSettings(
-        MapConfig.locationPuckSettings(zoomedOut: zoomedOut),
+        MapConfig.locationPuckSettings(
+          zoomedOut: zoomedOut,
+          hasHeading: hasHeading,
+        ),
       );
     } catch (_) {
       // Réessayé au prochain mouvement de la caméra.
@@ -722,6 +874,7 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
 
     setState(() {
       _mapError = null;
+      _styleReady = false;
     });
 
     try {
@@ -745,7 +898,40 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
   /// Centre la carte sur l'utilisateur puis le suit à chaque nouvelle position.
   /// [animated] : vol jusqu'à l'utilisateur (bouton), sinon saut direct
   /// (lancement de la carte).
+  void _watchPosition() {
+    // Flux partagé avec le suivi des alertes (NW-159), qui peut continuer
+    // en arrière-plan : la carte ignore alors les positions.
+    _positionSubscription ??= _locationService.watchPosition().listen(
+      (position) {
+        if (!mounted || _hidden || !MapAlertCamera.usable(position)) return;
+        _showAccuracyHalo(position);
+        final previous = _position;
+        _position = position;
+        _positionForSelectedReport();
+        _syncLocationPuck().ignore();
+        // L'écran ne se redessine que si les coordonnées affichées
+        // changent, soit environ tous les 30 m.
+        if (_locationError == null &&
+            previous != null &&
+            _sameDisplayedCoordinates(previous, position)) {
+          return;
+        }
+        setState(() => _locationError = null);
+      },
+      onError: (Object _) {
+        if (!mounted) return;
+        setState(() {
+          _locationError = 'Position indisponible pour le moment.';
+        });
+      },
+      onDone: () {
+        _positionSubscription = null;
+      },
+    );
+  }
+
   Future<void> _locate({bool animated = false}) async {
+    final wasWatching = _positionSubscription != null;
     setState(() {
       _isLocating = true;
       _locationError = null;
@@ -755,11 +941,16 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
       final position = await _locationService.getCurrentPosition();
 
       if (!mounted) return;
+      if (!MapAlertCamera.usable(position)) {
+        throw StateError('Position GPS inexploitable pour le moment.');
+      }
 
       setState(() {
         _position = position;
       });
       _showAccuracyHalo(position);
+      _watchPosition();
+      _positionForSelectedReport();
 
       // Curseur remis à chaque recentrage, adapté au zoom actuel.
       _puckZoomedOut = null;
@@ -767,8 +958,15 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
 
       if (!mounted) return;
 
+      // A GPS request started before the push must not undo its fitted camera.
+      if (!animated && _focusWithUser && _selectedReport != null) return;
+      if (animated) {
+        _cameraFocusRevision++;
+        _selectionTouched = true;
+        _latePositionFocus = false;
+      }
       CameraState? previousCamera;
-      if (_positionSubscription != null) {
+      if (wasWatching) {
         try {
           previousCamera = await _mapboxMap?.getCameraState();
         } catch (_) {
@@ -812,34 +1010,6 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
       } else {
         setState(followUser);
       }
-
-      // Flux partagé avec le suivi des alertes (NW-159), qui peut continuer
-      // en arrière-plan : la carte ignore alors les positions.
-      _positionSubscription ??= _locationService.watchPosition().listen(
-        (position) {
-          if (!mounted || _hidden) return;
-          _showAccuracyHalo(position);
-          final previous = _position;
-          _position = position;
-          // L'écran ne se redessine que si les coordonnées affichées
-          // changent, soit environ tous les 30 m.
-          if (_locationError == null &&
-              previous != null &&
-              _sameDisplayedCoordinates(previous, position)) {
-            return;
-          }
-          setState(() => _locationError = null);
-        },
-        onError: (Object _) {
-          if (!mounted) return;
-          setState(() {
-            _locationError = 'Position indisponible pour le moment.';
-          });
-        },
-        onDone: () {
-          _positionSubscription = null;
-        },
-      );
     } on StateError catch (error) {
       if (!mounted) return;
 
@@ -859,6 +1029,16 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
         _locationError = 'Impossible de récupérer votre position.';
       });
     } finally {
+      // A timed-out first fix must not prevent a later stream position from
+      // completing the two-point framing. Never ask permission again here.
+      if (mounted && _positionSubscription == null) {
+        try {
+          final allowed = await _locationService.canWatchPosition();
+          if (allowed && mounted) _watchPosition();
+        } catch (_) {
+          // Permission or GPS unavailable: keep the single-report fallback.
+        }
+      }
       if (mounted) {
         setState(() {
           _isLocating = false;
@@ -875,11 +1055,18 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
           formatDms(b.longitude, isLatitude: false);
 
   Future<void> _openCamera() async {
-    final draft = await widget.onOpenCamera?.call();
-    if (draft == null || !mounted) return;
-    await _waitForCoveringRouteToClose();
-    if (!mounted) return;
-    await _openReportComposer(photoDraft: draft);
+    widget.focusController?.setBlocked(true);
+    try {
+      final draft = await widget.onOpenCamera?.call();
+      if (draft == null || !mounted) return;
+      await _waitForCoveringRouteToClose();
+      if (!mounted) return;
+      await _openReportComposer(photoDraft: draft);
+    } finally {
+      if (mounted && !_reportComposerOpen) {
+        widget.focusController?.setBlocked(false);
+      }
+    }
   }
 
   /// Le résultat de la caméra arrive dès le début de sa fermeture : on attend
@@ -917,10 +1104,12 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
       return;
     }
 
+    widget.focusController?.setBlocked(true);
     CameraState camera;
     try {
       camera = await map.getCameraState();
     } catch (_) {
+      if (mounted) widget.focusController?.setBlocked(false);
       return;
     }
     if (!mounted) return;
@@ -976,7 +1165,6 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
     final resumeFollowing = _restoreFollowAfterReport;
     setState(() {
       _reportComposerOpen = false;
-      widget.focusController?.setBlocked(false);
       _reportPoint.value = null;
       _pendingReport = null;
       _photoDraft = null;
@@ -1008,18 +1196,22 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
         // Restauration impossible : la carte reste où elle est.
       }
     }
-    if (!mounted || !resumeFollowing || _reportComposerOpen) return;
-    setState(() {
-      _isFollowing = true;
-      _viewport = FollowPuckViewportState(
-        zoom: camera?.zoom ?? _userZoom,
-        pitch: camera?.pitch ?? 60,
-        padding: camera?.padding,
-        bearing: FollowPuckViewportStateBearingConstant(
-          camera?.bearing ?? _cameraBearing,
-        ),
-      );
-    });
+    if (!mounted || _reportComposerOpen) return;
+    if (resumeFollowing) {
+      setState(() {
+        _isFollowing = true;
+        _viewport = FollowPuckViewportState(
+          zoom: camera?.zoom ?? _userZoom,
+          pitch: camera?.pitch ?? 60,
+          padding: camera?.padding,
+          bearing: FollowPuckViewportStateBearingConstant(
+            camera?.bearing ?? _cameraBearing,
+          ),
+        );
+      });
+    }
+    widget.focusController?.setBlocked(false);
+    unawaited(_applySelection());
   }
 
   Future<void> _publishReport(
@@ -1246,7 +1438,14 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
         mediaQuery.viewInsets.bottom +
         12;
     final shortNotice = _notice;
-    final notice = shortNotice ?? _reportLayerBanner;
+    final notice =
+        shortNotice ??
+        (_positionFallback
+            ? const MapNotice(
+                'Position indisponible — cadrage sur le signalement',
+                MapNoticeKind.warning,
+              )
+            : _reportLayerBanner);
     final gpsLabel = _isLocating
         ? 'Localisation…'
         : _locationError ??
@@ -1266,6 +1465,13 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
               key: _mapAreaKey,
               onPointerDown: (_) {
                 _mapTouchActive = true;
+                if (_selectedReport != null) {
+                  _cameraFocusRevision++;
+                  _selectionTouched = true;
+                  _latePositionFocus = false;
+                  _focusCameraPending = false;
+                  widget.focusController?.complete(_focusRevision);
+                }
                 _touchStartBearing = _cameraBearing;
               },
               onPointerUp: (_) => _mapTouchActive = false,
@@ -1275,12 +1481,13 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
                   setState(() => _mapboxMap = map);
                   unawaited(MapConfig.hideDefaultOrnaments(map));
                   _addReportInteractions(map);
-                  if (_selectedReport == null) unawaited(_locate());
+                  unawaited(_locate());
                 },
                 onMapLoadedListener: _handleMapLoaded,
                 onStyleLoadedListener: (_) {
+                  _styleReady = true;
                   _showAccuracyHalo();
-                  unawaited(_showSelectedReport());
+                  unawaited(_applySelection());
                   if (widget.reportTiles != null) _reportLayer.styleLoaded();
                 },
                 onMapLoadErrorListener: _handleMapLoadError,

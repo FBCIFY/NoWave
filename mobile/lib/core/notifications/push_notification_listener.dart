@@ -13,10 +13,12 @@ class PushNotificationListener extends StatefulWidget {
     required this.controller,
     required this.onOpen,
     required this.child,
+    this.onOpenHistory,
   });
   final AlertPushController controller;
   final Future<void> Function(AlertPush) onOpen;
   final Widget child;
+  final VoidCallback? onOpenHistory;
   @override
   State<PushNotificationListener> createState() =>
       _PushNotificationListenerState();
@@ -40,6 +42,7 @@ class _PushNotificationListenerState extends State<PushNotificationListener> {
     final controller = widget.controller;
     final push = controller.foreground;
     final notice = controller.notice;
+    final session = controller.sessionEpoch;
     controller.foreground = null;
     controller.notice = null;
     if (push == null && notice == null) return;
@@ -51,11 +54,38 @@ class _PushNotificationListenerState extends State<PushNotificationListener> {
             notice ??
                 '${push!.alert.category.label} · ${formatNauticalMiles(push.alert.distanceM)}\n${push.alert.positionDms}',
           ),
-          action: notice != null || push == null
+          action: notice != null
+              ? controller.canRetry
+                    ? SnackBarAction(
+                        label: 'Réessayer',
+                        onPressed: () {
+                          if (controller.sessionEpoch == session &&
+                              controller.ready) {
+                            controller.retry();
+                          }
+                        },
+                      )
+                    : widget.onOpenHistory == null
+                    ? null
+                    : SnackBarAction(
+                        label: 'Historique',
+                        onPressed: () {
+                          if (controller.sessionEpoch == session &&
+                              controller.ready) {
+                            widget.onOpenHistory?.call();
+                          }
+                        },
+                      )
+              : push == null
               ? null
               : SnackBarAction(
                   label: 'Ouvrir',
-                  onPressed: () => controller.open(push),
+                  onPressed: () {
+                    if (controller.sessionEpoch == session &&
+                        controller.ready) {
+                      controller.open(push);
+                    }
+                  },
                 ),
         ),
       );

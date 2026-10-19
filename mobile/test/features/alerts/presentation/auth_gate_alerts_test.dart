@@ -98,7 +98,7 @@ void main() {
         if (!reportAvailable) return http.Response('', 404);
         return http.Response(
           jsonEncode({
-            'id': 'report-a',
+            'id': request.url.pathSegments.last,
             'category': 'pollution',
             'description': 'Position actualisée',
             'positioning_mode': 'manual',
@@ -187,7 +187,8 @@ void main() {
       expect(f.calls, isEmpty);
       f.auth.changes.add(_User('user-a'));
       await tester.pumpAndSettle();
-      expect(find.byType(AlertReportScreen), findsOneWidget);
+      expect(find.byType(AlertReportScreen), findsNothing);
+      expect(find.byType(MapScreen), findsOneWidget);
       expect(find.textContaining('n’est plus disponible'), findsOneWidget);
       expect(f.calls, ['/api/v1/users/me', '/api/v1/reports/report-a']);
       f.source.taps.add(pushMessage());
@@ -201,50 +202,35 @@ void main() {
     },
   );
   testWidgets(
-    'deux notifications distinctes empilent immédiatement leurs fiches',
+    'deux notifications distinctes sélectionnent successivement la même carte',
     (tester) async {
       final f = await mount(tester, reportAvailable: true);
-
       f.auth.changes.add(_User('user-a'));
       await tester.pumpAndSettle();
-
+      final mainMap = tester.state(find.byType(MapScreen));
       f.source.taps.add(pushMessage());
       await tester.pumpAndSettle();
-
       expect(
         tester
-            .widget<AlertReportScreen>(find.byType(AlertReportScreen))
-            .reportId,
+            .widget<MapScreen>(find.byType(MapScreen))
+            .focusController!
+            .report!
+            .id,
         'report-a',
       );
-
       f.source.taps.add(pushMessage(id: 'alert-b', reportId: 'report-b'));
       await tester.pumpAndSettle();
-
-      final allScreens = tester
-          .widgetList<AlertReportScreen>(
-            find.byType(AlertReportScreen, skipOffstage: false),
-          )
-          .toList();
-
-      expect(allScreens, hasLength(2));
+      expect(find.byType(AlertReportScreen, skipOffstage: false), findsNothing);
+      expect(find.byType(MapScreen, skipOffstage: false), findsOneWidget);
+      expect(tester.state(find.byType(MapScreen)), same(mainMap));
       expect(
         tester
-            .widget<AlertReportScreen>(find.byType(AlertReportScreen))
-            .reportId,
+            .widget<MapScreen>(find.byType(MapScreen))
+            .focusController!
+            .report!
+            .id,
         'report-b',
       );
-
-      await tester.pageBack();
-      await tester.pumpAndSettle();
-
-      expect(
-        tester
-            .widget<AlertReportScreen>(find.byType(AlertReportScreen))
-            .reportId,
-        'report-a',
-      );
-
       await tester.pumpWidget(const SizedBox.shrink());
     },
   );
