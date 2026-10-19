@@ -33,12 +33,12 @@ Cette page est l'index de référence des guides conservés dans le dépôt. Ell
 
 ## Documents historiques
 
-[BlueWay — Database Design — MVP](https://docs.google.com/document/d/1Gl4LLNGHcCR5BLrGtgfok0VrHJndEFfrR-ZWrPtdtSU/edit) est **ARCHIVÉ** (CON-027). Il sert exclusivement à retracer l'évolution de l'architecture ; il ne définit pas le contrat SQL ou métier actuel. La documentation technique courante et les migrations font référence.
+[BlueWay — Database Design — MVP](https://docs.google.com/document/d/1Gl4LLNGHcCR5BLrGtgfok0VrHJndEFfrR-ZWrPtdtSU/edit) est **ARCHIVÉ** ([FIX T16 / NW-169](https://linear.app/blueway/issue/NW-169)). Il sert exclusivement à retracer l'évolution de l'architecture ; il ne définit pas le contrat SQL ou métier actuel. La documentation technique courante et les migrations font référence.
 
 ## Décisions documentaires du 19/10/2026
 
-- **CON-024 / A :** maintenir le cache HTTP MVT de 15 secondes et expliciter le décalage visuel potentiel.
-- **CON-025 / C :** ne décrire comme disponibles que les routes réellement implémentées.
-- **CON-026 / A :** documenter le déploiement existant depuis `dev`, sans inventer d'environnement distinct.
-- **CON-027 / A :** conserver la conception BDD BlueWay comme archive historique.
-- **CON-039 / C :** centraliser la documentation et la matrice de traçabilité, sans prétendre que les recettes manquantes sont validées.
+- **[FIX T13 / NW-166](https://linear.app/blueway/issue/NW-166) :** maintenir le cache HTTP MVT de 15 secondes et expliciter le décalage visuel potentiel.
+- **[FIX T14 / NW-167](https://linear.app/blueway/issue/NW-167) :** ne décrire comme disponibles que les routes réellement implémentées.
+- **[FIX T15 / NW-168](https://linear.app/blueway/issue/NW-168) :** documenter le déploiement existant depuis `dev`, sans inventer d'environnement distinct.
+- **[FIX T16 / NW-169](https://linear.app/blueway/issue/NW-169) :** conserver la conception BDD BlueWay comme archive historique.
+- **[FIX T17 / NW-170](https://linear.app/blueway/issue/NW-170) :** centraliser la documentation et la matrice de traçabilité, sans prétendre que les recettes manquantes sont validées.
