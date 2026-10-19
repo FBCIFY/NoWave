@@ -34,19 +34,39 @@ def run_audit(tmp_path):
         """
 import json
 import os
+from pathlib import Path
+import signal
 import sys
 
 args = sys.argv[1:]
 with open(os.environ['DOCKER_LOG'], 'a') as log:
     log.write(json.dumps(args) + '\\n')
+mounts = {}
+for index, arg in enumerate(args):
+    if arg == '-v':
+        source, destination, *_ = args[index + 1].split(':')
+        mounts[destination] = Path(source)
 if '--download-db-only' in args:
+    cache = mounts['/scan'] / 'cache/db'
+    cache.mkdir(parents=True, exist_ok=True)
+    (cache / 'trivy.db').write_bytes(b'regenerable database')
     repository = args[args.index('--db-repository') + 1]
     if os.environ['DB_FAILURE'] == 'all' or (
         os.environ['DB_FAILURE'] == 'mirror' and repository.startswith('mirror.gcr.io/')
     ):
         print('failed to fetch the layer: 404 Not Found', file=sys.stderr)
         sys.exit(1)
+elif args[0] == 'save':
+    Path(args[args.index('-o') + 1]).write_bytes(b'image export')
+    sys.exit(int(os.environ['SAVE_EXIT']))
 elif '--input' in args:
+    archive = mounts['/scan'] / Path(args[args.index('--input') + 1]).name
+    assert archive.read_bytes() == b'image export'
+    assert list(mounts['/scan'].glob('*.tar')) == [archive]
+    report = mounts['/reports'] / Path(args[args.index('--output') + 1]).name
+    report.write_text('{"Results": []}')
+    if os.environ['INTERRUPT_SCAN'] == '1':
+        os.kill(os.getppid(), signal.SIGTERM)
     sys.exit(int(os.environ['SCAN_EXIT']))
 elif 'config' in args:
     sys.exit(int(os.environ['CONFIG_EXIT']))
@@ -55,7 +75,7 @@ elif 'config' in args:
     docker.chmod(0o755)
     log = tmp_path / "docker.jsonl"
 
-    def run(db_failure="none", scan_exit=0, config_exit=0):
+    def run(db_failure="none", scan_exit=0, config_exit=0, save_exit=0, interrupt_scan=False):
         result = subprocess.run(
             ["bash", str(script), REVISION],
             env={
@@ -65,12 +85,16 @@ elif 'config' in args:
                 "DB_FAILURE": db_failure,
                 "SCAN_EXIT": str(scan_exit),
                 "CONFIG_EXIT": str(config_exit),
+                "SAVE_EXIT": str(save_exit),
+                "INTERRUPT_SCAN": str(int(interrupt_scan)),
             },
             capture_output=True,
             text=True,
             timeout=30,
         )
         calls = [json.loads(line) for line in log.read_text().splitlines()]
+        # Cleanup is required after success, scanner/build errors, and termination.
+        assert not list((marker.parent / "containers").glob(".audit-*"))
         return result, calls, marker
 
     return run
@@ -91,12 +115,18 @@ def test_database_download_then_all_mandatory_audits(run_audit, db_failure, expe
         f"/scan/{component}.tar" for component in ("api", "web", "postgres", "tunnel")
     ]
     for call in downloads + scans:
+        assert call[call.index("--user") + 1] == f"{os.getuid()}:{os.getgid()}"
         assert call[call.index("--cache-dir") + 1] == "/scan/cache"
-        assert call[call.index("-v") + 1] == f"{marker.parent}/containers:/scan"
+        workspace, mount = call[call.index("-v") + 1].split(":")
+        assert mount == "/scan"
+        assert Path(workspace).parent == marker.parent / "containers"
+        assert Path(workspace).name.startswith(".audit-")
     for call in scans:
         assert "--skip-db-update" in call
         assert call[call.index("--exit-code") + 1] == "1"
         assert call[call.index("--severity") + 1] == "UNKNOWN,LOW,MEDIUM,HIGH,CRITICAL"
+        report = Path(call[call.index("--output") + 1]).name
+        assert json.loads((marker.parent / "containers" / report).read_text()) == {"Results": []}
     assert "--vex" in scans[-1]
     assert "config" in calls[-1]
     assert calls[-1][calls[-1].index("--exit-code") + 1] == "1"
@@ -119,6 +149,7 @@ def test_vulnerabilities_or_scanner_errors_after_fallback_block_release(run_audi
     assert len([call for call in calls if "--download-db-only" in call]) == 2
     assert len([call for call in calls if "--input" in call]) == 1
     assert "--input" in calls[-1]
+    assert (marker.parent / "containers/api.json").is_file()
     assert not marker.exists()
 
 
@@ -127,4 +158,19 @@ def test_configuration_audit_failure_blocks_release(run_audit):
     assert result.returncode == 1
     assert len([call for call in calls if "--input" in call]) == 4
     assert "config" in calls[-1]
+    assert not marker.exists()
+
+
+def test_partial_image_export_is_removed_and_release_is_blocked(run_audit):
+    result, calls, marker = run_audit(save_exit=1)
+    assert result.returncode == 1
+    assert calls[-1][0] == "save"
+    assert not marker.exists()
+
+
+def test_termination_cleans_temporary_files_and_preserves_report(run_audit):
+    result, calls, marker = run_audit(interrupt_scan=True)
+    assert result.returncode == 143
+    assert "--input" in calls[-1]
+    assert (marker.parent / "containers/api.json").is_file()
     assert not marker.exists()

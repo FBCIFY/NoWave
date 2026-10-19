@@ -8,6 +8,14 @@ Le workflow `.github/workflows/production.yml` exécute les tests web, API et ba
 
 Le script `hostinger/ci-deploy.sh` reconstruit et audite les images sur le VPS, puis appelle `hostinger/deploy.sh`. Celui-ci effectue une sauvegarde, applique les migrations, démarre les services et vérifie la version sur l’adresse privée. Le tunnel est ensuite mis à jour et les routes publiques sont vérifiées.
 
+Les rapports JSON d’audit sont conservés dans `test-results/containers`. La base
+Trivy, son cache et les exports `.tar` des images sont temporaires : chaque export
+est supprimé après son analyse et le répertoire de travail est nettoyé à la fin du
+script, y compris en cas d’échec ou d’interruption SIGINT/SIGTERM. Un arrêt forcé
+(SIGKILL) ou une panne du serveur peut laisser un répertoire `.audit-*` à nettoyer
+après avoir vérifié qu’aucun audit ne l’utilise. Les images Docker restent disponibles
+pour le déploiement et le retour arrière.
+
 ## Protection et sauvegardes
 
 - L’API et PostgreSQL ne publient pas de port directement sur Internet.
