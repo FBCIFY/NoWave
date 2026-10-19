@@ -2,6 +2,7 @@ from fastapi.testclient import TestClient
 
 from app.api.dependencies.auth import (
     get_authenticated_identity,
+    get_registration_identity,
     get_current_identity,
 )
 from app.domain.errors import EmailAlreadyRegisteredError, InvalidNationalityError
@@ -56,6 +57,7 @@ def unverified_identity():
 
 
 def set_identity_override(provider):
+    app.dependency_overrides[get_registration_identity] = provider
     app.dependency_overrides[
         get_authenticated_identity
     ] = provider

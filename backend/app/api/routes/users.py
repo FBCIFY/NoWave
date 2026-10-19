@@ -3,6 +3,7 @@ from fastapi import APIRouter, Depends, Query, status
 from app.api.dependencies.auth import (
     reuse_current_user,
     get_authenticated_identity,
+    get_registration_identity,
     get_current_identity,
 )
 from app.api.schemas.admin import PaginatedResponse
@@ -42,7 +43,7 @@ router = APIRouter(
 )
 def create_my_profile(
     request: UserCreateRequest,
-    identity: dict = Depends(get_authenticated_identity),
+    identity: dict = Depends(get_registration_identity),
 ):
     repository = PostgreSQLUserRepository()
     create_user = CreateUser(repository)

@@ -39,6 +39,18 @@ def reuse_current_user(identity: dict, repository: UserRepository) -> UserReposi
 def get_authenticated_identity(
     credentials: HTTPAuthorizationCredentials | None = Depends(bearer_scheme),
 ) -> dict:
+    return _verify_identity(credentials)
+
+
+def get_registration_identity(
+    credentials: HTTPAuthorizationCredentials | None = Depends(bearer_scheme),
+) -> dict:
+    # Creating a profile is the one mobile operation that must confirm the
+    # Firebase account still exists; ordinary reads/deletion remain resumable.
+    return _verify_identity(credentials, check_revoked=True)
+
+
+def _verify_identity(credentials, *, check_revoked=False) -> dict:
     if credentials is None:
         raise HTTPException(
             status_code=401,
@@ -54,7 +66,10 @@ def get_authenticated_identity(
         ) from None
 
     try:
-        identity = adapter.verify_token(credentials.credentials)
+        if check_revoked:
+            identity = adapter.verify_token(credentials.credentials, check_revoked=True)
+        else:
+            identity = adapter.verify_token(credentials.credentials)
     except (
         ValueError,
         firebase_auth.InvalidIdTokenError,

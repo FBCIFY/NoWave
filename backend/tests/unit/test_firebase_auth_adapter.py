@@ -20,7 +20,7 @@ def test_verify_token_calls_firebase(monkeypatch):
     monkeypatch.setattr(
         auth,
         "verify_id_token",
-        lambda token: expected_identity,
+        lambda token, *, check_revoked=False: expected_identity,
     )
 
     adapter = FirebaseAuthAdapter()
