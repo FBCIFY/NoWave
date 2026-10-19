@@ -3,7 +3,7 @@ from functools import lru_cache
 from io import BytesIO
 
 import httpx
-from PIL import Image, ImageFilter
+from PIL import Image, ImageFilter, ImageChops
 
 
 EMODNET_WMS_URL = "https://ows.emodnet-bathymetry.eu/wms"
@@ -223,6 +223,12 @@ def fetch_bathymetry_tile(
     """Récupère une tuile PNG et garde le résultat recoloré en cache."""
 
     bbox = web_mercator_tile_bbox(z, x, y)
+    # Three neighbouring display pixels, at the unchanged native sample pitch.
+    # A halo avoids treating XYZ tile edges as no-data coverage boundaries.
+    padding = 3
+    pixel = (bbox[2] - bbox[0]) / 256
+    bbox = (bbox[0] - padding * pixel, bbox[1] - padding * pixel,
+            bbox[2] + padding * pixel, bbox[3] + padding * pixel)
 
     params = {
         "service": "WMS",
@@ -232,8 +238,8 @@ def fetch_bathymetry_tile(
         "styles": "",
         "format": "image/png",
         "transparent": "true",
-        "width": "256",
-        "height": "256",
+        "width": str(256 + 2 * padding),
+        "height": str(256 + 2 * padding),
         "srs": "EPSG:3857",
         "bbox": ",".join(f"{value:.6f}" for value in bbox),
     }
@@ -251,4 +257,26 @@ def fetch_bathymetry_tile(
             f"{content_type or 'unknown'}"
         )
 
-    return recolor_bathymetry_png(response.content)
+    recolored = recolor_bathymetry_png(response.content)
+    with Image.open(BytesIO(recolored)) as image:
+        if image.size != (262, 262):
+            raise BathymetryUnavailable("Unexpected padded raster dimensions")
+        rgba = feather_coverage(image.convert("RGBA"))
+        rgba = rgba.crop((padding, padding, padding + 256, padding + 256))
+        output = BytesIO()
+        rgba.save(output, format="PNG")
+        return output.getvalue()
+
+
+def feather_coverage(rgba: Image.Image) -> Image.Image:
+    """Inward-only subpixel alpha fade; RGB and zero-alpha remain unchanged.
+
+    Applied to a padded render before cropping. No depth calculation, no RGB
+    blur, and no opacity extension into an unknown pixel. The 3-pixel halo
+    covers Pillow's finite Gaussian kernel; uniform valid areas stay opaque.
+    """
+    result = rgba.copy()
+    alpha = rgba.getchannel("A")
+    softened = alpha.filter(ImageFilter.GaussianBlur(radius=0.8))
+    result.putalpha(ImageChops.darker(alpha, softened))
+    return result

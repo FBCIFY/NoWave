@@ -31,12 +31,8 @@ class AidStyle extends Fake implements StyleManager {
     List<ImageStretches?> y,
     ImageContent? content,
   ) async {
-    expect(scale, 3);
-    final size = id == 'nowave-beacon-neutral'
-        ? 12
-        : id.startsWith('nowave-light-')
-        ? 36
-        : 72;
+    expect(scale, id.startsWith('nowave-light-') ? 6 : 3);
+    final size = id == 'nowave-beacon-neutral' ? 12 : 72;
     expect(image.width, size);
     expect(image.height, size);
     expect(image.data.take(8), [137, 80, 78, 71, 13, 10, 26, 10]);

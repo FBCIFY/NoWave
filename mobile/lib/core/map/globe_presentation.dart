@@ -22,10 +22,16 @@ class GlobePresentation {
       while (_applied != (_zoom >= 4)) {
         final visible = _zoom >= 4;
         final generation = _generation;
-        await map.style.setStyleImportConfigProperties('basemap', {
-          'showPlaceLabels': visible,
-          'showAdminBoundaries': visible,
-        });
+        // The batch setter replaces the import configuration on native Mapbox.
+        // Change only our label options so the marine water colour and the
+        // style's lighting/theme survive zoom crossings and style reloads.
+        for (final property in ['showPlaceLabels', 'showAdminBoundaries']) {
+          await map.style.setStyleImportConfigProperty(
+            'basemap',
+            property,
+            visible,
+          );
+        }
         if (generation == _generation) _applied = visible;
       }
     } catch (error) {

@@ -3,6 +3,7 @@ import 'package:blueway/core/map/globe_style.dart';
 import 'package:blueway/core/map/marine/marine_map_controller.dart';
 import 'package:blueway/features/map/data/buoy_layer.dart';
 import 'package:blueway/features/map/data/port_layer.dart';
+import 'package:blueway/features/map/data/harbour_layer.dart';
 import 'package:blueway/features/map/data/hydrography_layer.dart';
 import 'package:blueway/features/map/presentation/map_screen.dart';
 import 'package:flutter/widgets.dart';
@@ -21,6 +22,8 @@ void main() {
         (MapLoadErrorType.SOURCE, BuoyLayer.sourceId),
         (MapLoadErrorType.TILE, BuoyLayer.sourceId),
         (MapLoadErrorType.TILE, PortLayer.sourceId),
+        (MapLoadErrorType.SOURCE, HarbourLayer.sourceId),
+        (MapLoadErrorType.TILE, HarbourLayer.sourceId),
         (MapLoadErrorType.TILE, MarineMapController.bathymetrySourceId),
         (MapLoadErrorType.SOURCE, GlobeStyle.waterSource),
         (MapLoadErrorType.TILE, GlobeStyle.waterSource),

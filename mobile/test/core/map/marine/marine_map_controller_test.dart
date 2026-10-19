@@ -83,7 +83,7 @@ void main() {
       expect(map.style.layers.length, 1);
       final source = map.style.sources.values.single;
       final layer = map.style.layers.values.single;
-      expect(source['tiles'], ['$local?v=coast-1']);
+      expect(source['tiles'], ['$local?v=coast-feather-2']);
       expect(source['maxzoom'], 14);
       expect(source['volatile'], true);
       expect(source['prefetch-zoom-delta'], 0);
@@ -103,7 +103,9 @@ void main() {
       map.style.sources.clear();
       map.style.layers.clear();
       await marine.install(map);
-      expect(map.style.sources.values.single['tiles'], ['$local?v=coast-1']);
+      expect(map.style.sources.values.single['tiles'], [
+        '$local?v=coast-feather-2',
+      ]);
       expect(map.style.layers.length, 1);
     },
   );
@@ -120,7 +122,7 @@ void main() {
     await MarineMapController(bathymetryTilesUrl: '$local?region=europe')
         .install(map);
     expect(map.style.sources.values.single['tiles'], [
-      '$local?region=europe&v=coast-1',
+      '$local?region=europe&v=coast-feather-2',
     ]);
   });
 

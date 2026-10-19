@@ -68,14 +68,10 @@ class FixedAidLayer {
     final style = map.style;
     for (final entry in (await (_images ??= _loadImages())).entries) {
       if (await style.hasStyleImage(entry.key)) continue;
-      final size = entry.key == 'nowave-beacon-neutral'
-          ? 12
-          : entry.key.startsWith('nowave-light-')
-          ? 36
-          : 72;
+      final size = entry.key == 'nowave-beacon-neutral' ? 12 : 72;
       await style.addStyleImage(
         entry.key,
-        3,
+        entry.key.startsWith('nowave-light-') ? 6 : 3,
         MbxImage(width: size, height: size, data: entry.value),
         false,
         [],

@@ -2,6 +2,16 @@
 
 SOURCES = [
     {
+        "id": "openwaters-harbours",
+        "families": ["harbours"],
+        "dataset": "Open Waters OSM harbour places (provider representative points)",
+        "attribution": "© Open Waters: Seamap; © OpenStreetMap contributors; Z6/Z7 tiles aggregated by NoWave",
+        "url": "https://openwaters.io/charts/seamap",
+        "license": "CC BY 4.0; underlying OSM ODbL 1.0",
+        "license_url": "https://creativecommons.org/licenses/by/4.0/",
+        "limitations": "Community mapped harbour places, not a complete official port register. Native points from Z8, tile-quantized coordinates. Unknown categories remain generic; no infrastructure-derived ports. No depth content used.",
+    },
+    {
         "id": "osm-coastline-mask",
         "families": ["bathymetry-mask"],
         "dataset": "OpenStreetMap Shortbread ocean and dock/canal polygons",

@@ -306,3 +306,16 @@ def test_mvt_clip_keeps_structures_when_tangencies_create_geometry_collections(
     assert {f["geometry"]["type"] for f in canonical} == {"Polygon", "LineString"}
     assert len(layers["pier_polygons"]["features"]) == 1
     assert len(layers["pier_lines"]["features"]) == 1
+
+
+def test_real_quay_line_is_rendered_without_moving_geometry_or_inventing_port():
+    quay = PortInfrastructureFeature(
+        id="ign:quay", source="ign", source_id="quay", source_priority=100,
+        infrastructure_type="quay", geometry=LineString([(5.93, 43.09), (5.931, 43.091)]),
+    )
+    layers = mapbox_vector_tile.decode(encode_tile(tile_at(5.93, 43.09), MarineFamily.PORTS, [quay]))
+    infrastructure = layers["port_infrastructure"]["features"][0]
+    rendered = layers["pier_lines"]["features"][0]
+    assert rendered["properties"]["kind"] == "quay"
+    assert rendered["geometry"] == infrastructure["geometry"]
+    assert "harbour" not in layers

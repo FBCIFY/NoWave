@@ -45,7 +45,7 @@ void main() {
   test('NoWave fournit les deux familles sans URL nationale dans Flutter', () {
     expect(
       PortLayer.tilesUrl(apiBaseUrl: 'https://api.example.com/gateway/'),
-      endsWith('/api/v1/map/port-infrastructure/{z}/{x}/{y}.pbf'),
+      endsWith('/api/v1/map/port-infrastructure/{z}/{x}/{y}.pbf?v=quays-2'),
     );
     expect(
       MarineTiles.template(
@@ -78,7 +78,7 @@ void main() {
         PortLayer.addTo(map, apiBaseUrl: 'https://api.example.com/gateway/'),
       ]);
       expect(map.style.adds, 1);
-      expect(map.style.layers.length, 5);
+      expect(map.style.layers.length, 6);
       final source = map.style.sources[PortLayer.sourceId] as Map;
       expect(source['tiles'], [
         PortLayer.tilesUrl(apiBaseUrl: 'https://api.example.com/gateway/'),
@@ -119,7 +119,7 @@ void main() {
         apiBaseUrl: 'https://api.example.com/gateway/',
       );
       expect(map.style.adds, 2);
-      expect(map.style.layers.length, 5);
+      expect(map.style.layers.length, 6);
     },
   );
 
@@ -131,6 +131,6 @@ void main() {
     );
     map.style.reject = false;
     await PortLayer.addTo(map, apiBaseUrl: 'https://api.example.com/gateway/');
-    expect(map.style.layers.length, 5);
+    expect(map.style.layers.length, 6);
   });
 }

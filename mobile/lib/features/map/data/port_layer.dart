@@ -24,8 +24,11 @@ class PortLayer {
   static const String _groyneLayerId = 'nowave-port-groynes';
   static const String _pierLayerId = 'nowave-port-piers';
 
-  static String tilesUrl({String? apiBaseUrl}) =>
-      MarineTiles.template('port-infrastructure', apiBaseUrl: apiBaseUrl);
+  static String tilesUrl({String? apiBaseUrl}) => MarineTiles.template(
+    'port-infrastructure',
+    apiBaseUrl: apiBaseUrl,
+    queryParameters: const {'v': 'quays-2'},
+  );
   static Future<void>? _installing;
 
   static Future<void> addTo(MapboxMap map, {String? apiBaseUrl}) async {
@@ -137,6 +140,40 @@ class PortLayer {
             2.7,
             18,
             3.6,
+          ],
+        ),
+      );
+    }
+
+    // Real IGN/ENC quay lines were retained in MVT but had no render layer.
+    // Draw their published centreline with a fine, rounded cartographic stroke.
+    if (!await style.styleLayerExists('nowave-port-quays')) {
+      await style.addLayer(
+        LineLayer(
+          id: 'nowave-port-quays',
+          sourceId: sourceId,
+          sourceLayer: 'pier_lines',
+          minZoom: 13,
+          slot: LayerSlot.MIDDLE,
+          filter: const [
+            '==',
+            ['get', 'kind'],
+            'quay',
+          ],
+          lineColor: 0xFF91A5B0,
+          lineOpacity: 0.8,
+          lineCap: LineCap.ROUND,
+          lineJoin: LineJoin.ROUND,
+          lineWidthExpression: const [
+            'interpolate',
+            ['linear'],
+            ['zoom'],
+            13,
+            0.6,
+            16,
+            1.0,
+            18,
+            1.3,
           ],
         ),
       );

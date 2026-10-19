@@ -7,6 +7,7 @@ import 'package:blueway/features/map/data/fixed_aid_layer.dart';
 import 'package:blueway/features/map/data/hydrography_layer.dart';
 import 'package:blueway/features/map/data/marine_tiles.dart';
 import 'package:blueway/features/map/data/port_layer.dart';
+import 'package:blueway/features/map/data/harbour_layer.dart';
 import 'package:blueway/features/map/data/report_tiles.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mapbox_maps_flutter/mapbox_maps_flutter.dart';
@@ -54,6 +55,7 @@ void main() {
         await raster.install(map);
         await hydro.addTo(map);
         await PortLayer.addTo(map, apiBaseUrl: base);
+        await HarbourLayer.addTo(map, apiBaseUrl: base);
         await buoys.addTo(map);
         await fixed.addTo(map);
         await reports.addTo(map);
@@ -62,12 +64,15 @@ void main() {
       await install();
       await install();
       final expected = {
-        'nowave-bathymetry': 'bathymetry/{z}/{x}/{y}.png?tenant=eu&v=coast-1',
+        'nowave-bathymetry':
+            'bathymetry/{z}/{x}/{y}.png?tenant=eu&v=coast-feather-2',
         'nowave-depth-contours': 'depth-contours/{z}/{x}/{y}.pbf?tenant=eu&v=3',
         'nowave-soundings': 'soundings/{z}/{x}/{y}.pbf?tenant=eu&v=depths-4',
         'nowave-underwater-hazards':
             'underwater-hazards/{z}/{x}/{y}.pbf?tenant=eu&v=3',
-        'nowave-osm-ports': 'port-infrastructure/{z}/{x}/{y}.pbf?tenant=eu',
+        'nowave-osm-ports':
+            'port-infrastructure/{z}/{x}/{y}.pbf?tenant=eu&v=quays-2',
+        'nowave-harbours': 'harbours/{z}/{x}/{y}.pbf?tenant=eu',
         'nowave-buoys': 'seamarks/{z}/{x}/{y}.pbf?tenant=eu',
         'nowave-reports': 'tiles/{z}/{x}/{y}.mvt?tenant=eu',
       };
@@ -129,14 +134,16 @@ void main() {
         await MarineMapController().install(map);
         await HydrographyLayer().addTo(map);
         await PortLayer.addTo(map);
+        await HarbourLayer.addTo(map);
         await BuoyLayer().addTo(map);
         await ReportTiles(getIdToken: () async => 'unit-token').addTo(map);
         final routes = {
-          'nowave-bathymetry': 'bathymetry/{z}/{x}/{y}.png?v=coast-1',
+          'nowave-bathymetry': 'bathymetry/{z}/{x}/{y}.png?v=coast-feather-2',
           'nowave-depth-contours': 'depth-contours/{z}/{x}/{y}.pbf?v=3',
           'nowave-soundings': 'soundings/{z}/{x}/{y}.pbf?v=depths-4',
           'nowave-underwater-hazards': 'underwater-hazards/{z}/{x}/{y}.pbf?v=3',
-          'nowave-osm-ports': 'port-infrastructure/{z}/{x}/{y}.pbf',
+          'nowave-osm-ports': 'port-infrastructure/{z}/{x}/{y}.pbf?v=quays-2',
+          'nowave-harbours': 'harbours/{z}/{x}/{y}.pbf',
           'nowave-buoys': 'seamarks/{z}/{x}/{y}.pbf',
           'nowave-reports': 'tiles/{z}/{x}/{y}.mvt',
         };

@@ -45,6 +45,15 @@ async def get_port_infrastructure_tile(
     return await _marine_tile(z, x, y, MarineFamily.PORTS)
 
 
+@router.get("/harbours/{z}/{x}/{y}.pbf")
+async def get_harbour_tile(
+    z: Annotated[int, Path(ge=0, le=14)],
+    x: Annotated[int, Path(ge=0)],
+    y: Annotated[int, Path(ge=0)],
+) -> Response:
+    return await _marine_tile(z, x, y, MarineFamily.HARBOURS)
+
+
 @router.get("/depth-contours/{z}/{x}/{y}.pbf")
 async def get_depth_contour_tile(
     z: Annotated[int, Path(ge=0, le=16)],

@@ -16,10 +16,10 @@ BANDS = {'red': ['red'], 'green': ['green'], 'yellow': ['yellow'],
          'green-grey': ['green', 'grey'], 'grey-green': ['grey', 'green'],
          'red-grey': ['red', 'grey'], 'grey-red': ['grey', 'red']}
 
-def save(name, body, size=24):
+def save(name, body, size=24, density=3):
     svg = f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {size} {size}">{body}</svg>'
     cairosvg.svg2png(bytestring=svg.encode(), write_to=str(ASSETS / f'{name}.png'),
-                    output_width=size*3, output_height=size*3)
+                    output_width=size*density, output_height=size*density)
 
 def cone(y, up):
     points = f'12,{y} 9.8,{y+3.5} 14.2,{y+3.5}' if up else f'9.8,{y} 14.2,{y} 12,{y+3.5}'
@@ -48,7 +48,10 @@ def main():
     for name in ['default', 'red', 'green', 'yellow', 'white']:
         color = COLORS[name]
         save('lighthouse-'+name, f'<path d="M8 21L9.5 10H14.5L16 21Z" fill="#F1F4F5" stroke="#F6F8FA" stroke-width="2"/><path d="M8 21L9.5 10H14.5L16 21Z" fill="#F1F4F5" stroke="#344653" stroke-width="0.8"/><path d="M9 16H15" stroke="#567489" stroke-width="2"/><path d="M8.5 5L12 2L15.5 5Z" fill="#344653"/><rect x="9" y="5" width="6" height="5" rx="0.6" fill="{color}" stroke="#344653" stroke-width="0.8"/><path d="M7 21H17" stroke="#344653" stroke-width="1"/>')
-        save('light-'+name, f'<path d="M6 1V2.2M6 9.8V11M1 6H2.2M9.8 6H11" stroke="#748B99" stroke-width="0.7"/><circle cx="6" cy="6" r="2.5" fill="#F6F8FA"/><circle cx="6" cy="6" r="2" fill="{color}" stroke="#344653" stroke-width="0.7"/>', 12)
+        # An isolated light remains a light, not an inferred beacon/buoy.
+        # A compact star is legible at 12 logical px, rasterized at 6x.
+        star = 'M6 1L7.1 4.9L11 6L7.1 7.1L6 11L4.9 7.1L1 6L4.9 4.9Z'
+        save('light-'+name, f'<path d="{star}" fill="{color}" stroke="#F8FCFE" stroke-width="1.5" stroke-linejoin="round"/><path d="{star}" fill="{color}" stroke="#344653" stroke-width="0.55" stroke-linejoin="round"/><circle cx="6" cy="6" r="1.4" fill="{color}"/>', 12, density=6)
 
 if __name__ == '__main__':
     main()

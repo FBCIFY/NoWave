@@ -29,6 +29,7 @@ import '../../reports/presentation/report_detail_sheet.dart';
 import '../data/buoy_layer.dart';
 import '../data/fixed_aid_layer.dart';
 import '../data/port_layer.dart';
+import '../data/harbour_layer.dart';
 import '../data/report_layer_controller.dart';
 import '../data/report_tiles.dart';
 import 'widgets/globe_moon.dart';
@@ -380,7 +381,8 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
 
     // Les infrastructures portuaires sont un enrichissement facultatif.
     // Leur indisponibilité ne doit jamais masquer le fond Mapbox.
-    if (event.sourceId == PortLayer.sourceId) {
+    if (event.sourceId == PortLayer.sourceId ||
+        event.sourceId == HarbourLayer.sourceId) {
       return;
     }
 
@@ -529,6 +531,12 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
     } catch (error) {
       // Comme la bathymétrie, les données portuaires sont facultatives.
       debugPrint('Couche portuaire non installée : $error');
+    }
+
+    try {
+      await HarbourLayer.addTo(map);
+    } catch (e) {
+      debugPrint('Ports : installation indisponible : $e');
     }
 
     try {

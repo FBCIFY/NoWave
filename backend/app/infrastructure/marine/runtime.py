@@ -5,6 +5,7 @@ import os
 from app.application.services.marine_tiles import MarineTileService
 from app.infrastructure.marine.emodnet_depths import EmodnetDepthProvider
 from app.infrastructure.marine.ign import IgnPortProvider
+from app.infrastructure.marine.harbours import HarbourProvider
 from app.infrastructure.marine.http import MarineHTTP
 from app.infrastructure.marine.coastline import CoastlineMask
 from app.infrastructure.marine.hydro_providers import (
@@ -42,6 +43,7 @@ def get_marine_service():
             NoaaHydroProvider(_http),
             NoaaSoundingProvider(_sounding_http),
             OpenWatersProvider(_http),
+            HarbourProvider(_http),
             ShortbreadProvider(_http, os.getenv("MARINE_SHORTBREAD_URL")),
             ShomProvider(_http),
             IgnPortProvider(_http),

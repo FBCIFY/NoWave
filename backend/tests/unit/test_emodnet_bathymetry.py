@@ -161,7 +161,7 @@ def test_recolor_rejects_non_png_images():
 
 
 def test_fetch_caches_the_final_recolored_png(monkeypatch):
-    source = png_bytes(Image.new("RGBA", (2, 2), (0, 0, 62, 127)))
+    source = png_bytes(Image.new("RGBA", (262, 262), (0, 0, 62, 127)))
     requests = []
     recolor_calls = []
 
@@ -189,6 +189,11 @@ def test_fetch_caches_the_final_recolored_png(monkeypatch):
     assert requests[0]["layers"] == "emodnet:mean_multicolour"
     assert requests[0]["srs"] == "EPSG:3857"
     assert requests[0]["transparent"] == "true"
+    assert requests[0]["width"] == requests[0]["height"] == "262"
+    native = web_mercator_tile_bbox(8, 131, 94)
+    padded = list(map(float, requests[0]["bbox"].split(",")))
+    assert (padded[2] - padded[0]) / 262 == pytest.approx((native[2] - native[0]) / 256)
+    assert Image.open(BytesIO(first)).size == (256, 256)
     result = Image.open(BytesIO(first))
     assert result.getpixel((0, 0))[3] == 127
     assert all(abs(a - b) <= 2 for a, b in zip(result.getpixel((0, 0))[:3], (30, 111, 168)))
@@ -217,3 +222,34 @@ def test_smoothing_softens_depth_edges_without_darkening_transparent_coast():
     assert result.getpixel((0, 2)) != result.getpixel((15, 2))
     assert result.getpixel((15, 2)) != result.getpixel((16, 2))
     assert result.getpixel((16, 2)) != result.getpixel((31, 2))
+
+
+def test_feather_only_changes_alpha_inside_known_coverage():
+    import numpy as np
+    from app.infrastructure.adapters.emodnet_bathymetry import feather_coverage
+
+    source = Image.new("RGBA", (262, 262), (92, 179, 223, 255))
+    for x in range(130):
+        for y in range(262):
+            source.putpixel((x, y), (30, 111, 168, 0))
+    before, after = np.array(source), np.array(feather_coverage(source))
+    assert np.array_equal(before[:, :, :3], after[:, :, :3])
+    assert np.all(after[:, :, 3] <= before[:, :, 3])
+    assert np.all(after[:, :130, 3] == 0)
+    assert 0 < after[128, 130, 3] < 255
+    assert np.all(after[:, 134:, 3] == 255)
+
+
+def test_feather_adjacent_tiles_share_the_same_global_pixel_lattice():
+    import numpy as np
+    from app.infrastructure.adapters.emodnet_bathymetry import feather_coverage
+
+    # A coverage edge crosses the tile seam; crop with the production halo.
+    big = Image.new("RGBA", (518, 262), (92, 179, 223, 255))
+    for x in range(518):
+        for y in range(100 + x // 10):
+            big.putpixel((x, y), (92, 179, 223, 0))
+    full = np.array(feather_coverage(big).crop((3, 3, 515, 259)))
+    left = np.array(feather_coverage(big.crop((0, 0, 262, 262))).crop((3, 3, 259, 259)))
+    right = np.array(feather_coverage(big.crop((256, 0, 518, 262))).crop((3, 3, 259, 259)))
+    assert np.array_equal(full, np.concatenate((left, right), axis=1))

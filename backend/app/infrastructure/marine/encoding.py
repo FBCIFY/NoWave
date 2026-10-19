@@ -14,7 +14,7 @@ from shapely.geometry import (
 )
 from shapely.ops import transform
 
-from app.domain.marine import MarineFamily, SeamarkFeature
+from app.domain.marine import MarineFamily, SeamarkFeature, HarbourFeature
 from app.domain.marine_tile import project
 
 
@@ -67,7 +67,9 @@ def encode_tile(tile, family, features):
     span = bounds[2] - bounds[0]
     clip = box(*bounds).buffer(span * 64 / 4096)
     layers = (
-        {"seamark": []}
+        {"harbour": []}
+        if family == MarineFamily.HARBOURS
+        else {"seamark": []}
         if family == MarineFamily.SEAMARKS
         else {
             name: []
@@ -96,6 +98,9 @@ def encode_tile(tile, family, features):
                     }
                 )
 
+        if isinstance(feature, HarbourFeature):
+            add("harbour", geometry)
+            continue
         if isinstance(feature, SeamarkFeature):
             add("seamark", geometry)
             continue
@@ -117,10 +122,8 @@ def encode_tile(tile, family, features):
                 geometry,
                 {"kind": "pier"},
             )
-        elif kind == "quay" and polygons:
-            # The existing pale marine-structure surface is appropriate to a
-            # real quay footprint. A quay LINE has no existing matching style.
-            add("pier_polygons", geometry, {"kind": "quay"})
+        elif kind == "quay" and (polygons or lines):
+            add("pier_polygons" if polygons else "pier_lines", geometry, {"kind": "quay"})
     return mapbox_vector_tile.encode(
         [{"name": name, "features": values} for name, values in layers.items()],
         default_options={

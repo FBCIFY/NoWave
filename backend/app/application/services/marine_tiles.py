@@ -52,7 +52,7 @@ class MarineTileService:
             if cached and cached[0] > time.monotonic():
                 self._cache.move_to_end(key)
                 return cached[1]
-            if tile.z < MIN_ZOOM.get(family, 10):
+            if tile.z < (6 if family == MarineFamily.HARBOURS else MIN_ZOOM.get(family, 10)):
                 return MarineTileResult(
                     self.encoder(tile, family, []),
                     status="below-minzoom"
@@ -108,7 +108,10 @@ class MarineTileService:
                 )
             )
             successful = [p.id for p, b in zip(providers, batches) if not b.failures]
-            fallback = "openwaters" if family == MarineFamily.SEAMARKS else "osm"
+            fallback = (
+                "openwaters-harbours" if family == MarineFamily.HARBOURS
+                else "openwaters" if family == MarineFamily.SEAMARKS else "osm"
+            )
             hydro = family in MIN_ZOOM
             if (
                 hydro
@@ -129,7 +132,12 @@ class MarineTileService:
 
             region = box(*tile.query_bounds)
             features = [f for f in features if f.geometry.intersects(region)]
-            merged = merge_features(features, tile.bounds)
+            if family == MarineFamily.HARBOURS:
+                from app.infrastructure.marine.harbours import merge_harbours
+
+                merged = merge_harbours(features)
+            else:
+                merged = merge_features(features, tile.bounds)
             result = MarineTileResult(
                 self.encoder(tile, family, merged.features),
                 failures,

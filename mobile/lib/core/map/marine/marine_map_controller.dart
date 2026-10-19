@@ -52,7 +52,7 @@ class MarineMapController {
           id: bathymetrySourceId,
           // Separate clipped coast tiles from the previous unmasked cache.
           tiles: [
-            ApiConfig.withQueryParameters(tilesUrl, {'v': 'coast-1'}),
+            ApiConfig.withQueryParameters(tilesUrl, {'v': 'coast-feather-2'}),
           ],
           tileSize: 256,
           minzoom: 0,

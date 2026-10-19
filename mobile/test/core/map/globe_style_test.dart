@@ -3,6 +3,7 @@ import 'dart:io';
 
 import 'package:blueway/core/map/globe_presentation.dart';
 import 'package:blueway/core/map/globe_style.dart';
+import 'package:blueway/core/map/marine/marine_map_controller.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mapbox_maps_flutter/mapbox_maps_flutter.dart';
@@ -14,7 +15,11 @@ class _Map extends Fake implements MapboxMap {
 
 class _Style extends Fake implements StyleManager {
   final calls = <Map<String, Object?>>[];
+  final config = <String, Object>{'lightPreset': 'day', 'theme': 'faded'};
   bool fail = false;
+
+  @override
+  Future<void> setProjection(StyleProjection projection) async {}
 
   @override
   Future<void> setStyleImportConfigProperties(
@@ -23,7 +28,23 @@ class _Style extends Fake implements StyleManager {
   ) async {
     expect(id, 'basemap');
     if (fail) throw PlatformException(code: 'style-not-ready');
+    // Native Mapbox replaces the whole import configuration with this API.
+    config
+      ..clear()
+      ..addAll(properties.cast<String, Object>());
     calls.add(properties);
+  }
+
+  @override
+  Future<void> setStyleImportConfigProperty(
+    String id,
+    String property,
+    Object value,
+  ) async {
+    expect(id, 'basemap');
+    if (fail) throw PlatformException(code: 'style-not-ready');
+    config[property] = value;
+    calls.add({property: value});
   }
 }
 
@@ -109,20 +130,53 @@ void main() {
       ]) {
         await presentation.synchronize(map, zoom);
       }
-      expect(map.style.calls.map((c) => c['showPlaceLabels']), [
-        false,
-        true,
-        false,
-      ]);
+      final labelCalls = map.style.calls.where(
+        (c) => c.containsKey('showPlaceLabels'),
+      );
+      expect(labelCalls.map((c) => c['showPlaceLabels']), [false, true, false]);
       presentation.styleLoaded();
       await presentation.synchronize(map, .65);
-      expect(map.style.calls.length, 4);
+      expect(labelCalls.length, 4);
       map.style.fail = true;
       await presentation.synchronize(map, 6);
       map.style.fail = false;
       await presentation.synchronize(map, 6);
-      expect(map.style.calls.last['showPlaceLabels'], true);
-      expect(map.style.calls.last['showAdminBoundaries'], true);
+      expect(map.style.config['showPlaceLabels'], true);
+      expect(map.style.config['showAdminBoundaries'], true);
+    },
+  );
+
+  test(
+    'globe updates preserve marine water colour, theme and lighting',
+    () async {
+      final map = _Map();
+      final marine = MarineMapController(bathymetryTilesUrl: '');
+      final presentation = GlobePresentation();
+      // Exercise both style-load operations together, as on the actual screen.
+      await Future.wait([
+        marine.install(map),
+        presentation.synchronize(map, GlobeStyle.initialZoom),
+      ]);
+      for (final reload in [false, true]) {
+        if (reload) {
+          map.style.config
+            ..clear()
+            ..addAll({'lightPreset': 'day', 'theme': 'faded'});
+          presentation.styleLoaded();
+          await marine.install(map);
+        }
+        for (final zoom in [0.65, 5.9, 6.0, 12.0, 17.0, 3.0]) {
+          await presentation.synchronize(map, zoom);
+          expect(
+            map.style.config['colorWater'],
+            MarineMapController.deepWaterColor,
+          );
+          expect(map.style.config['lightPreset'], 'day');
+          expect(map.style.config['theme'], 'faded');
+          expect(map.style.config['showPlaceLabels'], zoom >= 4);
+          expect(map.style.config['showAdminBoundaries'], zoom >= 4);
+        }
+      }
     },
   );
 }

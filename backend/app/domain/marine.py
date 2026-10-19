@@ -14,6 +14,7 @@ from shapely.geometry.base import BaseGeometry
 class MarineFamily(StrEnum):
     SEAMARKS = "seamarks"
     PORTS = "port-infrastructure"
+    HARBOURS = "harbours"
     CONTOURS = "depth-contours"
     SOUNDINGS = "soundings"
     HAZARDS = "underwater-hazards"
@@ -137,3 +138,18 @@ class MergeResult:
     features: list[Feature] = field(default_factory=list)
     matches: list[tuple[str, str]] = field(default_factory=list)
     conflicts: list[tuple[str, str]] = field(default_factory=list)
+
+
+@dataclass(frozen=True, kw_only=True)
+class HarbourFeature(MarineFeature):
+    """A qualified harbour place, never an inferred quay or depth."""
+
+    category: str = "harbour"
+    source_category: str = ""
+    position_method: str = "provider-point"
+    source_tile: str = ""
+
+    def __post_init__(self):
+        super().__post_init__()
+        if self.geometry.geom_type != "Point":
+            raise ValueError("Harbours require a representative point")

@@ -12,6 +12,7 @@ from app.domain.marine import ProviderUnavailable
     [
         ("seamarks", "seamark"),
         ("port-infrastructure", "pier_lines"),
+        ("harbours", "harbour"),
         ("depth-contours", "depth_contour"),
         ("soundings", "sounding"),
         ("underwater-hazards", "underwater_hazard"),
@@ -51,6 +52,8 @@ def test_public_marine_endpoints_return_valid_mvt_and_degradation_metadata(
     [
         "seamarks/2/4/0",
         "port-infrastructure/2/0/4",
+        "harbours/6/64/0",
+        "harbours/15/0/0",
         "seamarks/15/0/0",
         "seamarks/-1/0/0",
     ],
@@ -81,6 +84,7 @@ def test_source_licenses_are_public_and_include_every_integrated_dataset():
         "noaa",
         "osm",
         "openwaters",
+        "openwaters-harbours",
         "ign",
         "shom-hazards",
         "shom-surveys",
