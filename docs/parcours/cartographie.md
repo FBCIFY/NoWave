@@ -1,6 +1,6 @@
 # Parcours — Carte maritime et consultation des signalements
 
-**Référence :** `dev@6b54aa8` (19/10/2026). Décision CON-024 **option A** ; tickets NW-111, NW-114 et NW-157.
+**Référence :** `dev@6b54aa8` (19/10/2026). Correctif [FIX T13 / NW-166](https://linear.app/blueway/issue/NW-166) ; tickets NW-111, NW-114 et NW-157.
 
 ## Parcours
 
@@ -11,7 +11,7 @@
 
 Le fond actuellement décrit dans `mobile/README.md` est **Mapbox Standard** ; le fond marine MapTiler cité dans certaines spécifications doit faire l'objet d'un alignement technique distinct avant d'être annoncé comme livré. La couche NoWave MVT est séparée du fond cartographique.
 
-## Expiration et cache — CON-024/A
+## Expiration et cache — FIX T13 (NW-166)
 
 - **Règle métier serveur :** `expires_at = observed_at + 24 h`. Les nouvelles requêtes cartographiques excluent les signalements qui ne sont plus actifs ou qui sont expirés à l'heure serveur.
 - **Contrat HTTP MVT observé :** `Cache-Control: private, max-age=15, must-revalidate` et `Vary: Authorization`, dans `backend/app/api/routes/map_tiles.py`.
