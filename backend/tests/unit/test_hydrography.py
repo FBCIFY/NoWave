@@ -326,9 +326,16 @@ def test_encoded_labels_preserve_real_depth_and_decimals(kind, geometry, props, 
 
 def test_official_shom_xyz_samples_have_provenance_datum_and_no_invented_accuracy():
     from app.infrastructure.marine.shom_soundings import (
+        DATA,
         survey_soundings,
         ShomSoundingProvider,
     )
+
+    # Le jeu SHOM XYZ est optionnel et absent de GitHub/CI.
+    # Les sondes du MVP proviennent d'EMODnet ou de NOAA ; si les archives
+    # sont disponibles localement, leurs contrôles d'intégrité restent stricts.
+    if not (DATA / "manifest.json").is_file():
+        pytest.skip("Archives locales SHOM XYZ absentes (hors sources de sondes MVP)")
 
     samples = survey_soundings()
     assert len(samples) == 7795
