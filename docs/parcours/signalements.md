@@ -1,6 +1,6 @@
 # Parcours — Création manuelle et photo des signalements
 
-**Référence :** `dev@6b54aa8` (19/10/2026). Tickets de référence : NW-104, NW-109, NW-112 ; décision CON-025 **option C**.
+**Référence :** `dev@6b54aa8` (19/10/2026). Tickets de référence : NW-104, NW-109, NW-112 ; correctif [FIX T14 / NW-167](https://linear.app/blueway/issue/NW-167).
 
 ## Création manuelle
 
