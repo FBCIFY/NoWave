@@ -158,12 +158,20 @@ void main() {
   testWidgets('ferme le clavier quand on touche en dehors du champ', (
     tester,
   ) async {
+    var mapTaps = 0;
     await tester.pumpWidget(
-      const MaterialApp(
+      MaterialApp(
         home: Scaffold(
           body: Column(
             children: [
-              Expanded(child: SizedBox.expand(key: ValueKey('map'))),
+              Expanded(
+                child: GestureDetector(
+                  key: const ValueKey('map'),
+                  behavior: HitTestBehavior.opaque,
+                  onTap: () => mapTaps++,
+                  child: const SizedBox.expand(),
+                ),
+              ),
               ReportComposerSheet(onClose: _noop),
             ],
           ),
@@ -181,6 +189,7 @@ void main() {
 
     await tester.tap(find.byKey(const ValueKey('map')));
     await tester.pump();
+    expect(mapTaps, 1);
     expect(hasFocus(), isFalse);
   });
 
