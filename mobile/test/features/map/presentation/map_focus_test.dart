@@ -131,6 +131,39 @@ void main() {
     },
   );
 
+  for (final photo in [false, true]) {
+    focusTestWidgets(
+      'NW-210 ${photo ? 'photo' : 'manuel'} : même cadrage GPS et geste libre',
+      (tester) async {
+        gps.initial.complete(focusPosition());
+        await mount(tester);
+        final pending = focus.focusAlert(
+          focusReport(
+            longitude: 6,
+            photo: photo
+                ? const ReportPhoto(
+                    status: ReportPhotoStatus.pending,
+                    url: null,
+                  )
+                : null,
+          ),
+        );
+        await pumpFrames(tester);
+        await pending;
+        expect(
+          map.fittedCoordinates.single.map((point) => point.coordinates.lng),
+          [6, 5.37],
+        );
+        expect(map.location.settings.last.enabled, true);
+        expect(find.byType(ReportDetailSheet), findsNothing);
+        await tester.tapAt(const Offset(200, 300));
+        gps.positions.add(focusPosition(longitude: 7));
+        await pumpFrames(tester);
+        expect(map.cameras, hasLength(1));
+      },
+    );
+  }
+
   for (final category in ReportCategory.values) {
     focusTestWidgets('badge sélectionné ${category.apiValue} sans MVT', (
       tester,

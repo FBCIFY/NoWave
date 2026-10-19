@@ -15,6 +15,7 @@ ReportDetail focusReport({
   double longitude = 5.373,
   double latitude = 43.29,
   DateTime? expires,
+  ReportPhoto? photo,
 }) => ReportDetail(
   id: id,
   category: category,
@@ -25,7 +26,7 @@ ReportDetail focusReport({
   expiresAt: expires ?? DateTime.now().add(const Duration(hours: 1)),
   author: null,
   boat: null,
-  photo: null,
+  photo: photo,
 );
 
 geo.Position focusPosition({
