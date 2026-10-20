@@ -32,6 +32,8 @@ class DevicePositionReporter {
   final DeviceService _devices;
   final DeviceRegistration _registration;
   final LocationService _location;
+  final Duration Function() _elapsed;
+  Duration? _lastAttempt;
 
   bool _running = false;
   Timer? _timer;
@@ -60,11 +62,23 @@ class DevicePositionReporter {
     required DeviceService devices,
     required DeviceRegistration registration,
     required LocationService location,
+    Duration Function()? elapsed,
   }) {
-    return DevicePositionReporter._(devices, registration, location);
+    final clock = Stopwatch()..start();
+    return DevicePositionReporter._(
+      devices,
+      registration,
+      location,
+      elapsed ?? (() => clock.elapsed),
+    );
   }
 
-  DevicePositionReporter._(this._devices, this._registration, this._location);
+  DevicePositionReporter._(
+    this._devices,
+    this._registration,
+    this._location,
+    this._elapsed,
+  );
 
   /// Démarre le suivi, ou le reprend au retour dans l'app. S'il tourne déjà,
   /// écoute le GPS sans attendre le tick si l'autorisation vient d'arriver.
@@ -91,6 +105,7 @@ class DevicePositionReporter {
     await subscription?.cancel();
     await _sending;
     _lastSent = null;
+    _lastAttempt = null;
   }
 
   /// Garde ou non le suivi quand l'app passe en arrière-plan. Un abonnement
@@ -177,8 +192,13 @@ class DevicePositionReporter {
       return Future.value();
     }
     final measurement = _pending!;
+    final lastAttempt = _lastAttempt;
+    if (lastAttempt != null && _elapsed() - lastAttempt < interval) {
+      return Future.value();
+    }
     _pending = null;
     if (!_isWorthSending(measurement)) return Future.value();
+    _lastAttempt = _elapsed();
     return _sending = _send(measurement).whenComplete(() => _sending = null);
   }
 

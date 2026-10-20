@@ -119,8 +119,10 @@ void main() {
   late _FakeDeviceRegistration registration;
   late _FakeLocationService location;
   late DevicePositionReporter reporter;
+  var elapsed = Duration.zero;
 
   setUp(() {
+    elapsed = Duration.zero;
     devices = _FakeDeviceService();
     registration = _FakeDeviceRegistration();
     location = _FakeLocationService();
@@ -128,6 +130,7 @@ void main() {
       devices: devices,
       registration: registration,
       location: location,
+      elapsed: () => elapsed,
     );
     addTearDown(location.positions.close);
     addTearDown(reporter.stop);
@@ -138,6 +141,40 @@ void main() {
     location.positions.add(position);
     await pumpEventQueue();
   }
+
+  Future<void> tick() async {
+    elapsed += DevicePositionReporter.interval;
+    await reporter.tick();
+  }
+
+  test(
+    'première mesure tardive : attend 60 secondes avant le prochain envoi',
+    () async {
+      await reporter.start();
+      elapsed = const Duration(seconds: 59);
+      await emit(_position(second: 0));
+      await emit(_position(second: 10));
+      elapsed = const Duration(seconds: 60);
+      await reporter.tick();
+      expect(devices.positions, hasLength(1));
+      elapsed = const Duration(seconds: 118);
+      await reporter.tick();
+      expect(devices.positions, hasLength(1));
+      elapsed = const Duration(seconds: 119);
+      await reporter.tick();
+      expect(devices.positions.map((p) => p.measuredAt.second), [0, 10]);
+    },
+  );
+
+  test('un échec réseau ne permet pas un réessai avant 60 secondes', () async {
+    devices.errors.add(TimeoutException('hors ligne'));
+    await reporter.start();
+    await emit(_position());
+    await reporter.tick();
+    expect(devices.positions, hasLength(1));
+    await tick();
+    expect(devices.positions, hasLength(2));
+  });
 
   test('envoie tout de suite la première mesure après start', () async {
     await reporter.start();
@@ -161,8 +198,8 @@ void main() {
       await emit(_position(second: 20));
       expect(devices.positions, hasLength(1));
 
-      await reporter.tick();
-      await reporter.tick();
+      await tick();
+      await tick();
 
       expect(devices.positions.map((p) => p.measuredAt.second), [0, 20]);
     },
@@ -174,7 +211,7 @@ void main() {
       await emit(_position(latitude: _latitude, second: 0));
       // Environ 45 m plus au nord.
       await emit(_position(latitude: _latitude + 0.0004, second: 10));
-      await reporter.tick();
+      await tick();
 
       expect(devices.positions.map((p) => p.measuredAt.second), [0]);
     });
@@ -184,7 +221,7 @@ void main() {
       await emit(_position(latitude: _latitude, second: 0));
       // Environ 56 m plus au nord.
       await emit(_position(latitude: _latitude + 0.0005, second: 10));
-      await reporter.tick();
+      await tick();
 
       expect(devices.positions.map((p) => p.measuredAt.second), [0, 10]);
     });
@@ -193,9 +230,9 @@ void main() {
       await reporter.start();
       await emit(_position(latitude: _latitude, accuracy: 40, second: 0));
       await emit(_position(latitude: _latitude, accuracy: 20, second: 10));
-      await reporter.tick();
+      await tick();
       await emit(_position(latitude: _latitude, accuracy: 15, second: 20));
-      await reporter.tick();
+      await tick();
 
       expect(devices.positions.map((p) => p.accuracyM), [40, 20]);
     });
@@ -205,7 +242,7 @@ void main() {
       await reporter.start();
       await emit(_position(latitude: _latitude, second: 0));
       await emit(_position(latitude: _latitude, second: 10));
-      await reporter.tick();
+      await tick();
 
       expect(devices.positions.map((p) => p.measuredAt.second), [0, 10]);
     });
@@ -215,7 +252,7 @@ void main() {
       await emit(_position(latitude: _latitude, second: 0));
       await reporter.setBackground(true);
       await emit(_position(latitude: _latitude, second: 10));
-      await reporter.tick();
+      await tick();
 
       expect(devices.positions, hasLength(1));
     });
@@ -234,7 +271,7 @@ void main() {
   test('ignore une mesure trop imprécise', () async {
     await reporter.start();
     await emit(_position(accuracy: DevicePosition.maxAccuracyM + 1));
-    await reporter.tick();
+    await tick();
 
     expect(devices.positions, isEmpty);
   });
@@ -243,9 +280,9 @@ void main() {
     await reporter.start();
     await emit(_position(heading: 90, speed: 0.5, second: 0));
     await emit(_position(heading: 90, speed: 3, second: 1));
-    await reporter.tick();
+    await tick();
     await emit(_position(heading: -1, speed: 3, second: 2));
-    await reporter.tick();
+    await tick();
 
     expect(devices.positions.map((p) => p.headingDeg), [null, 90, null]);
   });
@@ -258,7 +295,7 @@ void main() {
       expect(location.positions.hasListener, isFalse);
 
       location.canWatch = true;
-      await reporter.tick();
+      await tick();
       await emit(_position());
 
       expect(location.positions.hasListener, isTrue);
@@ -290,7 +327,7 @@ void main() {
     devices.errors.add(_error(409));
     await reporter.start();
     await emit(_position());
-    await reporter.tick();
+    await tick();
 
     expect(devices.positions, hasLength(1));
     expect(registration.registerCalls, 0);
@@ -300,7 +337,7 @@ void main() {
     devices.errors.add(TimeoutException('pas de réseau'));
     await reporter.start();
     await emit(_position());
-    await reporter.tick();
+    await tick();
 
     expect(devices.positions, hasLength(2));
     expect(
@@ -315,7 +352,7 @@ void main() {
     await pumpEventQueue();
     expect(location.positions.hasListener, isFalse);
 
-    await reporter.tick();
+    await tick();
 
     expect(location.positions.hasListener, isTrue);
   });
@@ -324,7 +361,7 @@ void main() {
     await reporter.start();
     await reporter.stop();
     await emit(_position());
-    await reporter.tick();
+    await tick();
 
     expect(location.positions.hasListener, isFalse);
     expect(devices.positions, isEmpty);
@@ -334,7 +371,7 @@ void main() {
     await reporter.start();
     await reporter.appHidden();
     await emit(_position());
-    await reporter.tick();
+    await tick();
 
     expect(location.backgroundRequests, [false]);
     expect(location.positions.hasListener, isFalse);
@@ -347,7 +384,7 @@ void main() {
     await emit(_position(second: 0));
     await reporter.appHidden();
     await emit(_position(second: 10));
-    await reporter.tick();
+    await tick();
 
     expect(location.backgroundRequests, [true]);
     expect(location.positions.hasListener, isTrue);
@@ -361,11 +398,11 @@ void main() {
     location.positions.addError(StateError('GPS coupé'));
     await pumpEventQueue();
 
-    await reporter.tick();
+    await tick();
     expect(location.positions.hasListener, isFalse);
 
     await reporter.start();
-    await reporter.tick();
+    await tick();
     expect(location.positions.hasListener, isTrue);
     expect(location.backgroundRequests, [true, true]);
   });
@@ -394,7 +431,7 @@ void main() {
     await reporter.stop();
 
     await reporter.start();
-    await reporter.tick();
+    await tick();
     await emit(_position());
 
     expect(location.positions.hasListener, isFalse);
@@ -407,7 +444,7 @@ void main() {
     await emit(_position(second: 10));
     registration.beginSignOut();
     await emit(_position(second: 20));
-    await reporter.tick();
+    await tick();
 
     expect(devices.positions, hasLength(1));
   });
@@ -438,6 +475,7 @@ void main() {
         devices: slowDevices,
         registration: registration,
         location: location,
+        elapsed: () => elapsed,
       );
       await reporter.start();
       location.positions.add(_position());
