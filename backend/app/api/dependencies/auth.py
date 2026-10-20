@@ -1,3 +1,8 @@
+from firebase_admin import auth as firebase_auth
+from firebase_admin.exceptions import FirebaseError
+from google.auth.exceptions import GoogleAuthError
+from requests.exceptions import RequestException
+
 from fastapi import Depends, HTTPException
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
@@ -40,15 +45,31 @@ def get_authenticated_identity(
             detail="Authentication required",
         )
 
-    adapter = FirebaseAuthAdapter()
+    try:
+        adapter = FirebaseAuthAdapter()
+    except (ValueError, OSError, FirebaseError, GoogleAuthError):
+        raise HTTPException(
+            status_code=503,
+            detail="Authentication service unavailable",
+        ) from None
 
     try:
         identity = adapter.verify_token(credentials.credentials)
-    except Exception:
+    except (
+        ValueError,
+        firebase_auth.InvalidIdTokenError,
+        firebase_auth.UserDisabledError,
+        firebase_auth.UserNotFoundError,
+    ):
         raise HTTPException(
             status_code=401,
             detail="Invalid authentication token",
-        )
+        ) from None
+    except (FirebaseError, GoogleAuthError, RequestException):
+        raise HTTPException(
+            status_code=503,
+            detail="Authentication service unavailable",
+        ) from None
 
     return identity
 

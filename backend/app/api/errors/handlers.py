@@ -48,6 +48,7 @@ def http_exception_handler(
 ):
     error_codes = {
         "Authentication required": "authentication_required",
+        "Authentication service unavailable": "authentication_unavailable",
         "Invalid authentication token": "invalid_authentication_token",
     }
 
