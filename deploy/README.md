@@ -97,3 +97,16 @@ minutes, masquer la photo et vérifier qu'aucune nouvelle URL n'est émise. Simu
 une panne de stockage puis confirmer que le même report_id peut être réessayé.
 Vérifier les logs et la disparition d'un objet orphelin après le délai de nettoyage.
 Utiliser un compte de recette ; aucune réussite de cette recette n'est implicite.
+
+## Convention Git de déploiement - [FIX T15 (NW-168)](https://linear.app/blueway/issue/NW-168) (19/10/2026)
+
+La branche `dev` est à la fois la **branche d'intégration** et, après les quatre contrôles CI ainsi que les audits requis, la source du **déploiement automatique actuel** sur le VPS. Le déploiement utilise le SHA précis du push validé. L'environnement GitHub portant le nom `production` ne constitue pas la preuve d'un deuxième serveur ou d'un environnement staging séparé.
+
+La branche `main` est la **référence des releases stables**, promues par Pull Request depuis `dev` après QA. Dans les workflows en vigueur, un push sur `main` ne déclenche **pas** de déploiement autonome ; une PR vers `main` exécute uniquement la validation. Il faut donc distinguer :
+
+- **code présent dans `dev`** : dernière intégration partagée ;
+- **version réellement déployée** : SHA confirmé par `GET /version` et le workflow de livraison ;
+- **release stable validée** : révision promue sur `main` après recette ;
+- **réception mobile et FCM** : recette spécifique, non prouvée par un conteneur démarré.
+
+Pour chaque livraison ou soutenance, noter la date, le SHA `dev`, le SHA annoncé par `/version`, le résultat du workflow GitHub Actions, la PR éventuelle `dev` vers `main` et les vérifications fonctionnelles réellement réalisées. Références : [parcours livraison](../docs/parcours/deploiement.md), [matrice de traçabilité](../docs/traceability-matrix.md), [CONTRIBUTING](../docs/CONTRIBUTING.md). Responsable : Brice (NW-57, NW-84).
