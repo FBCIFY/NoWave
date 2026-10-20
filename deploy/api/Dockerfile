@@ -11,6 +11,8 @@ LABEL org.opencontainers.image.source="https://github.com/FBCIFY/NoWave" org.ope
 ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1 NOWAVE_VERSION=$NOWAVE_VERSION
 RUN apk upgrade --no-cache && apk add --no-cache libstdc++ \
     && addgroup -S -g 10001 nowave && adduser -S -D -H -u 10001 -G nowave nowave \
+    && mkdir -p /var/cache/nowave/marine \
+    && chown 10001:10001 /var/cache/nowave/marine \
     && python -m pip uninstall -y pip && rm -rf /usr/local/lib/python3.12/ensurepip
 COPY --from=builder /install /usr/local
 WORKDIR /app
