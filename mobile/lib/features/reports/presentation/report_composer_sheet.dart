@@ -317,6 +317,7 @@ class _ReportComposerSheetState extends State<ReportComposerSheet> {
   static final _primaryButtonStyle = FilledButton.styleFrom(
     minimumSize: const ui.Size.fromHeight(48),
     backgroundColor: _accentColor,
+    foregroundColor: _textColor,
     disabledBackgroundColor: const Color(0xFFD5E4EC),
     disabledForegroundColor: const Color(0xFF637888),
   );
@@ -435,7 +436,7 @@ class _ReportComposerSheetState extends State<ReportComposerSheet> {
   /// personne ne fait sur l'eau.
   Widget _categoryTile(ReportCategory category) {
     final selected = _category == category;
-    final foreground = selected ? Colors.white : _textColor;
+    const foreground = _textColor;
     return Semantics(
       selected: selected,
       inMutuallyExclusiveGroup: true,

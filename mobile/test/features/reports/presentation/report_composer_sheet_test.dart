@@ -11,6 +11,44 @@ import 'package:image/image.dart' as img;
 import '../../../core/haptics/record_haptics.dart';
 
 void main() {
+  testWidgets('texte lisible sur les contrôles cyan sélectionnés', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: ReportComposerSheet(onClose: _noop, onPublish: (_, _) async {}),
+        ),
+      ),
+    );
+    await tester.tap(find.text('Pollution'));
+    await tester.pump();
+    double contrast(Color foreground, Color background) {
+      final a = foreground.computeLuminance();
+      final b = background.computeLuminance();
+      return ((a > b ? a : b) + 0.05) / ((a < b ? a : b) + 0.05);
+    }
+
+    final label = tester.widget<Text>(find.text('Pollution'));
+    final tile = tester.widget<Material>(
+      find
+          .ancestor(of: find.text('Pollution'), matching: find.byType(Material))
+          .first,
+    );
+    expect(
+      contrast(label.style!.color!, tile.color!),
+      greaterThanOrEqualTo(4.5),
+    );
+    final style = tester.widget<FilledButton>(find.byType(FilledButton)).style!;
+    expect(
+      contrast(
+        style.foregroundColor!.resolve({})!,
+        style.backgroundColor!.resolve({})!,
+      ),
+      greaterThanOrEqualTo(4.5),
+    );
+  });
+
   testWidgets('garde le texte et le focus quand le clavier masque le repère', (
     tester,
   ) async {
