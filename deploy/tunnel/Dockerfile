@@ -6,11 +6,11 @@ RUN git init && git remote add origin https://github.com/cloudflare/cloudflared.
     && git fetch --depth=1 origin "$CLOUDFLARED_COMMIT" && git checkout --detach "$CLOUDFLARED_COMMIT" \
     && test "$(git rev-parse HEAD)" = "$CLOUDFLARED_COMMIT"
 ENV GOFLAGS=-mod=mod
-RUN go get golang.org/x/crypto@v0.57.0 golang.org/x/net@v0.60.0 && go mod tidy \
+RUN go get golang.org/x/crypto@v0.57.0 golang.org/x/net@v0.60.0 github.com/klauspost/compress@v1.18.7 && go mod tidy \
     && CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go list -deps ./cmd/cloudflared > /tmp/dependencies \
     && if grep -E '^golang.org/x/crypto/openpgp(/|$)' /tmp/dependencies; then exit 1; fi \
     && CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -trimpath \
-       -ldflags='-s -w -X main.Version=2026.9.3-nowave.2 -X main.BuildTime=2026-10-09T00:00:00Z' \
+       -ldflags='-s -w -X main.Version=2026.9.3-nowave.3 -X main.BuildTime=2026-10-09T00:00:00Z' \
        -o /cloudflared ./cmd/cloudflared
 
 FROM alpine:3.24.1@sha256:28bd5fe8b56d1bd048e5babf5b10710ebe0bae67db86916198a6eec434943f8b
