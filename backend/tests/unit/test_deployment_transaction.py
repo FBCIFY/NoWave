@@ -113,6 +113,10 @@ elif name == 'curl':
         if active == new and (failure == 'public_http' or
                              (failure == 'public_retry' and state['public_calls'] <= 2)):
             sys.exit(22)
+        if active == new and os.environ.get('FAIL_MARINE_TILE') and (
+            url.endswith('/api/v1/map/' + os.environ['FAIL_MARINE_TILE'])
+        ):
+            sys.exit(22)
     elif active == new and failure == 'private_http':
         sys.exit(22)
     if 'Host: untrusted.example' in args:
@@ -347,15 +351,41 @@ def test_success_commits_revision_only_after_public_validation(sandbox, previous
     assert all(value == NEW for value in sandbox.services().values())
     public = [e for e in sandbox.events() if e["command"] == "curl" and any(
         a.startswith("https:") for a in e["args"])]
-    assert len(public) == 3
+    # Three version/health requests and three representative marine tiles.
+    # They must all finish before the new revision marker is published.
+    assert len(public) == 6
+    urls = {a for e in public for a in e["args"] if a.startswith("https:")}
+    assert urls == {
+        "https://no-wave.fr/version.json",
+        "https://api.no-wave.fr/version",
+        "https://api.no-wave.fr/health/ready",
+        "https://api.no-wave.fr/api/v1/map/seamarks/12/2115/1503.pbf",
+        "https://api.no-wave.fr/api/v1/map/soundings/12/2115/1503.pbf",
+        "https://api.no-wave.fr/api/v1/map/bathymetry/12/2115/1503.png",
+    }
     assert all(e["marker"] == (OLD if previous else None) for e in public)
 
 
 def test_transient_public_failure_retries_before_committing(sandbox):
     result = sandbox.run(FAILURE="public_retry")
     assert result.returncode == 0, result.stderr
-    assert json.loads((sandbox.root / "state.json").read_text())["public_calls"] == 5
+    # Two transient failures then three version/health and three marine calls.
+    assert json.loads((sandbox.root / "state.json").read_text())["public_calls"] == 8
     assert (sandbox.root / "current-revision").read_text().strip() == NEW
+
+
+@pytest.mark.parametrize("tile", [
+    "seamarks/12/2115/1503.pbf",
+    "soundings/12/2115/1503.pbf",
+    "bathymetry/12/2115/1503.png",
+])
+def test_marine_public_failure_rolls_back_before_publishing_revision(sandbox, tile):
+    result = sandbox.run(FAIL_MARINE_TILE=tile)
+    assert result.returncode != 0
+    assert f"Marine public smoke check failed for {tile}" in result.stderr
+    assert "live and healthy" not in result.stdout
+    assert "Rollback incomplete" not in result.stderr
+    sandbox.assert_restored()
 
 
 @pytest.mark.parametrize("tunnel,running", [(False, False), (True, False)])

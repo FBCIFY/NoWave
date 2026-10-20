@@ -52,6 +52,7 @@ services:
       - ${NOWAVE_CONFIG_DIR:-/opt/nowave/config}/photo-storage.env
     environment:
       NOWAVE_ENV: production
+      MARINE_CACHE_DIR: /var/cache/nowave/marine
       NOWAVE_VERSION: ${NOWAVE_VERSION:?}
       DATABASE_URL_FILE: /run/secrets/database_url
       GOOGLE_CLOUD_PROJECT: blueway-dev
@@ -60,6 +61,8 @@ services:
       SCW_SECRET_KEY_FILE: /run/secrets/scaleway_secret_key
       FIREBASE_WEB_API_KEY_FILE: /run/secrets/firebase_web_api_key
     secrets: [database_url, firebase_service_account, scaleway_access_key, scaleway_secret_key, firebase_web_api_key]
+    volumes:
+      - marine-cache:/var/cache/nowave/marine
     networks:
       backend:
       frontend:
@@ -127,6 +130,7 @@ services:
     pids_limit: 50
 volumes:
   database:
+  marine-cache:
 networks:
   backend:
     internal: true

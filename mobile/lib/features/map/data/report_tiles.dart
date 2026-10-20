@@ -169,7 +169,7 @@ class ReportTiles {
   final Future<String> Function() _getIdToken;
   final String _apiBaseUrl;
 
-  /// Badges en RGBA, dessinés au premier affichage puis réutilisés à chaque
+  /// Badges PNG, dessinés au premier affichage puis réutilisés à chaque
   /// chargement de style.
   Future<Map<String, Uint8List>>? _markers;
 
@@ -253,11 +253,11 @@ class ReportTiles {
 
     final markers = await (_markers ??= _paintMarkers());
     final side = (ReportMarker.size * ReportMarker.pixelRatio).round();
-    for (final MapEntry(key: id, value: rgba) in markers.entries) {
+    for (final MapEntry(key: id, value: png) in markers.entries) {
       await style.addStyleImage(
         id,
         ReportMarker.pixelRatio,
-        MbxImage(width: side, height: side, data: rgba),
+        MbxImage(width: side, height: side, data: png),
         false,
         [],
         [],
