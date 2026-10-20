@@ -86,6 +86,21 @@ de base répond 503. Le journal JSON du serveur web expose `status`,
 `upstream_status`, `limit_req_status` et `limit_conn_status` pour distinguer
 ces cas lors d'une recette de zooms répétés. Comparer aussi la révision de
 `/version` avec la révision livrée avant d'attribuer un incident à ce réglage.
+Les sept familles XYZ marines ont un budget distinct de **20 requêtes/s/IP**,
+avec une rafale bornée à 40 et mise en attente au-delà de 8. La limite générale
+reste à 10/s pour profil, publication et métadonnées ; les MVT de signalements
+restent à 30/s. Le plafond commun de 30 connexions/IP est conservé. Le cache
+marin persistant réduit les appels fournisseurs mais ne réduit pas le nombre
+de requêtes reçues par Nginx : ces protections sont complémentaires.
+
+Pour reproduire sans charge publique, utiliser `backend/tools/probe_marine_rate_limits.py`
+avec un binaire Nginx local. Ce scénario ne contacte que le loopback et un
+fournisseur synthétique, après préchauffage du vrai cache `MarineHTTP`.
+Les résultats locaux ne prouvent pas l'origine d'un 429 distant : vérifier
+`limit_req_status` et `upstream_status` dans les logs de production. Les 429/503
+amont conservent le backoff `Retry-After` du transport marin ; aucune boucle de
+retries ni préchargement de zones n'est ajouté.
+
 Le service `photo-cleanup` partage le code de l'API et tourne toutes les cinq
 minutes ; ses logs indiquent les suppressions et les pannes sans exposer les
 secrets ni les URL signées. Il ne supprime que les objets NoWave non référencés
