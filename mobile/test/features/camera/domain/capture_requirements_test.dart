@@ -2,6 +2,59 @@ import 'package:blueway/features/camera/domain/capture_requirements.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  test('contrôle les bornes temporelles sans accepter le futur arbitraire', () {
+    final now = DateTime.utc(2026, 10, 20);
+    expect(isCaptureMeasurementFresh(null, now, maxCaptureGpsAge), isFalse);
+    expect(
+      isCaptureMeasurementFresh(
+        now.subtract(maxCaptureGpsAge),
+        now,
+        maxCaptureGpsAge,
+      ),
+      isTrue,
+    );
+    expect(
+      isCaptureMeasurementFresh(
+        now.subtract(maxCaptureGpsAge + const Duration(milliseconds: 1)),
+        now,
+        maxCaptureGpsAge,
+      ),
+      isFalse,
+    );
+    expect(
+      isCaptureMeasurementFresh(
+        now.add(const Duration(seconds: 2)),
+        now,
+        maxCaptureGpsAge,
+      ),
+      isTrue,
+    );
+    expect(
+      isCaptureMeasurementFresh(
+        now.add(const Duration(seconds: 3)),
+        now,
+        maxCaptureGpsAge,
+      ),
+      isFalse,
+    );
+    expect(
+      isCaptureMeasurementFresh(
+        now.subtract(const Duration(seconds: 5)),
+        now,
+        maxCaptureSensorAge,
+      ),
+      isTrue,
+    );
+    expect(
+      isCaptureMeasurementFresh(
+        now.subtract(const Duration(seconds: 6)),
+        now,
+        maxCaptureSensorAge,
+      ),
+      isFalse,
+    );
+  });
+
   test('autorise une précision nulle', () {
     expect(isCaptureGpsAccuracySufficient(0), isTrue);
   });

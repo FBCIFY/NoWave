@@ -46,6 +46,7 @@ class CameraScreen extends StatefulWidget {
     this.orientationService,
     this.inclinationService,
     this.cameraAxisService,
+    this.now = DateTime.now,
   });
 
   final PositionEstimateService positionEstimateService;
@@ -60,6 +61,7 @@ class CameraScreen extends StatefulWidget {
   /// Axe de visée, sur Android uniquement. Par défaut, le capteur du
   /// téléphone sur Android et rien sur iOS.
   final CameraAxisService? cameraAxisService;
+  final DateTime Function() now;
 
   @override
   State<CameraScreen> createState() => _CameraScreenState();
@@ -107,6 +109,10 @@ class _CameraScreenState extends State<CameraScreen> {
   String? _inclinationError;
   StreamSubscription<CameraAxis>? _cameraAxisSubscription;
   CameraAxis? _cameraAxis;
+  DateTime? _inclinationUpdatedAt;
+  DateTime? _axisUpdatedAt;
+  Timer? _freshnessTimer;
+  String? _lastFreshnessReason;
   String? _cameraAxisError;
   late final AppLifecycleListener _lifecycleListener;
 
@@ -120,6 +126,13 @@ class _CameraScreenState extends State<CameraScreen> {
     _listenToOrientation();
     _listenToInclination();
     _listenToCameraAxis();
+    _freshnessTimer = Timer.periodic(const Duration(seconds: 1), (_) {
+      if (!mounted || _capture != null) return;
+      final reason = _freshnessReason();
+      if (reason != _lastFreshnessReason) {
+        setState(() => _lastFreshnessReason = reason);
+      }
+    });
     _lifecycleListener = AppLifecycleListener(
       onResume: _retryLocationIfBlocked,
       // Écran verrouillé ou autre application : le système peut reprendre
@@ -250,12 +263,19 @@ class _CameraScreenState extends State<CameraScreen> {
     _cameraAxisSubscription = service.axis.listen(
       (axis) {
         if (!mounted) return;
+        final wasStale = !isCaptureMeasurementFresh(
+          _axisUpdatedAt,
+          widget.now(),
+          maxCaptureSensorAge,
+        );
+        _axisUpdatedAt = widget.now();
 
         // ~50 mesures par seconde : on ne redessine que si le degré affiché
         // ou le message change.
         final before = (_cameraHeading?.round(), _isAimingVertically);
         _cameraAxis = axis;
-        if (_cameraAxisError == null &&
+        if (!wasStale &&
+            _cameraAxisError == null &&
             before == (_cameraHeading?.round(), _isAimingVertically)) {
           return;
         }
@@ -276,10 +296,17 @@ class _CameraScreenState extends State<CameraScreen> {
     _inclinationSubscription = _inclinationService.inclinationDegrees.listen(
       (inclination) {
         if (!mounted) return;
+        final wasStale = !isCaptureMeasurementFresh(
+          _inclinationUpdatedAt,
+          widget.now(),
+          maxCaptureSensorAge,
+        );
+        _inclinationUpdatedAt = widget.now();
 
         // ~50 mesures par seconde : on garde toujours la dernière pour la
         // capture, mais on ne redessine que si le degré affiché change.
-        if (_inclinationError == null &&
+        if (!wasStale &&
+            _inclinationError == null &&
             _inclinationDegrees?.round() == inclination.round()) {
           _inclinationDegrees = inclination;
           return;
@@ -352,6 +379,34 @@ class _CameraScreenState extends State<CameraScreen> {
   }
 
   /// Ce qui empêche encore la photo, ou `null` si tout est prêt.
+  String? _freshnessReason() {
+    final now = widget.now();
+    if (_position != null &&
+        !isCaptureMeasurementFresh(
+          _position!.timestamp,
+          now,
+          maxCaptureGpsAge,
+        )) {
+      return 'Position GPS trop ancienne. Attendez une nouvelle mesure.';
+    }
+    if (_inclinationDegrees != null &&
+        !isCaptureMeasurementFresh(
+          _inclinationUpdatedAt,
+          now,
+          maxCaptureSensorAge,
+        )) {
+      return 'Inclinaison trop ancienne. Attendez une nouvelle mesure.';
+    }
+    if (_cameraAxisService != null &&
+        _cameraAxis != null &&
+        !isCaptureMeasurementFresh(_axisUpdatedAt, now, maxCaptureSensorAge)) {
+      return 'Orientation trop ancienne. Attendez une nouvelle mesure.';
+    }
+    // Le cap iOS est événementiel : l'absence de changement de cap ne signifie
+    // pas une panne. La fraîcheur du mouvement vient des capteurs continus.
+    return null;
+  }
+
   String? _blockingReason() {
     if (_isLocating) {
       return 'Recherche de la position GPS…';
@@ -393,7 +448,7 @@ class _CameraScreenState extends State<CameraScreen> {
       return 'Recherche de l’orientation…';
     }
 
-    return null;
+    return _freshnessReason();
   }
 
   bool get _canCapture {
@@ -427,7 +482,7 @@ class _CameraScreenState extends State<CameraScreen> {
       cameraHeightMeters: defaultCameraHeightMeters,
       cameraHeightSource: defaultCameraHeightSource,
       cameraHeightUncertaintyMeters: defaultCameraHeightUncertaintyMeters,
-      capturedAt: DateTime.now(),
+      capturedAt: widget.now(),
       // Aucun zoom numérique n'est appliqué par l'application.
       zoomRatio: 1,
     );
@@ -634,6 +689,7 @@ class _CameraScreenState extends State<CameraScreen> {
 
   @override
   void dispose() {
+    _freshnessTimer?.cancel();
     SystemChrome.setPreferredOrientations(const []);
     _lifecycleListener.dispose();
     _positionSubscription?.cancel();
