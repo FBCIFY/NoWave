@@ -1,6 +1,11 @@
 import 'dart:async';
+import 'dart:convert';
+
+import 'package:blueway/features/map/presentation/report_marker.dart' as badges;
+import 'package:blueway/features/reports/domain/manual_report.dart';
 
 import 'package:blueway/features/map/presentation/map_screen.dart';
+import 'package:blueway/features/map/data/report_tiles.dart';
 import 'package:blueway/features/reports/data/report_detail_service.dart';
 import 'package:blueway/features/reports/domain/report_detail.dart';
 import 'package:blueway/features/reports/presentation/report_detail_sheet.dart';
@@ -18,6 +23,29 @@ class _Reports extends Fake implements ReportDetailService {
     calls.add(id);
     return focusReport(id: id);
   }
+}
+
+class _LateTiles extends Fake implements ReportTiles {
+  final ready = Completer<void>();
+  @override
+  Future<void> addTo(mb.MapboxMap map) async {
+    await ready.future;
+    await map.style.addLayer(
+      mb.SymbolLayer(
+        id: ReportTiles.pointsLayerId,
+        sourceId: ReportTiles.sourceId,
+      ),
+    );
+  }
+
+  @override
+  void stopPulse() {}
+  @override
+  void updatePulse(
+    mb.MapboxMap map, {
+    required double zoom,
+    required bool enabled,
+  }) {}
 }
 
 Future<void> pumpFrames(WidgetTester tester) async {
@@ -61,13 +89,19 @@ void main() {
     );
   }
 
-  Future<void> mount(WidgetTester tester, {bool style = true}) async {
+  Future<void> mount(
+    WidgetTester tester, {
+    bool style = true,
+    ReportTiles? tiles,
+  }) async {
+    await prepareFocusMarkers(tester);
     await tester.pumpWidget(
       MaterialApp(
         home: MapScreen(
           focusController: focus,
           locationService: gps,
           reportDetailService: reports,
+          reportTiles: tiles,
         ),
       ),
     );
@@ -75,6 +109,173 @@ void main() {
     if (style) styleReady(tester);
     await pumpFrames(tester);
   }
+
+  focusTestWidgets(
+    'MVT en retard : sélection visible puis replacée au-dessus',
+    (tester) async {
+      final tiles = _LateTiles();
+      gps.initial.complete(focusPosition());
+      await mount(tester, tiles: tiles);
+      final pending = focus.focusAlert(focusReport());
+      await pumpFrames(tester);
+      await pending;
+      expect(map.style.layers, contains('alert-selected-point'));
+      expect(map.style.layers, isNot(contains(ReportTiles.pointsLayerId)));
+      tiles.ready.complete();
+      await pumpFrames(tester);
+      expect(
+        map.style.layerOrder.indexOf('alert-selected-point'),
+        greaterThan(map.style.layerOrder.indexOf(ReportTiles.pointsLayerId)),
+      );
+      expect(map.cameras, hasLength(1));
+    },
+  );
+
+  for (final photo in [false, true]) {
+    focusTestWidgets(
+      'NW-210 ${photo ? 'photo' : 'manuel'} : même cadrage GPS et geste libre',
+      (tester) async {
+        gps.initial.complete(focusPosition());
+        await mount(tester);
+        final pending = focus.focusAlert(
+          focusReport(
+            longitude: 6,
+            photo: photo
+                ? const ReportPhoto(
+                    status: ReportPhotoStatus.pending,
+                    url: null,
+                  )
+                : null,
+          ),
+        );
+        await pumpFrames(tester);
+        await pending;
+        expect(
+          map.fittedCoordinates.single.map((point) => point.coordinates.lng),
+          [6, 5.37],
+        );
+        expect(map.location.settings.last.enabled, true);
+        expect(find.byType(ReportDetailSheet), findsNothing);
+        await tester.tapAt(const Offset(200, 300));
+        gps.positions.add(focusPosition(longitude: 7));
+        await pumpFrames(tester);
+        expect(map.cameras, hasLength(1));
+      },
+    );
+  }
+
+  for (final category in ReportCategory.values) {
+    focusTestWidgets('badge sélectionné ${category.apiValue} sans MVT', (
+      tester,
+    ) async {
+      gps.initial.complete(focusPosition());
+      await mount(tester);
+      final pending = focus.focusAlert(focusReport(category: category));
+      await pumpFrames(tester);
+      await pending;
+      final layer = map.style.layers['alert-selected-point']!;
+      expect(layer['type'], 'symbol');
+      expect(
+        layer['layout']['icon-image'],
+        contains(badges.ReportMarker.imageId(category)),
+      );
+      final data = jsonDecode(
+        map.style.sources['alert-selected']!['data'] as String,
+      );
+      expect(data['properties']['category'], category.apiValue);
+      final image = map.style.images[badges.ReportMarker.imageId(category)]!;
+      expect(image.data, await badges.ReportMarker.paintCategory(category));
+      expect(map.style.layerOrder.last, 'alert-selected-point');
+      expect(find.byType(ReportDetailSheet), findsNothing);
+    });
+  }
+
+  focusTestWidgets('style rechargé et rappels idempotents : badge restauré', (
+    tester,
+  ) async {
+    gps.initial.complete(focusPosition());
+    await mount(tester);
+    final pending = focus.focusAlert(
+      focusReport(category: ReportCategory.marineAnimal),
+    );
+    await pumpFrames(tester);
+    await pending;
+    map.style.images.clear();
+    map.style.layers.clear();
+    map.style.sources.clear();
+    map.style.layerOrder.clear();
+    styleReady(tester);
+    styleReady(tester);
+    await pumpFrames(tester);
+    expect(map.style.layers.keys.where((id) => id.startsWith('alert-')), [
+      'alert-selected-point',
+    ]);
+    expect(map.style.sources.keys.where((id) => id.startsWith('alert-')), [
+      'alert-selected',
+    ]);
+    expect(map.style.images.keys, [
+      badges.ReportMarker.imageId(ReportCategory.marineAnimal),
+    ]);
+    expect(map.cameras, hasLength(1));
+  });
+
+  focusTestWidgets(
+    'catégorie changée pendant enregistrement : une seule sélection finale',
+    (tester) async {
+      gps.initial.complete(focusPosition());
+      await mount(tester);
+      final slow = Completer<void>();
+      map.style.imageGate = slow.future;
+      final first = focus.focusAlert(
+        focusReport(category: ReportCategory.marineAnimal),
+      );
+      await pumpFrames(tester);
+      final second = focus.focusAlert(
+        focusReport(
+          id: 'b',
+          longitude: 7,
+          category: ReportCategory.obstruction,
+        ),
+      );
+      map.style.imageGate = null;
+      slow.complete();
+      await pumpFrames(tester);
+      await Future.wait([first, second]);
+      final data = jsonDecode(
+        map.style.sources['alert-selected']!['data'] as String,
+      );
+      expect(data['properties'], {'report_id': 'b', 'category': 'obstruction'});
+      expect(data['geometry']['coordinates'], [7, 43.29]);
+      expect(map.style.layers.keys.where((id) => id.startsWith('alert-')), [
+        'alert-selected-point',
+      ]);
+      expect(map.cameras, hasLength(1));
+      focus.clear();
+      await pumpFrames(tester);
+      expect(map.style.layers, isNot(contains('alert-selected-point')));
+      expect(map.style.sources, isNot(contains('alert-selected')));
+      styleReady(tester);
+      await pumpFrames(tester);
+      expect(map.style.layers, isNot(contains('alert-selected-point')));
+    },
+  );
+
+  focusTestWidgets('expiration après affichage : couche et source retirées', (
+    tester,
+  ) async {
+    gps.initial.complete(focusPosition());
+    await mount(tester);
+    final pending = focus.focusAlert(
+      focusReport(expires: DateTime.now().add(const Duration(seconds: 2))),
+    );
+    await pumpFrames(tester);
+    await pending;
+    expect(map.style.layers, contains('alert-selected-point'));
+    await tester.pump(const Duration(seconds: 3));
+    await pumpFrames(tester);
+    expect(map.style.layers, isNot(contains('alert-selected-point')));
+    expect(map.style.sources, isNot(contains('alert-selected')));
+  });
 
   focusTestWidgets(
     'deux points cadrés, puck neutre visible, aucun suivi GPS repris',

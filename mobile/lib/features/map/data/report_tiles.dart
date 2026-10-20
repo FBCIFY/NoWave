@@ -7,7 +7,6 @@ import 'package:mapbox_maps_flutter/mapbox_maps_flutter.dart';
 
 import '../../../core/api/api_config.dart';
 import '../../reports/domain/manual_report.dart';
-import '../../reports/presentation/report_category_style.dart';
 import '../presentation/report_marker.dart';
 
 /// Couche des signalements sur la carte. Les tuiles MVT viennent du backend
@@ -147,10 +146,9 @@ class ReportTiles {
       RegExp(r'status code 403\b').hasMatch(message);
 
   static String _markerIdOf(ReportCategory category) =>
-      'nowave-report-${category.apiValue}';
+      ReportMarker.imageId(category);
 
-  /// Expression Mapbox qui choisit le badge selon `category`.
-  @visibleForTesting
+  /// Expression partagée par les badges ordinaires et la sélection.
   static List<Object> markerImageExpression() => [
     'match',
     ['get', 'category'],
@@ -171,7 +169,7 @@ class ReportTiles {
   final Future<String> Function() _getIdToken;
   final String _apiBaseUrl;
 
-  /// Badges en PNG, dessinés au premier affichage puis réutilisés à chaque
+  /// Badges en RGBA, dessinés au premier affichage puis réutilisés à chaque
   /// chargement de style.
   Future<Map<String, Uint8List>>? _markers;
 
@@ -254,11 +252,11 @@ class ReportTiles {
 
     final markers = await (_markers ??= _paintMarkers());
     final side = (ReportMarker.size * ReportMarker.pixelRatio).round();
-    for (final MapEntry(key: id, value: png) in markers.entries) {
+    for (final MapEntry(key: id, value: rgba) in markers.entries) {
       await style.addStyleImage(
         id,
         ReportMarker.pixelRatio,
-        MbxImage(width: side, height: side, data: png),
+        MbxImage(width: side, height: side, data: rgba),
         false,
         [],
         [],
@@ -390,10 +388,7 @@ class ReportTiles {
 
   static Future<Map<String, Uint8List>> _paintMarkers() async => {
     for (final category in ReportCategory.values)
-      _markerIdOf(category): await ReportMarker.paint(
-        icon: category.icon,
-        color: category.color,
-      ),
+      _markerIdOf(category): await ReportMarker.paintCategory(category),
     _unknownMarkerId: await ReportMarker.paint(
       icon: _unknownMarkerIcon,
       color: _unknownMarkerColor,

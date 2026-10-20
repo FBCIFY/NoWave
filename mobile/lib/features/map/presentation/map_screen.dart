@@ -25,6 +25,7 @@ import '../data/report_layer_controller.dart';
 import '../data/report_tiles.dart';
 import 'map_alert_camera.dart';
 import 'map_focus_controller.dart';
+import 'report_marker.dart' as badges;
 export 'map_focus_controller.dart';
 import 'widgets/map_notice_banner.dart';
 import 'widgets/report_marker.dart';
@@ -456,6 +457,8 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
     if (map == null || reportTiles == null) return;
 
     await reportTiles.addTo(map);
+    // MVT may arrive after the selection; keep its badge above ordinary points.
+    if (_selectedReport != null) unawaited(_applySelection());
     _cameraZoom ??= (await map.getCameraState()).zoom;
     _syncHeatmapPulse();
   }
@@ -614,6 +617,9 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
           if (await map.style.styleLayerExists('alert-selected-point')) {
             await map.style.removeStyleLayer('alert-selected-point');
           }
+          if (await map.style.styleSourceExists('alert-selected')) {
+            await map.style.removeStyleSource('alert-selected');
+          }
           continue;
         }
         await _showSelectedReport();
@@ -721,12 +727,31 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
 
     final data = jsonEncode({
       'type': 'Feature',
-      'properties': {'report_id': report.id},
+      'properties': {
+        'report_id': report.id,
+        'category': report.category.apiValue,
+      },
       'geometry': {
         'type': 'Point',
         'coordinates': [report.longitude, report.latitude],
       },
     });
+
+    final imageId = badges.ReportMarker.imageId(report.category);
+    final pixels = await badges.ReportMarker.paintCategory(report.category);
+    // Independent of MVT authorization/installation. addStyleImage replaces
+    // an existing image, so replaying this after a style reload is safe.
+    final side = (badges.ReportMarker.size * badges.ReportMarker.pixelRatio)
+        .round();
+    await map.style.addStyleImage(
+      imageId,
+      badges.ReportMarker.pixelRatio,
+      MbxImage(width: side, height: side, data: pixels),
+      false,
+      [],
+      [],
+      null,
+    );
 
     if (!await map.style.styleSourceExists('alert-selected')) {
       await map.style.addSource(
@@ -739,17 +764,18 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
     if (!await map.style.styleLayerExists('alert-selected-point') &&
         !_selectedExpired) {
       await map.style.addLayer(
-        CircleLayer(
+        SymbolLayer(
           id: 'alert-selected-point',
           sourceId: 'alert-selected',
-          circleRadius: 12,
-          circleColor: 0xFF7C3AED,
-          circleOpacity: 1,
-          circleStrokeColor: 0xFFFFFFFF,
-          circleStrokeWidth: 3,
+          iconImageExpression: ReportTiles.markerImageExpression(),
+          iconSize: 1.15,
+          iconAllowOverlap: true,
+          iconIgnorePlacement: true,
+          iconEmissiveStrength: 1,
         ),
       );
     }
+    await map.style.moveStyleLayer('alert-selected-point', LayerPosition());
   }
 
   /// Ouvre la fiche du signalement touché, sauf pendant une création.
