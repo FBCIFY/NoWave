@@ -526,3 +526,12 @@ worker après l'opération courante, sans commencer une nouvelle tentative.
 
 Les tests et limites de la validation locale sont décrits dans
 [`docs/NW-122-NW-123.md`](../docs/NW-122-NW-123.md).
+
+## NW-174 — Création du profil après suppression
+
+`POST /api/v1/users/me` vérifie le token avec `check_revoked=True` : une
+identité Firebase supprimée, désactivée ou révoquée ne peut pas recréer de profil.
+Ce contrôle ciblé complète le contrat mobile standard, sans ajouter de lecture
+Firebase de l'identité à chaque requête métier. GET et DELETE conservent leur
+vérification standard, notamment pour reprendre une suppression après perte de
+la réponse 204. Une panne fournisseur retourne 503, sans création de profil.
