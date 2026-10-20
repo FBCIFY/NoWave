@@ -1,4 +1,7 @@
+import 'package:flutter/foundation.dart';
 import 'package:mapbox_maps_flutter/mapbox_maps_flutter.dart';
+
+import 'globe_style.dart';
 
 /// Réglages Mapbox partagés : jeton (lu dans `.env.json`), style de la carte
 /// et masquage des éléments affichés par défaut.
@@ -7,7 +10,15 @@ class MapConfig {
     'MAPBOX_ACCESS_TOKEN',
   );
 
-  static const String styleUrl = 'mapbox://styles/mapbox/standard';
+  static String styleUrl = 'mapbox://styles/mapbox/standard';
+
+  static Future<void> prepareStyle() async {
+    try {
+      styleUrl = await GlobeStyle.prepare();
+    } catch (error) {
+      debugPrint('Style globe indisponible, fond Standard conservé : $error');
+    }
+  }
 
   /// Zoom à partir duquel la flèche 3D remplace le point bleu : le même
   /// seuil que les badges des signalements.

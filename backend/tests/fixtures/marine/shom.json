@@ -1,0 +1,539 @@
+{
+  "boycar": [
+    {
+      "type": "Feature",
+      "id": "boycar.198",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          5.8933113,
+          43.1061904
+        ]
+      },
+      "geometry_name": "geometry",
+      "properties": {
+        "inspireid": "FR000005252700001",
+        "posacc": null,
+        "objnam": "LS1",
+        "nobjnm": null,
+        "inform": null,
+        "ninfom": null,
+        "numald": "8300084",
+        "persta": null,
+        "perend": null,
+        "boyshp": 4,
+        "catcam": 2,
+        "colour": "2,6,2",
+        "colpat": "1",
+        "status": null,
+        "aisatn": null,
+        "daymar": null,
+        "topmar": "FR000005253100001",
+        "fogsig": null,
+        "radsta": null,
+        "rtpbcn": null,
+        "rdosta": null,
+        "sistat": null,
+        "sistaw": null,
+        "lights": "FR000005253000001"
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "boycar.477",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          5.9552833,
+          43.0676667
+        ]
+      },
+      "geometry_name": "geometry",
+      "properties": {
+        "inspireid": "FR000065401300003",
+        "posacc": null,
+        "objnam": null,
+        "nobjnm": null,
+        "inform": null,
+        "ninfom": null,
+        "numald": "8300225",
+        "persta": null,
+        "perend": null,
+        "boyshp": 4,
+        "catcam": 2,
+        "colour": "2,6,2",
+        "colpat": "1",
+        "status": null,
+        "aisatn": null,
+        "daymar": null,
+        "topmar": "FR000065401500003",
+        "fogsig": null,
+        "radsta": null,
+        "rtpbcn": null,
+        "rdosta": null,
+        "sistat": null,
+        "sistaw": null,
+        "lights": "FR000065401600003"
+      }
+    }
+  ],
+  "boylat": [
+    {
+      "type": "Feature",
+      "id": "boylat.512",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          5.9593833,
+          43.07615
+        ]
+      },
+      "geometry_name": "geometry",
+      "properties": {
+        "inspireid": "FR000005242800001",
+        "posacc": null,
+        "objnam": "GR2",
+        "nobjnm": null,
+        "inform": null,
+        "ninfom": null,
+        "numald": "8300047",
+        "persta": null,
+        "perend": null,
+        "boyshp": 4,
+        "catlam": 1,
+        "colour": "3",
+        "colpat": null,
+        "status": null,
+        "aisatn": null,
+        "daymar": null,
+        "topmar": "FR000017179700001",
+        "fogsig": null,
+        "radsta": null,
+        "rtpbcn": null,
+        "rdosta": null,
+        "sistat": null,
+        "sistaw": null,
+        "lights": "FR000005243100001"
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "boylat.513",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          5.9591333,
+          43.0903333
+        ]
+      },
+      "geometry_name": "geometry",
+      "properties": {
+        "inspireid": "FR000005243900001",
+        "posacc": null,
+        "objnam": "GR1",
+        "nobjnm": null,
+        "inform": null,
+        "ninfom": null,
+        "numald": "8300049",
+        "persta": null,
+        "perend": null,
+        "boyshp": 4,
+        "catlam": 2,
+        "colour": "4",
+        "colpat": null,
+        "status": null,
+        "aisatn": null,
+        "daymar": null,
+        "topmar": "FR000017179800001",
+        "fogsig": null,
+        "radsta": null,
+        "rtpbcn": null,
+        "rdosta": null,
+        "sistat": null,
+        "sistaw": null,
+        "lights": "FR000005244200001"
+      }
+    }
+  ],
+  "boysaw": [
+    {
+      "type": "Feature",
+      "id": "boysaw.24",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          5.9588996,
+          43.0834808
+        ]
+      },
+      "geometry_name": "geometry",
+      "properties": {
+        "inspireid": "FR000005243300001",
+        "posacc": null,
+        "objnam": "Grande Rade",
+        "nobjnm": null,
+        "inform": "Automatic Identification System (AIS) aid to navigation",
+        "ninfom": "Aide \u00e0 la navigation \u00e9quip\u00e9e du syst\u00e8me d'identification automatique (AIS)",
+        "numald": "8300048",
+        "persta": null,
+        "perend": null,
+        "boyshp": 4,
+        "colour": "3,1",
+        "colpat": "2",
+        "status": null,
+        "aisatn": "FR000013386800003",
+        "daymar": null,
+        "topmar": "FR000005243700001",
+        "fogsig": null,
+        "radsta": null,
+        "rtpbcn": null,
+        "rdosta": null,
+        "sistat": null,
+        "sistaw": null,
+        "lights": "FR000005243600001"
+      }
+    }
+  ],
+  "boyspp": [
+    {
+      "type": "Feature",
+      "id": "boyspp.155",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          5.9934288,
+          43.088993
+        ]
+      },
+      "geometry_name": "geometry",
+      "properties": {
+        "inspireid": "FR000005262400001",
+        "posacc": null,
+        "objnam": null,
+        "nobjnm": null,
+        "inform": null,
+        "ninfom": null,
+        "numald": "8300052",
+        "persta": null,
+        "perend": null,
+        "boyshp": 4,
+        "catspm": "8",
+        "colour": "6",
+        "colpat": null,
+        "status": null,
+        "aisatn": null,
+        "daymar": null,
+        "topmar": "FR000005262800001",
+        "fogsig": null,
+        "radsta": null,
+        "rtpbcn": null,
+        "rdosta": null,
+        "sistat": null,
+        "sistaw": null,
+        "lights": "FR000005262700001"
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "boyspp.291",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          5.9475329,
+          43.0812139
+        ]
+      },
+      "geometry_name": "geometry",
+      "properties": {
+        "inspireid": "FR000007032100001",
+        "posacc": null,
+        "objnam": null,
+        "nobjnm": null,
+        "inform": null,
+        "ninfom": null,
+        "numald": null,
+        "persta": null,
+        "perend": null,
+        "boyshp": 3,
+        "catspm": "50",
+        "colour": "6",
+        "colpat": null,
+        "status": null,
+        "aisatn": null,
+        "daymar": null,
+        "topmar": null,
+        "fogsig": null,
+        "radsta": null,
+        "rtpbcn": null,
+        "rdosta": null,
+        "sistat": null,
+        "sistaw": null,
+        "lights": null
+      }
+    }
+  ],
+  "bcncar": [
+    {
+      "type": "Feature",
+      "id": "bcncar.341",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          5.8968319,
+          43.0806806
+        ]
+      },
+      "geometry_name": "geometry",
+      "properties": {
+        "inspireid": "FR000002344000001",
+        "posacc": 0.5,
+        "objnam": null,
+        "nobjnm": null,
+        "inform": null,
+        "ninfom": null,
+        "numald": "8300074",
+        "persta": null,
+        "perend": null,
+        "condtn": null,
+        "convis": 2,
+        "bcnshp": 5,
+        "catcam": 1,
+        "colour": "2,6",
+        "colpat": "1",
+        "height": 4.5,
+        "verlen": 3,
+        "status": null,
+        "aisatn": null,
+        "daymar": null,
+        "topmar": "FR000005249600001",
+        "fogsig": null,
+        "radsta": null,
+        "rtpbcn": null,
+        "rdosta": null,
+        "sistat": null,
+        "sistaw": null,
+        "lights": "FR000005249500001"
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "bcncar.342",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          5.9235903,
+          43.104025
+        ]
+      },
+      "geometry_name": "geometry",
+      "properties": {
+        "inspireid": "FR000002390400001",
+        "posacc": 0.4,
+        "objnam": "Banc de l'\u00c2ne",
+        "nobjnm": null,
+        "inform": null,
+        "ninfom": null,
+        "numald": "8300097",
+        "persta": null,
+        "perend": null,
+        "condtn": null,
+        "convis": 2,
+        "bcnshp": 5,
+        "catcam": 4,
+        "colour": "6,2,6",
+        "colpat": "1",
+        "height": 4.2,
+        "verlen": 4,
+        "status": null,
+        "aisatn": null,
+        "daymar": null,
+        "topmar": "FR000005260300001",
+        "fogsig": null,
+        "radsta": null,
+        "rtpbcn": null,
+        "rdosta": null,
+        "sistat": null,
+        "sistaw": null,
+        "lights": "FR000005260200001"
+      }
+    }
+  ],
+  "topmar": [
+    {
+      "type": "Feature",
+      "id": "topmar.807",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          5.9588996,
+          43.0834808
+        ]
+      },
+      "geometry_name": "geometry",
+      "properties": {
+        "inspireid": "FR000005243700001",
+        "posacc": null,
+        "inform": null,
+        "ninfom": null,
+        "topshp": 3,
+        "colour": "3",
+        "colpat": null,
+        "status": null
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "topmar.808",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          5.8968319,
+          43.0806806
+        ]
+      },
+      "geometry_name": "geometry",
+      "properties": {
+        "inspireid": "FR000005249600001",
+        "posacc": 0.5,
+        "inform": null,
+        "ninfom": null,
+        "topshp": 13,
+        "colour": "2",
+        "colpat": null,
+        "status": null
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "topmar.810",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          5.8933113,
+          43.1061904
+        ]
+      },
+      "geometry_name": "geometry",
+      "properties": {
+        "inspireid": "FR000005253100001",
+        "posacc": null,
+        "inform": null,
+        "ninfom": null,
+        "topshp": 11,
+        "colour": "2",
+        "colpat": null,
+        "status": null
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "topmar.811",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          5.9235903,
+          43.104025
+        ]
+      },
+      "geometry_name": "geometry",
+      "properties": {
+        "inspireid": "FR000005260300001",
+        "posacc": 0.4,
+        "inform": null,
+        "ninfom": null,
+        "topshp": 10,
+        "colour": "2",
+        "colpat": null,
+        "status": null
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "topmar.813",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          5.9934288,
+          43.088993
+        ]
+      },
+      "geometry_name": "geometry",
+      "properties": {
+        "inspireid": "FR000005262800001",
+        "posacc": null,
+        "inform": null,
+        "ninfom": null,
+        "topshp": 7,
+        "colour": "6",
+        "colpat": null,
+        "status": null
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "topmar.5513",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          5.9593833,
+          43.07615
+        ]
+      },
+      "geometry_name": "geometry",
+      "properties": {
+        "inspireid": "FR000017179700001",
+        "posacc": null,
+        "inform": null,
+        "ninfom": null,
+        "topshp": 5,
+        "colour": "3",
+        "colpat": null,
+        "status": null
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "topmar.5514",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          5.9591333,
+          43.0903333
+        ]
+      },
+      "geometry_name": "geometry",
+      "properties": {
+        "inspireid": "FR000017179800001",
+        "posacc": null,
+        "inform": null,
+        "ninfom": null,
+        "topshp": 1,
+        "colour": "4",
+        "colpat": null,
+        "status": null
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "topmar.6645",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          5.9552833,
+          43.0676667
+        ]
+      },
+      "geometry_name": "geometry",
+      "properties": {
+        "inspireid": "FR000065401500003",
+        "posacc": null,
+        "inform": null,
+        "ninfom": null,
+        "topshp": 11,
+        "colour": "2",
+        "colpat": null,
+        "status": null
+      }
+    }
+  ]
+}

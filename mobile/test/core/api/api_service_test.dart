@@ -6,8 +6,86 @@ import 'dart:async';
 
 import 'package:blueway/core/api/api_service.dart';
 import 'package:blueway/core/api/api_exception.dart';
+import 'package:blueway/core/api/api_config.dart';
 
 void main() {
+  test(
+    'environnement : client métier et token restent sur API_BASE_URL',
+    () async {
+      if (ApiConfig.baseUrl.isEmpty) return;
+      final paths = [
+        'api/v1/users/me',
+        'api/v1/reports',
+        'api/v1/photos',
+        'api/v1/alerts',
+        'api/v1/map/tiles/12/2115/1503.mvt',
+        'api/v1/map/another-feature',
+      ];
+      final requests = <http.Request>[];
+      final client = MockClient((request) async {
+        requests.add(request);
+        return http.Response('{}', 200);
+      });
+      addTearDown(client.close);
+      final api = ApiService(client: client);
+      for (final path in paths) {
+        await api.get(path, headers: {'Authorization': 'Bearer unit-token'});
+      }
+      expect(requests, hasLength(paths.length));
+      for (var i = 0; i < paths.length; i++) {
+        expect(requests[i].url, ApiConfig.resolve(paths[i]));
+        expect(requests[i].headers['authorization'], 'Bearer unit-token');
+      }
+    },
+  );
+
+  test(
+    'base sans slash, préfixe et paramètres conservés dans le client',
+    () async {
+      final client = MockClient((request) async {
+        expect(
+          request.url.toString(),
+          'https://api.example.com/proxy/api/v1/users/me?tenant=eu&detail=full',
+        );
+        expect(request.headers['authorization'], 'Bearer unit-token');
+        return http.Response('{}', 200);
+      });
+      addTearDown(client.close);
+      final api = ApiService(
+        client: client,
+        baseUrl: 'https://api.example.com/proxy?tenant=eu',
+      );
+      await api.get(
+        '/api/v1/users/me?detail=full',
+        headers: {'Authorization': 'Bearer unit-token'},
+      );
+    },
+  );
+
+  test(
+    'un chemin absolu ne peut transmettre le token à un fournisseur',
+    () async {
+      var sent = false;
+      final client = MockClient((request) async {
+        sent = true;
+        return http.Response('{}', 200);
+      });
+      addTearDown(client.close);
+      final api = ApiService(
+        client: client,
+        baseUrl: 'https://api.example.com/',
+      );
+      await expectLater(
+        api.get(
+          'https://api.mapbox.com/tiles',
+          headers: {'Authorization': 'Bearer unit-token'},
+        ),
+        throwsArgumentError,
+      );
+      expect(sent, isFalse);
+    },
+  );
+
   test('get retourne le contenu pour une réponse HTTP 200', () async {
     final client = MockClient((request) async {
       expect(request.method, 'GET');

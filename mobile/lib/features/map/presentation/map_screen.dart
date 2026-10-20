@@ -12,7 +12,11 @@ import '../../../core/haptics/app_haptics.dart';
 import '../../../core/location/coordinate_formatter.dart';
 import '../../../core/location/location_service.dart';
 import '../../../core/map/accuracy_halo.dart';
+import '../../../core/map/cloud_passage_controller.dart';
+import '../../../core/map/globe_presentation.dart';
+import '../../../core/map/globe_style.dart';
 import '../../../core/map/map_config.dart';
+import '../../../core/map/marine/marine_map_controller.dart';
 import '../../../core/sensors/device_orientation_service.dart';
 import '../../camera/domain/photo_report_draft.dart';
 import '../../reports/data/manual_report_service.dart';
@@ -21,13 +25,21 @@ import '../../reports/domain/manual_report.dart';
 import '../../reports/domain/report_detail.dart';
 import '../../reports/presentation/report_composer_sheet.dart';
 import '../../reports/presentation/report_detail_sheet.dart';
+import '../data/buoy_layer.dart';
+import '../data/fixed_aid_layer.dart';
+import '../data/port_layer.dart';
+import '../data/harbour_layer.dart';
 import '../data/report_layer_controller.dart';
 import '../data/report_tiles.dart';
+import 'widgets/globe_moon.dart';
+import 'widgets/cloud_passage.dart';
 import 'map_alert_camera.dart';
 import 'map_focus_controller.dart';
 import 'report_marker.dart' as badges;
 export 'map_focus_controller.dart';
 import 'widgets/map_notice_banner.dart';
+import 'widgets/map_zoom_badge.dart';
+import '../data/hydrography_layer.dart';
 import 'widgets/report_marker.dart';
 
 /// Nord en haut, carte tournée selon le cap du téléphone, ou rotation libre
@@ -94,6 +106,12 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
   bool _isLocating = false;
   String? _locationError;
   MapboxMap? _mapboxMap;
+  final _marineMap = MarineMapController();
+  final _globePresentation = GlobePresentation();
+  final _cloudPassage = CloudPassageController();
+  final _hydrographyLayer = HydrographyLayer();
+  final _buoyLayer = BuoyLayer();
+  final _fixedAidLayer = FixedAidLayer();
   String? _mapError;
   bool _reportComposerOpen = false;
   int _reportIntent = 0;
@@ -136,6 +154,7 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
   /// Dernier zoom connu, pour relancer le battement de la heatmap au
   /// retour au premier plan.
   double? _cameraZoom;
+  final _displayedZoom = ValueNotifier<double>(GlobeStyle.initialZoom);
 
   /// Coupe le battement de la heatmap, le renouvellement du token des
   /// tuiles et le réseau de Mapbox quand l'app n'est plus visible.
@@ -223,9 +242,22 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
   /// Un geste de l'utilisateur coupe le suivi GPS ; une rotation au doigt
   /// passe la boussole en mode manuel.
   void _handleMapCameraChange(CameraChangedEventData event) {
-    if (_hidden) return;
+    if (!mounted || _hidden) return;
     _reportMapRevision++;
+    final map = _mapboxMap;
+    if (map != null) _hydrographyLayer.invalidateContourLabels(map);
     _cameraZoom = event.cameraState.zoom;
+    _displayedZoom.value = event.cameraState.zoom;
+    _cloudPassage.setCamera(
+      zoom: event.cameraState.zoom,
+      longitude: event.cameraState.center.coordinates.lng.toDouble(),
+      latitude: event.cameraState.center.coordinates.lat.toDouble(),
+      bearing: event.cameraState.bearing,
+      pitch: event.cameraState.pitch,
+    );
+    if (map != null) {
+      unawaited(_globePresentation.synchronize(map, event.cameraState.zoom));
+    }
     _syncHeatmapPulse();
     _syncLocationPuck().ignore();
     final bearing = event.cameraState.bearing;
@@ -259,6 +291,7 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
     required bool editing,
   }) async {
     try {
+      final bottom = MediaQuery.viewPaddingOf(context).bottom + 4;
       await Future.wait([
         map.logo.updateSettings(
           LogoSettings(
@@ -267,7 +300,7 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
                 : OrnamentPosition.BOTTOM_LEFT,
             marginLeft: 16,
             marginTop: editing ? 64 : 4,
-            marginBottom: 4,
+            marginBottom: bottom,
           ),
         ),
         map.attribution.updateSettings(
@@ -277,7 +310,7 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
                 : OrnamentPosition.BOTTOM_RIGHT,
             marginRight: 16,
             marginTop: editing ? 64 : 4,
-            marginBottom: 4,
+            marginBottom: bottom,
           ),
         ),
       ]);
@@ -343,6 +376,29 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
       'source ${event.sourceId ?? '-'}) : ${event.message}',
     );
     if (!mounted) return;
+
+    // La bathymétrie est facultative : son indisponibilité ne doit
+    // pas masquer le fond de carte Mapbox.
+    if (event.sourceId == MarineMapController.bathymetrySourceId) {
+      return;
+    }
+
+    // Une panne de la décoration ne masque jamais la carte.
+    if (GlobeStyle.isDecorativeSource(event.sourceId)) return;
+    if (event.sourceId == GlobeStyle.waterSource) return;
+    if (HydrographyLayer.sourceIds.contains(event.sourceId)) return;
+
+    // Les infrastructures portuaires sont un enrichissement facultatif.
+    // Leur indisponibilité ne doit jamais masquer le fond Mapbox.
+    if (event.sourceId == PortLayer.sourceId ||
+        event.sourceId == HarbourLayer.sourceId) {
+      return;
+    }
+
+    // Une panne du fournisseur de bouées ne masque aucune autre couche.
+    if (event.sourceId == BuoyLayer.sourceId) {
+      return;
+    }
 
     // Une tuile de signalements en échec ne doit pas cacher le fond de
     // carte, qui reste utilisable.
@@ -478,6 +534,68 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
   void _handleMapLoaded(MapLoadedEventData event) {
     if (!mounted || _mapError == null) return;
     setState(() => _mapError = null);
+  }
+
+  /// Installe l'habillage marin sans bloquer la carte en cas d'échec.
+  Future<void> _installMarineMap() async {
+    final map = _mapboxMap;
+    if (map == null) return;
+
+    try {
+      await _marineMap.install(map);
+    } catch (error) {
+      // La bathymétrie est un enrichissement visuel :
+      // son indisponibilité ne doit jamais bloquer la carte NoWave.
+      debugPrint('Habillage marin non installé : $error');
+    }
+  }
+
+  Future<void> _installMarineLayers() async {
+    // L'ordre est volontaire :
+    //
+    // 1. bathymétrie ;
+    // 2. courbes / sondes, dangers TOP ; puis infrastructures portuaires ;
+    // 3. bouées (slot TOP, sous les reports sans slot) ;
+    // 4. aides fixes insérées sous les bouées dans le même slot.
+    //
+    // La bathymétrie et les docks utilisent le slot BOTTOM.
+    // Les ports sont donc ajoutés après ces fonds afin de rester
+    // visibles au-dessus de celle-ci.
+    await _installMarineMap();
+
+    final map = _mapboxMap;
+    if (map == null) return;
+
+    try {
+      await _hydrographyLayer.addTo(map);
+    } catch (error) {
+      debugPrint('Hydrographie non installée : $error');
+    }
+
+    try {
+      await PortLayer.addTo(map);
+    } catch (error) {
+      // Comme la bathymétrie, les données portuaires sont facultatives.
+      debugPrint('Couche portuaire non installée : $error');
+    }
+
+    try {
+      await HarbourLayer.addTo(map);
+    } catch (e) {
+      debugPrint('Ports : installation indisponible : $e');
+    }
+
+    try {
+      await _buoyLayer.addTo(map);
+    } catch (error) {
+      debugPrint('Couche bouées non installée : $error');
+    }
+
+    try {
+      await _fixedAidLayer.addTo(map);
+    } catch (error) {
+      debugPrint('Aides fixes non installées : $error');
+    }
   }
 
   /// Installe la couche des signalements ; une erreur remonte au
@@ -1503,9 +1621,14 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
   );
 
   ViewportState _viewport = CameraViewportState(
-    center: Point(coordinates: Position(-4.49, 48.38)),
-    zoom: 7,
-    pitch: 60,
+    center: Point(
+      coordinates: Position(
+        GlobeStyle.initialLongitude,
+        GlobeStyle.initialLatitude,
+      ),
+    ),
+    zoom: GlobeStyle.initialZoom,
+    pitch: 0,
   );
 
   @override
@@ -1521,6 +1644,8 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
     _reportMarkerDropTimer?.cancel();
     _noticeTimer?.cancel();
     _selectedExpiryTimer?.cancel();
+    _displayedZoom.dispose();
+    _cloudPassage.dispose();
     _reportPoint.dispose();
     _reportMarkerLifted.dispose();
     final subscription = _positionSubscription;
@@ -1584,15 +1709,32 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
               onPointerUp: (_) => _mapTouchActive = false,
               onPointerCancel: (_) => _mapTouchActive = false,
               child: MapWidget(
+                // The default HEIGHT_ONLY constraint locks latitude near
+                // the equator at the minimum zoom on tall phone screens.
+                mapOptions: MapOptions(
+                  constrainMode: ConstrainMode.NONE,
+                  pixelRatio: mediaQuery.devicePixelRatio,
+                ),
                 onMapCreated: (map) {
                   setState(() => _mapboxMap = map);
                   unawaited(MapConfig.hideDefaultOrnaments(map));
+                  unawaited(
+                    _positionMapOrnaments(map, editing: _reportComposerOpen),
+                  );
                   _addReportInteractions(map);
                   unawaited(_locate());
                 },
                 onMapLoadedListener: _handleMapLoaded,
                 onStyleLoadedListener: (_) {
                   _styleReady = true;
+                  _globePresentation.styleLoaded();
+                  final map = _mapboxMap;
+                  if (map != null) {
+                    unawaited(
+                      _globePresentation.synchronize(map, _displayedZoom.value),
+                    );
+                  }
+                  unawaited(_installMarineLayers());
                   _showAccuracyHalo();
                   unawaited(_applySelection());
                   if (widget.reportTiles != null) _reportLayer.styleLoaded();
@@ -1600,6 +1742,22 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
                 onMapLoadErrorListener: _handleMapLoadError,
                 onSourceDataLoadedListener: _handleSourceDataLoaded,
                 onCameraChangeListener: _handleMapCameraChange,
+                onRenderFrameFinishedListener: (event) {
+                  if (!mounted || _hidden) return;
+                  // Placement can finish before unrelated network tiles do.
+                  if (!event.placementChanged) return;
+                  final map = _mapboxMap;
+                  if (map != null) {
+                    unawaited(_hydrographyLayer.synchronizeContourLabels(map));
+                  }
+                },
+                onMapIdleListener: (_) {
+                  if (!mounted || _hidden) return;
+                  final map = _mapboxMap;
+                  if (map != null) {
+                    unawaited(_hydrographyLayer.synchronizeContourLabels(map));
+                  }
+                },
                 onScrollListener: _handleMapGesture,
                 onZoomListener: _handleMapGesture,
                 styleUri: MapConfig.styleUrl,
@@ -1607,6 +1765,8 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
               ),
             ),
           ),
+          Positioned.fill(child: GlobeMoon(zoom: _displayedZoom)),
+          Positioned.fill(child: CloudPassage(camera: _cloudPassage)),
           if (_mapError != null)
             Positioned.fill(
               child: ColoredBox(
@@ -1645,29 +1805,38 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
                       Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Expanded(
                             child: Align(
                               alignment: Alignment.centerLeft,
-                              child: Container(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 12,
-                                  vertical: 9,
-                                ),
-                                decoration: BoxDecoration(
-                                  color: const Color(0xFFF6F8FA)
-                                      .withValues(alpha: 0.90),
-                                  borderRadius: BorderRadius.circular(14),
-                                ),
-                                child: Text(
-                                  gpsLabel,
-                                  maxLines: 2,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: const TextStyle(
-                                    color: Color(0xFF243243),
-                                    fontSize: 12,
+                              child: Column(
+                                mainAxisSize: MainAxisSize.min,
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 12,
+                                      vertical: 9,
+                                    ),
+                                    decoration: BoxDecoration(
+                                      color: const Color(0xFFF6F8FA)
+                                          .withValues(alpha: 0.90),
+                                      borderRadius: BorderRadius.circular(14),
+                                    ),
+                                    child: Text(
+                                      gpsLabel,
+                                      maxLines: 2,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: const TextStyle(
+                                        color: Color(0xFF243243),
+                                        fontSize: 12,
+                                      ),
+                                    ),
                                   ),
-                                ),
+                                  const SizedBox(height: 4),
+                                  MapZoomBadge(zoom: _displayedZoom),
+                                ],
                               ),
                             ),
                           ),

@@ -1,0 +1,266 @@
+{
+  "type": "FeatureCollection",
+  "numberMatched": 5,
+  "features": [
+    {
+      "type": "Feature",
+      "id": "construction_lineaire.20016",
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [
+            5.90685579,
+            43.08079014,
+            0.5
+          ],
+          [
+            5.90680319,
+            43.08064756,
+            0.8
+          ]
+        ]
+      },
+      "geometry_name": "geometrie",
+      "properties": {
+        "cleabs": "CONSLINE0000002202525937",
+        "nature": "Quai",
+        "nature_detaillee": "Ponton",
+        "toponyme": null,
+        "statut_du_toponyme": null,
+        "importance": null,
+        "etat_de_l_objet": "En service",
+        "date_creation": "2019-05-09T16:29:25.665Z",
+        "date_modification": null,
+        "date_d_apparition": null,
+        "date_de_confirmation": "2017-06-08Z",
+        "sources": null,
+        "identifiants_sources": null,
+        "methode_d_acquisition_planimetrique": "Photogrammétrie",
+        "precision_planimetrique": 2.5,
+        "methode_d_acquisition_altimetrique": "Photogrammétrie",
+        "precision_altimetrique": 1.5
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "construction_lineaire.20084",
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [
+            5.90695145,
+            43.08103236,
+            0.2
+          ],
+          [
+            5.90860729,
+            43.08055834,
+            0.2
+          ]
+        ]
+      },
+      "geometry_name": "geometrie",
+      "properties": {
+        "cleabs": "CONSLINE0000000227202891",
+        "nature": "Quai",
+        "nature_detaillee": "Brise-lames",
+        "toponyme": null,
+        "statut_du_toponyme": null,
+        "importance": "5",
+        "etat_de_l_objet": "En service",
+        "date_creation": "2009-12-07T13:21:13.303Z",
+        "date_modification": "2019-05-09T16:29:25.665Z",
+        "date_d_apparition": null,
+        "date_de_confirmation": "2017-06-08Z",
+        "sources": null,
+        "identifiants_sources": null,
+        "methode_d_acquisition_planimetrique": "Photogrammétrie",
+        "precision_planimetrique": 2.5,
+        "methode_d_acquisition_altimetrique": "Photogrammétrie",
+        "precision_altimetrique": 1.5
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "construction_lineaire.20108",
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [
+            5.92665402,
+            43.1014595,
+            2.5
+          ],
+          [
+            5.92662072,
+            43.1014568,
+            1.9
+          ],
+          [
+            5.92659056,
+            43.10144322,
+            1.7
+          ],
+          [
+            5.92654285,
+            43.10142292,
+            1.6
+          ],
+          [
+            5.92650683,
+            43.1014149,
+            1.6
+          ],
+          [
+            5.92644395,
+            43.1014103,
+            1.5
+          ],
+          [
+            5.92613695,
+            43.10143575,
+            1.2
+          ]
+        ]
+      },
+      "geometry_name": "geometrie",
+      "properties": {
+        "cleabs": "CONSLINE0000002202525940",
+        "nature": "Quai",
+        "nature_detaillee": "Epi",
+        "toponyme": null,
+        "statut_du_toponyme": null,
+        "importance": null,
+        "etat_de_l_objet": "En service",
+        "date_creation": "2019-05-09T16:29:41.063Z",
+        "date_modification": null,
+        "date_d_apparition": null,
+        "date_de_confirmation": "2017-06-08Z",
+        "sources": null,
+        "identifiants_sources": null,
+        "methode_d_acquisition_planimetrique": "Photogrammétrie",
+        "precision_planimetrique": 2.5,
+        "methode_d_acquisition_altimetrique": "Photogrammétrie",
+        "precision_altimetrique": 1.5
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "construction_lineaire.359103",
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [
+            5.93856083,
+            43.10701712,
+            1.2
+          ],
+          [
+            5.9384735,
+            43.10699071,
+            1.2
+          ],
+          [
+            5.93843496,
+            43.10695755,
+            0.3
+          ],
+          [
+            5.9383466,
+            43.10678986,
+            2.1
+          ],
+          [
+            5.93830307,
+            43.10680364,
+            1.5
+          ],
+          [
+            5.93820535,
+            43.1066452,
+            1.8
+          ],
+          [
+            5.93812487,
+            43.10656009,
+            2.1
+          ],
+          [
+            5.93720154,
+            43.10603624,
+            2.6
+          ],
+          [
+            5.93696258,
+            43.10592665,
+            2.3
+          ],
+          [
+            5.93697052,
+            43.10588953,
+            0.3
+          ]
+        ]
+      },
+      "geometry_name": "geometrie",
+      "properties": {
+        "cleabs": "CONSLINE0000000074760241",
+        "nature": "Quai",
+        "nature_detaillee": "Jetée",
+        "toponyme": null,
+        "statut_du_toponyme": null,
+        "importance": "5",
+        "etat_de_l_objet": "En service",
+        "date_creation": "2007-05-10T11:19:44.864Z",
+        "date_modification": "2016-11-07T11:13:07.665Z",
+        "date_d_apparition": null,
+        "date_de_confirmation": null,
+        "sources": null,
+        "identifiants_sources": null,
+        "methode_d_acquisition_planimetrique": "BDTopo",
+        "precision_planimetrique": 2.5,
+        "methode_d_acquisition_altimetrique": "BDTopo",
+        "precision_altimetrique": 1.5
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "construction_lineaire.19510",
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [
+            5.92970039,
+            43.12100766,
+            0.9
+          ],
+          [
+            5.93020779,
+            43.12076435,
+            1.1
+          ]
+        ]
+      },
+      "geometry_name": "geometrie",
+      "properties": {
+        "cleabs": "CONSLINE0000002202485491",
+        "nature": "Quai",
+        "nature_detaillee": null,
+        "toponyme": null,
+        "statut_du_toponyme": null,
+        "importance": null,
+        "etat_de_l_objet": "En service",
+        "date_creation": "2019-05-06T10:16:28.033Z",
+        "date_modification": null,
+        "date_d_apparition": null,
+        "date_de_confirmation": "2017-06-08Z",
+        "sources": null,
+        "identifiants_sources": null,
+        "methode_d_acquisition_planimetrique": "Photogrammétrie",
+        "precision_planimetrique": 2.5,
+        "methode_d_acquisition_altimetrique": "Photogrammétrie",
+        "precision_altimetrique": 1.5
+      }
+    }
+  ]
+}
