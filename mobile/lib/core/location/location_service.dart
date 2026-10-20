@@ -111,6 +111,8 @@ class LocationService {
 /// abonné (souvent la carte) imposerait ses réglages au suivi.
 class _SharedPositionStream {
   StreamSubscription<Position>? _source;
+  Timer? _retry;
+  int _generation = 0;
   bool _background = false;
 
   late final _controller = StreamController<Position>.broadcast(
@@ -134,17 +136,46 @@ class _SharedPositionStream {
   }
 
   void _listen() {
-    _source =
-        Geolocator.getPositionStream(
-          locationSettings: LocationService._settings(background: _background),
-        ).listen(
-          _controller.add,
-          onError: _controller.addError,
-          onDone: () => _source = null,
-        );
+    _retry?.cancel();
+    _retry = null;
+    if (!_controller.hasListener || _source != null) return;
+    final generation = ++_generation;
+    try {
+      _source =
+          Geolocator.getPositionStream(
+            locationSettings: LocationService._settings(
+              background: _background,
+            ),
+          ).listen(
+            (position) {
+              if (generation == _generation) _controller.add(position);
+            },
+            onError: (Object error, StackTrace stack) {
+              if (generation == _generation) _controller.addError(error, stack);
+            },
+            onDone: () {
+              if (generation != _generation) return;
+              _source = null;
+              _controller.addError(StateError('Le flux GPS s’est interrompu.'));
+              _scheduleRetry();
+            },
+          );
+    } catch (error, stack) {
+      _controller.addError(error, stack);
+      _scheduleRetry();
+    }
+  }
+
+  void _scheduleRetry() {
+    if (!_controller.hasListener) return;
+    _retry?.cancel();
+    _retry = Timer(const Duration(seconds: 15), _listen);
   }
 
   void _cancel() {
+    _generation++;
+    _retry?.cancel();
+    _retry = null;
     unawaited(_source?.cancel());
     _source = null;
   }
