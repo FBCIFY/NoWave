@@ -535,3 +535,16 @@ Ce contrôle ciblé complète le contrat mobile standard, sans ajouter de lectur
 Firebase de l'identité à chaque requête métier. GET et DELETE conservent leur
 vérification standard, notamment pour reprendre une suppression après perte de
 la réponse 204. Une panne fournisseur retourne 503, sans création de profil.
+
+## NW-202 — Délais Firebase
+
+Les budgets actuels et leur investigation sont détaillés dans
+[`docs/test-reports/NW-202.md`](../docs/test-reports/NW-202.md).
+Le SDK Auth utilise par défaut 120 s par tentative réseau pour les certificats
+et les opérations d'identité (option Firebase `httpTimeout`). La connexion admin
+REST utilise 5 s ; OAuth worker utilise 10 s ; FCM conserve 3 s pour la connexion
+et 10 s pour lecture/écriture/pool, sans retry du transport. Ce sont des délais
+par phase, pas une garantie de durée globale ; les retries internes du SDK Auth
+et les renouvellements OAuth peuvent allonger la requête. Les contrôles de
+révocation ciblés NW-174 héritent du budget Auth SDK. Aucune latence VPS n'est
+présumée validée par les essais locaux.
