@@ -12,16 +12,30 @@ du 20 octobre. Aucun déploiement du backend modifié n'a été effectué.
 | 2026102001 | dev `06b2eea` | Référence, release iOS et Android |
 | 2026102002 | map-fluidity, modifications locales | Première itération |
 | 2026102003 | map-fluidity, modifications locales | Marqueurs PNG, cadrage court, iOS profile normal installé |
-| 2026102004 | map-fluidity, modifications locales | Clic marqueur robuste, protection contre GPS tardif, relâchement iOS assoupli |
+| 2026102004 | code enregistré dans `6ddffee` | Clic marqueur robuste, protection contre GPS tardif, relâchement iOS assoupli |
 
 Chaque installation conserve l'identifiant d'application et les données. Le
 numéro est visible dans le profil. Pour les mesures, comparer deux builds profile
 avec la même configuration et le même écran. Ne pas comparer un debug à un release.
 
 Le serveur Wi-Fi est limité au dossier `/tmp/nowave-map-fluidity-distribution`.
-L'index et le QR pointent vers `http://10.6.1.107:8765/` ; le téléphone doit être
-sur le même réseau. Les APK et leurs empreintes identifient précisément les fichiers
+L'index et le QR pointent vers `http://192.168.1.52:8765/` ; le téléphone doit être
+sur le même réseau. L'ancienne adresse `10.6.1.107` est devenue inaccessible après
+un changement de réseau du Mac : le QR a été régénéré et l'accès revérifié.
+Les APK et leurs empreintes identifient précisément les fichiers
 distribués. Le QR reste identique lorsque l'index change.
+
+Le numéro 2026102004 a été vérifié dans le manifeste de l'APK et dans
+l'application effectivement installée sur l'iPhone (profile, interface normale).
+APK : SHA-256 `7a42405f1a5a70aff1f0e49f039547c6ffa9523d5993f6b8aa2c4ac6137175ce`.
+Le release iOS a aussi été compilé par Xcode et sa signature vérifiée. Flutter
+attendait une sortie `build/ios/iphoneos/Runner.app`, alors que le produit se
+trouve dans `build/ios/Release-iphoneos/Runner.app`. L'installation de ce release
+reste en attente de reconnexion de l'iPhone : CoreDevice le déclare indisponible.
+L'ouverture automatique du profile installé a expiré, sans confirmation visuelle.
+
+Les labels d'images des conteneurs API, web, notifications et nettoyage des photos
+du VPS confirment tous la révision `06b2eea`.
 
 Les mouvements sous les doigts restent natifs : déplacement sur deux axes,
 rotation, pincement et translation simultanés. La rotation et le pincement n'ont
