@@ -37,9 +37,11 @@ class _Backend {
   final List<Object> posts;
   final List<Object> gets;
   final requests = <String>[];
+  final bodies = <String>[];
 
   late final client = MockClient((request) async {
     requests.add(request.method);
+    bodies.add(request.body);
     final queue = request.method == 'POST' ? posts : gets;
     final next = queue.removeAt(0);
     if (next is http.Response) return next;
@@ -76,6 +78,29 @@ Future<void> _submit(WidgetTester tester, String username) async {
 }
 
 void main() {
+  testWidgets('conserve les espaces intérieurs autorisés par le serveur', (
+    tester,
+  ) async {
+    final backend = _Backend(
+      posts: [http.Response(jsonEncode(_profileJson), 201)],
+    );
+    var created = 0;
+    await _pumpScreen(tester, backend, onProfileCreated: () => created++);
+    await _submit(tester, '  Jean  Marin  ');
+    expect(jsonDecode(backend.bodies.single)['username'], 'Jean  Marin');
+    expect(created, 1);
+  });
+
+  testWidgets('un nom composé uniquement d’espaces reste refusé', (
+    tester,
+  ) async {
+    final backend = _Backend(posts: []);
+    await _pumpScreen(tester, backend, onProfileCreated: () {});
+    await _submit(tester, '   ');
+    expect(backend.requests, isEmpty);
+    expect(find.text('Choisissez un nom d’utilisateur.'), findsOneWidget);
+  });
+
   testWidgets(
     'réponse de création perdue, puis 409 : relit le profil et continue',
     (tester) async {
