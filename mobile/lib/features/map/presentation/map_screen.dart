@@ -304,7 +304,7 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
         if (!mounted) return;
         // Mapbox marque cette animation du viewport comme expérimentale.
         // ignore: experimental_member_use
-        setStateWithViewportAnimation(() {
+        _setViewport(() {
           _orientationMode = nextMode;
           _selectedBearing = targetBearing;
           _viewport = FollowPuckViewportState(
@@ -318,10 +318,7 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
           _orientationMode = nextMode;
           _selectedBearing = targetBearing;
         });
-        await map.easeTo(
-          CameraOptions(bearing: targetBearing),
-          MapAnimationOptions(duration: 350),
-        );
+        await _moveCamera(map, CameraOptions(bearing: targetBearing), 350);
       }
     } catch (_) {
       if (!mounted) return;
@@ -850,9 +847,10 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
         _viewport = const IdleViewportState();
       });
       await WidgetsBinding.instance.endOfFrame;
-      await map.easeTo(
+      await _moveCamera(
+        map,
         CameraOptions(center: center, zoom: zoom + _clusterZoomStep),
-        MapAnimationOptions(duration: 500),
+        500,
       );
     } catch (_) {
       // Carte en cours de rechargement : l'utilisateur peut zoomer au doigt.
@@ -869,6 +867,22 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
   bool get _reduceMotion =>
       (MediaQuery.maybeDisableAnimationsOf(context) ?? false) ||
       View.of(context).platformDispatcher.accessibilityFeatures.reduceMotion;
+
+  void _setViewport(
+    VoidCallback change, {
+    ViewportTransition? transition = const DefaultViewportTransition(),
+  }) {
+    // ignore: experimental_member_use
+    setStateWithViewportAnimation(
+      change,
+      transition: _reduceMotion ? null : transition,
+    );
+  }
+
+  Future<void> _moveCamera(MapboxMap map, CameraOptions camera, int duration) =>
+      _reduceMotion
+      ? map.setCamera(camera)
+      : map.easeTo(camera, MapAnimationOptions(duration: duration));
 
   /// La heatmap bat tant qu'elle est visible, sauf si l'utilisateur a
   /// demandé moins d'animations dans les réglages du téléphone.
@@ -1058,7 +1072,7 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
       if (animated) {
         // Mapbox marque cette animation du viewport comme expérimentale.
         // ignore: experimental_member_use
-        setStateWithViewportAnimation(
+        _setViewport(
           followUser,
           transition: const DefaultViewportTransition(
             maxDuration: _recenterMaxDuration,
@@ -1191,7 +1205,7 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
     // sans qu'une fin de suivi GPS puisse l'annuler en cours de route.
     // Mapbox marque cette animation du viewport comme expérimentale.
     // ignore: experimental_member_use
-    setStateWithViewportAnimation(
+    _setViewport(
       () {
         _viewport = CameraViewportState(
           center: Point(coordinates: start),
@@ -1239,7 +1253,8 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
 
     if (map != null && camera != null) {
       try {
-        await map.easeTo(
+        await _moveCamera(
+          map,
           CameraOptions(
             center: camera.center,
             zoom: camera.zoom,
@@ -1247,7 +1262,7 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
             bearing: camera.bearing,
             padding: camera.padding,
           ),
-          MapAnimationOptions(duration: 350),
+          350,
         );
       } catch (_) {
         // Restauration impossible : la carte reste où elle est.

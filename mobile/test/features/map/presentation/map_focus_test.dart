@@ -96,10 +96,16 @@ void main() {
     WidgetTester tester, {
     bool style = true,
     ReportTiles? tiles,
+    bool reduceMotion = false,
   }) async {
     await prepareFocusMarkers(tester);
     await tester.pumpWidget(
       MaterialApp(
+        builder: (context, child) => MediaQuery(
+          data: MediaQuery.of(context)
+              .copyWith(disableAnimations: reduceMotion),
+          child: child!,
+        ),
         home: MapScreen(
           focusController: focus,
           locationService: gps,
@@ -112,6 +118,21 @@ void main() {
     if (style) styleReady(tester);
     await pumpFrames(tester);
   }
+
+  focusTestWidgets(
+    'mouvements réduits : ferme le formulaire sans animer la restauration',
+    (tester) async {
+      gps.initial.complete(focusPosition());
+      await mount(tester, reduceMotion: true);
+      await tester.tap(find.byTooltip('Créer un signalement'));
+      await pumpFrames(tester);
+      expect(find.byType(ReportComposerSheet), findsOneWidget);
+      await tester.tap(find.byTooltip('Fermer'));
+      await pumpFrames(tester);
+      expect(map.easedCameras, isEmpty);
+      expect(map.cameras, isNotEmpty);
+    },
+  );
 
   focusTestWidgets(
     'une route au-dessus suspend les traitements visuels jusqu’au retour',
