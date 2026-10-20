@@ -1,5 +1,10 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:typed_data';
+
+import 'package:blueway/features/camera/domain/photo_capture.dart';
+import 'package:blueway/features/camera/domain/photo_report_draft.dart';
+import 'package:image/image.dart' as img;
 
 import 'package:blueway/features/map/presentation/report_marker.dart' as badges;
 import 'package:blueway/features/reports/domain/manual_report.dart';
@@ -16,6 +21,26 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:mapbox_maps_flutter/mapbox_maps_flutter.dart' as mb;
 
 import '../support/focus_fakes.dart';
+
+PhotoReportDraft photoDraft() => PhotoReportDraft(
+  capture: PhotoCapture(
+    jpegBytes: Uint8List.fromList(
+      img.encodeJpg(img.Image(width: 4, height: 4)),
+    ),
+    measurements: PhotoCaptureMeasurements(
+      observerLongitude: 5.37,
+      observerLatitude: 43.29,
+      gpsAccuracyMeters: 5,
+      azimuthDegrees: 90,
+      inclinationDegrees: -10,
+      cameraHeightMeters: 2.5,
+      cameraHeightSource: 'default',
+      cameraHeightUncertaintyMeters: 0.5,
+      capturedAt: DateTime.now(),
+    ),
+  ),
+  estimate: null,
+);
 
 class _Reports extends Fake implements ReportDetailService {
   final calls = <String>[];
@@ -97,6 +122,7 @@ void main() {
     bool style = true,
     ReportTiles? tiles,
     bool reduceMotion = false,
+    Future<PhotoReportDraft?> Function()? onOpenCamera,
   }) async {
     await prepareFocusMarkers(tester);
     await tester.pumpWidget(
@@ -111,6 +137,7 @@ void main() {
           locationService: gps,
           reportDetailService: reports,
           reportTiles: tiles,
+          onOpenCamera: onOpenCamera,
         ),
       ),
     );
@@ -118,6 +145,26 @@ void main() {
     if (style) styleReady(tester);
     await pumpFrames(tester);
   }
+
+  focusTestWidgets(
+    'une ancienne photo ne rouvre pas le formulaire après un autre parcours',
+    (tester) async {
+      gps.initial.complete(focusPosition());
+      final camera = Completer<PhotoReportDraft?>();
+      await mount(tester, onOpenCamera: () => camera.future);
+      await tester.tap(find.byTooltip('Signaler avec une photo'));
+      await tester.pump();
+      await tester.tap(find.byTooltip('Créer un signalement'));
+      await pumpFrames(tester);
+      await tester.tap(find.byTooltip('Fermer'));
+      await pumpFrames(tester);
+      expect(find.byType(ReportComposerSheet), findsNothing);
+      camera.complete(photoDraft());
+      await pumpFrames(tester);
+      expect(find.byType(ReportComposerSheet), findsNothing);
+      expect(focus.isBlocked, isFalse);
+    },
+  );
 
   focusTestWidgets(
     'mouvements réduits : ferme le formulaire sans animer la restauration',

@@ -94,6 +94,7 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
   MapboxMap? _mapboxMap;
   String? _mapError;
   bool _reportComposerOpen = false;
+  int _reportIntent = 0;
   CameraState? _cameraBeforeReport;
   bool _restoreFollowAfterReport = false;
   final ValueNotifier<Point?> _reportPoint = ValueNotifier(null);
@@ -1126,15 +1127,16 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
           formatDms(b.longitude, isLatitude: false);
 
   Future<void> _openCamera() async {
+    final intent = ++_reportIntent;
     widget.focusController?.setBlocked(true);
     try {
       final draft = await widget.onOpenCamera?.call();
-      if (draft == null || !mounted) return;
+      if (draft == null || !mounted || intent != _reportIntent) return;
       await _waitForCoveringRouteToClose();
-      if (!mounted) return;
-      await _openReportComposer(photoDraft: draft);
+      if (!mounted || intent != _reportIntent) return;
+      await _openReportComposer(photoDraft: draft, cameraIntent: intent);
     } finally {
-      if (mounted && !_reportComposerOpen) {
+      if (mounted && intent == _reportIntent && !_reportComposerOpen) {
         widget.focusController?.setBlocked(false);
       }
     }
@@ -1158,8 +1160,12 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
 
   /// Ouvre le formulaire et mémorise la caméra pour la rétablir à la fermeture.
   /// Avec une photo, le point part de l'estimation plutôt que du GPS actuel.
-  Future<void> _openReportComposer({PhotoReportDraft? photoDraft}) async {
+  Future<void> _openReportComposer({
+    PhotoReportDraft? photoDraft,
+    int? cameraIntent,
+  }) async {
     if (_reportComposerOpen) return;
+    final intent = cameraIntent ?? ++_reportIntent;
     final position = _position;
     final map = _mapboxMap;
     final start = photoDraft != null
@@ -1180,10 +1186,11 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
     try {
       camera = await map.getCameraState();
     } catch (_) {
-      if (mounted) widget.focusController?.setBlocked(false);
+      if (mounted && intent == _reportIntent)
+        widget.focusController?.setBlocked(false);
       return;
     }
-    if (!mounted) return;
+    if (!mounted || intent != _reportIntent) return;
 
     setState(() {
       _cameraBeforeReport = camera;
@@ -1226,6 +1233,7 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
 
   Future<void> _closeReportComposer() async {
     if (!_reportComposerOpen) return;
+    _reportIntent++;
     FocusManager.instance.primaryFocus?.unfocus();
     _reportPointTimer?.cancel();
     _reportPointRequest++;
