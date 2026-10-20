@@ -8,6 +8,7 @@ import 'package:image/image.dart' as img;
 
 import 'package:blueway/features/map/presentation/report_marker.dart' as badges;
 import 'package:blueway/features/reports/domain/manual_report.dart';
+import 'package:blueway/features/reports/data/manual_report_service.dart';
 
 import 'package:blueway/features/map/presentation/map_screen.dart';
 import 'package:blueway/features/map/data/report_tiles.dart';
@@ -48,6 +49,15 @@ class _Reports extends Fake implements ReportDetailService {
   Future<ReportDetail> fetchReport(String id) async {
     calls.add(id);
     return focusReport(id: id);
+  }
+}
+
+class _Publications extends Fake implements ManualReportService {
+  final requests = <ManualReportRequest>[];
+  @override
+  Future<String> createReport(ManualReportRequest request) async {
+    requests.add(request);
+    return 'published-report';
   }
 }
 
@@ -123,6 +133,7 @@ void main() {
     ReportTiles? tiles,
     bool reduceMotion = false,
     Future<PhotoReportDraft?> Function()? onOpenCamera,
+    ManualReportService? publicationService,
   }) async {
     await prepareFocusMarkers(tester);
     await tester.pumpWidget(
@@ -138,6 +149,7 @@ void main() {
           reportDetailService: reports,
           reportTiles: tiles,
           onOpenCamera: onOpenCamera,
+          reportService: publicationService,
         ),
       ),
     );
@@ -145,6 +157,89 @@ void main() {
     if (style) styleReady(tester);
     await pumpFrames(tester);
   }
+
+  focusTestWidgets(
+    'mouvement pendant conversion : refuse les coordonnées devenues anciennes',
+    (tester) async {
+      gps.initial.complete(focusPosition());
+      final publications = _Publications();
+      await mount(tester, publicationService: publications);
+      await tester.tap(find.byTooltip('Créer un signalement'));
+      await pumpFrames(tester);
+      await tester.tap(find.text('Pollution'));
+      await tester.pump();
+      final conversion = Completer<mb.Point>();
+      map.onCoordinate = (_) => conversion.future;
+      await tester.tap(find.text('Publier le signalement'));
+      await tester.pump();
+      tester
+          .widget<mb.MapWidget>(find.byType(mb.MapWidget))
+          .onCameraChangeListener!(
+        mb.CameraChangedEventData.fromJson({
+          'timestamp': 1,
+          'cameraState': {
+            'center': {
+              'type': 'Point',
+              'coordinates': [8.0, 44.0],
+            },
+            'padding': {'top': 0.0, 'left': 0.0, 'bottom': 0.0, 'right': 0.0},
+            'zoom': 14.0,
+            'bearing': 0.0,
+            'pitch': 0.0,
+          },
+        }),
+      );
+      conversion.complete(mb.Point(coordinates: mb.Position(5, 43)));
+      await pumpFrames(tester);
+      expect(publications.requests, isEmpty);
+      expect(find.textContaining('Position non confirmée.'), findsOneWidget);
+    },
+  );
+
+  focusTestWidgets(
+    'publication : attend la conversion courante avant de transmettre le point',
+    (tester) async {
+      gps.initial.complete(focusPosition());
+      final publications = _Publications();
+      await mount(tester, publicationService: publications);
+      await tester.tap(find.byTooltip('Créer un signalement'));
+      await pumpFrames(tester);
+      await tester.tap(find.text('Pollution'));
+      await tester.pump();
+      final conversion = Completer<mb.Point>();
+      map.onCoordinate = (_) => conversion.future;
+      await tester.tap(find.text('Publier le signalement'));
+      await tester.pump();
+      expect(publications.requests, isEmpty);
+      conversion.complete(mb.Point(coordinates: mb.Position(8, 44)));
+      await pumpFrames(tester);
+      expect(publications.requests.single.longitude, 8);
+      expect(publications.requests.single.latitude, 44);
+    },
+  );
+
+  focusTestWidgets(
+    'conversion en échec : aucun envoi et brouillon conservé pour réessayer',
+    (tester) async {
+      gps.initial.complete(focusPosition());
+      final publications = _Publications();
+      await mount(tester, publicationService: publications);
+      await tester.tap(find.byTooltip('Créer un signalement'));
+      await pumpFrames(tester);
+      await tester.tap(find.text('Pollution'));
+      await tester.enterText(find.byType(TextField), 'Brouillon');
+      map.onCoordinate = (_) async => throw StateError('conversion native');
+      await tester.tap(find.text('Publier le signalement'));
+      await pumpFrames(tester);
+      expect(publications.requests, isEmpty);
+      expect(find.textContaining('Position non confirmée.'), findsOneWidget);
+      expect(find.text('Brouillon'), findsOneWidget);
+      map.onCoordinate = null;
+      await tester.tap(find.text('Publier le signalement'));
+      await pumpFrames(tester);
+      expect(publications.requests.single.description, 'Brouillon');
+    },
+  );
 
   focusTestWidgets(
     'une ancienne photo ne rouvre pas le formulaire après un autre parcours',

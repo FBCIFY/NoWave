@@ -1,5 +1,10 @@
 import '../../camera/domain/photo_capture.dart';
 
+/// Le point visé ne peut pas encore être confirmé par la carte.
+class ReportPositionUnavailable implements Exception {
+  const ReportPositionUnavailable();
+}
+
 /// Catégories proposées ; [apiValue] est la valeur attendue par le backend.
 enum ReportCategory {
   marineAnimal('marine_animal'),

@@ -84,6 +84,13 @@ class _ReportComposerSheetState extends State<ReportComposerSheet> {
       await onPublish(category, description.isEmpty ? null : description);
       // En mode photo, le succès attend l'envoi de la photo.
       if (widget.onUploadPhoto == null) AppHaptics.success();
+    } on ReportPositionUnavailable {
+      AppHaptics.failure();
+      if (!mounted) return;
+      setState(() {
+        _errorMessage = 'Position non confirmée. Attendez que la carte soit stable puis réessayez.';
+      });
+      return;
     } on ApiException catch (error) {
       AppHaptics.failure();
       if (!mounted) return;

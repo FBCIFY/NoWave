@@ -109,6 +109,7 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
   bool _isUploadingPhoto = false;
   Timer? _reportPointTimer;
   int _reportPointRequest = 0;
+  int _reportMapRevision = 0;
   final _mapAreaKey = GlobalKey();
   final _reportMarkerKey = GlobalKey();
   bool _wasKeyboardVisible = false;
@@ -219,6 +220,7 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
   /// passe la boussole en mode manuel.
   void _handleMapCameraChange(CameraChangedEventData event) {
     if (_hidden) return;
+    _reportMapRevision++;
     _cameraZoom = event.cameraState.zoom;
     _syncHeatmapPulse();
     _syncLocationPuck().ignore();
@@ -1299,9 +1301,17 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
     String? description,
   ) async {
     final service = widget.reportService;
-    final point = _reportPoint.value;
+    _reportPointTimer?.cancel();
+    final intent = _reportIntent;
+    final point = await _updateReportPoint().timeout(
+      const Duration(seconds: 5),
+      onTimeout: () => null,
+    );
+    if (!mounted || !_reportComposerOpen || intent != _reportIntent) {
+      throw const ReportPositionUnavailable();
+    }
     if (service == null || point == null) {
-      throw StateError('Position du signalement indisponible.');
+      throw const ReportPositionUnavailable();
     }
 
     final longitude = double.parse(
@@ -1442,7 +1452,7 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
   }
 
   /// Convertit la pointe du marqueur (pixels) en coordonnées sur la carte.
-  Future<void> _updateReportPoint() async {
+  Future<Point?> _updateReportPoint() async {
     final map = _mapboxMap;
     final mapBox = _mapAreaKey.currentContext?.findRenderObject() as RenderBox?;
     final markerBox =
@@ -1451,20 +1461,32 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
         map == null ||
         markerBox == null ||
         mapBox == null) {
-      return;
+      return null;
     }
     final mapPixel = mapBox.globalToLocal(_markerTipGlobal(markerBox));
     final request = ++_reportPointRequest;
+    final revision = _reportMapRevision;
+    final intent = _reportIntent;
     try {
       final point = await map.coordinateForPixel(
         ScreenCoordinate(x: mapPixel.dx, y: mapPixel.dy),
       );
-      if (!mounted || !_reportComposerOpen || request != _reportPointRequest) {
-        return;
+      if (!mounted ||
+          !_reportComposerOpen ||
+          request != _reportPointRequest ||
+          revision != _reportMapRevision ||
+          intent != _reportIntent ||
+          !point.coordinates.lat.isFinite ||
+          !point.coordinates.lng.isFinite ||
+          point.coordinates.lat.abs() > 90 ||
+          point.coordinates.lng.abs() > 180) {
+        return null;
       }
       _reportPoint.value = point;
+      return point;
     } catch (_) {
       // Pendant une animation, on garde les dernières coordonnées valides.
+      return null;
     }
   }
 
