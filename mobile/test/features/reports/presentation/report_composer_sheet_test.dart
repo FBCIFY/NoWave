@@ -11,6 +11,61 @@ import 'package:image/image.dart' as img;
 import '../../../core/haptics/record_haptics.dart';
 
 void main() {
+  testWidgets(
+    'petit écran, texte doublé et clavier : saisie, erreur et réessai accessibles',
+    (tester) async {
+      tester.view.physicalSize = const Size(320, 568);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      var attempts = 0;
+      await tester.pumpWidget(
+        MaterialApp(
+          builder: (context, child) => MediaQuery(
+            data: MediaQuery.of(context).copyWith(
+              textScaler: const TextScaler.linear(2),
+              viewInsets: const EdgeInsets.only(bottom: 250),
+            ),
+            child: child!,
+          ),
+          home: Scaffold(
+            resizeToAvoidBottomInset: false,
+            body: Align(
+              alignment: Alignment.bottomCenter,
+              child: ReportComposerSheet(
+                onClose: _noop,
+                subtitle: 'Déplacez la carte pour placer le point',
+                onPublish: (_, description) async {
+                  expect(description, 'Commentaire conservé');
+                  attempts++;
+                  if (attempts == 1)
+                    throw const ApiException(statusCode: 503, body: '');
+                },
+              ),
+            ),
+          ),
+        ),
+      );
+      expect(tester.takeException(), isNull);
+      await tester.ensureVisible(find.text('Pollution'));
+      await tester.tap(find.text('Pollution'));
+      await tester.pump();
+      await tester.ensureVisible(find.byType(TextField));
+      await tester.enterText(find.byType(TextField), 'Commentaire conservé');
+      await tester.ensureVisible(find.text('Publier le signalement'));
+      await tester.tap(find.text('Publier le signalement'));
+      await tester.pumpAndSettle();
+      expect(find.text('Impossible de publier. Réessayez.'), findsOneWidget);
+      expect(find.text('Commentaire conservé'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+      await tester.ensureVisible(find.text('Publier le signalement'));
+      await tester.tap(find.text('Publier le signalement'));
+      await tester.pumpAndSettle();
+      expect(attempts, 2);
+      expect(tester.takeException(), isNull);
+    },
+  );
+
   testWidgets('texte lisible sur les contrôles cyan sélectionnés', (
     tester,
   ) async {
@@ -88,13 +143,13 @@ void main() {
     expect(find.byType(TextField), findsOneWidget);
     expect(
       ReportComposerSheet.heightFor(const MediaQueryData(size: Size(390, 844))),
-      272,
+      294,
     );
     // La carte place le marqueur avec heightFor : il doit correspondre à la
     // hauteur réelle du formulaire (+ 12 de marge sous le panneau).
     expect(
       tester.getSize(find.byKey(const ValueKey('report-composer'))).height,
-      272 + 12,
+      294 + 12,
     );
 
     await tester.tap(find.byType(TextField));
@@ -126,7 +181,7 @@ void main() {
           viewInsets: EdgeInsets.only(bottom: 300),
         ),
       ),
-      272,
+      294,
     );
 
     await tester.pumpWidget(sheetWithInsets(0));

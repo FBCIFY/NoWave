@@ -40,12 +40,14 @@ class ReportComposerSheet extends StatefulWidget {
   /// Hauteur réservée au panneau par la carte pour placer le marqueur : celle
   /// du formulaire sans message. Un message d'erreur ou d'envoi agrandit le
   /// panneau vers le haut sans déplacer le marqueur.
-  static double heightFor(MediaQueryData mediaQuery) =>
-      math.min(_formHeight, _maxHeightFor(mediaQuery));
+  static double heightFor(MediaQueryData mediaQuery) => math.min(
+    _formHeight * math.max(1, mediaQuery.textScaler.scale(14) / 14),
+    _maxHeightFor(mediaQuery),
+  );
 
-  /// En-tête 12 + 48, catégories 12 + 64, commentaire 12 + 48,
-  /// bouton 12 + 48 + 16.
-  static const _formHeight = 272.0;
+  /// Hauteur naturelle à taille de texte standard, avec commentaire sur
+  /// deux lignes. Le texte agrandi réserve davantage de place sur la carte.
+  static const _formHeight = 294.0;
 
   static double _maxHeightFor(MediaQueryData mediaQuery) => math.max(
     0,
@@ -245,12 +247,12 @@ class _ReportComposerSheetState extends State<ReportComposerSheet> {
                 ),
               ],
             ),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                _header(),
-                Flexible(
-                  child: SingleChildScrollView(
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  _header(),
+                  Padding(
                     padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -261,48 +263,48 @@ class _ReportComposerSheetState extends State<ReportComposerSheet> {
                       ],
                     ),
                   ),
-                ),
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      if (_isPublished) ...[
-                        _publishedStatus(),
-                        const SizedBox(height: 12),
-                      ] else if (_errorMessage != null) ...[
-                        Text(
-                          _errorMessage!,
-                          textAlign: TextAlign.center,
-                          style: const TextStyle(color: _errorColor),
-                        ),
-                        const SizedBox(height: 12),
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        if (_isPublished) ...[
+                          _publishedStatus(),
+                          const SizedBox(height: 12),
+                        ] else if (_errorMessage != null) ...[
+                          Text(
+                            _errorMessage!,
+                            textAlign: TextAlign.center,
+                            style: const TextStyle(color: _errorColor),
+                          ),
+                          const SizedBox(height: 12),
+                        ],
+                        if (_isPublished && _errorMessage != null)
+                          _photoRetryActions()
+                        else
+                          FilledButton(
+                            onPressed:
+                                _category == null ||
+                                    _isLocked ||
+                                    widget.onPublish == null
+                                ? null
+                                : _publish,
+                            style: _primaryButtonStyle,
+                            // Grisé sans explication, le bouton laissait chercher
+                            // ce qui manquait : son libellé dit quoi faire.
+                            child: _isBusy
+                                ? const _ButtonSpinner()
+                                : Text(
+                                    _category == null
+                                        ? 'Choisissez une catégorie'
+                                        : 'Publier le signalement',
+                                  ),
+                          ),
                       ],
-                      if (_isPublished && _errorMessage != null)
-                        _photoRetryActions()
-                      else
-                        FilledButton(
-                          onPressed:
-                              _category == null ||
-                                  _isLocked ||
-                                  widget.onPublish == null
-                              ? null
-                              : _publish,
-                          style: _primaryButtonStyle,
-                          // Grisé sans explication, le bouton laissait chercher
-                          // ce qui manquait : son libellé dit quoi faire.
-                          child: _isBusy
-                              ? const _ButtonSpinner()
-                              : Text(
-                                  _category == null
-                                      ? 'Choisissez une catégorie'
-                                      : 'Publier le signalement',
-                                ),
-                        ),
-                    ],
+                    ),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
           ),
         ),
@@ -341,8 +343,8 @@ class _ReportComposerSheetState extends State<ReportComposerSheet> {
     // La croix (40 px dans une zone de 48) tombe à 16 du coin.
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 12, 12, 0),
-      child: SizedBox(
-        height: 48,
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(minHeight: 48),
         child: Row(
           children: [
             if (photo != null) ...[
@@ -351,13 +353,12 @@ class _ReportComposerSheetState extends State<ReportComposerSheet> {
             ],
             Expanded(
               child: Column(
+                mainAxisSize: MainAxisSize.min,
                 mainAxisAlignment: MainAxisAlignment.center,
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   const Text(
                     'Nouveau signalement',
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
                     style: TextStyle(
                       color: _textColor,
                       fontSize: 18,
@@ -367,8 +368,6 @@ class _ReportComposerSheetState extends State<ReportComposerSheet> {
                   if (subtitle != null)
                     Text(
                       subtitle,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
                       style: const TextStyle(color: _mutedColor, fontSize: 12),
                     ),
                 ],
@@ -467,20 +466,21 @@ class _ReportComposerSheetState extends State<ReportComposerSheet> {
                       _errorMessage = null;
                     });
                   },
-            child: SizedBox(
-              height: 64,
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(category.icon, color: foreground),
-                  const SizedBox(height: 4),
-                  Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 4),
-                    child: FittedBox(
-                      fit: BoxFit.scaleDown,
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(minHeight: 64),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(vertical: 8),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(category.icon, color: foreground),
+                    const SizedBox(height: 4),
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 4),
                       child: Text(
                         category.label,
-                        maxLines: 1,
+                        textAlign: TextAlign.center,
                         style: TextStyle(
                           color: foreground,
                           fontSize: 13,
@@ -488,8 +488,8 @@ class _ReportComposerSheetState extends State<ReportComposerSheet> {
                         ),
                       ),
                     ),
-                  ),
-                ],
+                  ],
+                ),
               ),
             ),
           ),
@@ -545,11 +545,13 @@ class _ReportComposerSheetState extends State<ReportComposerSheet> {
           children: [
             Icon(Icons.check_circle, color: Color(0xFF1E8E5A), size: 18),
             SizedBox(width: 6),
-            Text(
-              'Signalement publié',
-              style: TextStyle(
-                color: Color(0xFF1E8E5A),
-                fontWeight: FontWeight.w600,
+            Flexible(
+              child: Text(
+                'Signalement publié',
+                style: TextStyle(
+                  color: Color(0xFF1E8E5A),
+                  fontWeight: FontWeight.w600,
+                ),
               ),
             ),
           ],
