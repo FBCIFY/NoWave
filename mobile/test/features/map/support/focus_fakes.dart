@@ -1,6 +1,8 @@
 import 'dart:async';
 import 'dart:convert';
 
+import 'package:image/image.dart' as img;
+
 import 'package:blueway/core/location/location_service.dart';
 import 'package:blueway/features/reports/domain/report_detail.dart';
 import 'package:blueway/features/map/presentation/report_marker.dart';
@@ -90,7 +92,10 @@ class FocusStyle extends Fake implements mb.StyleManager {
     mb.ImageContent? content,
   ) async {
     if (imageGate != null) await imageGate;
-    expectSync(image.data.length, 4 * image.width * image.height);
+    final decoded = img.decodePng(image.data);
+    expectSync(decoded, isNotNull);
+    expectSync(decoded!.width, image.width);
+    expectSync(decoded.height, image.height);
     expectSync(scale, ReportMarker.pixelRatio);
     images[id] = image;
     imageRegistrations.add(id);
