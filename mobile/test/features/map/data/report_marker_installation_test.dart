@@ -2,6 +2,7 @@ import 'package:blueway/features/map/data/report_tiles.dart';
 import 'package:blueway/features/map/presentation/report_marker.dart';
 import 'package:blueway/features/reports/domain/manual_report.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:image/image.dart' as img;
 import 'package:mapbox_maps_flutter/mapbox_maps_flutter.dart' as mb;
 
 import '../support/focus_fakes.dart';
@@ -24,7 +25,7 @@ class _Map extends FocusMap {
 }
 
 void main() {
-  testWidgets('MVT et sélection partagent les mêmes pixels RGBA de catégorie', (
+  testWidgets('MVT et sélection partagent les mêmes images PNG de catégorie', (
     tester,
   ) async {
     final map = _Map();
@@ -36,7 +37,9 @@ void main() {
     for (final category in ReportCategory.values) {
       final image = map.style.images[ReportMarker.imageId(category)]!;
       expect(image.data, await ReportMarker.paintCategory(category));
-      expect(image.data.length, 4 * image.width * image.height);
+      final decoded = img.decodePng(image.data)!;
+      expect(decoded.width, image.width);
+      expect(decoded.height, image.height);
     }
     final pointLayer = map.style.layers[ReportTiles.pointsLayerId]!;
     // Le seuil où la heatmap disparaît doit déjà afficher les badges.

@@ -887,7 +887,7 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
     });
 
     final imageId = badges.ReportMarker.imageId(report.category);
-    final pixels = await badges.ReportMarker.paintCategory(report.category);
+    final png = await badges.ReportMarker.paintCategory(report.category);
     // Independent of MVT authorization/installation. addStyleImage replaces
     // an existing image, so replaying this after a style reload is safe.
     final side = (badges.ReportMarker.size * badges.ReportMarker.pixelRatio)
@@ -895,7 +895,7 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
     await map.style.addStyleImage(
       imageId,
       badges.ReportMarker.pixelRatio,
-      MbxImage(width: side, height: side, data: pixels),
+      MbxImage(width: side, height: side, data: png),
       false,
       [],
       [],
