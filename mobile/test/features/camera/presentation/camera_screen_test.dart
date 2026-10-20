@@ -24,6 +24,61 @@ import 'package:sensors_plus/sensors_plus.dart';
 import '../../../core/haptics/record_haptics.dart';
 
 void main() {
+  testWidgets('un GPS précis mais ancien interdit la capture', (tester) async {
+    final now = DateTime.now();
+    final camera = _FakeCamera();
+    await _openCameraScreen(
+      tester,
+      camera: camera,
+      now: () => now,
+      locationService: _FakeLocationService(
+        timestamp: now.subtract(const Duration(seconds: 16)),
+      ),
+    );
+    expect(find.textContaining('Position GPS trop ancienne.'), findsOneWidget);
+    await tester.tap(
+      find.bySemanticsLabel('Prendre la photo'),
+      warnIfMissed: false,
+    );
+    await tester.pump();
+    expect(camera.pictures, 0);
+  });
+
+  testWidgets('capteurs figés : bloque puis reprend à la nouvelle mesure', (
+    tester,
+  ) async {
+    debugDefaultTargetPlatformOverride = TargetPlatform.iOS;
+    try {
+      var now = DateTime.now();
+      final inclination = _LiveInclination();
+      addTearDown(inclination.values.close);
+      final camera = _FakeCamera();
+      await _openCameraScreen(
+        tester,
+        camera: camera,
+        now: () => now,
+        inclinationService: inclination,
+      );
+      inclination.values.add(-10);
+      await tester.pumpAndSettle();
+      now = now.add(const Duration(seconds: 6));
+      await tester.pump(const Duration(seconds: 1));
+      expect(find.textContaining('Inclinaison trop ancienne.'), findsOneWidget);
+      await tester.tap(
+        find.bySemanticsLabel('Prendre la photo'),
+        warnIfMissed: false,
+      );
+      expect(camera.pictures, 0);
+      inclination.values.add(-10);
+      await tester.pumpAndSettle();
+      expect(find.textContaining('Inclinaison trop ancienne.'), findsNothing);
+      await _takePhoto(tester);
+      expect(camera.pictures, 1);
+    } finally {
+      debugDefaultTargetPlatformOverride = null;
+    }
+  });
+
   testWidgets('« Reprendre » efface la photo et rend le déclencheur', (
     tester,
   ) async {
@@ -502,6 +557,9 @@ Future<Future<PhotoReportDraft?>> _openCameraScreen(
   ReportCamera Function()? createCamera,
   MockClientHandler? estimate,
   CameraAxisService? cameraAxisService,
+  LocationService? locationService,
+  CameraInclinationService? inclinationService,
+  DateTime Function()? now,
   bool settle = true,
 }) async {
   tester.view.physicalSize = const Size(390, 844);
@@ -527,23 +585,26 @@ Future<Future<PhotoReportDraft?>> _openCameraScreen(
               getIdToken: () async => 'firebase-token',
             ),
             createCamera: createCamera ?? () => camera ?? _FakeCamera(),
-            locationService: _FakeLocationService(),
+            locationService: locationService ?? _FakeLocationService(),
+            now: now ?? DateTime.now,
             orientationService: _FakeOrientationService(),
             // Par défaut, caméra qui vise 245° vrais (243° magnétiques + 2°).
             cameraAxisService: defaultTargetPlatform == TargetPlatform.android
                 ? cameraAxisService ?? _cameraAimingAt(magneticAzimuth: 243)
                 : null,
-            inclinationService: CameraInclinationService(
-              // Gravité d'un téléphone qui vise 10° sous l'horizon.
-              accelerometer: Stream.value(
-                AccelerometerEvent(
-                  0,
-                  9.81 * 0.9848,
-                  9.81 * 0.1736,
-                  DateTime(2026),
+            inclinationService:
+                inclinationService ??
+                CameraInclinationService(
+                  // Gravité d'un téléphone qui vise 10° sous l'horizon.
+                  accelerometer: Stream.value(
+                    AccelerometerEvent(
+                      0,
+                      9.81 * 0.9848,
+                      9.81 * 0.1736,
+                      DateTime.now(),
+                    ),
+                  ),
                 ),
-              ),
-            ),
           ),
         ),
       );
@@ -642,11 +703,13 @@ class _FakeCamera implements ReportCamera {
 }
 
 class _FakeLocationService extends LocationService {
+  _FakeLocationService({this.timestamp});
+  final DateTime? timestamp;
   @override
   Future<geo.Position> getCurrentPosition() async => geo.Position(
     longitude: -4.4861,
     latitude: 48.3904,
-    timestamp: DateTime(2026),
+    timestamp: timestamp ?? DateTime.now(),
     accuracy: 8,
     altitude: 0,
     altitudeAccuracy: 0,
@@ -658,6 +721,13 @@ class _FakeLocationService extends LocationService {
 
   @override
   Stream<geo.Position> watchPosition() => const Stream.empty();
+}
+
+class _LiveInclination extends CameraInclinationService {
+  _LiveInclination() : super(accelerometer: const Stream.empty());
+  final values = StreamController<double>.broadcast();
+  @override
+  Stream<double> get inclinationDegrees => values.stream;
 }
 
 class _FakeOrientationService extends DeviceOrientationService {

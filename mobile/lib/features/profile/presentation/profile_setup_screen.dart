@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 
 import '../../../core/api/api_exception.dart';
 import '../data/profile_service.dart';
@@ -198,9 +197,6 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
               hintText: 'Votre nom public',
               icon: Icons.person_outline,
               maxLength: 100,
-              inputFormatters: [
-                FilteringTextInputFormatter.deny(RegExp(r'\s')),
-              ],
               textInputAction: TextInputAction.done,
               onChanged: (_) {
                 if (_errorMessage != null) {
@@ -218,10 +214,6 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
 
                 if (username.length > 100) {
                   return 'Le nom ne peut pas dépasser 100 caractères.';
-                }
-
-                if (RegExp(r'\s').hasMatch(username)) {
-                  return 'Le nom d’utilisateur ne peut pas contenir d’espace.';
                 }
 
                 return null;

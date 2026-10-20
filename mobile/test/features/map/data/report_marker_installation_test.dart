@@ -39,6 +39,10 @@ void main() {
       expect(image.data.length, 4 * image.width * image.height);
     }
     final pointLayer = map.style.layers[ReportTiles.pointsLayerId]!;
+    // Le seuil où la heatmap disparaît doit déjà afficher les badges.
+    expect(pointLayer['minzoom'], 9);
+    expect(map.style.layers[ReportTiles.heatmapLayerId]!['maxzoom'], 9);
+    expect(pointLayer['paint']['icon-opacity'], 1);
     expect(
       pointLayer['layout']['icon-image'],
       ReportTiles.markerImageExpression(),

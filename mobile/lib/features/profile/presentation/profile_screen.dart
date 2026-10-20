@@ -318,6 +318,16 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   value: _profile.notificationsEnabled,
                   onChanged: _isSaving ? null : _onAlertsChanged,
                 ),
+                const Padding(
+                  padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                  child: Text(
+                    'Activer les alertes maintient le suivi GPS en arrière-plan '
+                    'pour recevoir les signalements à proximité, selon les '
+                    'autorisations du téléphone. Cela peut augmenter la '
+                    'consommation de batterie. Désactiver les alertes arrête '
+                    'ce suivi en arrière-plan.',
+                  ),
+                ),
                 if (_permission case final permission?) ...[
                   const SizedBox(height: 8),
                   _PermissionStatus(permission),

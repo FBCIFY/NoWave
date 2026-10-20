@@ -1,6 +1,6 @@
 # Parcours — Carte maritime et consultation des signalements
 
-**Référence :** `dev@6b54aa8` (19/10/2026). Correctif [FIX T13 (NW-166)](https://linear.app/blueway/issue/NW-166) ; tickets NW-111, NW-114 et NW-157.
+**Référence :** `dev@e708880` (20/10/2026), après fusion de la PR #93. Correctif [FIX T13 (NW-166)](https://linear.app/blueway/issue/NW-166) ; tickets NW-111, NW-114 et NW-157.
 
 ## Parcours
 
@@ -9,7 +9,18 @@
 3. Le mobile affiche les marques et clusters représentés dans les tuiles. La sélection d'un signalement provoque la lecture des données actuelles via `GET /api/v1/reports/{report_id}`.
 4. Une notification FCM peut ouvrir directement la carte sur le signalement ciblé, avec cadrage de celui-ci et de la position disponible du téléphone. Les détails complets sont lus auprès de l'API ; les coordonnées du push ne doivent pas être considérées comme source d'autorité.
 
-Le fond actuellement décrit dans `mobile/README.md` est **Mapbox Standard** ; le fond marine MapTiler cité dans certaines spécifications doit faire l'objet d'un alignement technique distinct avant d'être annoncé comme livré. La couche NoWave MVT est séparée du fond cartographique.
+Le fond retenu reste **Mapbox**. `GlobeStyle` prépare un style local qui importe
+Mapbox Standard ; les couches publiques de bathymétrie, hydrographie, ports et
+balisage sont ajoutées par-dessus ce socle. La couche NoWave MVT authentifiée
+reste distincte. Les évolutions de [NW-164](https://linear.app/blueway/issue/NW-164)
+sont fusionnées dans la [PR #93](https://github.com/FBCIFY/NoWave/pull/93).
+
+**Décision NW-187, confirmée par Vadim le 20/10/2026 :** conserver cette solution
+Mapbox et les couches marines ; ne pas réactiver l'ancien fond MapTiler.
+`MAPTILER_STYLE_URL` n'est plus utilisé. Les sources publiques peuvent passer
+par `MARINE_API_BASE_URL`, sinon elles utilisent `API_BASE_URL`. La fusion ne
+certifie ni le déploiement des routes marines ni une profondeur disponible
+partout sur le globe ; la recette distante doit en vérifier la couverture.
 
 ## Expiration et cache - FIX T13 (NW-166)
 

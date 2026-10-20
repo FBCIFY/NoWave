@@ -195,9 +195,11 @@ class FocusMap extends Fake implements mb.MapboxMap {
   final fittedCoordinates = <List<mb.Point>>[];
   final fitPadding = <mb.MbxEdgeInsets?>[];
   final cameras = <mb.CameraOptions>[];
+  final easedCameras = <mb.CameraOptions>[];
   double nativeZoom = 17;
   double width = 390, height = 844;
   Future<mb.CameraOptions> Function()? onFit;
+  Future<mb.Point> Function(mb.ScreenCoordinate)? onCoordinate;
   @override
   void addInteraction<
     T extends mb.TypedFeaturesetFeature<mb.FeaturesetDescriptor>
@@ -239,10 +241,12 @@ class FocusMap extends Fake implements mb.MapboxMap {
   Future<void> easeTo(
     mb.CameraOptions camera,
     mb.MapAnimationOptions? options,
-  ) async {}
+  ) async => easedCameras.add(camera);
   @override
   Future<mb.Point> coordinateForPixel(mb.ScreenCoordinate pixel) async =>
-      mb.Point(coordinates: mb.Position(5.37, 43.29));
+      onCoordinate != null
+      ? onCoordinate!(pixel)
+      : mb.Point(coordinates: mb.Position(5.37, 43.29));
   @override
   Future<mb.CameraState> getCameraState() async => mb.CameraState(
     center: mb.Point(coordinates: mb.Position(5.37, 43.29)),

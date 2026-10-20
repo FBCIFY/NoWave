@@ -23,7 +23,7 @@ void main() {
       controller.dispose();
       await source.close();
     });
-    controller.setSession('recipient');
+    controller.setSession(data['recipient_firebase_uid'] as String);
     controller.setReady(true);
     controller.attach((push) async => opened.add(push));
     await controller.start();

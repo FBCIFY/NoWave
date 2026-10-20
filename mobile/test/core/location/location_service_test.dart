@@ -42,6 +42,48 @@ void main() {
   });
 
   test(
+    'fin native : avertit les abonnés puis reprend le flux partagé',
+    () async {
+      final received = <Position>[];
+      final errors = <Object>[];
+      final map = location.watchPosition().listen(
+        received.add,
+        onError: errors.add,
+      );
+      final tracking = location
+          .watchDevicePosition(background: true)
+          .listen((_) {}, onError: (Object _) {});
+      unawaited(geolocator.finish());
+      await pumpEventQueue();
+      expect(errors, hasLength(1));
+      await Future<void>.delayed(const Duration(seconds: 16));
+      expect(geolocator.started, hasLength(3));
+      expect(
+        (geolocator.started.last as AppleSettings)
+            .allowBackgroundLocationUpdates,
+        isTrue,
+      );
+      geolocator.emit(testPosition());
+      await pumpEventQueue();
+      expect(received, hasLength(1));
+      await map.cancel();
+      await tracking.cancel();
+    },
+  );
+
+  test('dernier abonné parti : annule la reprise après fin native', () async {
+    final subscription = location.watchPosition().listen(
+      (_) {},
+      onError: (Object _) {},
+    );
+    unawaited(geolocator.finish());
+    await pumpEventQueue();
+    await subscription.cancel();
+    await Future<void>.delayed(const Duration(seconds: 16));
+    expect(geolocator.started, hasLength(1));
+  });
+
+  test(
     'le suivi en arrière-plan relance le flux de la carte avec ses réglages',
     () async {
       final map = <Position>[];

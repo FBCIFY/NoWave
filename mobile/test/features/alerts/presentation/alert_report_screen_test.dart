@@ -1,6 +1,8 @@
 import 'dart:async';
 
 import 'package:blueway/core/api/api_exception.dart';
+import 'package:blueway/core/location/location_service.dart';
+import 'package:geolocator/geolocator.dart';
 import 'package:blueway/features/alerts/presentation/alert_report_screen.dart';
 import 'package:blueway/features/map/presentation/map_screen.dart';
 import 'package:blueway/features/reports/data/report_detail_service.dart';
@@ -11,6 +13,20 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 
 import '../support/alert_fixtures.dart';
+import '../../map/support/focus_fakes.dart' show focusPosition;
+
+class _Location extends LocationService {
+  bool allowed = true;
+  late final result = Completer<Position>();
+  int requests = 0;
+  @override
+  Future<bool> canWatchPosition() async => allowed;
+  @override
+  Future<Position> getCurrentPosition() {
+    requests++;
+    return result.future;
+  }
+}
 
 ReportDetail report({DateTime? expiry}) => ReportDetail(
   id: 'report-a',
@@ -37,8 +53,10 @@ class Reports extends Fake implements ReportDetailService {
 
 void main() {
   late Reports service;
+  late _Location location;
   setUp(() {
     service = Reports();
+    location = _Location();
   });
   Future<void> open(
     WidgetTester tester, {
@@ -49,6 +67,7 @@ void main() {
         home: AlertReportScreen(
           reportId: 'report-a',
           service: service,
+          locationService: location,
           now: () => testNow,
           onShowOnMap: onMap ?? (_) async {},
         ),
@@ -56,6 +75,42 @@ void main() {
     );
     await tester.pumpAndSettle();
   }
+
+  testWidgets(
+    'la position GPS arrivée après le détail met à jour la distance',
+    (tester) async {
+      service.respond = () async => report();
+      await open(tester);
+      expect(find.text('Votre position est inconnue'), findsOneWidget);
+      location.result.complete(focusPosition());
+      await tester.pumpAndSettle();
+      expect(find.text('Votre position est inconnue'), findsNothing);
+      expect(find.textContaining(' NM au '), findsOneWidget);
+      expect(service.ids, ['report-a']);
+    },
+  );
+
+  testWidgets('GPS refusé : fiche disponible sans demander de position', (
+    tester,
+  ) async {
+    location.allowed = false;
+    service.respond = () async => report();
+    await open(tester);
+    expect(location.requests, 0);
+    expect(find.text('Votre position est inconnue'), findsOneWidget);
+    expect(find.text('Voir sur la carte'), findsOneWidget);
+  });
+
+  testWidgets('GPS en échec : conserve la fiche et le repli sans position', (
+    tester,
+  ) async {
+    service.respond = () async => report();
+    await open(tester);
+    location.result.completeError(StateError('GPS indisponible'));
+    await tester.pumpAndSettle();
+    expect(find.text('Votre position est inconnue'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
 
   testWidgets(
     'relit le détail puis utilise la position actuelle pour la carte',

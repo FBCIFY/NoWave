@@ -35,6 +35,53 @@ void main() {
     await controller.start();
   }
 
+  test(
+    'ancien push du compte A reçu après connexion à B : aucune navigation',
+    () async {
+      await ready();
+      final previous = AlertPush.fromData(pushData());
+      controller.setSession(null);
+      controller.setSession('user-b');
+      controller.setReady(true);
+      controller.attach(navigate);
+      source.taps.add(pushMessage());
+      controller.open(previous);
+      await flush();
+      expect(opened, isEmpty);
+      expect(controller.notice, contains('ce compte'));
+      source.taps.add(
+        RemoteMessage(
+          data: {...pushData(), 'recipient_firebase_uid': 'user-b'},
+        ),
+      );
+      await flush();
+      expect(opened, hasLength(1));
+    },
+  );
+
+  test('tap initial destiné à A ne passe pas lorsque B devient prêt', () async {
+    source.initial = pushMessage();
+    await controller.start();
+    controller.setSession('user-b');
+    controller.setReady(true);
+    controller.attach(navigate);
+    await flush();
+    expect(opened, isEmpty);
+  });
+
+  test(
+    'ancien format sans destinataire : historique proposé sans navigation',
+    () async {
+      await ready();
+      source.taps.add(
+        RemoteMessage(data: pushData()..remove('recipient_firebase_uid')),
+      );
+      await flush();
+      expect(opened, isEmpty);
+      expect(controller.notice, contains('historique'));
+    },
+  );
+
   for (final delivery in ['foreground', 'background', 'terminated']) {
     test('push sans GeoJSON en $delivery ouvre une seule fois', () async {
       final message = RemoteMessage(

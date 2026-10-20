@@ -43,6 +43,12 @@ class FakeGeolocator extends GeolocatorPlatform {
 
   /// Nouvelle mesure sur le flux en cours.
   void emit(Position position) => _native!.add(position);
+
+  Future<void> finish() async {
+    final native = _native;
+    _cached = null;
+    await native!.close();
+  }
 }
 
 Position testPosition({double latitude = 43.2965}) {

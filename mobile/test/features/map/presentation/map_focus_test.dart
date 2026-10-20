@@ -1,8 +1,13 @@
 import 'dart:async';
 import 'dart:convert';
 
+import 'package:blueway/features/camera/domain/photo_capture.dart';
+import 'package:blueway/features/camera/domain/photo_report_draft.dart';
+import 'package:image/image.dart' as img;
+
 import 'package:blueway/features/map/presentation/report_marker.dart' as badges;
 import 'package:blueway/features/reports/domain/manual_report.dart';
+import 'package:blueway/features/reports/data/manual_report_service.dart';
 
 import 'package:blueway/features/map/presentation/map_screen.dart';
 import 'package:blueway/features/map/data/report_tiles.dart';
@@ -11,10 +16,31 @@ import 'package:blueway/features/reports/domain/report_detail.dart';
 import 'package:blueway/features/reports/presentation/report_detail_sheet.dart';
 import 'package:blueway/features/reports/presentation/report_composer_sheet.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mapbox_maps_flutter/mapbox_maps_flutter.dart' as mb;
 
 import '../support/focus_fakes.dart';
+
+PhotoReportDraft photoDraft() => PhotoReportDraft(
+  capture: PhotoCapture(
+    jpegBytes: Uint8List.fromList(
+      img.encodeJpg(img.Image(width: 4, height: 4)),
+    ),
+    measurements: PhotoCaptureMeasurements(
+      observerLongitude: 5.37,
+      observerLatitude: 43.29,
+      gpsAccuracyMeters: 5,
+      azimuthDegrees: 90,
+      inclinationDegrees: -10,
+      cameraHeightMeters: 2.5,
+      cameraHeightSource: 'default',
+      cameraHeightUncertaintyMeters: 0.5,
+      capturedAt: DateTime.now(),
+    ),
+  ),
+  estimate: null,
+);
 
 class _Reports extends Fake implements ReportDetailService {
   final calls = <String>[];
@@ -25,8 +51,19 @@ class _Reports extends Fake implements ReportDetailService {
   }
 }
 
+class _Publications extends Fake implements ManualReportService {
+  final requests = <ManualReportRequest>[];
+  @override
+  Future<String> createReport(ManualReportRequest request) async {
+    requests.add(request);
+    return 'published-report';
+  }
+}
+
 class _LateTiles extends Fake implements ReportTiles {
   final ready = Completer<void>();
+  final pulseEnabled = <bool>[];
+  int stops = 0;
   @override
   Future<void> addTo(mb.MapboxMap map) async {
     await ready.future;
@@ -39,13 +76,13 @@ class _LateTiles extends Fake implements ReportTiles {
   }
 
   @override
-  void stopPulse() {}
+  void stopPulse() => stops++;
   @override
   void updatePulse(
     mb.MapboxMap map, {
     required double zoom,
     required bool enabled,
-  }) {}
+  }) => pulseEnabled.add(enabled);
 }
 
 Future<void> pumpFrames(WidgetTester tester) async {
@@ -93,15 +130,25 @@ void main() {
     WidgetTester tester, {
     bool style = true,
     ReportTiles? tiles,
+    bool reduceMotion = false,
+    Future<PhotoReportDraft?> Function()? onOpenCamera,
+    ManualReportService? publicationService,
   }) async {
     await prepareFocusMarkers(tester);
     await tester.pumpWidget(
       MaterialApp(
+        builder: (context, child) => MediaQuery(
+          data: MediaQuery.of(context)
+              .copyWith(disableAnimations: reduceMotion),
+          child: child!,
+        ),
         home: MapScreen(
           focusController: focus,
           locationService: gps,
           reportDetailService: reports,
           reportTiles: tiles,
+          onOpenCamera: onOpenCamera,
+          reportService: publicationService,
         ),
       ),
     );
@@ -109,6 +156,183 @@ void main() {
     if (style) styleReady(tester);
     await pumpFrames(tester);
   }
+
+  focusTestWidgets(
+    'mouvement pendant conversion : refuse les coordonnées devenues anciennes',
+    (tester) async {
+      gps.initial.complete(focusPosition());
+      final publications = _Publications();
+      await mount(tester, publicationService: publications);
+      await tester.tap(find.byTooltip('Créer un signalement'));
+      await pumpFrames(tester);
+      await tester.tap(find.text('Pollution'));
+      await tester.pump();
+      final conversion = Completer<mb.Point>();
+      map.onCoordinate = (_) => conversion.future;
+      await tester.tap(find.text('Publier le signalement'));
+      await tester.pump();
+      tester
+          .widget<mb.MapWidget>(find.byType(mb.MapWidget))
+          .onCameraChangeListener!(
+        mb.CameraChangedEventData.fromJson({
+          'timestamp': 1,
+          'cameraState': {
+            'center': {
+              'type': 'Point',
+              'coordinates': [8.0, 44.0],
+            },
+            'padding': {'top': 0.0, 'left': 0.0, 'bottom': 0.0, 'right': 0.0},
+            'zoom': 14.0,
+            'bearing': 0.0,
+            'pitch': 0.0,
+          },
+        }),
+      );
+      conversion.complete(mb.Point(coordinates: mb.Position(5, 43)));
+      await pumpFrames(tester);
+      expect(publications.requests, isEmpty);
+      expect(find.textContaining('Position non confirmée.'), findsOneWidget);
+    },
+  );
+
+  focusTestWidgets(
+    'publication : attend la conversion courante avant de transmettre le point',
+    (tester) async {
+      gps.initial.complete(focusPosition());
+      final publications = _Publications();
+      await mount(tester, publicationService: publications);
+      await tester.tap(find.byTooltip('Créer un signalement'));
+      await pumpFrames(tester);
+      await tester.tap(find.text('Pollution'));
+      await tester.pump();
+      final conversion = Completer<mb.Point>();
+      map.onCoordinate = (_) => conversion.future;
+      await tester.tap(find.text('Publier le signalement'));
+      await tester.pump();
+      expect(publications.requests, isEmpty);
+      conversion.complete(mb.Point(coordinates: mb.Position(8, 44)));
+      await pumpFrames(tester);
+      expect(publications.requests.single.longitude, 8);
+      expect(publications.requests.single.latitude, 44);
+    },
+  );
+
+  focusTestWidgets(
+    'conversion en échec : aucun envoi et brouillon conservé pour réessayer',
+    (tester) async {
+      gps.initial.complete(focusPosition());
+      final publications = _Publications();
+      await mount(tester, publicationService: publications);
+      await tester.tap(find.byTooltip('Créer un signalement'));
+      await pumpFrames(tester);
+      await tester.tap(find.text('Pollution'));
+      await tester.enterText(find.byType(TextField), 'Brouillon');
+      map.onCoordinate = (_) async => throw StateError('conversion native');
+      await tester.tap(find.text('Publier le signalement'));
+      await pumpFrames(tester);
+      expect(publications.requests, isEmpty);
+      expect(find.textContaining('Position non confirmée.'), findsOneWidget);
+      expect(find.text('Brouillon'), findsOneWidget);
+      map.onCoordinate = null;
+      await tester.tap(find.text('Publier le signalement'));
+      await pumpFrames(tester);
+      expect(publications.requests.single.description, 'Brouillon');
+    },
+  );
+
+  focusTestWidgets(
+    'une ancienne photo ne rouvre pas le formulaire après un autre parcours',
+    (tester) async {
+      gps.initial.complete(focusPosition());
+      final camera = Completer<PhotoReportDraft?>();
+      await mount(tester, onOpenCamera: () => camera.future);
+      await tester.tap(find.byTooltip('Signaler avec une photo'));
+      await tester.pump();
+      await tester.tap(find.byTooltip('Créer un signalement'));
+      await pumpFrames(tester);
+      await tester.tap(find.byTooltip('Fermer'));
+      await pumpFrames(tester);
+      expect(find.byType(ReportComposerSheet), findsNothing);
+      camera.complete(photoDraft());
+      await pumpFrames(tester);
+      expect(find.byType(ReportComposerSheet), findsNothing);
+      expect(focus.isBlocked, isFalse);
+    },
+  );
+
+  focusTestWidgets(
+    'mouvements réduits : ferme le formulaire sans animer la restauration',
+    (tester) async {
+      gps.initial.complete(focusPosition());
+      await mount(tester, reduceMotion: true);
+      await tester.tap(find.byTooltip('Créer un signalement'));
+      await pumpFrames(tester);
+      expect(find.byType(ReportComposerSheet), findsOneWidget);
+      await tester.tap(find.byTooltip('Fermer'));
+      await pumpFrames(tester);
+      expect(map.easedCameras, isEmpty);
+      expect(map.cameras, isNotEmpty);
+    },
+  );
+
+  focusTestWidgets(
+    'une route au-dessus suspend les traitements visuels jusqu’au retour',
+    (tester) async {
+      const channel =
+          'dev.flutter.pigeon.mapbox_maps_flutter._OfflineSwitch.setMapboxStackConnected';
+      final messenger =
+          TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger;
+      messenger.setMockMessageHandler(
+        channel,
+        (_) async =>
+            const StandardMessageCodec().encodeMessage(<Object?>[null]),
+      );
+      addTearDown(() => messenger.setMockMessageHandler(channel, null));
+      final tiles = _LateTiles()..ready.complete();
+      gps.initial.complete(focusPosition());
+      await mount(tester, tiles: tiles);
+      expect(tiles.pulseEnabled, contains(true));
+      final navigator = Navigator.of(tester.element(find.byType(MapScreen)));
+      unawaited(
+        navigator.push(
+          MaterialPageRoute<void>(
+            builder: (_) => const Scaffold(body: Text('Profil')),
+          ),
+        ),
+      );
+      await pumpFrames(tester);
+      expect(tiles.stops, greaterThan(0));
+      final updates = tiles.pulseEnabled.length;
+      gps.positions.add(focusPosition(longitude: 7));
+      await pumpFrames(tester);
+      expect(tiles.pulseEnabled.length, updates);
+      navigator.pop();
+      await pumpFrames(tester);
+      expect(tiles.pulseEnabled.length, greaterThan(updates));
+      expect(tiles.pulseEnabled.last, isTrue);
+    },
+  );
+
+  focusTestWidgets(
+    'fermer le bandeau conserve un avertissement de couche indisponible',
+    (tester) async {
+      final tiles = _LateTiles();
+      gps.initial.complete(focusPosition());
+      await mount(tester, tiles: tiles);
+      tiles.ready.completeError(StateError('réseau indisponible'));
+      await pumpFrames(tester);
+      final detailed = find.text(
+        'Signalements indisponibles. Nouvel essai automatique.',
+      );
+      expect(detailed, findsOneWidget);
+      await tester.tap(detailed);
+      await pumpFrames(tester);
+      expect(find.text('Signalements indisponibles'), findsOneWidget);
+      await tester.tap(find.text('Signalements indisponibles'));
+      await pumpFrames(tester);
+      expect(find.text('Signalements indisponibles'), findsOneWidget);
+    },
+  );
 
   focusTestWidgets(
     'MVT en retard : sélection visible puis replacée au-dessus',

@@ -86,6 +86,7 @@ class ReportLayerController {
   ValueListenable<ReportLayerStatus> get status => _status;
 
   bool _installing = false;
+  bool _tileFailure = false;
 
   /// Un style a été chargé pendant une installation : on recommence une
   /// fois celle-ci terminée, la précédente visait l'ancien style.
@@ -131,6 +132,10 @@ class ReportLayerController {
   /// Nouveau style : ses couches sont vides, on installe la nôtre.
   void styleLoaded() {
     _cancelRecovery();
+    _tileFailure = false;
+    _recentTileError?.cancel();
+    _recentTileError = null;
+    _recentlyFailedTiles.clear();
     _retryTimer?.cancel();
     _retryTimer = null;
     _failedInstalls = 0;
@@ -185,6 +190,7 @@ class ReportLayerController {
   /// [tile] identifie la tuile (`z/x/y`) quand Mapbox la donne.
   void tileError(String message, {String? tile}) {
     if (networkCut || isRateLimited(message)) return;
+    _tileFailure = true;
     if (tile != null) _recentlyFailedTiles.add(tile);
     _recentTileError?.cancel();
     _recentTileError = Timer(recoveryQuietPeriod, _endRecentTileError);
@@ -262,7 +268,11 @@ class ReportLayerController {
     if (installed) {
       _failedInstalls = 0;
       _startAuthorizeCooldown();
-      _setStatus(ReportLayerStatus.installed);
+      _setStatus(
+        _tileFailure
+            ? ReportLayerStatus.unavailable
+            : ReportLayerStatus.installed,
+      );
     } else {
       _setStatus(ReportLayerStatus.notInstalled);
       _scheduleRetry();
@@ -340,6 +350,7 @@ class ReportLayerController {
     _recoveryTimer = Timer(recoveryQuietPeriod, () {
       _recoveryTimer = null;
       if (_status.value == ReportLayerStatus.unavailable) {
+        _tileFailure = false;
         _setStatus(ReportLayerStatus.installed);
       }
     });
