@@ -1,12 +1,12 @@
 from datetime import UTC, datetime
 
-import firebase_admin
 from google.auth.exceptions import GoogleAuthError
 from google.auth.transport.requests import Request
 import httpx
 import requests
 
 from app.application.ports.push_sender import PushSender
+from app.infrastructure.adapters.firebase_app import initialize_firebase
 from app.domain.notification import (
     NotificationDelivery,
     PushSendError,
@@ -29,10 +29,7 @@ class FirebasePushSender(PushSender):
     @classmethod
     def from_environment(cls):
         try:
-            try:
-                app = firebase_admin.get_app()
-            except ValueError:
-                app = firebase_admin.initialize_app()
+            app = initialize_firebase()
             credentials = app.credential.get_credential()
             if not app.project_id:
                 raise ValueError("missing project")
