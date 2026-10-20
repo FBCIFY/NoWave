@@ -111,6 +111,27 @@ void main() {
   }
 
   focusTestWidgets(
+    'fermer le bandeau conserve un avertissement de couche indisponible',
+    (tester) async {
+      final tiles = _LateTiles();
+      gps.initial.complete(focusPosition());
+      await mount(tester, tiles: tiles);
+      tiles.ready.completeError(StateError('réseau indisponible'));
+      await pumpFrames(tester);
+      final detailed = find.text(
+        'Signalements indisponibles. Nouvel essai automatique.',
+      );
+      expect(detailed, findsOneWidget);
+      await tester.tap(detailed);
+      await pumpFrames(tester);
+      expect(find.text('Signalements indisponibles'), findsOneWidget);
+      await tester.tap(find.text('Signalements indisponibles'));
+      await pumpFrames(tester);
+      expect(find.text('Signalements indisponibles'), findsOneWidget);
+    },
+  );
+
+  focusTestWidgets(
     'MVT en retard : sélection visible puis replacée au-dessus',
     (tester) async {
       final tiles = _LateTiles();

@@ -367,8 +367,7 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
   static String? _tileKey(TileID? tile) =>
       tile == null ? null : '${tile.z}/${tile.x}/${tile.y}';
 
-  /// Bandeau tant que la couche manque ou que ses tuiles échouent. Fermé
-  /// d'un appui, il revient au prochain changement d'état.
+  /// Réaffiche le détail de l'alerte à chaque changement d'état.
   void _handleReportLayerStatus() {
     if (mounted) setState(() => _reportLayerNoticeHidden = false);
   }
@@ -382,10 +381,14 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
 
   /// Bandeau permanent de la couche, derrière les messages courts.
   MapNotice? get _reportLayerBanner {
-    if (_reportLayerNoticeHidden) return null;
     return switch (_reportLayer.status.value) {
-      ReportLayerStatus.notInstalled ||
-      ReportLayerStatus.unavailable => _reportLayerNotice,
+      ReportLayerStatus.notInstalled || ReportLayerStatus.unavailable =>
+        _reportLayerNoticeHidden
+            ? const MapNotice(
+                'Signalements indisponibles',
+                MapNoticeKind.warning,
+              )
+            : _reportLayerNotice,
       ReportLayerStatus.pending || ReportLayerStatus.installed => null,
     };
   }
