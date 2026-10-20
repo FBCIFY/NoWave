@@ -11,6 +11,7 @@ import 'package:blueway/features/reports/domain/report_detail.dart';
 import 'package:blueway/features/reports/presentation/report_detail_sheet.dart';
 import 'package:blueway/features/reports/presentation/report_composer_sheet.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mapbox_maps_flutter/mapbox_maps_flutter.dart' as mb;
 
@@ -27,6 +28,8 @@ class _Reports extends Fake implements ReportDetailService {
 
 class _LateTiles extends Fake implements ReportTiles {
   final ready = Completer<void>();
+  final pulseEnabled = <bool>[];
+  int stops = 0;
   @override
   Future<void> addTo(mb.MapboxMap map) async {
     await ready.future;
@@ -39,13 +42,13 @@ class _LateTiles extends Fake implements ReportTiles {
   }
 
   @override
-  void stopPulse() {}
+  void stopPulse() => stops++;
   @override
   void updatePulse(
     mb.MapboxMap map, {
     required double zoom,
     required bool enabled,
-  }) {}
+  }) => pulseEnabled.add(enabled);
 }
 
 Future<void> pumpFrames(WidgetTester tester) async {
@@ -109,6 +112,44 @@ void main() {
     if (style) styleReady(tester);
     await pumpFrames(tester);
   }
+
+  focusTestWidgets(
+    'une route au-dessus suspend les traitements visuels jusqu’au retour',
+    (tester) async {
+      const channel =
+          'dev.flutter.pigeon.mapbox_maps_flutter._OfflineSwitch.setMapboxStackConnected';
+      final messenger =
+          TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger;
+      messenger.setMockMessageHandler(
+        channel,
+        (_) async =>
+            const StandardMessageCodec().encodeMessage(<Object?>[null]),
+      );
+      addTearDown(() => messenger.setMockMessageHandler(channel, null));
+      final tiles = _LateTiles()..ready.complete();
+      gps.initial.complete(focusPosition());
+      await mount(tester, tiles: tiles);
+      expect(tiles.pulseEnabled, contains(true));
+      final navigator = Navigator.of(tester.element(find.byType(MapScreen)));
+      unawaited(
+        navigator.push(
+          MaterialPageRoute<void>(
+            builder: (_) => const Scaffold(body: Text('Profil')),
+          ),
+        ),
+      );
+      await pumpFrames(tester);
+      expect(tiles.stops, greaterThan(0));
+      final updates = tiles.pulseEnabled.length;
+      gps.positions.add(focusPosition(longitude: 7));
+      await pumpFrames(tester);
+      expect(tiles.pulseEnabled.length, updates);
+      navigator.pop();
+      await pumpFrames(tester);
+      expect(tiles.pulseEnabled.length, greaterThan(updates));
+      expect(tiles.pulseEnabled.last, isTrue);
+    },
+  );
 
   focusTestWidgets(
     'fermer le bandeau conserve un avertissement de couche indisponible',

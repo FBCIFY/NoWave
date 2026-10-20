@@ -138,7 +138,9 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
   AppLifecycleListener? _lifecycleListener;
 
   /// App en arrière-plan, entre [_pauseMapUpdates] et [_resumeMapUpdates].
-  bool _hidden = false;
+  bool _appHidden = false;
+  bool _routeHidden = false;
+  bool get _hidden => _appHidden || _routeHidden;
 
   /// Renouvellement périodique du token des tuiles ; arrêté en arrière-plan.
   Timer? _reportTilesTokenTimer;
@@ -175,7 +177,7 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
     WidgetsBinding.instance.addObserver(this);
     _headingSubscription = DeviceOrientationService().mapHeadings.listen(
       (heading) {
-        if (!mounted) return;
+        if (!mounted || _hidden) return;
         if (!heading.isFinite) return;
         _deviceHeading = heading;
         _syncLocationPuck().ignore();
@@ -215,6 +217,7 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
   /// Un geste de l'utilisateur coupe le suivi GPS ; une rotation au doigt
   /// passe la boussole en mode manuel.
   void _handleMapCameraChange(CameraChangedEventData event) {
+    if (_hidden) return;
     _cameraZoom = event.cameraState.zoom;
     _syncHeatmapPulse();
     _syncLocationPuck().ignore();
@@ -418,7 +421,11 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
   /// L'app n'est plus visible : ni battement, ni renouvellement du token,
   /// ni réseau pour Mapbox.
   void _pauseMapUpdates() {
-    _hidden = true;
+    _appHidden = true;
+    _suspendVisualUpdates();
+  }
+
+  void _suspendVisualUpdates() {
     widget.reportTiles?.stopPulse();
     _reportTilesTokenTimer?.cancel();
     _reportLayer.pause();
@@ -428,7 +435,11 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
   /// avant de rebrancher Mapbox, qui redemande alors les tuiles ; la couche
   /// manquante est réinstallée.
   void _resumeMapUpdates() {
-    _hidden = false;
+    _appHidden = false;
+    if (!_hidden) _restoreVisualUpdates();
+  }
+
+  void _restoreVisualUpdates() {
     _syncHeatmapPulse();
     _reportLayer.resume();
     _startReportTilesTokenRenewal();
@@ -444,6 +455,19 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
             })
             .catchError((Object _) {}),
       );
+    }
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final hidden = !TickerMode.of(context);
+    if (hidden == _routeHidden) return;
+    _routeHidden = hidden;
+    if (_hidden) {
+      _suspendVisualUpdates();
+    } else {
+      _restoreVisualUpdates();
     }
   }
 
@@ -852,14 +876,18 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
     final map = _mapboxMap;
     final zoom = _cameraZoom;
     if (!mounted || map == null || zoom == null) return;
-    widget.reportTiles?.updatePulse(map, zoom: zoom, enabled: !_reduceMotion);
+    widget.reportTiles?.updatePulse(
+      map,
+      zoom: zoom,
+      enabled: !_hidden && !_reduceMotion,
+    );
   }
 
   /// Point bleu de loin, flèche 3D de près. Mapbox ne change de curseur
   /// que quand le zoom franchit le seuil.
   Future<void> _syncLocationPuck() async {
     final map = _mapboxMap;
-    if (!mounted || map == null || _position == null) return;
+    if (!mounted || _hidden || map == null || _position == null) return;
     final hasHeading = _deviceHeading != null;
     final zoomedOut =
         (_cameraZoom ?? _userZoom) < MapConfig.detailedPuckMinZoom;
@@ -885,7 +913,7 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
   void _showAccuracyHalo([geo.Position? position]) {
     final map = _mapboxMap;
     final at = position ?? _position;
-    if (map == null || at == null) return;
+    if (_hidden || map == null || at == null) return;
     unawaited(
       _accuracyHalo.show(
         map,
