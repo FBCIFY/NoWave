@@ -1,8 +1,10 @@
 # Corrections Vadim — audit du 19 octobre 2026
 
 Branche : `fix/vadim-audit-2026-10-19`, créée depuis `dev@8fdb36c` après mise à jour.
-Une branche commune pour la future PR. Aucune PR créée, aucun push, aucune
-fusion et aucun déploiement effectués pendant cette tâche.
+Une branche commune pour la future PR. Le nouveau `dev@e708880`, qui contient
+la PR marine #93, a ensuite été intégré localement par le merge `dcc0a5c`.
+Aucune PR créée, aucun push, aucune fusion vers `dev`/`main` et aucun déploiement
+effectués pendant cette tâche.
 
 ## Corrections réalisées
 
@@ -31,10 +33,11 @@ modifiés.
 | NW-195 | Erreurs de tuiles conservées pendant l'installation | `93ea8de` |
 | NW-196 | Formulaire défilable avec texte agrandi et clavier | `dcdc68a` |
 
-## Investigations et décisions restantes
+## Alignement cartographique et investigations restantes
 
-- [NW-187](NW-187.md) : comparatif, coûts publics et recommandation préparés.
-  Choix produit en attente ; ne pas dupliquer ou fusionner automatiquement #93.
+- [NW-187](NW-187.md) : choix existant confirmé par Vadim et vérifié sur Git :
+  Mapbox conservé, PR #93 fusionnée dans `dev@e708880`. Documentation alignée
+  et nouveau `dev` intégré à cette branche. Aucune réimplémentation de #93.
 - [NW-197](NW-197.md) : inspection et matrice de recette prêtes. Objectif
   physique et focus lointain à vérifier sur plusieurs appareils.
 - [NW-201](NW-201.md) : mesure locale reproductible réalisée, 120 reconstructions
@@ -43,16 +46,19 @@ modifiés.
 
 ## Validation globale finale
 
-Les résultats ci-dessous portent sur l'arbre de travail intégré dans ce commit,
-y compris l'alignement des destinataires des fixtures d'intégration et les
-ajustements de formatage/analyse.
+Les résultats ci-dessous portent sur les fixes réunis avec `dev@e708880` dans
+`dcc0a5c`, avant l'alignement documentaire final de NW-187. Ils incluent les
+nouveaux tests marins et les corrections de cette branche. Les validations
+précédentes, avant cette intégration, étaient de 568 tests Flutter et 647 tests
+API/unitaires serveur réussis ; elles ne sont pas additionnées aux résultats
+ci-dessous.
 
 | Contrôle | Résultat |
 |---|---|
-| `dart format --output=none --set-exit-if-changed lib test` | 165 fichiers, aucun changement requis |
+| `dart format --output=none --set-exit-if-changed lib test` | 191 fichiers, aucun changement requis |
 | `flutter analyze --no-pub` | Aucun problème |
-| `flutter test --no-pub --coverage --reporter expanded` | **568 tests réussis** |
-| `pytest backend/tests/api backend/tests/unit -q` | **647 tests réussis** |
+| `flutter test --no-pub --coverage --reporter expanded` | **650 tests réussis** |
+| `pytest backend/tests/api backend/tests/unit -q` | **911 tests réussis, 1 ignoré** |
 | `pytest backend/tests/database -q` | **275 tests réussis** |
 | `ruff check backend deploy/hostinger mobile/tool` | Réussi |
 | `git diff --check` | Réussi |
@@ -62,11 +68,14 @@ avec stockage temporaire et une base de test créée puis supprimée par la fixt
 Le conteneur et le réseau dédiés ont été nettoyés après validation. Aucun accès
 aux données applicatives existantes ou à la production n'a été utilisé.
 
-L'avertissement de dépréciation Starlette/httpx du client de test serveur est
-présent, sans échec. Les tests web et les audits d'images ne sont pas rejoués :
-les fichiers web, de déploiement et les dépendances n'ont pas été modifiés.
-La CI de la future PR et la recette Android/iOS réelle restent distinctes de ces
-contrôles locaux.
+Les avertissements Starlette/httpx et Shapely (`oriented_envelope`) sont
+présents, sans échec. Le test optionnel d'archives SHOM locales est ignoré en
+leur absence. Les dépendances marines de #93 ont été installées depuis le
+fichier de test verrouillé dans un environnement temporaire dédié. Aucun
+renouvellement de dépendance n'a été ajouté par les fixes.
+Les tests web et les audits d'images ne sont pas rejoués ici. La CI de la future
+PR, la validation des images issues de #93 et la recette Android/iOS réelle
+restent distinctes de ces contrôles locaux.
 
 ## Points de livraison
 

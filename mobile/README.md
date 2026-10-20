@@ -51,7 +51,9 @@ Il n’y a pas de routage global de `/api/v1/map/` : le client métier et la sou
 de signalements restent sur `API_BASE_URL`. Le token utilisateur est réservé
 à cet hôte ; les sources publiques n’ajoutent pas d’en-tête d’authentification.
 L’ancienne variable `BATHYMETRY_TILES_URL` n’est pas lue. Ne pas la passer aux builds.
-`MAPTILER_STYLE_URL` n’est plus utilisé : la carte utilise Mapbox Standard.
+`MAPTILER_STYLE_URL` n’est plus utilisé : le style du globe importe Mapbox
+Standard et conserve Mapbox comme fond. Les couches marines fusionnées via
+NW-164 / PR #93 complètent ce socle sans changer de fournisseur.
 Le jeton Mapbox reste nécessaire ; les clés des fournisseurs marins restent
 sur le backend.
 
