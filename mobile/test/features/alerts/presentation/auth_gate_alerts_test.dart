@@ -481,13 +481,18 @@ void main() {
       expect(selected.longitude, 6);
       expect(selected.latitude, 44);
 
-      final viewport =
-          tester.widget<MapWidget>(find.byType(MapWidget)).viewport
-              as CameraViewportState;
-
-      expect(viewport.center!.coordinates.lng, 6);
-      expect(viewport.center!.coordinates.lat, 44);
-      expect(viewport.zoom, 14);
+      final focus = tester
+          .widget<MapScreen>(find.byType(MapScreen))
+          .focusController!;
+      expect(focus.report!.longitude, 6);
+      expect(focus.report!.latitude, 44);
+      expect(focus.includeUserPosition, isTrue);
+      // The native fit is applied when the map is ready, without first
+      // declaring a conflicting viewport that would cause an instant jump.
+      expect(
+        tester.widget<MapWidget>(find.byType(MapWidget)).viewport,
+        isA<IdleViewportState>(),
+      );
 
       expect(
         f.calls.where((path) => path == '/api/v1/reports/report-a').length,

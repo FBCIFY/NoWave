@@ -31,7 +31,7 @@ void main() {
     () async {
       final map = FocusMap();
       final zooms = <double?>[];
-      for (final pair in [(5.3701, 19.0), (25.0, 4.0)]) {
+      for (final pair in [(5.3701, 17.0), (25.0, 4.0)]) {
         map.nativeZoom = pair.$2;
         zooms.add(
           (await MapAlertCamera.fit(
@@ -42,7 +42,7 @@ void main() {
           )).zoom,
         );
       }
-      expect(zooms, [19, 4]);
+      expect(zooms, [17, 4]);
       expect(map.fittedCoordinates, hasLength(2));
       // Le calcul de projection et du zoom lui-même appartient au SDK natif.
     },
@@ -55,6 +55,22 @@ void main() {
     );
     expect(padding.top + padding.bottom, lessThan(160));
     expect(padding.left + padding.right, lessThan(200));
+  });
+
+  test('fiche ouverte : le report est cadré dans la partie visible', () async {
+    final map = FocusMap();
+    final camera = await MapAlertCamera.fit(
+      map,
+      focusReport(),
+      null,
+      const EdgeInsets.only(top: 44, bottom: 34),
+      sheetHeight: 450,
+    );
+    expect(camera.zoom, 16);
+    expect(camera.padding!.bottom, 470);
+    expect(camera.padding!.top, 92);
+    expect(camera.padding!.left, camera.padding!.right);
+    expect(map.fittedCoordinates, isEmpty);
   });
 
   test(

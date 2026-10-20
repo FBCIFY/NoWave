@@ -90,7 +90,7 @@ class FocusStyle extends Fake implements mb.StyleManager {
     mb.ImageContent? content,
   ) async {
     if (imageGate != null) await imageGate;
-    expectSync(image.data.length, 4 * image.width * image.height);
+    expectSync(image.data.take(8), [137, 80, 78, 71, 13, 10, 26, 10]);
     expectSync(scale, ReportMarker.pixelRatio);
     images[id] = image;
     imageRegistrations.add(id);
@@ -194,9 +194,13 @@ class FocusMap extends Fake implements mb.MapboxMap {
   final interactions = <mb.TypedInteraction>[];
   final fittedCoordinates = <List<mb.Point>>[];
   final fitPadding = <mb.MbxEdgeInsets?>[];
+  final fitCameraOptions = <mb.CameraOptions>[];
   final cameras = <mb.CameraOptions>[];
   final easedCameras = <mb.CameraOptions>[];
+  final animationDurations = <int?>[];
+  int cancellations = 0;
   double nativeZoom = 17;
+  double cameraBearing = 0, cameraPitch = 0;
   double width = 390, height = 844;
   Future<mb.CameraOptions> Function()? onFit;
   Future<mb.Point> Function(mb.ScreenCoordinate)? onCoordinate;
@@ -219,16 +223,15 @@ class FocusMap extends Fake implements mb.MapboxMap {
   ) async {
     fittedCoordinates.add(coordinates);
     fitPadding.add(padding);
-    expectSync(camera.pitch, 0);
-    expectSync(camera.bearing, 0);
-    expectSync(maxZoom, 20);
+    fitCameraOptions.add(camera);
+    expectSync(maxZoom, 17);
     return onFit != null
         ? onFit!()
         : mb.CameraOptions(
             center: coordinates.first,
             zoom: nativeZoom,
-            pitch: 0,
-            bearing: 0,
+            pitch: camera.pitch,
+            bearing: camera.bearing,
           );
   }
 
@@ -241,7 +244,17 @@ class FocusMap extends Fake implements mb.MapboxMap {
   Future<void> easeTo(
     mb.CameraOptions camera,
     mb.MapAnimationOptions? options,
-  ) async => easedCameras.add(camera);
+  ) async {
+    easedCameras.add(camera);
+    cameras.add(camera);
+    animationDurations.add(options?.duration);
+  }
+
+  @override
+  Future<void> cancelCameraAnimation() async {
+    cancellations++;
+  }
+
   @override
   Future<mb.Point> coordinateForPixel(mb.ScreenCoordinate pixel) async =>
       onCoordinate != null
@@ -251,8 +264,8 @@ class FocusMap extends Fake implements mb.MapboxMap {
   Future<mb.CameraState> getCameraState() async => mb.CameraState(
     center: mb.Point(coordinates: mb.Position(5.37, 43.29)),
     zoom: 14,
-    pitch: 0,
-    bearing: 0,
+    pitch: cameraPitch,
+    bearing: cameraBearing,
     padding: mb.MbxEdgeInsets(top: 0, left: 0, bottom: 0, right: 0),
   );
 }

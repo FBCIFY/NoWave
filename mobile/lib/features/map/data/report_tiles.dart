@@ -169,7 +169,7 @@ class ReportTiles {
   final Future<String> Function() _getIdToken;
   final String _apiBaseUrl;
 
-  /// Badges en RGBA, dessinés au premier affichage puis réutilisés à chaque
+  /// Badges en PNG, dessinés au premier affichage puis réutilisés à chaque
   /// chargement de style.
   Future<Map<String, Uint8List>>? _markers;
 

@@ -16,6 +16,7 @@ import '../../../core/map/cloud_passage_controller.dart';
 import '../../../core/map/globe_presentation.dart';
 import '../../../core/map/globe_style.dart';
 import '../../../core/map/map_config.dart';
+import '../../../core/map/map_motion.dart';
 import '../../../core/map/marine/marine_map_controller.dart';
 import '../../../core/sensors/device_orientation_service.dart';
 import '../../camera/domain/photo_report_draft.dart';
@@ -140,6 +141,9 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
   bool _selectedExpired = false;
   ReportDetail? _selectedReport;
   bool _detailOpen = false;
+  int _detailRequest = 0;
+  double _selectedSheetHeight = 0;
+  int _cameraMotionRevision = 0;
   int _focusRevision = -1;
   bool _focusWithUser = false;
   bool _focusCameraPending = false;
@@ -486,6 +490,7 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
   }
 
   void _suspendVisualUpdates() {
+    _interruptCameraMotion();
     widget.reportTiles?.stopPulse();
     _reportTilesTokenTimer?.cancel();
     _reportLayer.pause();
@@ -503,6 +508,7 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
     _syncHeatmapPulse();
     _reportLayer.resume();
     _startReportTilesTokenRenewal();
+    if (_selectionDirty || _focusCameraPending) unawaited(_applySelection());
     if (_focusWithUser &&
         _selectedReport != null &&
         _positionSubscription == null &&
@@ -606,6 +612,7 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
     if (map == null || reportTiles == null) return;
 
     await reportTiles.addTo(map);
+    debugPrint('Couche des signalements installée.');
     // MVT may arrive after the selection; keep its badge above ordinary points.
     if (_selectedReport != null) unawaited(_applySelection());
     _cameraZoom ??= (await map.getCameraState()).zoom;
@@ -670,6 +677,7 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
     final controller = widget.focusController;
     if (controller == null || _focusRevision == controller.revision) return;
     _focusRevision = controller.revision;
+    _interruptCameraMotion();
     _cameraFocusRevision++;
     final report = controller.report;
     if (report == null && _selectedReport == null && controller.revision == 0) {
@@ -687,15 +695,7 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
       _selectionTouched = false;
       if (!_reportComposerOpen) {
         _isFollowing = false;
-        _viewport = report != null && !_focusWithUser
-            ? CameraViewportState(
-                center: Point(
-                  coordinates: Position(report.longitude, report.latitude),
-                ),
-                zoom: 14,
-                pitch: 0,
-              )
-            : const IdleViewportState();
+        _viewport = const IdleViewportState();
       }
     });
     if (report != null) {
@@ -753,7 +753,11 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
   /// Native mutations are serialized; an older fit can never restore a marker
   /// after a more recent selection. A not-yet-created map retains the request.
   Future<void> _drainSelection() async {
-    while (mounted && _selectionDirty && _styleReady && !_reportComposerOpen) {
+    while (mounted &&
+        !_hidden &&
+        _selectionDirty &&
+        _styleReady &&
+        !_reportComposerOpen) {
       final map = _mapboxMap;
       if (map == null) return;
       _selectionDirty = false;
@@ -780,20 +784,17 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
             await _syncLocationPuck();
           }
           if (!mounted) return;
-          final camera = withUser
-              ? await MapAlertCamera.fit(
-                  map,
-                  report,
-                  position,
-                  MediaQuery.paddingOf(context),
-                )
-              : CameraOptions(
-                  center: Point(
-                    coordinates: Position(report.longitude, report.latitude),
-                  ),
-                  zoom: 14,
-                  pitch: 0,
-                );
+          final currentCamera = await map.getCameraState();
+          if (!mounted) return;
+          final camera = await MapAlertCamera.fit(
+            map,
+            report,
+            withUser ? position : null,
+            MediaQuery.paddingOf(context),
+            sheetHeight: withUser ? 0 : _selectedSheetHeight,
+            bearing: currentCamera.bearing,
+            pitch: currentCamera.pitch,
+          );
           if (!_isCurrentFocus(request) ||
               cameraRequest != _cameraFocusRevision ||
               _selectionTouched ||
@@ -811,8 +812,13 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
               _reportComposerOpen) {
             continue;
           }
-          await map.setCamera(camera);
+          await _moveCamera(
+            map,
+            camera,
+            MapMotion.focusDurationMs(currentCamera, camera),
+          );
           if (!mounted ||
+              _hidden ||
               request != _focusRevision ||
               cameraRequest != _cameraFocusRevision) {
             continue;
@@ -934,19 +940,83 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
     if (!mounted || _reportComposerOpen || _detailOpen) return;
     if (service == null || reportId is! String) return;
     _detailOpen = true;
+    final detailRequest = ++_detailRequest;
+    final focusRevision = _focusRevision;
+    ReportDetail? loaded;
+    var focused = false;
     AppHaptics.selection();
     final position = _position;
     unawaited(
       ReportDetailSheet.show(
         context,
         reportId: reportId,
-        loadReport: service.fetchReport,
+        loadReport: (id) async {
+          final report = await service.fetchReport(id);
+          if (!report.expiresAt.isAfter(DateTime.now())) {
+            throw const ReportNotFoundException();
+          }
+          loaded = report;
+          return report;
+        },
         loadPhoto: service.fetchPhoto,
         userPosition: position == null
             ? null
             : (latitude: position.latitude, longitude: position.longitude),
-      ).whenComplete(() => _detailOpen = false),
+        onLayout: (height) {
+          final report = loaded;
+          if (!mounted ||
+              !_detailOpen ||
+              detailRequest != _detailRequest ||
+              focusRevision != _focusRevision ||
+              focused ||
+              report == null) {
+            return;
+          }
+          focused = true;
+          _selectedSheetHeight = height + 36; // Modal drag handle.
+          widget.focusController?.focus(report, origin: MapFocusOrigin.mapTap);
+        },
+      ).whenComplete(() {
+        if (!mounted || detailRequest != _detailRequest) return;
+        _detailOpen = false;
+        _detailRequest++;
+        _selectedSheetHeight = 0;
+        if (focused &&
+            widget.focusController?.origin == MapFocusOrigin.mapTap &&
+            _selectedReport?.id == loaded?.id &&
+            !_selectionTouched) {
+          unawaited(_clearDetailPadding());
+        }
+      }),
     );
+  }
+
+  /// Closing the sheet does not trigger another flight. Re-express the
+  /// current visible camera without padding so the map stays in place.
+  Future<void> _clearDetailPadding() async {
+    final map = _mapboxMap;
+    if (map == null) return;
+    _interruptCameraMotion();
+    final request = _cameraMotionRevision;
+    try {
+      final camera = await map.getCameraState();
+      final size = await map.getSize();
+      final center = await map.coordinateForPixel(
+        ScreenCoordinate(x: size.width / 2, y: size.height / 2),
+      );
+      if (!mounted || _hidden || request != _cameraMotionRevision) return;
+      await map.setCamera(
+        CameraOptions(
+          center: center,
+          zoom: camera.zoom,
+          bearing: camera.bearing,
+          pitch: camera.pitch,
+          padding: MbxEdgeInsets(top: 0, left: 0, right: 0, bottom: 0),
+        ),
+      );
+    } catch (_) {
+      // A dismissed/replaced native map has no camera left to restore.
+    }
   }
 
   /// Rapproche la carte sur la zone touchée, jusqu'à voir ses badges.
@@ -975,7 +1045,7 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
       await _moveCamera(
         map,
         CameraOptions(center: center, zoom: zoom + _clusterZoomStep),
-        500,
+        MapMotion.clusterDurationMs,
       );
     } catch (_) {
       // Carte en cours de rechargement : l'utilisateur peut zoomer au doigt.
@@ -984,7 +1054,13 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
 
   /// Réglage d'accessibilité changé pendant que la carte est ouverte.
   @override
-  void didChangeAccessibilityFeatures() => _syncHeatmapPulse();
+  void didChangeAccessibilityFeatures() {
+    _syncHeatmapPulse();
+    final map = _mapboxMap;
+    if (map != null) {
+      unawaited(MapMotion.configure(map, reduceMotion: _reduceMotion));
+    }
+  }
 
   /// L'utilisateur a demandé moins d'animations : « Supprimer les
   /// animations » sur Android, « Réduire les animations » sur iOS, que
@@ -1004,10 +1080,28 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
     );
   }
 
-  Future<void> _moveCamera(MapboxMap map, CameraOptions camera, int duration) =>
-      _reduceMotion
-      ? map.setCamera(camera)
-      : map.easeTo(camera, MapAnimationOptions(duration: duration));
+  void _interruptCameraMotion() {
+    _cameraMotionRevision++;
+    final map = _mapboxMap;
+    if (map != null) {
+      unawaited(map.cancelCameraAnimation().catchError((Object _) {}));
+    }
+  }
+
+  Future<void> _moveCamera(
+    MapboxMap map,
+    CameraOptions camera,
+    int duration,
+  ) async {
+    final request = ++_cameraMotionRevision;
+    await map.cancelCameraAnimation();
+    if (!mounted || request != _cameraMotionRevision || _hidden) return;
+    if (_reduceMotion) {
+      await map.setCamera(camera);
+    } else {
+      await map.easeTo(camera, MapAnimationOptions(duration: duration));
+    }
+  }
 
   /// La heatmap bat tant qu'elle est visible, sauf si l'utilisateur a
   /// demandé moins d'animations dans les réglages du téléphone.
@@ -1089,7 +1183,7 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
 
   /// Durée maximale du vol vers l'utilisateur au recentrage : Mapbox
   /// raccourcit l'animation quand la distance est faible.
-  static const _recenterMaxDuration = Duration(milliseconds: 1200);
+  static const _recenterMaxDuration = Duration(milliseconds: 500);
 
   /// Centre la carte sur l'utilisateur puis le suit à chaque nouvelle position.
   /// [animated] : vol jusqu'à l'utilisateur (bouton), sinon saut direct
@@ -1155,7 +1249,7 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
       if (!mounted) return;
 
       // A GPS request started before the push must not undo its fitted camera.
-      if (!animated && _focusWithUser && _selectedReport != null) return;
+      if (!animated && _selectedReport != null) return;
       if (animated) {
         _cameraFocusRevision++;
         _selectionTouched = true;
@@ -1696,8 +1790,12 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
             child: Listener(
               key: _mapAreaKey,
               onPointerDown: (_) {
+                if (!_detailOpen) _interruptCameraMotion();
                 _mapTouchActive = true;
-                if (_selectedReport != null) {
+                // On iOS the native feature tap may arrive before Flutter's
+                // pointer-down for that same touch. It must not cancel the
+                // selection just opened by the native callback.
+                if (_selectedReport != null && !_detailOpen) {
                   _cameraFocusRevision++;
                   _selectionTouched = true;
                   _latePositionFocus = false;
@@ -1719,6 +1817,9 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
                   setState(() => _mapboxMap = map);
                   unawaited(MapConfig.hideDefaultOrnaments(map));
                   unawaited(
+                    MapMotion.configure(map, reduceMotion: _reduceMotion),
+                  );
+                  unawaited(
                     _positionMapOrnaments(map, editing: _reportComposerOpen),
                   );
                   _addReportInteractions(map);
@@ -1730,6 +1831,9 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
                   _globePresentation.styleLoaded();
                   final map = _mapboxMap;
                   if (map != null) {
+                    unawaited(
+                      MapMotion.configure(map, reduceMotion: _reduceMotion),
+                    );
                     unawaited(
                       _globePresentation.synchronize(map, _displayedZoom.value),
                     );

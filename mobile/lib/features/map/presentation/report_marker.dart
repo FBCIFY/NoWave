@@ -9,7 +9,7 @@ import '../../reports/presentation/report_category_style.dart';
 /// Badge d'un signalement sur la carte : le carré arrondi du choix de
 /// catégorie, avec son icône, posé sur une petite ombre.
 ///
-/// Mapbox n'affiche pas de widget : le badge est dessiné une fois en pixels RGBA,
+/// Mapbox n'affiche pas de widget : le badge est dessiné une fois en PNG,
 /// puis ajouté au style comme image.
 abstract final class ReportMarker {
   /// Résolution du dessin : net sur les écrans les plus denses.
@@ -43,7 +43,8 @@ abstract final class ReportMarker {
     return pixels;
   }
 
-  /// Pixels RGBA prémultipliés attendus par MbxImage (4 octets par pixel).
+  /// The Flutter SDK's iOS UIImage(data:) and Android BitmapFactory adapters
+  /// both decode an encoded image, even though the native core accepts RGBA.
   static Future<Uint8List> paint({
     required IconData icon,
     required Color color,
@@ -88,8 +89,8 @@ abstract final class ReportMarker {
     try {
       final image = await picture.toImage(pixels, pixels);
       try {
-        final rgba = await image.toByteData(format: ui.ImageByteFormat.rawRgba);
-        return rgba!.buffer.asUint8List(rgba.offsetInBytes, rgba.lengthInBytes);
+        final png = await image.toByteData(format: ui.ImageByteFormat.png);
+        return png!.buffer.asUint8List(png.offsetInBytes, png.lengthInBytes);
       } finally {
         image.dispose();
       }

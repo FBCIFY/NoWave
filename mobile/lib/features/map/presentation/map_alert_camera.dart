@@ -31,8 +31,11 @@ class MapAlertCamera {
     MapboxMap map,
     ReportDetail report,
     geo.Position? position,
-    widgets.EdgeInsets safe,
-  ) async {
+    widgets.EdgeInsets safe, {
+    double sheetHeight = 0,
+    double bearing = 0,
+    double pitch = 0,
+  }) async {
     final viewport = await map.getSize();
     if (viewport.width <= 0 || viewport.height <= 0) {
       throw StateError('Map viewport is not ready');
@@ -41,6 +44,12 @@ class MapAlertCamera {
       widgets.Size(viewport.width, viewport.height),
       safe,
     );
+    if (sheetHeight > 0) {
+      margins.bottom = math.min(sheetHeight + 20, viewport.height * .78);
+      margins.top = math.min(safe.top + 48, viewport.height * .15);
+      margins.left = math.min(24, viewport.width * .1);
+      margins.right = margins.left;
+    }
     final target = Point(
       coordinates: Position(report.longitude, report.latitude),
     );
@@ -49,8 +58,8 @@ class MapAlertCamera {
       return CameraOptions(
         center: target,
         zoom: 16,
-        pitch: 0,
-        bearing: 0,
+        pitch: pitch,
+        bearing: bearing,
         padding: margins,
       );
     }
@@ -60,12 +69,12 @@ class MapAlertCamera {
         Point(coordinates: Position(position!.longitude, position.latitude)),
       ],
       CameraOptions(
-        pitch: 0,
-        bearing: 0,
+        pitch: pitch,
+        bearing: bearing,
         padding: MbxEdgeInsets(top: 0, left: 0, bottom: 0, right: 0),
       ),
       margins,
-      20, // Upper bound for coincident/very close points, never a forced zoom.
+      17, // Keep local context when user and report are almost coincident.
       null,
     );
     if (camera.center == null ||

@@ -24,7 +24,7 @@ class _Map extends FocusMap {
 }
 
 void main() {
-  testWidgets('MVT et sélection partagent les mêmes pixels RGBA de catégorie', (
+  testWidgets('MVT et sélection partagent les mêmes PNG de catégorie', (
     tester,
   ) async {
     final map = _Map();
@@ -36,7 +36,7 @@ void main() {
     for (final category in ReportCategory.values) {
       final image = map.style.images[ReportMarker.imageId(category)]!;
       expect(image.data, await ReportMarker.paintCategory(category));
-      expect(image.data.length, 4 * image.width * image.height);
+      expect(image.data.take(8), [137, 80, 78, 71, 13, 10, 26, 10]);
     }
     final pointLayer = map.style.layers[ReportTiles.pointsLayerId]!;
     // Le seuil où la heatmap disparaît doit déjà afficher les badges.

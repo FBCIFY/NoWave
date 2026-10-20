@@ -49,3 +49,9 @@ kotlin {
 flutter {
     source = "../.."
 }
+
+dependencies {
+    // Same native artifact as mapbox_maps_flutter 2.30.1. The app's small
+    // gesture bridge uses its public APIs; the Flutter plugin keeps its SDK.
+    implementation("com.mapbox.maps:android-ndk27:11.30.1")
+}
