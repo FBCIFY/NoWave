@@ -1,0 +1,47 @@
+{
+  "verified_at_paris": "2026-10-20T12:16:26.311672+02:00",
+  "parent_commit": "4913a103c5c40e764ef3e1fc3e91d6a1569e8fa8",
+  "python": "3.12.14",
+  "os": "Darwin",
+  "results": {
+    "tests": 676,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "deployment_scenarios": 32,
+  "initial_linux_run": "https://github.com/FBCIFY/NoWave/actions/runs/39405889315",
+  "source_sha256": {
+    "backend/tests/unit/test_deployment_transaction.py": "c3f95619c5e8cc22e76d4cfd170756e5497ada761ac94dc403f8ff29cde240bb",
+    "deploy/hostinger/backup.sh": "605485846b67db06c000ae6aa6d1bbf51e75197a2a7ca63943dc0aac24bb480b",
+    "deploy/hostinger/deploy.sh": "a7cab0c76a20939a70dc449adc01c5d0bf00d8899a99e0e263b3d832891e6176",
+    "deploy/hostinger/ci-deploy.sh": "a800139fbd974fee38bb91356cc12b1dacd9ff18cc713345613f617d92698380",
+    "deploy/hostinger/verify-public.sh": "8e30aabe66f68af00e40b3de5e863fb49ea2dac3a2251668fbb57d33cc74ab95"
+  },
+  "checks": [
+    {
+      "command": [
+        "git",
+        "diff",
+        "--check"
+      ],
+      "exit": 0,
+      "stdout": "",
+      "stderr": ""
+    },
+    {
+      "command": [
+        ".venv/bin/ruff",
+        "check",
+        "backend",
+        "deploy/hostinger",
+        "mobile/tool"
+      ],
+      "exit": 0,
+      "stdout": "All checks passed!",
+      "stderr": ""
+    }
+  ],
+  "production_scripts_modified_by_ci_fix": false,
+  "production_deployed": false
+}

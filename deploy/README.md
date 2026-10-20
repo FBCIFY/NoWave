@@ -17,7 +17,7 @@ manuelle, lancer **NoWave CI** dans GitHub Actions ; `production.yml` est un
 workflow appelé, sans déclencheur indépendant. Les livraisons sont sérialisées
 et ne sont pas annulées par un nouveau push.
 
-Le script `hostinger/ci-deploy.sh` reconstruit et audite les images sur le VPS, puis appelle `hostinger/deploy.sh`. Celui-ci effectue une sauvegarde, applique les migrations, démarre les services et vérifie la version sur l’adresse privée. Le tunnel est ensuite mis à jour et les routes publiques sont vérifiées.
+Le script `hostinger/ci-deploy.sh` reconstruit et audite les images sur le VPS, puis appelle `hostinger/deploy.sh`. Celui-ci effectue une sauvegarde, applique les migrations, démarre les services, vérifie l’origine privée, active le tunnel et vérifie les routes publiques. La révision courante n’est publiée qu’après réussite de l’ensemble de ces étapes.
 
 Les rapports JSON d’audit sont conservés dans `test-results/containers`. La base
 Trivy, son cache et les exports `.tar` des images sont temporaires : chaque export
@@ -32,7 +32,8 @@ pour le déploiement et le retour arrière.
 - L’API et PostgreSQL ne publient pas de port directement sur Internet.
 - Les identifiants Firebase et le jeton Cloudflare restent dans `/opt/nowave/secrets`, hors du dépôt.
 - `hostinger/backup.sh` sauvegarde la base et la configuration avant les mises à jour ; un timer système lance également une sauvegarde quotidienne sur le VPS.
-- En cas d’échec pendant le déploiement des services, `hostinger/deploy.sh` remet la précédente configuration applicative. Il ne restaure pas automatiquement la base de données.
+- Chaque sauvegarde réserve un répertoire unique, même pour deux lancements dans la même seconde. `database.dump` n’apparaît qu’après validation du dump et copie de la configuration et des journaux ; un échec nettoie le répertoire incomplet.
+- En cas d’échec des services, du tunnel ou des contrôles publics, `hostinger/deploy.sh` remet la précédente configuration applicative et celle du tunnel, puis redémarre le tunnel s’il fonctionnait auparavant. Sans version précédente, les nouveaux services applicatifs et le tunnel sont arrêtés. La base et ses sauvegardes sont préservées, sans restauration automatique des données. Un échec du rollback est explicitement signalé.
 
 ## Accès GitHub nécessaire
 

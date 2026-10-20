@@ -1,0 +1,34 @@
+$ git diff --check
+exit=0
+
+
+$ /Users/__fdbrv/NoWave/.venv/bin/ruff check backend deploy/hostinger mobile/tool
+exit=0
+All checks passed!
+
+$ bash -n deploy/hostinger/backup.sh
+exit=0
+
+
+$ bash -n deploy/hostinger/build-and-audit.sh
+exit=0
+
+
+$ bash -n deploy/hostinger/ci-deploy.sh
+exit=0
+
+
+$ bash -n deploy/hostinger/deploy.sh
+exit=0
+
+
+$ bash -n deploy/hostinger/verify-notifications.sh
+exit=0
+
+
+$ bash -n deploy/hostinger/verify-public.sh
+exit=0
+
+
+$ bash -n deploy/hostinger/verify.sh
+exit=0
