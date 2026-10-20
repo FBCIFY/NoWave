@@ -1,6 +1,7 @@
 import 'package:mapbox_maps_flutter/mapbox_maps_flutter.dart';
 
 import '../../api/api_config.dart';
+import 'marine_palette.dart';
 
 /// Habillage marin commun de la carte NoWave.
 ///
@@ -18,7 +19,7 @@ class MarineMapController {
   static const String bathymetryLayerId = 'nowave-bathymetry-raster';
 
   /// Fond marin accordé aux zones côtières claires du raster.
-  static const String deepWaterColor = '#E6F7FD';
+  static const String deepWaterColor = MarinePalette.water;
 
   Future<void> install(MapboxMap map) async {
     final tilesUrl =
@@ -33,14 +34,15 @@ class MarineMapController {
     // Vue globe lorsque le niveau de zoom le permet.
     await style.setProjection(StyleProjection(name: StyleProjectionName.globe));
 
-    // Océan Mapbox Standard teinté dans notre bleu profond.
-    // Cette couleur sert aussi de fond lorsqu'aucune donnée bathymétrique
-    // détaillée n'est disponible.
-    await style.setStyleImportConfigProperty(
-      'basemap',
-      'colorWater',
-      deepWaterColor,
-    );
+    // Les propriétés individuelles préservent les réglages de visibilité
+    // des noms de lieux pilotés par GlobePresentation selon le zoom.
+    for (final setting in MarinePalette.basemapConfig.entries) {
+      await style.setStyleImportConfigProperty(
+        'basemap',
+        setting.key,
+        setting.value,
+      );
+    }
 
     // Une injection vide permet toujours de désactiver le raster dans un test.
     if (tilesUrl.trim().isEmpty) return;
@@ -86,6 +88,8 @@ class MarineMapController {
           ],
           rasterFadeDuration: 150,
           rasterResampling: RasterResampling.LINEAR,
+          rasterContrast: .08,
+          rasterSaturation: .08,
         ),
       );
     }

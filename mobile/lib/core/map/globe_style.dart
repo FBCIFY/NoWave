@@ -3,6 +3,8 @@ import 'dart:io';
 
 import 'package:flutter/services.dart';
 
+import 'marine/marine_palette.dart';
+
 /// One native style, from the globe to the harbour. No style swap on zoom.
 class GlobeStyle {
   static const satelliteSource = 'nowave-satellite';
@@ -41,7 +43,7 @@ class GlobeStyle {
       {
         'id': 'basemap',
         'url': 'mapbox://styles/mapbox/standard',
-        'config': {'lightPreset': 'day'},
+        'config': MarinePalette.basemapConfig,
       },
     ],
     'projection': {'name': 'globe'},

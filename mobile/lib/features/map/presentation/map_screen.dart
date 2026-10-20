@@ -11,7 +11,7 @@ import 'package:uuid/uuid.dart';
 import '../../../core/haptics/app_haptics.dart';
 import '../../../core/location/coordinate_formatter.dart';
 import '../../../core/location/location_service.dart';
-import '../../../core/map/accuracy_halo.dart';
+import '../../../core/map/location_marker.dart';
 import '../../../core/map/cloud_passage_controller.dart';
 import '../../../core/map/globe_presentation.dart';
 import '../../../core/map/globe_style.dart';
@@ -175,14 +175,8 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
     connectNetwork: OfflineSwitch.shared.setMapboxStackConnected,
   );
 
-  /// Halo de précision du GPS, sous le curseur et sous les signalements :
-  /// un danger reste lisible même quand la position est approximative.
-  final _accuracyHalo = AccuracyHalo(below: ReportTiles.heatmapLayerId);
-
-  /// Curseur affiché : point bleu de loin (true), flèche 3D de près (false),
-  /// null avant la première position.
-  bool? _puckZoomedOut;
-  bool? _puckHasHeading;
+  final _locationMarker = LocationMarker();
+  bool _nativeLocationConfigured = false;
 
   @override
   void initState() {
@@ -1022,45 +1016,32 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
     );
   }
 
-  /// Point bleu de loin, flèche 3D de près. Mapbox ne change de curseur
-  /// que quand le zoom franchit le seuil.
+  /// Repère NoWave piloté par le même cap que la boussole.
   Future<void> _syncLocationPuck() async {
     final map = _mapboxMap;
-    if (!mounted || _hidden || map == null || _position == null) return;
-    final hasHeading = _deviceHeading != null;
-    final zoomedOut =
-        (_cameraZoom ?? _userZoom) < MapConfig.detailedPuckMinZoom;
-    if (zoomedOut == _puckZoomedOut && hasHeading == _puckHasHeading) return;
-    _puckZoomedOut = zoomedOut;
-    _puckHasHeading = hasHeading;
-    try {
-      await map.location.updateSettings(
-        MapConfig.locationPuckSettings(
-          zoomedOut: zoomedOut,
-          hasHeading: hasHeading,
-        ),
-      );
-    } catch (_) {
-      // Réessayé au prochain mouvement de la caméra.
-      _puckZoomedOut = null;
-      rethrow;
+    final position = _position;
+    if (!mounted || _hidden || map == null || position == null) return;
+    if (!_nativeLocationConfigured) {
+      _nativeLocationConfigured = true;
+      try {
+        await map.location.updateSettings(MapConfig.locationPuckSettings());
+      } catch (_) {
+        _nativeLocationConfigured = false;
+        rethrow;
+      }
     }
-  }
-
-  /// Place le halo de précision sur [position], ou sur la dernière position
-  /// connue après un chargement de style.
-  void _showAccuracyHalo([geo.Position? position]) {
-    final map = _mapboxMap;
-    final at = position ?? _position;
-    if (_hidden || map == null || at == null) return;
-    unawaited(
-      _accuracyHalo.show(
-        map,
-        latitude: at.latitude,
-        longitude: at.longitude,
-        accuracy: at.accuracy,
-      ),
-    );
+    if (!mounted || _hidden || _mapboxMap != map || !_styleReady) return;
+    // Un style en cours de chargement ne doit pas bloquer le recentrage.
+    // La prochaine mesure de cap ou de position retente le dessin.
+    _locationMarker
+        .update(
+          map,
+          pixelRatio: MediaQuery.devicePixelRatioOf(context),
+          latitude: position.latitude,
+          longitude: position.longitude,
+          heading: _deviceHeading,
+        )
+        .ignore();
   }
 
   Future<void> _retryMapLoad() async {
@@ -1100,7 +1081,6 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
     _positionSubscription ??= _locationService.watchPosition().listen(
       (position) {
         if (!mounted || _hidden || !MapAlertCamera.usable(position)) return;
-        _showAccuracyHalo(position);
         final previous = _position;
         _position = position;
         _positionForSelectedReport();
@@ -1144,12 +1124,11 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
       setState(() {
         _position = position;
       });
-      _showAccuracyHalo(position);
       _watchPosition();
       _positionForSelectedReport();
 
       // Curseur remis à chaque recentrage, adapté au zoom actuel.
-      _puckZoomedOut = null;
+      _nativeLocationConfigured = false;
       await _syncLocationPuck();
 
       if (!mounted) return;
@@ -1728,6 +1707,8 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
                 onStyleLoadedListener: (_) {
                   _styleReady = true;
                   _globePresentation.styleLoaded();
+                  _nativeLocationConfigured = false;
+                  _syncLocationPuck().ignore();
                   final map = _mapboxMap;
                   if (map != null) {
                     unawaited(
@@ -1735,7 +1716,6 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
                     );
                   }
                   unawaited(_installMarineLayers());
-                  _showAccuracyHalo();
                   unawaited(_applySelection());
                   if (widget.reportTiles != null) _reportLayer.styleLoaded();
                 },

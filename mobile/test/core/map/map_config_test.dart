@@ -1,26 +1,20 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:mapbox_maps_flutter/mapbox_maps_flutter.dart';
 import 'package:blueway/core/map/map_config.dart';
 
 void main() {
-  test('sans cap fiable, repère neutre même à fort zoom', () {
-    final settings = MapConfig.locationPuckSettings(hasHeading: false);
+  test('suivi natif actif, sans point bleu ni image ni cercle Mapbox', () {
+    final settings = MapConfig.locationPuckSettings();
+    final puck = settings.locationPuck?.locationPuck2D;
+
     expect(settings.enabled, true);
     expect(settings.puckBearingEnabled, false);
-    expect(settings.locationPuck?.locationPuck2D, isA<DefaultLocationPuck2D>());
+    expect(settings.pulsingEnabled, false);
+    expect(settings.showAccuracyRing, false);
     expect(settings.locationPuck?.locationPuck3D, isNull);
-  });
-  test('de près, le curseur est la flèche 3D', () {
-    final puck = MapConfig.locationPuckSettings().locationPuck;
-
-    expect(puck?.locationPuck3D, isNotNull);
-    expect(puck?.locationPuck2D, isNull);
-  });
-
-  test('de loin, le curseur est le point bleu de Mapbox', () {
-    final puck = MapConfig.locationPuckSettings(zoomedOut: true).locationPuck;
-
-    expect(puck?.locationPuck2D, isA<DefaultLocationPuck2D>());
-    expect(puck?.locationPuck3D, isNull);
+    // Vide retire l'image native ; null la conserverait sur Android.
+    expect(puck?.topImage, isEmpty);
+    expect(puck?.bearingImage, isEmpty);
+    expect(puck?.shadowImage, isEmpty);
+    expect(puck?.opacity, 0);
   });
 }

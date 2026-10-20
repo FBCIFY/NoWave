@@ -59,6 +59,9 @@ void main() {
       final basemap = (document['imports'] as List).single as Map;
       expect(basemap['id'], 'basemap');
       expect(basemap['url'], 'mapbox://styles/mapbox/standard');
+      expect(basemap['config']['colorLand'], '#E8E0CC');
+      expect(basemap['config']['colorGreenspace'], '#C1D0AF');
+      expect(basemap['config']['showRoadLabels'], false);
       final sources = document['sources'] as Map;
       expect(sources[GlobeStyle.waterSource]['type'], 'vector');
       expect(
@@ -173,6 +176,10 @@ void main() {
           );
           expect(map.style.config['lightPreset'], 'day');
           expect(map.style.config['theme'], 'faded');
+          expect(map.style.config['colorLand'], '#E8E0CC');
+          expect(map.style.config['colorGreenspace'], '#C1D0AF');
+          expect(map.style.config['showRoadLabels'], false);
+          expect(map.style.config['showPointOfInterestLabels'], false);
           expect(map.style.config['showPlaceLabels'], zoom >= 4);
           expect(map.style.config['showAdminBoundaries'], zoom >= 4);
         }

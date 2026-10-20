@@ -44,6 +44,7 @@ flutter:
   assets:
     - assets/globe/
     - assets/models/location_puck.glb
+    - assets/images/
     - assets/icons/buoys/
     - assets/icons/fixed-aids/
 
