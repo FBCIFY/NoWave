@@ -2,7 +2,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 
 import '../data/auth_service.dart';
-import 'widgets/auth_layout.dart';
+import 'widgets/auth_photo_layout.dart';
 import 'widgets/auth_primary_button.dart';
 import 'widgets/auth_text_field.dart';
 
@@ -88,26 +88,40 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return AuthLayout(
+    return AuthPhotoLayout(
       title: 'Mot de passe oublié',
-      subtitle: 'Réinitialiser votre accès NoWave',
+      subtitle: _isSent
+          ? null
+          : 'Saisissez l’adresse e-mail de votre compte. '
+                'Nous vous enverrons un lien pour choisir '
+                'un nouveau mot de passe.',
       showBackButton: true,
       child: _isSent
           ? Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                const Icon(
-                  Icons.mark_email_read_outlined,
-                  color: Color(0xFF22D3EE),
-                  size: 48,
-                ),
-                const SizedBox(height: 24),
-                const Text(
-                  'Si un compte existe pour cette adresse, '
-                  'vous recevrez un lien de réinitialisation. '
-                  'Vérifiez également vos courriers indésirables.',
-                  textAlign: TextAlign.center,
-                  style: TextStyle(color: Colors.white, fontSize: 14),
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Icon(
+                      Icons.mark_email_read_outlined,
+                      color: Color(0xFF22D3EE),
+                      size: 32,
+                    ),
+                    const SizedBox(width: 14),
+                    Expanded(
+                      child: Text(
+                        'Si un compte existe pour cette adresse, '
+                        'vous recevrez un lien de réinitialisation. '
+                        'Vérifiez également vos courriers indésirables.',
+                        style: TextStyle(
+                          color: Colors.white.withValues(alpha: 0.85),
+                          fontSize: 15,
+                          height: 1.4,
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
                 const SizedBox(height: 28),
                 AuthPrimaryButton(
@@ -121,14 +135,6 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  const Text(
-                    'Saisissez l’adresse e-mail de votre compte. '
-                    'Nous vous enverrons un lien pour choisir '
-                    'un nouveau mot de passe.',
-                    textAlign: TextAlign.center,
-                    style: TextStyle(color: Colors.white70, fontSize: 14),
-                  ),
-                  const SizedBox(height: 28),
                   AuthTextField(
                     controller: _emailController,
                     label: 'E-mail',
@@ -156,7 +162,7 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
                       _errorMessage!,
                       style: const TextStyle(
                         color: Color(0xFFFCA5A5),
-                        fontSize: 12,
+                        fontSize: 14,
                       ),
                     ),
                   ],
