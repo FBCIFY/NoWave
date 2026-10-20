@@ -115,7 +115,7 @@ elif name == 'curl':
             sys.exit(22)
     elif active == new and failure == 'private_http':
         sys.exit(22)
-    if 'untrusted.example' in args:
+    if 'Host: untrusted.example' in args:
         print('421', end='')
     elif 'Origin: https://untrusted.example' in args:
         print('403', end='')
@@ -249,6 +249,18 @@ def wait_for(file):
     while not file.exists():
         assert time.monotonic() < deadline, f"Timed out waiting for {file}"
         time.sleep(0.01)
+
+
+def test_untrusted_host_simulation_returns_expected_http_status(sandbox):
+    # Check the boundary directly: Bash 3.2 does not apply errexit to a failing
+    # [[ ... ]] the same way as Linux Bash, and can otherwise hide a bad mock.
+    result = subprocess.run(
+        [str(sandbox.bin / "curl"), "-s", "-o", "/dev/null", "-w", "%{http_code}",
+         "-H", "Host: untrusted.example", "http://127.0.0.1:18080/"],
+        env=sandbox.env, capture_output=True, text=True, timeout=10,
+    )
+    assert result.returncode == 0, result.stderr
+    assert result.stdout == "421"
 
 
 def test_concurrent_backups_same_second_have_separate_unpublished_dumps(sandbox):
