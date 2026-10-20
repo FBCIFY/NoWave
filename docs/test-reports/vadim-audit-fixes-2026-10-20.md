@@ -3,7 +3,7 @@
 Branche : `fix/vadim-audit-2026-10-19`, créée depuis `dev@8fdb36c` après mise à jour.
 Une branche commune pour la future PR. Le nouveau `dev@e708880`, qui contient
 la PR marine #93, a ensuite été intégré localement par le merge `dcc0a5c`.
-Aucune PR créée, aucun push, aucune fusion vers `dev`/`main` et aucun déploiement
+Aucune PR créée, aucun push, aucune fusion vers `dev`/`main` et aucun déploiement de production
 effectués pendant cette tâche.
 
 ## Corrections réalisées
@@ -33,13 +33,15 @@ modifiés.
 | NW-195 | Erreurs de tuiles conservées pendant l'installation | `93ea8de` |
 | NW-196 | Formulaire défilable avec texte agrandi et clavier | `dcdc68a` |
 
-## Alignement cartographique et investigations restantes
+## Alignement cartographique et investigations
 
 - [NW-187](NW-187.md) : choix existant confirmé par Vadim et vérifié sur Git :
   Mapbox conservé, PR #93 fusionnée dans `dev@e708880`. Documentation alignée
   et nouveau `dev` intégré à cette branche. Aucune réimplémentation de #93.
-- [NW-197](NW-197.md) : inspection et matrice de recette prêtes. Objectif
-  physique et focus lointain à vérifier sur plusieurs appareils.
+- [NW-197](NW-197.md) : ouverture et sélection du grand-angle `wide` observées
+  sur iPhone 12 Pro. Essais de netteté annulés par Vadim (tempête, immeuble).
+  Focus lointain et recette multi-appareils restent non validés. Outil prêt
+  pour reprise ; aucun changement de caméra de production.
 - [NW-201](NW-201.md) : mesure locale et trois comparaisons sur iPhone 12 Pro
   en mode profile réalisées. P95 UI Flutter en rotation de 2,63 à 2,98 ms,
   aucune frame mesurée au-delà du budget de 16,7 ms. Flux contrôlé, moteur
