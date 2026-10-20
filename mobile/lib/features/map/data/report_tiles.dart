@@ -62,7 +62,7 @@ class ReportTiles {
   /// voisins s'additionneraient jusqu'au rouge.
   static const _fadeStartZoom = 8.5;
 
-  /// Zoom où les badges ont fini d'apparaître, en fondu et en grandissant.
+  /// Zoom où les badges ont fini de grandir.
   static const _badgesFullZoom = 9.5;
 
   /// Taille des badges au début du fondu, avant de grandir jusqu'à 1.
@@ -365,7 +365,8 @@ class ReportTiles {
         minZoom: _badgesMinZoom,
         filter: _isReport,
         iconImageExpression: markerImageExpression(),
-        iconOpacityExpression: _zoomRamp(_badgesMinZoom, 0, _badgesFullZoom, 1),
+        // À 9, la zone colorée est déjà masquée : le badge doit être visible.
+        iconOpacity: 1,
         iconSizeExpression: _zoomRamp(
           _badgesMinZoom,
           _badgeStartScale,
