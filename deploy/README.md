@@ -126,3 +126,29 @@ La branche `main` est la **référence des releases stables**, promues par Pull 
 - **réception mobile et FCM** : recette spécifique, non prouvée par un conteneur démarré.
 
 Pour chaque livraison ou soutenance, noter la date, le SHA `dev`, le SHA annoncé par `/version`, le résultat du workflow GitHub Actions, la PR éventuelle `dev` vers `main` et les vérifications fonctionnelles réellement réalisées. Références : [parcours livraison](../docs/parcours/deploiement.md), [matrice de traçabilité](../docs/traceability-matrix.md), [CONTRIBUTING](../docs/CONTRIBUTING.md). Responsable : Brice (NW-57, NW-84).
+
+### Livraison contrôlée des correctifs cartographiques
+
+Le job de production est **désactivé par défaut**, y compris après un push sur
+`dev`. Pour autoriser délibérément une livraison, définir la variable
+GitHub Actions du dépôt `NOWAVE_PRODUCTION_DEPLOY_ENABLED=true`, seulement
+après revue du commit et préparation de la fenêtre de déploiement. La retirer
+ou la remettre à `false` après la livraison. Les validations des PR restent
+actives même lorsque cette variable est absente.
+
+Le workflow `.github/workflows/production.yml` vérifie cette variable avant
+de commencer le job de déploiement. Les règles de protection de l'environnement
+GitHub `production` (approbateurs, délais, restrictions de branches) doivent
+aussi être contrôlées dans les paramètres GitHub ; le code source ne permet pas
+d'établir leur configuration effective.
+
+La vérification publique `deploy/hostinger/verify-public.sh` sonde une fois
+par tentative trois tuiles marines représentatives près de Toulon :
+`seamarks/12/2115/1503.pbf`,
+`soundings/12/2115/1503.pbf` et
+`bathymetry/12/2115/1503.png`. Les réponses HTTP 429/503, autres erreurs
+non-2xx et délais dépassés empêchent la validation et déclenchent le rollback
+prévu par `deploy.sh`. Cette vérification à faible débit ne prouve pas la
+couverture complète des sept familles ni leur rendu Android ; conserver la
+recette cartographique sur téléphone après livraison. Les erreurs de fournisseur
+peuvent également bloquer la promotion, volontairement.
