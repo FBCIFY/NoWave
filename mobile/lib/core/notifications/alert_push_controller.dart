@@ -19,6 +19,7 @@ class AlertPushController extends ChangeNotifier {
   final _pending = Queue<AlertPush>();
   final _displayed = <String, DateTime>{};
   final _opened = <String, DateTime>{};
+  final _reserved = <String, DateTime>{};
   Future<void> Function(AlertPush)? _navigate;
   AlertPush? foreground;
   String? notice;
@@ -26,11 +27,35 @@ class AlertPushController extends ChangeNotifier {
   bool _sessionKnown = false;
   bool _started = false;
   bool _disposed = false;
-  bool _navigating = false;
   bool _ready = false;
+  int _attempt = 0;
+  AlertPush? _failed;
+  bool get ready => _ready;
+  int get sessionEpoch => _generation;
+  bool get canRetry => _failed != null && _uid != null && _ready;
+
+  /// SDK redelivery stays deduplicated; retry requires an explicit action.
+  void retry() {
+    final push = _failed;
+    if (!canRetry || push == null) return;
+    for (final key in _keys(push)) {
+      _reserved.remove(key);
+    }
+    _failed = null;
+    open(push);
+  }
+
   void setReady(bool ready) {
     if (_ready == ready) return;
     _ready = ready;
+    if (!ready) {
+      _generation++;
+      _failed = null;
+      _reserved.clear();
+      for (final push in _pending) {
+        _remember(_reserved, push);
+      }
+    }
     if (ready) scheduleMicrotask(_drain);
   }
 
@@ -42,10 +67,11 @@ class AlertPushController extends ChangeNotifier {
       _pending.clear();
       _displayed.clear();
       _opened.clear();
+      _reserved.clear();
       foreground = null;
       notice = null;
       _navigate = null;
-      _navigating = false;
+      _failed = null;
       _ready = false;
     }
     // Le premier utilisateur connecté peut reprendre le tap de lancement.
@@ -110,11 +136,7 @@ class AlertPushController extends ChangeNotifier {
 
   bool _remember(Map<String, DateTime> seen, AlertPush push) {
     seen.removeWhere((_, expiry) => !expiry.isAfter(_now()));
-    final keys = [
-      'alert:${push.alert.id}',
-      'event:${push.alert.eventKey}',
-      if (push.messageId != null) 'message:${push.messageId}',
-    ];
+    final keys = _keys(push);
     if (keys.any(seen.containsKey)) return false;
     for (final key in keys) {
       seen[key] = push.expiresAt;
@@ -125,16 +147,31 @@ class AlertPushController extends ChangeNotifier {
     return true;
   }
 
+  List<String> _keys(AlertPush push) => [
+    'alert:${push.alert.id}',
+    'event:${push.alert.eventKey}',
+    if (push.messageId != null) 'message:${push.messageId}',
+  ];
+
   void open(AlertPush push) {
-    if (_disposed) return;
+    if (_disposed || (_sessionKnown && _uid == null)) return;
     if (push.expired(_now())) {
       notice =
           'Cette alerte a expiré. Le signalement peut ne plus être disponible.';
       notifyListeners();
       return;
     }
-    if (!_remember(_opened, push)) return;
-    if (_pending.length == 32) _pending.removeFirst();
+    _opened.removeWhere((_, expiry) => !expiry.isAfter(_now()));
+    if (_keys(push).any(_opened.containsKey) || !_remember(_reserved, push)) {
+      return;
+    }
+    _failed = null;
+    if (_pending.length == 32) {
+      final discarded = _pending.removeFirst();
+      for (final key in _keys(discarded)) {
+        _reserved.remove(key);
+      }
+    }
     _pending.add(push);
     _drain();
   }
@@ -151,36 +188,48 @@ class AlertPushController extends ChangeNotifier {
     notice = null;
   }
 
-  Future<void> _drain() async {
-    if (_navigating ||
-        _disposed ||
+  void _drain() {
+    if (_disposed ||
         !_ready ||
         _uid == null ||
         _navigate == null ||
         _pending.isEmpty) {
       return;
     }
-    final generation = _generation;
-    final push = _pending.removeFirst();
-    if (push.expired(_now())) {
-      notice =
-          'Cette alerte a expiré. Le signalement peut ne plus être disponible.';
-      notifyListeners();
-      _drain();
-      return;
-    }
-    _navigating = true;
-    try {
-      await _navigate!(push);
-    } catch (_) {
-      if (!_disposed && generation == _generation) {
-        notice = 'Impossible d’ouvrir cette alerte. Consultez l’historique.';
+    while (_pending.isNotEmpty) {
+      final push = _pending.removeFirst();
+      if (push.expired(_now())) {
+        notice = 'Cette alerte a expiré. Le signalement peut ne plus être disponible.';
         notifyListeners();
+        continue;
       }
-    } finally {
-      if (!_disposed && generation == _generation) {
-        _navigating = false;
-        _drain();
+      unawaited(_navigatePush(push, _generation, ++_attempt, _navigate!));
+    }
+  }
+
+  Future<void> _navigatePush(
+    AlertPush push,
+    int generation,
+    int attempt,
+    Future<void> Function(AlertPush) navigate,
+  ) async {
+    try {
+      await navigate(push);
+      if (!_disposed && generation == _generation && _ready) {
+        _remember(_opened, push);
+        for (final key in _keys(push)) {
+          _reserved.remove(key);
+        }
+      }
+    } catch (error) {
+      if (!_disposed &&
+          _ready &&
+          generation == _generation &&
+          attempt == _attempt &&
+          _navigate == navigate) {
+        _failed = error is AlertOpenFailure && !error.retryable ? null : push;
+        notice = error is AlertOpenFailure ? error.message : 'Impossible de cadrer la carte. Réessayez ou consultez l’historique.';
+        notifyListeners();
       }
     }
   }
@@ -193,4 +242,11 @@ class AlertPushController extends ChangeNotifier {
     _pending.clear();
     super.dispose();
   }
+}
+
+/// HTTP recovery and camera/navigation recovery have different user messages.
+class AlertOpenFailure implements Exception {
+  const AlertOpenFailure(this.message, {this.retryable = true});
+  final String message;
+  final bool retryable;
 }

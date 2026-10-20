@@ -1,15 +1,12 @@
-import firebase_admin
 from firebase_admin import auth
 
 from app.application.ports.auth_provider import AuthProvider
+from app.infrastructure.adapters.firebase_app import initialize_firebase
 
 
 class FirebaseAuthAdapter(AuthProvider):
     def __init__(self):
-        try:
-            firebase_admin.get_app()
-        except ValueError:
-            firebase_admin.initialize_app()
+        initialize_firebase()
 
     def verify_token(self, token: str) -> dict:
         return auth.verify_id_token(token)

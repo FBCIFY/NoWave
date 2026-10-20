@@ -27,7 +27,7 @@ class _Gps extends geo.GeolocatorPlatform {
   }) async => geo.Position(
     longitude: 5.37,
     latitude: 43.29,
-    timestamp: DateTime.utc(2026, 10, 10),
+    timestamp: DateTime.now(),
     accuracy: 5,
     altitude: 0,
     altitudeAccuracy: 1,
@@ -36,6 +36,10 @@ class _Gps extends geo.GeolocatorPlatform {
     speed: 0,
     speedAccuracy: 1,
   );
+  @override
+  Stream<geo.Position> getPositionStream({
+    geo.LocationSettings? locationSettings,
+  }) => const Stream.empty();
 }
 
 class _Compass extends Fake implements CompassSettingsInterface {

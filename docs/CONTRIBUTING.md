@@ -111,5 +111,7 @@ Nobody develops directly on `main` or `dev`, including the repository owner.
 
 ## Contrôles automatiques
 
-Consulter [TESTING.md](TESTING.md) pour reproduire les contrôles Python, Flutter
-et PostGIS, retrouver les rapports et configurer les contrôles obligatoires.
+Consulter [TESTING.md](TESTING.md) pour reproduire les contrôles Python, Flutter,
+PostGIS et web, les audits de production, retrouver les rapports et configurer
+les contrôles obligatoires. Le workflow **NoWave CI** regroupe ces vérifications
+et conditionne le déploiement automatique depuis `dev` à leur réussite.

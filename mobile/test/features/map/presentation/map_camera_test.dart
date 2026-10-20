@@ -1,10 +1,9 @@
 import 'package:blueway/features/map/presentation/map_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:geolocator/geolocator.dart' as geo;
 import 'package:mapbox_maps_flutter/mapbox_maps_flutter.dart';
 
-import '../../../core/location/support/fake_geolocator.dart';
+import '../support/focus_fakes.dart';
 
 class _Location extends Fake implements LocationSettings {
   @override
@@ -51,52 +50,47 @@ class _Map extends Fake implements MapboxMap {
 }
 
 void main() {
-  late geo.GeolocatorPlatform previous;
-  late FakeGeolocator gps;
+  late FocusGps gps;
   setUp(() {
-    previous = geo.GeolocatorPlatform.instance;
-    geo.GeolocatorPlatform.instance = gps = FakeGeolocator();
+    gps = FocusGps()..onCurrent = () async => focusPosition();
   });
-  tearDown(() => geo.GeolocatorPlatform.instance = previous);
+  tearDown(() => gps.close());
 
-  testWidgets(
-    'GPS : vol du globe à Z 15.5, puis mises à jour sans suivi caméra',
-    (tester) async {
-      await tester.pumpWidget(const MaterialApp(home: MapScreen()));
-      final map = _Map();
-      tester.widget<MapWidget>(find.byType(MapWidget)).onMapCreated!(map);
-      await tester.pumpAndSettle();
-      // La collecte initiale du GPS ne déplace pas la caméra libre.
-      expect(map.flights, isEmpty);
-      expect(
-        tester.widget<MapWidget>(find.byType(MapWidget)).viewport,
-        isNot(isA<FollowPuckViewportState>()),
-      );
+  testWidgets('GPS : globe initial puis suivi et recentrage au zoom de dev', (
+    tester,
+  ) async {
+    await tester.pumpWidget(MaterialApp(home: MapScreen(locationService: gps)));
+    final map = _Map();
+    tester.widget<MapWidget>(find.byType(MapWidget)).onMapCreated!(map);
+    await tester.pumpAndSettle();
+    // Le globe reste la vue avant localisation ; le GPS reprend ensuite
+    // le suivi de dev, y compris au recentrage depuis un zoom éloigné.
+    expect(map.flights, isEmpty);
+    var viewport =
+        tester.widget<MapWidget>(find.byType(MapWidget)).viewport
+            as FollowPuckViewportState;
+    expect(viewport.zoom, 14);
+    expect(viewport.pitch, 60);
 
-      await tester.tap(find.byTooltip('Recentrer sur ma position'));
-      await tester.pumpAndSettle();
-      expect(map.flights, hasLength(1));
-      final flight = map.flights.single;
-      expect(flight.center!.coordinates.lng, testPosition().longitude);
-      expect(flight.center!.coordinates.lat, testPosition().latitude);
-      expect(flight.zoom, 15.5);
-      expect(flight.pitch, 0);
-      expect(map.durations.single, 2200);
-      expect(
-        tester.widget<MapWidget>(find.byType(MapWidget)).viewport,
-        isA<IdleViewportState>(),
-      );
+    await tester.tap(find.byTooltip('Recentrer sur ma position'));
+    await tester.pumpAndSettle();
+    expect(map.flights, isEmpty);
+    viewport =
+        tester.widget<MapWidget>(find.byType(MapWidget)).viewport
+            as FollowPuckViewportState;
+    expect(viewport.zoom, 14);
+    expect(viewport.pitch, 40);
+    expect(viewport.bearing, isA<FollowPuckViewportStateBearingConstant>());
 
-      gps.emit(testPosition(latitude: 43.30));
-      await tester.pumpAndSettle();
-      expect(map.flights, hasLength(1));
-      expect(
-        tester.widget<MapWidget>(find.byType(MapWidget)).viewport,
-        isA<IdleViewportState>(),
-      );
-      await tester.pumpWidget(const SizedBox.shrink());
-    },
-  );
+    gps.positions.add(focusPosition(latitude: 43.30));
+    await tester.pumpAndSettle();
+    expect(map.flights, isEmpty);
+    expect(
+      tester.widget<MapWidget>(find.byType(MapWidget)).viewport,
+      isA<FollowPuckViewportState>(),
+    );
+    await tester.pumpWidget(const SizedBox.shrink());
+  });
 
   testWidgets(
     'le badge Z suit les événements caméra sans remplacer les coordonnées',

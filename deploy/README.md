@@ -4,9 +4,28 @@ Le VPS héberge le site web, l’API FastAPI et PostgreSQL/PostGIS dans des cont
 
 ## Livraison
 
-Le workflow `.github/workflows/production.yml` exécute les tests web, API et base de données, puis les audits des dépendances et des quatre images Docker. Après un push sur `dev`, un résultat valide déclenche le déploiement de cette révision exacte sur le VPS. Les pull requests et les lancements manuels exécutent seulement la validation.
+Le workflow **NoWave CI** (`.github/workflows/checks.yml`) exécute une seule fois
+les contrôles Python, Flutter, PostGIS et web, dont le test HTTP du service Nginx
+autonome. Après leur réussite, il appelle `.github/workflows/production.yml`
+pour les audits des dépendances et des quatre images Docker. Un échec d'un
+contrôle ou d'un audit bloque la livraison.
+
+Après un push sur `dev`, un résultat valide déclenche le déploiement de cette
+révision exacte sur le VPS. Les pull requests vers `dev` et `main` et les
+lancements manuels exécutent seulement la validation. Pour une vérification
+manuelle, lancer **NoWave CI** dans GitHub Actions ; `production.yml` est un
+workflow appelé, sans déclencheur indépendant. Les livraisons sont sérialisées
+et ne sont pas annulées par un nouveau push.
 
 Le script `hostinger/ci-deploy.sh` reconstruit et audite les images sur le VPS, puis appelle `hostinger/deploy.sh`. Celui-ci effectue une sauvegarde, applique les migrations, démarre les services et vérifie la version sur l’adresse privée. Le tunnel est ensuite mis à jour et les routes publiques sont vérifiées.
+
+Les rapports JSON d’audit sont conservés dans `test-results/containers`. La base
+Trivy, son cache et les exports `.tar` des images sont temporaires : chaque export
+est supprimé après son analyse et le répertoire de travail est nettoyé à la fin du
+script, y compris en cas d’échec ou d’interruption SIGINT/SIGTERM. Un arrêt forcé
+(SIGKILL) ou une panne du serveur peut laisser un répertoire `.audit-*` à nettoyer
+après avoir vérifié qu’aucun audit ne l’utilise. Les images Docker restent disponibles
+pour le déploiement et le retour arrière.
 
 ## Protection et sauvegardes
 
@@ -18,6 +37,26 @@ Le script `hostinger/ci-deploy.sh` reconstruit et audite les images sur le VPS, 
 ## Accès GitHub nécessaire
 
 Pour que le déploiement automatique fonctionne, l’environnement GitHub `production` doit contenir la variable `NOWAVE_DEPLOY_HOST` et les secrets `NOWAVE_DEPLOY_SSH_KEY` et `NOWAVE_DEPLOY_KNOWN_HOSTS`. Ces accès ne sont pas fournis par le dépôt.
+
+## Notifications de proximité
+
+Le service `notifications` démarre avec le profil de production `api`, depuis
+la même image et la même révision que l’API. Il utilise uniquement les secrets
+PostgreSQL et Firebase existants et dispose d’un accès sortant à FCM. Le compte
+Firebase doit être autorisé à envoyer des messages au projet `blueway-dev`.
+Les secrets restent hors du dépôt. Aucun nouveau schéma ni migration ne sont requis.
+
+Le déploiement vérifie que le conteneur exécute le worker attendu à la bonne
+révision. Un échec déclenche le rollback ; les workers de la nouvelle version
+sont arrêtés avant de restaurer les services de la version précédente. Ce contrôle
+de processus ne prouve pas la disponibilité de FCM ni la réception sur téléphone.
+
+Pour le diagnostic, consulter les logs du service `notifications` et les compteurs
+de `nowave.notifications` par `status` et `last_error_code`, sans afficher de token.
+Des tâches `pending` à zéro tentative avec un worker absent indiquent que l’envoi
+n’a pas démarré, même si l’API est saine. Au démarrage, le worker reprend les tâches
+committées, revérifie leur éligibilité et clôture les tâches expirées sans les envoyer.
+`sent` signifie acceptation par FCM ; la réception doit être vérifiée sur un téléphone.
 
 ## Stockage photo NW-112
 
@@ -58,3 +97,16 @@ minutes, masquer la photo et vérifier qu'aucune nouvelle URL n'est émise. Simu
 une panne de stockage puis confirmer que le même report_id peut être réessayé.
 Vérifier les logs et la disparition d'un objet orphelin après le délai de nettoyage.
 Utiliser un compte de recette ; aucune réussite de cette recette n'est implicite.
+
+## Convention Git de déploiement - [FIX T15 (NW-168)](https://linear.app/blueway/issue/NW-168) (19/10/2026)
+
+La branche `dev` est à la fois la **branche d'intégration** et, après les quatre contrôles CI ainsi que les audits requis, la source du **déploiement automatique actuel** sur le VPS. Le déploiement utilise le SHA précis du push validé. L'environnement GitHub portant le nom `production` ne constitue pas la preuve d'un deuxième serveur ou d'un environnement staging séparé.
+
+La branche `main` est la **référence des releases stables**, promues par Pull Request depuis `dev` après QA. Dans les workflows en vigueur, un push sur `main` ne déclenche **pas** de déploiement autonome ; une PR vers `main` exécute uniquement la validation. Il faut donc distinguer :
+
+- **code présent dans `dev`** : dernière intégration partagée ;
+- **version réellement déployée** : SHA confirmé par `GET /version` et le workflow de livraison ;
+- **release stable validée** : révision promue sur `main` après recette ;
+- **réception mobile et FCM** : recette spécifique, non prouvée par un conteneur démarré.
+
+Pour chaque livraison ou soutenance, noter la date, le SHA `dev`, le SHA annoncé par `/version`, le résultat du workflow GitHub Actions, la PR éventuelle `dev` vers `main` et les vérifications fonctionnelles réellement réalisées. Références : [parcours livraison](../docs/parcours/deploiement.md), [matrice de traçabilité](../docs/traceability-matrix.md), [CONTRIBUTING](../docs/CONTRIBUTING.md). Responsable : Brice (NW-57, NW-84).

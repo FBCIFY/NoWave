@@ -7,6 +7,14 @@ from uuid import UUID
 
 
 RETRY_MINUTES = (1, 5, 15, 30, 60)
+METERS_PER_NAUTICAL_MILE = 1852
+NOTIFICATION_DESCRIPTION_MAX = 100
+DEFAULT_NOTIFICATION_BODY = "Un signalement à proximité."
+CATEGORY_LABELS = {
+    "marine_animal": "Animal marin",
+    "obstruction": "Obstacle",
+    "pollution": "Pollution",
+}
 
 
 class PushSendError(Exception):
@@ -45,6 +53,17 @@ def coordinate_dms(value: float, positive: str, negative: str) -> str:
     return f"{degrees}° {minutes}′ {seconds}″ {direction}"
 
 
+def nautical_miles(distance_m: float) -> str:
+    # Same thresholds and rounding as formatNauticalMiles on mobile.
+    miles = distance_m / METERS_PER_NAUTICAL_MILE
+    if miles < 0.1:
+        return "< 0,1 NM"
+    if miles < 10:
+        tenths = floor(miles * 10 + 0.5)
+        return f"{tenths // 10},{tenths % 10} NM"
+    return f"{floor(miles + 0.5)} NM"
+
+
 @dataclass(frozen=True)
 class NotificationDelivery:
     notification_id: UUID
@@ -60,6 +79,19 @@ class NotificationDelivery:
     expires_at: datetime
     attempt_count: int
     fcm_token: str = field(repr=False)
+    description: str | None = field(default=None, repr=False)
+
+    def title(self) -> str:
+        label = CATEGORY_LABELS.get(self.category, "Signalement")
+        return f"{label} · {nautical_miles(self.distance_m)}"
+
+    def body(self) -> str:
+        description = " ".join((self.description or "").split())
+        if not description:
+            return DEFAULT_NOTIFICATION_BODY
+        if len(description) > NOTIFICATION_DESCRIPTION_MAX:
+            description = description[: NOTIFICATION_DESCRIPTION_MAX - 1].rstrip() + "…"
+        return f"« {description} »"
 
     def data(self) -> dict[str, str]:
         return {

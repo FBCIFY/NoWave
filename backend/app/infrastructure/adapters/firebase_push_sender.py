@@ -1,12 +1,12 @@
 from datetime import UTC, datetime
 
-import firebase_admin
 from google.auth.exceptions import GoogleAuthError
 from google.auth.transport.requests import Request
 import httpx
 import requests
 
 from app.application.ports.push_sender import PushSender
+from app.infrastructure.adapters.firebase_app import initialize_firebase
 from app.domain.notification import (
     NotificationDelivery,
     PushSendError,
@@ -29,10 +29,7 @@ class FirebasePushSender(PushSender):
     @classmethod
     def from_environment(cls):
         try:
-            try:
-                app = firebase_admin.get_app()
-            except ValueError:
-                app = firebase_admin.initialize_app()
+            app = initialize_firebase()
             credentials = app.credential.get_credential()
             if not app.project_id:
                 raise ValueError("missing project")
@@ -60,8 +57,8 @@ class FirebasePushSender(PushSender):
             "token": delivery.fcm_token,
             "data": delivery.data(),
             "notification": {
-                "title": "Alerte NoWave",
-                "body": "Un signalement à proximité.",
+                "title": delivery.title(),
+                "body": delivery.body(),
             },
             "android": {
                 "ttl": f"{int(remaining)}s",
@@ -72,6 +69,7 @@ class FirebasePushSender(PushSender):
                     "apns-expiration": str(int(delivery.expires_at.timestamp())),
                     "apns-collapse-id": str(delivery.alert_id),
                 },
+                "payload": {"aps": {"sound": "default"}},
             },
         }
         try:
