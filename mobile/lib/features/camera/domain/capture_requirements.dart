@@ -3,6 +3,8 @@ const double maxCaptureGpsAccuracyMeters = 50;
 
 bool isCaptureGpsAccuracySufficient(double? accuracyMeters) {
   return accuracyMeters != null &&
+      accuracyMeters.isFinite &&
+      accuracyMeters >= 0 &&
       accuracyMeters <= maxCaptureGpsAccuracyMeters;
 }
 
