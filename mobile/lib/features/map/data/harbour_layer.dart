@@ -1,7 +1,6 @@
-import 'dart:ui' as ui;
-
 import 'package:mapbox_maps_flutter/mapbox_maps_flutter.dart';
 
+import 'marine_icon_image.dart';
 import 'marine_tiles.dart';
 
 /// Qualified port places, independent of detailed quay/pier geometries.
@@ -133,43 +132,11 @@ class HarbourLayer {
     ],
   );
 
-  /// Original NoWave geometric artwork, CC0; drawn at 3×, no external sprite.
-  /// A shared anchor silhouette; a small ring distinguishes qualified marinas.
+  /// PNG NoWave 72x72 ; même asset et même dimension que les autres symboles.
   static Future<MbxImage> icon({required bool marina}) async {
-    final recorder = ui.PictureRecorder();
-    final canvas = ui.Canvas(recorder)..scale(3);
-    final anchor = ui.Path()
-      ..moveTo(12, 7)
-      ..lineTo(12, 20)
-      ..moveTo(8, 10)
-      ..lineTo(16, 10)
-      ..moveTo(4, 14)
-      ..cubicTo(4, 18, 8, 20, 12, 20)
-      ..cubicTo(16, 20, 20, 18, 20, 14)
-      ..moveTo(4, 17)
-      ..lineTo(4, 14)
-      ..lineTo(7, 15)
-      ..moveTo(17, 15)
-      ..lineTo(20, 14)
-      ..lineTo(20, 17)
-      ..addOval(const ui.Rect.fromLTWH(9.6, 2.4, 4.8, 4.8));
-    for (final halo in [true, false]) {
-      final paint = ui.Paint()
-        ..color = ui.Color(halo ? 0xFFF8FCFE : 0xFF395C70)
-        ..style = ui.PaintingStyle.stroke
-        ..strokeWidth = halo ? 3.3 : 1.5
-        ..strokeCap = ui.StrokeCap.round
-        ..strokeJoin = ui.StrokeJoin.round;
-      canvas.drawPath(anchor, paint);
-      if (marina) {
-        canvas.drawCircle(const ui.Offset(18.5, 5), 1.7, paint);
-      }
-    }
-    final picture = recorder.endRecording();
-    final image = await picture.toImage(72, 72);
-    final bytes = await image.toByteData(format: ui.ImageByteFormat.png);
-    image.dispose();
-    picture.dispose();
-    return MbxImage(width: 72, height: 72, data: bytes!.buffer.asUint8List());
+    final asset = marina
+        ? 'assets/icons/harbours/marina.png'
+        : 'assets/icons/harbours/port.png';
+    return MarineIconImage.load(asset);
   }
 }

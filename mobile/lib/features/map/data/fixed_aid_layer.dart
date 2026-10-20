@@ -1,7 +1,7 @@
-import 'package:flutter/services.dart';
 import 'package:mapbox_maps_flutter/mapbox_maps_flutter.dart';
 
 import 'buoy_layer.dart';
+import 'marine_icon_image.dart';
 
 /// Aides fixes sur la source seamark existante, sous les bouées prioritaires.
 class FixedAidLayer {
@@ -42,7 +42,7 @@ class FixedAidLayer {
     'grey-red',
   ];
   static const _lightColors = ['default', 'red', 'green', 'yellow', 'white'];
-  Future<Map<String, Uint8List>>? _images;
+  Future<Map<String, MbxImage>>? _images;
   Future<void>? _installing;
 
   Future<void> addTo(MapboxMap map) async {
@@ -68,11 +68,15 @@ class FixedAidLayer {
     final style = map.style;
     for (final entry in (await (_images ??= _loadImages())).entries) {
       if (await style.hasStyleImage(entry.key)) continue;
-      final size = entry.key == 'nowave-beacon-neutral' ? 12 : 72;
+      final scale = entry.key == 'nowave-beacon-neutral'
+          ? 18.0
+          : entry.key.startsWith('nowave-light-')
+          ? 6.0
+          : 3.0;
       await style.addStyleImage(
         entry.key,
-        entry.key.startsWith('nowave-light-') ? 6 : 3,
-        MbxImage(width: size, height: size, data: entry.value),
+        scale,
+        entry.value,
         false,
         [],
         [],
@@ -88,7 +92,7 @@ class FixedAidLayer {
     }
   }
 
-  Future<Map<String, Uint8List>> _loadImages() async {
+  Future<Map<String, MbxImage>> _loadImages() async {
     try {
       final names = [
         for (final v in _variants) 'beacon-$v',
@@ -97,12 +101,12 @@ class FixedAidLayer {
       ];
       return {
         for (final n in names)
-          'nowave-$n': (await rootBundle.load('assets/icons/fixed-aids/$n.png'))
-              .buffer
-              .asUint8List(),
-        'nowave-beacon-neutral': (await rootBundle.load(
+          'nowave-$n': await MarineIconImage.load(
+            'assets/icons/fixed-aids/$n.png',
+          ),
+        'nowave-beacon-neutral': await MarineIconImage.load(
           'assets/icons/buoys/neutral.png',
-        )).buffer.asUint8List(),
+        ),
       };
     } catch (_) {
       _images = null;

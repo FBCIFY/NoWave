@@ -77,10 +77,12 @@ class TestStyle extends Fake implements StyleManager {
     List<ImageStretches?> stretchY,
     ImageContent? content,
   ) async {
-    expect(scale, 3);
-    final size = id == 'nowave-buoy-neutral' ? 12 : 72;
+    final neutral = id == 'nowave-buoy-neutral';
+    expect(scale, neutral ? 18 : 3);
+    const size = 72;
     expect(image.width, size);
     expect(image.height, size);
+    expect(image.width / scale, neutral ? 4 : 24);
     expect(image.data.take(8), [137, 80, 78, 71, 13, 10, 26, 10]);
     expect(images.add(id), isTrue);
     imageAdds++;
@@ -414,14 +416,16 @@ void main() {
           bytes.buffer.asUint8List(),
         );
         final frame = await codec.getNextFrame();
-        final size = name == 'neutral' ? 12 : 72;
+        const size = 72;
         expect(frame.image.width, size);
         expect(frame.image.height, size);
         if (name == 'neutral') {
           final data = (await frame.image.toByteData())!.buffer.asUint8List();
-          // Petit disque sombre : centre opaque, coins transparents, sans halo.
-          final center = (6 * size + 6) * 4;
-          expect(data.sublist(center, center + 4), [32, 38, 44, 255]);
+          // Le nouveau dessin neutre reste sombre, opaque au centre et
+          // transparent aux coins ; sa densité 18 conserve le canevas à 4 px.
+          final center = (36 * size + 36) * 4;
+          expect(data.sublist(center, center + 4), [13, 13, 13, 255]);
+          expect(frame.image.width / 18, 4);
           for (final corner in [
             0,
             size - 1,

@@ -47,6 +47,7 @@ flutter:
     - assets/images/
     - assets/icons/buoys/
     - assets/icons/fixed-aids/
+    - assets/icons/harbours/
 
   # Raleway, la police du logo NoWave (licence OFL dans le même dossier).
   # Embarquée plutôt que téléchargée : elle reste disponible hors réseau.

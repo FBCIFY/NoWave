@@ -1,29 +1,25 @@
 # NoWave fixed aids
 
-Original geometric artwork created for NoWave in 2026, dedicated to CC0 1.0.
-See LICENSE-CC0.md. No third-party drawing, sprite or style is incorporated.
+The supplied NoWave maritime palette contains 19 beacon variants, five
+lighthouses and five isolated-light variants. All PNGs are transparent 72×72
+images. Beacons and lighthouses use pixel ratio 3 (24 logical pixels before
+zoom scaling); isolated lights use pixel ratio 6 (12 logical pixels).
+The unqualified beacon fallback reuses the buoy neutral image at ratio 18
+(4 logical pixels), without deriving a qualified beacon from its light colour.
 
-`mobile/tool/make_fixed_aid_icons.py` generates these PNGs from the inline SVG
-geometry with the existing development tool CairoSVG; no mobile dependency.
-Beacons/lighthouses: 72×72 at density 3 (24 logical px before zoom scaling).
-Lights: 72×72 at density 6 (12 logical px), a compact four-ray star. The neutral fallback reuses the small
-existing dark dot, without implying an unqualified category.
+`FixedAidLayer` retains the existing IALA A/B checks and the published order
+of green/white, red/white, green/grey and red/grey bands. Grey is never replaced
+by white. Cardinal topmarks remain north both up, south both down, east bases
+together, west points together. Isolated danger retains two black spheres;
+safe water retains vertical red/white bands and a red sphere. Unknown or
+multiple light colours select the default icon; no geographical light sector
+is inferred from the artwork.
 
-Upright narrow supports with a foot distinguish beacons from floating buoys.
-Four fixed lateral variants preserve published horizontal green/white or
-red/white bands and their order. They require a lateral category consistent
-with the declared IALA A/B system; a light colour alone never selects them.
-The Môle Bérouard SHOM beacon is a verified green/white, starboard, IALA A case.
-Four further variants preserve published red/grey and green/grey horizontal
-bands (including reversed order), with the same strict lateral/IALA checks.
-The SHOM Antibes marks FR000002555800001 and FR000002556200001 are verified
-green/grey starboard and red/grey port cases; grey is never replaced by white.
-Cardinal topmarks: north both up, south both down, east bases together, west
-points together. The support band colours follow the existing qualified buoy
-rules; these are abstract display symbols, not replicas of physical shapes.
-Lighthouses use a small tower/lantern. Lights use a smaller coloured star with four rays, distinct from a fixed
-support or floating buoy. Multi-colour or unknown light colour uses a neutral
-lantern: no sector is inferred, and no characteristic text is drawn.
+`MarineIconImage` supplies encoded PNG bytes with their decoded dimensions,
+as required by the Android and iOS bridges of Mapbox Maps Flutter 2.30.1.
+Images are cached per layer instance, restored after style reloads, and loading
+errors are propagated so a later installation can retry.
 
-Regenerate: `python mobile/tool/make_fixed_aid_icons.py`
-(after installing cairosvg in that development environment).
+`LICENSE-CC0.md` and `mobile/tool/make_fixed_aid_icons.py` document the historical
+NoWave geometric drawings. That generator recreates the old artwork and must
+not be used to regenerate the new supplied palette.

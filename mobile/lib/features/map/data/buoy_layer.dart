@@ -1,11 +1,11 @@
-import 'package:flutter/services.dart';
 import 'package:mapbox_maps_flutter/mapbox_maps_flutter.dart';
 
 import '../../../core/api/api_config.dart';
+import 'marine_icon_image.dart';
 import 'marine_tiles.dart';
 
 /// Bouées seules, normalisées et fusionnées par le backend NoWave.
-/// Les symboles locaux dérivent de Temaki buoy (CC0), voir assets/icons/buoys.
+/// Symboles graphiques NoWave : assets/icons/buoys, avec règles IALA inchangées.
 class BuoyLayer {
   BuoyLayer({String? apiBaseUrl})
     : apiBaseUrl = apiBaseUrl ?? ApiConfig.marineBaseUrl;
@@ -33,7 +33,7 @@ class BuoyLayer {
     'preferred-starboard',
   ];
 
-  Future<Map<String, Uint8List>>? _images;
+  Future<Map<String, MbxImage>>? _images;
   Future<void>? _installing;
 
   /// Une installation à la fois ; les vérifications visent le style courant,
@@ -62,13 +62,13 @@ class BuoyLayer {
     final images = await (_images ??= _loadImages());
     for (final entry in images.entries) {
       if (await style.hasStyleImage(entry.key)) continue;
-      // Le neutral est un petit point (4 px logiques de canevas), sans
-      // changer la taille ni l’interpolation des onze symboles qualifiés.
-      final size = entry.key == _neutral ? 12 : 72;
+      // Le PNG neutre passe de 12 à 72 px : 72/18 conserve son canevas de
+      // 4 px logiques. Les onze symboles qualifiés restent à densité 3.
+      final scale = entry.key == _neutral ? 18.0 : 3.0;
       await style.addStyleImage(
         entry.key,
-        3,
-        MbxImage(width: size, height: size, data: entry.value),
+        scale,
+        entry.value,
         false,
         [],
         [],
@@ -94,13 +94,13 @@ class BuoyLayer {
     }
   }
 
-  Future<Map<String, Uint8List>> _loadImages() async {
+  Future<Map<String, MbxImage>> _loadImages() async {
     try {
       return {
         for (final variant in _variants)
-          'nowave-buoy-$variant': (await rootBundle.load(
+          'nowave-buoy-$variant': await MarineIconImage.load(
             'assets/icons/buoys/$variant.png',
-          )).buffer.asUint8List(),
+          ),
       };
     } catch (_) {
       _images = null;
