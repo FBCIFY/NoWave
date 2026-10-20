@@ -40,9 +40,11 @@ modifiés.
   et nouveau `dev` intégré à cette branche. Aucune réimplémentation de #93.
 - [NW-197](NW-197.md) : inspection et matrice de recette prêtes. Objectif
   physique et focus lointain à vérifier sur plusieurs appareils.
-- [NW-201](NW-201.md) : mesure locale reproductible réalisée, 120 reconstructions
-  de carte pour 120 changements de cap, aucune pour un cap inchangé.
-  Profilage natif requis avant conclusion et optimisation.
+- [NW-201](NW-201.md) : mesure locale et trois comparaisons sur iPhone 12 Pro
+  en mode profile réalisées. P95 UI Flutter en rotation de 2,63 à 2,98 ms,
+  aucune frame mesurée au-delà du budget de 16,7 ms. Flux contrôlé, moteur
+  Mapbox réel, couches marines vides locales. Aucune anomalie de fluidité
+  démontrée dans ce périmètre ; aucune optimisation de production ajoutée.
 
 ## Validation globale finale
 
