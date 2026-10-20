@@ -139,11 +139,13 @@ class AlertPush {
     required this.expiresAt,
     this.messageId,
     required this.positionDms,
+    this.recipientFirebaseUid,
   });
   final Alert alert;
   final DateTime expiresAt;
   final String? messageId;
   final String positionDms;
+  final String? recipientFirebaseUid;
 
   bool expired(DateTime now) => !expiresAt.isAfter(now);
 
@@ -176,6 +178,9 @@ class AlertPush {
       expiresAt: expiresAt,
       messageId: messageId,
       positionDms: positionDms,
+      recipientFirebaseUid: data.containsKey('recipient_firebase_uid')
+          ? Alert.nonEmpty(data['recipient_firebase_uid'])
+          : null,
     );
   }
 

@@ -79,6 +79,7 @@ class NotificationDelivery:
     expires_at: datetime
     attempt_count: int
     fcm_token: str = field(repr=False)
+    recipient_firebase_uid: str = field(repr=False)
     description: str | None = field(default=None, repr=False)
 
     def title(self) -> str:
@@ -95,6 +96,7 @@ class NotificationDelivery:
 
     def data(self) -> dict[str, str]:
         return {
+            "recipient_firebase_uid": self.recipient_firebase_uid,
             "notification_id": str(self.notification_id),
             "alert_id": str(self.alert_id),
             "report_id": str(self.report_id),

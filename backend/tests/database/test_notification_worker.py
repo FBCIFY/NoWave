@@ -167,6 +167,10 @@ def test_success_uses_current_token_and_history_uuid(jobs):
     assert message.description == "Filet dérivant"
     assert message.body() == "« Filet dérivant »"
     assert message.fcm_token == "rotated-token"
+    expected_uid = job["connection"].execute(
+        "SELECT firebase_uid FROM nowave.users WHERE id = %s", (job["user"],)
+    ).fetchone()[0]
+    assert message.data()["recipient_firebase_uid"] == expected_uid
     assert message.alert_id == job["alert"]
     assert message.notification_id == job["notification"]
     assert state(job)[:3] == ("sent", 1, None)

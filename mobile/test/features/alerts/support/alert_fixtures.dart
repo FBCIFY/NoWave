@@ -45,6 +45,7 @@ Map<String, dynamic> pushData({
   int version = 1,
   DateTime? expiry,
 }) => {
+  'recipient_firebase_uid': 'user-a',
   'alert_id': id,
   'report_id': reportId,
   'report_version': '$version',

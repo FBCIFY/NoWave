@@ -15,7 +15,7 @@ void main() {
       controller.dispose();
       await source.close();
     });
-    controller.setSession('user');
+    controller.setSession('user-a');
     controller.setReady(true);
     await controller.start();
     final opened = <String>[];

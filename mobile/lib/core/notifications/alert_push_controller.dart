@@ -119,6 +119,7 @@ class AlertPushController extends ChangeNotifier {
         return;
       }
       if (_uid == null ||
+          push.recipientFirebaseUid != _uid ||
           !_ready ||
           push.expired(_now()) ||
           !_remember(_displayed, push)) {
@@ -153,8 +154,18 @@ class AlertPushController extends ChangeNotifier {
     if (push.messageId != null) 'message:${push.messageId}',
   ];
 
+  void _rejectAccount() {
+    notice = 'Cette notification ne peut pas être ouverte avec ce compte. Consultez l’historique des alertes.';
+    notifyListeners();
+  }
+
   void open(AlertPush push) {
     if (_disposed || (_sessionKnown && _uid == null)) return;
+    if (push.recipientFirebaseUid == null ||
+        (_uid != null && push.recipientFirebaseUid != _uid)) {
+      _rejectAccount();
+      return;
+    }
     if (push.expired(_now())) {
       notice =
           'Cette alerte a expiré. Le signalement peut ne plus être disponible.';
@@ -198,6 +209,13 @@ class AlertPushController extends ChangeNotifier {
     }
     while (_pending.isNotEmpty) {
       final push = _pending.removeFirst();
+      if (push.recipientFirebaseUid != _uid) {
+        for (final key in _keys(push)) {
+          _reserved.remove(key);
+        }
+        _rejectAccount();
+        continue;
+      }
       if (push.expired(_now())) {
         notice = 'Cette alerte a expiré. Le signalement peut ne plus être disponible.';
         notifyListeners();

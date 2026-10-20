@@ -20,6 +20,7 @@ def delivery(**changes):
         expires_at=now + timedelta(hours=1),
         attempt_count=0,
         fcm_token="test-token",
+        recipient_firebase_uid="user-a",
     )
     values.update(changes)
     return NotificationDelivery(**values)

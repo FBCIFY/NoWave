@@ -148,6 +148,7 @@ class PostgreSQLNotificationRepository:
                     expires_at=report["expires_at"],
                     attempt_count=notification["attempt_count"],
                     fcm_token=device["fcm_token"],
+                    recipient_firebase_uid=user["firebase_uid"],
                     description=report["description"],
                     **history,
                 )
