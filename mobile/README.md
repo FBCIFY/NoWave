@@ -20,29 +20,78 @@ Créer le fichier local depuis l’exemple :
 cp .env.example.json .env.json
 ```
 
-Compléter ensuite les trois valeurs :
+Compléter ensuite les valeurs :
 
 ```json
 {
   "MAPBOX_ACCESS_TOKEN": "jeton-public-mapbox",
-  "MAPTILER_STYLE_URL": "https://api.maptiler.com/maps/ocean-v4/style.json?key=cle-maptiler",
-  "API_BASE_URL": "https://adresse-du-backend/"
+  "API_BASE_URL": "https://api.example.com/"
 }
 ```
 
-`API_BASE_URL` doit se terminer par `/`. Pour un backend lancé sur le poste de
-développement, utiliser :
+`API_BASE_URL` est l’adresse principale du backend NoWave : profil,
+signalements, photos, alertes et tuiles authentifiées `/api/v1/map/tiles/`.
+`MARINE_API_BASE_URL` est facultative : renseignée, elle sélectionne un backend
+direct pour les seules sources publiques `bathymetry/`, `depth-contours/`,
+`soundings/`, `underwater-hazards/`, `seamarks/`, `port-infrastructure/` sous
+`/api/v1/map/`, ainsi que leurs crédits `/api/v1/map/marine-sources`.
+Absente, vide ou composée d’espaces, elle conserve `API_BASE_URL` pour ces sources.
+`ApiConfig` construit toutes les URL avec la même validation et normalisation.
+Les services Firebase et Mapbox conservent leurs adresses propres. Les photos sont téléchargées
+depuis les URLs signées retournées par le backend, sans token Firebase envoyé au
+stockage.
+
+Le slash final est facultatif. Un préfixe tel que `https://api.example.com/proxy/`
+est conservé devant `api/v1/...`. HTTP et HTTPS sont acceptés ; une adresse
+absente ou invalide produit une erreur explicite, sans repli vers localhost.
+Les placeholders Mapbox `{z}/{x}/{y}` et les versions de cache existantes
+(`coast-1`, `depths-4`, etc.) sont conservés.
+
+Il n’y a pas de routage global de `/api/v1/map/` : le client métier et la source
+de signalements restent sur `API_BASE_URL`. Le token utilisateur est réservé
+à cet hôte ; les sources publiques n’ajoutent pas d’en-tête d’authentification.
+L’ancienne variable `BATHYMETRY_TILES_URL` n’est pas lue. Ne pas la passer aux builds.
+`MAPTILER_STYLE_URL` n’est plus utilisé : la carte utilise Mapbox Standard.
+Le jeton Mapbox reste nécessaire ; les clés des fournisseurs marins restent
+sur le backend.
+
+Pour un backend de développement, choisir l’adresse adaptée :
 
 - Android Emulator : `http://10.0.2.2:8000/`
 - simulateur iOS : `http://127.0.0.1:8000/`
-- téléphone physique : `http://<adresse-ip-du-poste>:8000/`
+- téléphone physique : adresse du poste sur le même réseau, ou reverse USB.
 
-Le téléphone physique et le poste doivent être sur le même réseau. Une
-modification de `.env.json` nécessite un redémarrage complet de `flutter run`.
-Le fichier `.env.json` ne doit jamais être ajouté à Git.
+Exemple de recette USB sur le LGN, avec backend principal distant et données
+marines locales, sans proxy HTTP et sans modifier `.env.json` :
 
-`MAPTILER_STYLE_URL` n’est plus lu par l’application : la carte utilise le
-style Mapbox Standard.
+```bash
+adb -s AV5PJV6328H03108 reverse tcp:8004 tcp:8004
+flutter run -d AV5PJV6328H03108 --debug --no-pub \
+  --dart-define-from-file=.env.json \
+  --dart-define=API_BASE_URL=https://api.no-wave.fr/ \
+  --dart-define=MARINE_API_BASE_URL=http://127.0.0.1:8004/
+```
+
+Le serveur marin doit déjà être disponible sur le poste au port 8004.
+`adb reverse` transporte cette connexion TCP par USB ; aucune requête métier
+ni aucun token utilisateur n’est redirigé vers le backend marin local.
+Le reverse USB est nécessaire tant que cet APK utilise `127.0.0.1:8004`.
+
+Pour une APK utilisant uniquement le backend principal, laisser la variable
+marine vide (surcharge explicite si un ancien fichier privé la renseigne) :
+
+```bash
+flutter build apk --debug --no-pub --dart-define-from-file=.env.json \
+  --dart-define=MARINE_API_BASE_URL=
+```
+
+Une compilation réussie ne prouve pas que les routes marines sont déployées.
+Vérifier `/health`, les endpoints réels et leurs formats ; un 404 requiert un
+déploiement backend autorisé, sans substitution silencieuse vers le local.
+
+Une modification de configuration exige une reconstruction et un redémarrage
+complet. Le fichier privé `.env.json` reste ignoré par Git ; ne jamais le
+versionner, ni mettre de token Firebase dans un exemple ou un journal.
 
 ## Organisation du code
 

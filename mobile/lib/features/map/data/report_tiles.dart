@@ -235,8 +235,9 @@ class ReportTiles {
   /// Donne le token à Mapbox, pour les requêtes vers le backend seulement :
   /// le fond de carte, servi par Mapbox, ne doit pas le recevoir.
   Future<void> authorize(MapboxMap map) async {
+    final backend = ApiConfig.resolve('', baseUrl: _apiBaseUrl);
     final token = await _getIdToken();
-    await map.httpService.setCustomHeadersForHost(Uri.parse(_apiBaseUrl).host, {
+    await map.httpService.setCustomHeadersForHost(backend.host, {
       'Authorization': 'Bearer $token',
     });
   }
@@ -281,7 +282,13 @@ class ReportTiles {
       await style.addSource(
         VectorSource(
           id: sourceId,
-          tiles: ['${_apiBaseUrl}api/v1/map/tiles/{z}/{x}/{y}.mvt'],
+          tiles: [
+            ApiConfig.tileTemplate(
+              'tiles',
+              extension: 'mvt',
+              baseUrl: _apiBaseUrl,
+            ),
+          ],
           maxzoom: _tilesMaxZoom,
           prefetchZoomDelta: 0,
           tileNetworkRequestsDelay: _gestureTilesDelaySeconds,

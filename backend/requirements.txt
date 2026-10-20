@@ -9,3 +9,5 @@ python-multipart
 jinja2
 # Required by SQLAlchemy on the Linux x86_64 production host.
 greenlet
+mapbox-vector-tile==2.2.0
+shapely==2.1.2

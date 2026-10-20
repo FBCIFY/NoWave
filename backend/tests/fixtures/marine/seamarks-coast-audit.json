@@ -1,0 +1,1154 @@
+[
+  {
+    "zone": "antibes",
+    "type": "beacon_lateral",
+    "source": "shom",
+    "dataset": "bcnlat",
+    "raw": {
+      "type": "Feature",
+      "id": "bcnlat.1395",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          7.1321395,
+          43.5906488
+        ]
+      },
+      "geometry_name": "geometry",
+      "properties": {
+        "inspireid": "FR000002555600001",
+        "posacc": 0.5,
+        "objnam": "Antibes",
+        "nobjnm": null,
+        "inform": null,
+        "ninfom": null,
+        "numald": "0600101",
+        "persta": null,
+        "perend": null,
+        "condtn": null,
+        "convis": 2,
+        "bcnshp": 3,
+        "catlam": 1,
+        "colour": "3,1",
+        "colpat": "1",
+        "height": 16,
+        "verlen": 22,
+        "status": null,
+        "aisatn": null,
+        "daymar": null,
+        "topmar": null,
+        "fogsig": null,
+        "radsta": null,
+        "rtpbcn": null,
+        "rdosta": null,
+        "sistat": null,
+        "sistaw": null,
+        "lights": "FR000005324000001"
+      }
+    },
+    "expected": {
+      "id": "shom:bcnlat:FR000002555600001",
+      "color": "red_white",
+      "color_pattern": "horizontal",
+      "category": "port",
+      "navigation_system": "IALA_A",
+      "shape": "beacon_tower"
+    }
+  },
+  {
+    "zone": "antibes",
+    "type": "beacon_lateral",
+    "source": "shom",
+    "dataset": "bcnlat",
+    "raw": {
+      "type": "Feature",
+      "id": "bcnlat.1396",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          7.1301081,
+          43.5889999
+        ]
+      },
+      "geometry_name": "geometry",
+      "properties": {
+        "inspireid": "FR000002555800001",
+        "posacc": 0.5,
+        "objnam": null,
+        "nobjnm": null,
+        "inform": null,
+        "ninfom": null,
+        "numald": "0600102",
+        "persta": null,
+        "perend": null,
+        "condtn": null,
+        "convis": 2,
+        "bcnshp": 3,
+        "catlam": 2,
+        "colour": "4,7",
+        "colpat": "1",
+        "height": null,
+        "verlen": 6,
+        "status": null,
+        "aisatn": null,
+        "daymar": null,
+        "topmar": null,
+        "fogsig": null,
+        "radsta": null,
+        "rtpbcn": null,
+        "rdosta": null,
+        "sistat": null,
+        "sistaw": null,
+        "lights": "FR000062819600003"
+      }
+    },
+    "expected": {
+      "id": "shom:bcnlat:FR000002555800001",
+      "color": "green_grey",
+      "color_pattern": "horizontal",
+      "category": "starboard",
+      "navigation_system": "IALA_A",
+      "shape": "beacon_tower"
+    }
+  },
+  {
+    "zone": "antibes",
+    "type": "beacon_lateral",
+    "source": "shom",
+    "dataset": "bcnlat",
+    "raw": {
+      "type": "Feature",
+      "id": "bcnlat.1397",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          7.1283219,
+          43.586001
+        ]
+      },
+      "geometry_name": "geometry",
+      "properties": {
+        "inspireid": "FR000002556200001",
+        "posacc": 0.5,
+        "objnam": null,
+        "nobjnm": null,
+        "inform": "Old light support",
+        "ninfom": "Ancien feu",
+        "numald": "0600103",
+        "persta": null,
+        "perend": null,
+        "condtn": null,
+        "convis": 2,
+        "bcnshp": 3,
+        "catlam": 1,
+        "colour": "3,7",
+        "colpat": "1",
+        "height": 17,
+        "verlen": 8,
+        "status": "12",
+        "aisatn": null,
+        "daymar": null,
+        "topmar": null,
+        "fogsig": null,
+        "radsta": null,
+        "rtpbcn": null,
+        "rdosta": null,
+        "sistat": null,
+        "sistaw": null,
+        "lights": null
+      }
+    },
+    "expected": {
+      "id": "shom:bcnlat:FR000002556200001",
+      "color": "red_grey",
+      "color_pattern": "horizontal",
+      "category": "port",
+      "navigation_system": "IALA_A",
+      "shape": "beacon_tower"
+    }
+  },
+  {
+    "zone": "antibes",
+    "type": "light",
+    "source": "shom",
+    "dataset": "lights",
+    "raw": {
+      "type": "Feature",
+      "id": "lights.2723",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          7.1321395,
+          43.5906488
+        ]
+      },
+      "geometry_name": "geometry",
+      "properties": {
+        "inspireid": "FR000005324000001",
+        "posacc": 0.5,
+        "inform": null,
+        "ninfom": null,
+        "persta": null,
+        "perend": null,
+        "catlit": null,
+        "exclit": null,
+        "mltylt": null,
+        "valnmr": 11,
+        "sectr1": null,
+        "sectr2": null,
+        "orient": null,
+        "litvis": null,
+        "litchr": 2,
+        "colour": "3",
+        "siggrp": "(1)",
+        "sigper": 4,
+        "sigseq": null,
+        "height": 23,
+        "status": null
+      }
+    },
+    "expected": {
+      "id": "shom:lights:FR000005324000001",
+      "color": "red",
+      "color_pattern": "",
+      "category": "",
+      "navigation_system": "IALA_A",
+      "shape": ""
+    }
+  },
+  {
+    "zone": "antibes",
+    "type": "light",
+    "source": "shom",
+    "dataset": "lights",
+    "raw": {
+      "type": "Feature",
+      "id": "lights.6302",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          7.13055,
+          43.59065
+        ]
+      },
+      "geometry_name": "geometry",
+      "properties": {
+        "inspireid": "FR000062607200003",
+        "posacc": null,
+        "inform": null,
+        "ninfom": null,
+        "persta": null,
+        "perend": null,
+        "catlit": null,
+        "exclit": null,
+        "mltylt": null,
+        "valnmr": 5,
+        "sectr1": null,
+        "sectr2": null,
+        "orient": null,
+        "litvis": null,
+        "litchr": 2,
+        "colour": "4",
+        "siggrp": null,
+        "sigper": null,
+        "sigseq": null,
+        "height": 4.7,
+        "status": null
+      }
+    },
+    "expected": {
+      "id": "shom:lights:FR000062607200003",
+      "color": "green",
+      "color_pattern": "",
+      "category": "",
+      "navigation_system": "IALA_A",
+      "shape": ""
+    }
+  },
+  {
+    "zone": "porquerolles",
+    "type": "buoy_lateral",
+    "source": "shom",
+    "dataset": "boylat",
+    "raw": {
+      "type": "Feature",
+      "id": "boylat.1503",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          6.1969833,
+          43.0062167
+        ]
+      },
+      "geometry_name": "geometry",
+      "properties": {
+        "inspireid": "FR000016996600001",
+        "posacc": null,
+        "objnam": null,
+        "nobjnm": null,
+        "inform": null,
+        "ninfom": null,
+        "numald": "8300171",
+        "persta": null,
+        "perend": null,
+        "boyshp": 1,
+        "catlam": 2,
+        "colour": "4",
+        "colpat": null,
+        "status": null,
+        "aisatn": null,
+        "daymar": null,
+        "topmar": "FR000016996700001",
+        "fogsig": null,
+        "radsta": null,
+        "rtpbcn": null,
+        "rdosta": null,
+        "sistat": null,
+        "sistaw": null,
+        "lights": "FR000016996900001"
+      }
+    },
+    "expected": {
+      "id": "shom:boylat:FR000016996600001",
+      "color": "green",
+      "color_pattern": "",
+      "category": "starboard",
+      "navigation_system": "IALA_A",
+      "shape": "conical"
+    }
+  },
+  {
+    "zone": "porquerolles",
+    "type": "buoy_lateral",
+    "source": "shom",
+    "dataset": "boylat",
+    "raw": {
+      "type": "Feature",
+      "id": "boylat.1504",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          6.1994,
+          43.0064
+        ]
+      },
+      "geometry_name": "geometry",
+      "properties": {
+        "inspireid": "FR000016997400001",
+        "posacc": null,
+        "objnam": null,
+        "nobjnm": null,
+        "inform": null,
+        "ninfom": null,
+        "numald": "8300172",
+        "persta": null,
+        "perend": null,
+        "boyshp": 2,
+        "catlam": 1,
+        "colour": "3",
+        "colpat": null,
+        "status": null,
+        "aisatn": null,
+        "daymar": null,
+        "topmar": "FR000016997300001",
+        "fogsig": null,
+        "radsta": null,
+        "rtpbcn": null,
+        "rdosta": null,
+        "sistat": null,
+        "sistaw": null,
+        "lights": "FR000016997200001"
+      }
+    },
+    "expected": {
+      "id": "shom:boylat:FR000016997400001",
+      "color": "red",
+      "color_pattern": "",
+      "category": "port",
+      "navigation_system": "IALA_A",
+      "shape": "can"
+    }
+  },
+  {
+    "zone": "marseille",
+    "type": "beacon_cardinal",
+    "source": "shom",
+    "dataset": "bcncar",
+    "raw": {
+      "type": "Feature",
+      "id": "bcncar.652",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          5.3178167,
+          43.2796
+        ]
+      },
+      "geometry_name": "geometry",
+      "properties": {
+        "inspireid": "FR000015022700001",
+        "posacc": 10,
+        "objnam": null,
+        "nobjnm": null,
+        "inform": null,
+        "ninfom": null,
+        "numald": "1300266",
+        "persta": null,
+        "perend": null,
+        "condtn": null,
+        "convis": 2,
+        "bcnshp": 7,
+        "catcam": 3,
+        "colour": "6,2",
+        "colpat": "1",
+        "height": null,
+        "verlen": null,
+        "status": null,
+        "aisatn": null,
+        "daymar": null,
+        "topmar": "FR000015022600001",
+        "fogsig": null,
+        "radsta": null,
+        "rtpbcn": null,
+        "rdosta": null,
+        "sistat": null,
+        "sistaw": null,
+        "lights": "FR000015022500001"
+      }
+    },
+    "expected": {
+      "id": "shom:bcncar:FR000015022700001",
+      "color": "yellow_black",
+      "color_pattern": "horizontal",
+      "category": "south",
+      "navigation_system": "IALA_A",
+      "shape": "buoyant_beacon"
+    }
+  },
+  {
+    "zone": "toulon",
+    "type": "buoy_special_purpose",
+    "source": "shom",
+    "dataset": "boyspp",
+    "raw": {
+      "type": "Feature",
+      "id": "boyspp.713",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          5.9246,
+          43.1140667
+        ]
+      },
+      "geometry_name": "geometry",
+      "properties": {
+        "inspireid": "FR000014754800001",
+        "posacc": null,
+        "objnam": null,
+        "nobjnm": null,
+        "inform": null,
+        "ninfom": null,
+        "numald": null,
+        "persta": null,
+        "perend": null,
+        "boyshp": null,
+        "catspm": "18",
+        "colour": "2",
+        "colpat": null,
+        "status": null,
+        "aisatn": null,
+        "daymar": null,
+        "topmar": "FR000014754700001,FR000015225500003",
+        "fogsig": null,
+        "radsta": null,
+        "rtpbcn": null,
+        "rdosta": null,
+        "sistat": null,
+        "sistaw": null,
+        "lights": "FR000056671100003"
+      }
+    },
+    "expected": {
+      "id": "shom:boyspp:FR000014754800001",
+      "color": "black",
+      "color_pattern": "",
+      "category": "18",
+      "navigation_system": "IALA_A",
+      "shape": ""
+    }
+  },
+  {
+    "zone": "toulon",
+    "type": "buoy_special_purpose",
+    "source": "shom",
+    "dataset": "boyspp",
+    "raw": {
+      "type": "Feature",
+      "id": "boyspp.714",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          5.9204667,
+          43.1125833
+        ]
+      },
+      "geometry_name": "geometry",
+      "properties": {
+        "inspireid": "FR000014755100001",
+        "posacc": null,
+        "objnam": null,
+        "nobjnm": null,
+        "inform": null,
+        "ninfom": null,
+        "numald": null,
+        "persta": null,
+        "perend": null,
+        "boyshp": null,
+        "catspm": "18",
+        "colour": "2",
+        "colpat": null,
+        "status": null,
+        "aisatn": null,
+        "daymar": null,
+        "topmar": "FR000014755000001,FR000015225600003",
+        "fogsig": null,
+        "radsta": null,
+        "rtpbcn": null,
+        "rdosta": null,
+        "sistat": null,
+        "sistaw": null,
+        "lights": "FR000056671000003"
+      }
+    },
+    "expected": {
+      "id": "shom:boyspp:FR000014755100001",
+      "color": "black",
+      "color_pattern": "",
+      "category": "18",
+      "navigation_system": "IALA_A",
+      "shape": ""
+    }
+  },
+  {
+    "zone": "toulon",
+    "type": "beacon_cardinal",
+    "source": "shom",
+    "dataset": "bcncar",
+    "raw": {
+      "type": "Feature",
+      "id": "bcncar.342",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          5.9235903,
+          43.104025
+        ]
+      },
+      "geometry_name": "geometry",
+      "properties": {
+        "inspireid": "FR000002390400001",
+        "posacc": 0.4,
+        "objnam": "Banc de l'\u00c2ne",
+        "nobjnm": null,
+        "inform": null,
+        "ninfom": null,
+        "numald": "8300097",
+        "persta": null,
+        "perend": null,
+        "condtn": null,
+        "convis": 2,
+        "bcnshp": 5,
+        "catcam": 4,
+        "colour": "6,2,6",
+        "colpat": "1",
+        "height": 4.2,
+        "verlen": 4,
+        "status": null,
+        "aisatn": null,
+        "daymar": null,
+        "topmar": "FR000005260300001",
+        "fogsig": null,
+        "radsta": null,
+        "rtpbcn": null,
+        "rdosta": null,
+        "sistat": null,
+        "sistaw": null,
+        "lights": "FR000005260200001"
+      }
+    },
+    "expected": {
+      "id": "shom:bcncar:FR000002390400001",
+      "color": "yellow_black_yellow",
+      "color_pattern": "horizontal",
+      "category": "west",
+      "navigation_system": "IALA_A",
+      "shape": "pile"
+    }
+  },
+  {
+    "zone": "toulon",
+    "type": "lighthouse",
+    "source": "shom",
+    "dataset": "lndmrk",
+    "raw": {
+      "type": "Feature",
+      "id": "lndmrk.2593",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          5.9264373,
+          43.1010808
+        ]
+      },
+      "geometry_name": "geometry",
+      "properties": {
+        "inspireid": "FR000003125900003",
+        "posacc": 0.4,
+        "objnam": "Petite Passe",
+        "nobjnm": null,
+        "inform": null,
+        "ninfom": null,
+        "numald": null,
+        "condtn": null,
+        "convis": 2,
+        "catlmk": "17",
+        "functn": "33,39",
+        "colour": null,
+        "colpat": null,
+        "natcon": null,
+        "height": null,
+        "verlen": 22,
+        "status": null,
+        "aisatn": null,
+        "daymar": null,
+        "topmar": null,
+        "fogsig": null,
+        "radsta": null,
+        "rtpbcn": null,
+        "rdosta": null,
+        "sistat": null,
+        "sistaw": null,
+        "lights": null
+      }
+    },
+    "expected": {
+      "id": "shom:lndmrk:FR000003125900003",
+      "color": "",
+      "color_pattern": "",
+      "category": "tower",
+      "navigation_system": "IALA_A",
+      "shape": ""
+    }
+  },
+  {
+    "zone": "mandrier",
+    "type": "beacon_special_purpose",
+    "source": "shom",
+    "dataset": "bcnspp",
+    "raw": {
+      "type": "Feature",
+      "id": "bcnspp.870",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          5.92633,
+          43.09921
+        ]
+      },
+      "geometry_name": "geometry",
+      "properties": {
+        "inspireid": "FR000003201100003",
+        "posacc": 10,
+        "objnam": null,
+        "nobjnm": null,
+        "inform": null,
+        "ninfom": null,
+        "numald": null,
+        "persta": null,
+        "perend": null,
+        "condtn": null,
+        "convis": 2,
+        "bcnshp": 5,
+        "catspm": null,
+        "colour": null,
+        "colpat": null,
+        "height": 5,
+        "verlen": 3,
+        "status": null,
+        "aisatn": null,
+        "daymar": null,
+        "topmar": null,
+        "fogsig": null,
+        "radsta": null,
+        "rtpbcn": null,
+        "rdosta": null,
+        "sistat": null,
+        "sistaw": null,
+        "lights": null
+      }
+    },
+    "expected": {
+      "id": "shom:bcnspp:FR000003201100003",
+      "color": "",
+      "color_pattern": "",
+      "category": "",
+      "navigation_system": "IALA_A",
+      "shape": "pile"
+    }
+  },
+  {
+    "zone": "mandrier",
+    "type": "lighthouse",
+    "source": "shom",
+    "dataset": "lndmrk",
+    "raw": {
+      "type": "Feature",
+      "id": "lndmrk.2593",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          5.9264373,
+          43.1010808
+        ]
+      },
+      "geometry_name": "geometry",
+      "properties": {
+        "inspireid": "FR000003125900003",
+        "posacc": 0.4,
+        "objnam": "Petite Passe",
+        "nobjnm": null,
+        "inform": null,
+        "ninfom": null,
+        "numald": null,
+        "condtn": null,
+        "convis": 2,
+        "catlmk": "17",
+        "functn": "33,39",
+        "colour": null,
+        "colpat": null,
+        "natcon": null,
+        "height": null,
+        "verlen": 22,
+        "status": null,
+        "aisatn": null,
+        "daymar": null,
+        "topmar": null,
+        "fogsig": null,
+        "radsta": null,
+        "rtpbcn": null,
+        "rdosta": null,
+        "sistat": null,
+        "sistaw": null,
+        "lights": null
+      }
+    },
+    "expected": {
+      "id": "shom:lndmrk:FR000003125900003",
+      "color": "",
+      "color_pattern": "",
+      "category": "tower",
+      "navigation_system": "IALA_A",
+      "shape": ""
+    }
+  },
+  {
+    "zone": "miami",
+    "type": "beacon_lateral",
+    "source": "noaa",
+    "dataset": "harbour:1",
+    "raw": {
+      "type": "Feature",
+      "id": 179086,
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -80.1765067,
+          25.77195499999999
+        ]
+      },
+      "properties": {
+        "OBJECTID": 179086,
+        "OBJL": 7,
+        "BCNSHP": "stake, pole, perch, post",
+        "CATLAM": 1,
+        "COLOUR": "4",
+        "COLPAT": null,
+        "CONDTN": null,
+        "CONRAD": null,
+        "CONVIS": null,
+        "ELEVAT": null,
+        "HEIGHT": null,
+        "MARSYS": null,
+        "NATCON": null,
+        "OBJNAM": "Fishermans Channel Light 15",
+        "VERACC": null,
+        "VERDAT": null,
+        "VERLEN": null,
+        "INFORM": null,
+        "PICREP": null,
+        "SCAMIN": 29999,
+        "SORDAT": "20130305",
+        "SORIND": "US,US,reprt,7thCGD,LNM 10/13",
+        "DSNM": "US5MIACB.000"
+      }
+    },
+    "expected": {
+      "id": "noaa:harbour:1:179086",
+      "color": "green",
+      "color_pattern": "",
+      "category": "port",
+      "navigation_system": "IALA_B",
+      "shape": "stake__pole__perch__post"
+    }
+  },
+  {
+    "zone": "miami",
+    "type": "beacon_lateral",
+    "source": "noaa",
+    "dataset": "harbour:1",
+    "raw": {
+      "type": "Feature",
+      "id": 179100,
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -80.1730369,
+          25.770406400000013
+        ]
+      },
+      "properties": {
+        "OBJECTID": 179100,
+        "OBJL": 7,
+        "BCNSHP": "stake, pole, perch, post",
+        "CATLAM": 1,
+        "COLOUR": "4",
+        "COLPAT": null,
+        "CONDTN": null,
+        "CONRAD": null,
+        "CONVIS": null,
+        "ELEVAT": null,
+        "HEIGHT": null,
+        "MARSYS": null,
+        "NATCON": null,
+        "OBJNAM": "Fishermans Channel Light 13",
+        "VERACC": null,
+        "VERDAT": null,
+        "VERLEN": null,
+        "INFORM": null,
+        "PICREP": null,
+        "SCAMIN": 29999,
+        "SORDAT": "20010828",
+        "SORIND": "US,US,reprt,7thCGD,LNM 35/01",
+        "DSNM": "US5MIACC.000"
+      }
+    },
+    "expected": {
+      "id": "noaa:harbour:1:179100",
+      "color": "green",
+      "color_pattern": "",
+      "category": "port",
+      "navigation_system": "IALA_B",
+      "shape": "stake__pole__perch__post"
+    }
+  },
+  {
+    "zone": "miami",
+    "type": "light",
+    "source": "noaa",
+    "dataset": "harbour:11",
+    "raw": {
+      "type": "Feature",
+      "id": 214609,
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -80.1765067,
+          25.77195499999999
+        ]
+      },
+      "properties": {
+        "OBJECTID": 214609,
+        "OBJL": 75,
+        "CATLIT": " ",
+        "COLOUR": "4",
+        "EXCLIT": 4,
+        "HEIGHT": 4.9,
+        "LITCHR": 4,
+        "LITVIS": null,
+        "MARSYS": null,
+        "MLTYLT": null,
+        "OBJNAM": null,
+        "ORIENT": null,
+        "SECTR1": null,
+        "SECTR2": null,
+        "SIGGRP": "(1)",
+        "SIGPER": 1,
+        "SIGSEQ": "00.3+(00.7)",
+        "VERACC": null,
+        "VALNMR": 5,
+        "VERDAT": null,
+        "INFORM": null,
+        "SCAMIN": 29999,
+        "SORDAT": "20230228",
+        "SORIND": "US,US,reprt,7thCGD,LNM 09/23",
+        "DSNM": "US5MIACB.000"
+      }
+    },
+    "expected": {
+      "id": "noaa:harbour:11:214609",
+      "color": "green",
+      "color_pattern": "",
+      "category": "",
+      "navigation_system": "IALA_B",
+      "shape": ""
+    }
+  },
+  {
+    "zone": "miami",
+    "type": "light",
+    "source": "noaa",
+    "dataset": "harbour:11",
+    "raw": {
+      "type": "Feature",
+      "id": 214639,
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -80.16892969999998,
+          25.7650347
+        ]
+      },
+      "properties": {
+        "OBJECTID": 214639,
+        "OBJL": 75,
+        "CATLIT": " ",
+        "COLOUR": "6",
+        "EXCLIT": 4,
+        "HEIGHT": 4.9,
+        "LITCHR": 2,
+        "LITVIS": null,
+        "MARSYS": null,
+        "MLTYLT": null,
+        "OBJNAM": null,
+        "ORIENT": null,
+        "SECTR1": null,
+        "SECTR2": null,
+        "SIGGRP": "(1)",
+        "SIGPER": 2.5,
+        "SIGSEQ": "00.3+(02.2)",
+        "VERACC": null,
+        "VALNMR": 4,
+        "VERDAT": null,
+        "INFORM": null,
+        "SCAMIN": 29999,
+        "SORDAT": "20230228",
+        "SORIND": "US,US,reprt,7thCGD,LNM 09/23",
+        "DSNM": "US5MIACC.000"
+      }
+    },
+    "expected": {
+      "id": "noaa:harbour:11:214639",
+      "color": "yellow",
+      "color_pattern": "",
+      "category": "",
+      "navigation_system": "IALA_B",
+      "shape": ""
+    }
+  },
+  {
+    "zone": "miami",
+    "type": "beacon_special_purpose",
+    "source": "noaa",
+    "dataset": "harbour:3",
+    "raw": {
+      "type": "Feature",
+      "id": 97352,
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -80.17885810000001,
+          25.771395799999993
+        ]
+      },
+      "properties": {
+        "OBJECTID": 97352,
+        "OBJL": 9,
+        "BCNSHP": "stake, pole, perch, post",
+        "CATSPM": "27",
+        "COLOUR": "6",
+        "COLPAT": null,
+        "CONDTN": null,
+        "CONRAD": null,
+        "CONVIS": null,
+        "ELEVAT": null,
+        "HEIGHT": null,
+        "MARSYS": null,
+        "NATCON": null,
+        "OBJNAM": "Dodge Island Turning Basin Daybeacon A",
+        "VERACC": null,
+        "VERDAT": null,
+        "VERLEN": null,
+        "INFORM": null,
+        "PICREP": null,
+        "SCAMIN": 29999,
+        "SORDAT": "20080729",
+        "SORIND": "US,US,reprt,7thCGD,LNM 31/08",
+        "DSNM": "US5MIACB.000"
+      }
+    },
+    "expected": {
+      "id": "noaa:harbour:3:97352",
+      "color": "yellow",
+      "color_pattern": "",
+      "category": "27",
+      "navigation_system": "IALA_B",
+      "shape": "stake__pole__perch__post"
+    }
+  },
+  {
+    "zone": "miami",
+    "type": "beacon_special_purpose",
+    "source": "noaa",
+    "dataset": "harbour:3",
+    "raw": {
+      "type": "Feature",
+      "id": 97353,
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -80.17899999999997,
+          25.77480559999998
+        ]
+      },
+      "properties": {
+        "OBJECTID": 97353,
+        "OBJL": 9,
+        "BCNSHP": "stake, pole, perch, post",
+        "CATSPM": "27",
+        "COLOUR": "6",
+        "COLPAT": null,
+        "CONDTN": null,
+        "CONRAD": null,
+        "CONVIS": null,
+        "ELEVAT": null,
+        "HEIGHT": null,
+        "MARSYS": null,
+        "NATCON": null,
+        "OBJNAM": "MSRC Boundary Daybeacon B",
+        "VERACC": null,
+        "VERDAT": null,
+        "VERLEN": null,
+        "INFORM": null,
+        "PICREP": null,
+        "SCAMIN": 29999,
+        "SORDAT": "19930914",
+        "SORIND": "US,US,reprt,7thCGD,LNM 37/93",
+        "DSNM": "US5MIACB.000"
+      }
+    },
+    "expected": {
+      "id": "noaa:harbour:3:97353",
+      "color": "yellow",
+      "color_pattern": "",
+      "category": "27",
+      "navigation_system": "IALA_B",
+      "shape": "stake__pole__perch__post"
+    }
+  },
+  {
+    "zone": "cape-florida",
+    "type": "lighthouse",
+    "source": "noaa",
+    "dataset": "approach:28",
+    "raw": {
+      "type": "Feature",
+      "id": 788600,
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -80.15586099999928,
+          25.666638000000603
+        ]
+      },
+      "properties": {
+        "OBJL": 74,
+        "CATLMK": "tower",
+        "COLOUR": "1",
+        "COLPAT": null,
+        "CONDTN": null,
+        "CONRAD": null,
+        "CONVIS": 1,
+        "ELEVAT": null,
+        "FUNCTN": "33",
+        "HEIGHT": null,
+        "NATCON": null,
+        "OBJNAM": "Cape Florida Light",
+        "VERACC": null,
+        "VERDAT": null,
+        "VERLEN": null,
+        "INFORM": "Conical",
+        "SCAMIN": 119999,
+        "SORDAT": "19980728",
+        "SORIND": "US,US,reprt,7thCGD,LNM 30/98",
+        "DSNM": "US4FL2AI.000",
+        "APPROACH.LNDMRK_POINT.FID": 788600
+      }
+    },
+    "expected": {
+      "id": "noaa:approach:28:788600",
+      "color": "white",
+      "color_pattern": "",
+      "category": "tower",
+      "navigation_system": "IALA_B",
+      "shape": ""
+    }
+  },
+  {
+    "zone": "cape-florida",
+    "type": "lighthouse",
+    "source": "noaa",
+    "dataset": "coastal:24",
+    "raw": {
+      "type": "Feature",
+      "id": 264273,
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -80.15586100000002,
+          25.666637999999978
+        ]
+      },
+      "properties": {
+        "OBJECTID": 264273,
+        "OBJL": 74,
+        "CATLMK": "tower",
+        "COLOUR": "1",
+        "COLPAT": null,
+        "CONDTN": null,
+        "CONRAD": null,
+        "CONVIS": 1,
+        "ELEVAT": null,
+        "FUNCTN": "33",
+        "HEIGHT": null,
+        "NATCON": null,
+        "OBJNAM": "Cape Florida Light",
+        "VERACC": null,
+        "VERDAT": null,
+        "VERLEN": null,
+        "INFORM": "Conical",
+        "SCAMIN": 499999,
+        "SORDAT": "19980728",
+        "SORIND": "US,US,reprt,7thCGD,LNM 30/98",
+        "DSNM": "US3FL1CG.000"
+      }
+    },
+    "expected": {
+      "id": "noaa:coastal:24:264273",
+      "color": "white",
+      "color_pattern": "",
+      "category": "tower",
+      "navigation_system": "IALA_B",
+      "shape": ""
+    }
+  }
+]

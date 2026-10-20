@@ -7,6 +7,7 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 from app.config.production import configure_production, is_production
 from app.config.settings import ConfigurationError
 from app.infrastructure.database.connection import close_database_pools
+from app.infrastructure.marine.runtime import close_marine_service
 from app.api.photo_upload_limit import PhotoUploadLimitMiddleware
 
 from app.api.errors.handlers import (
@@ -80,6 +81,7 @@ async def lifespan(_app: FastAPI):
     try:
         yield
     finally:
+        await close_marine_service()
         close_database_pools()
 
 

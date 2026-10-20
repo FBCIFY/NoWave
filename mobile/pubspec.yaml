@@ -42,7 +42,10 @@ flutter:
   # Flèche 3D de la position sur la carte, générée par
   # tool/make_location_puck.py.
   assets:
+    - assets/globe/
     - assets/models/location_puck.glb
+    - assets/icons/buoys/
+    - assets/icons/fixed-aids/
 
   # Raleway, la police du logo NoWave (licence OFL dans le même dossier).
   # Embarquée plutôt que téléchargée : elle reste disponible hors réseau.
