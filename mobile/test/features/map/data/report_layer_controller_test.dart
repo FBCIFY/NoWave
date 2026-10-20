@@ -111,6 +111,45 @@ void main() {
   }
 
   group('installation', () {
+    testLayer('conserve une erreur de tuile pendant une installation lente', (
+      tester,
+    ) async {
+      map.blockedInstall = Completer();
+      map.controller.styleLoaded();
+      await tester.pump();
+      map.controller.tileError(_tileError503, tile: '9/1/1');
+      await tester.pump(const Duration(seconds: 3));
+      map.finishInstall();
+      await tester.pump();
+      expect(map.status, ReportLayerStatus.unavailable);
+
+      map.controller.tileLoaded(tile: '9/1/2');
+      await tester.pump(ReportLayerController.recoveryQuietPeriod);
+      expect(map.status, ReportLayerStatus.installed);
+    });
+
+    testLayer('un nouveau style oublie les erreurs de son prédécesseur', (
+      tester,
+    ) async {
+      await install(tester);
+      map.controller.tileError(_tileError503);
+      map.controller.styleLoaded();
+      await tester.pump();
+      expect(map.status, ReportLayerStatus.installed);
+    });
+
+    testLayer('une limitation de débit pendant installation reste ignorée', (
+      tester,
+    ) async {
+      map.blockedInstall = Completer();
+      map.controller.styleLoaded();
+      await tester.pump();
+      map.controller.tileError(_tileError429);
+      map.finishInstall();
+      await tester.pump();
+      expect(map.status, ReportLayerStatus.installed);
+    });
+
     testLayer('réussie au chargement du style', (tester) async {
       map.controller.styleLoaded();
       expect(map.status, ReportLayerStatus.pending);
