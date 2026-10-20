@@ -45,6 +45,7 @@ class MapScreen extends StatefulWidget {
   final VoidCallback? onOpenProfile;
   final VoidCallback? onOpenAlerts;
   final MapFocusController? focusController;
+  final DeviceOrientationService? orientationService;
 
   /// Ouvre la caméra ; renvoie null si l'utilisateur la ferme sans photo.
   final Future<PhotoReportDraft?> Function()? onOpenCamera;
@@ -63,6 +64,7 @@ class MapScreen extends StatefulWidget {
     this.onOpenProfile,
     this.onOpenAlerts,
     this.focusController,
+    this.orientationService,
     this.onOpenCamera,
     this.reportService,
     this.reportTiles,
@@ -177,19 +179,21 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
     _startReportTilesTokenRenewal();
     _reportLayer.status.addListener(_handleReportLayerStatus);
     WidgetsBinding.instance.addObserver(this);
-    _headingSubscription = DeviceOrientationService().mapHeadings.listen(
-      (heading) {
-        if (!mounted || _hidden) return;
-        if (!heading.isFinite) return;
-        _deviceHeading = heading;
-        _syncLocationPuck().ignore();
-        _setCompassTurnsForHeading(heading);
-      },
-      onError: (Object _) {
-        _deviceHeading = null;
-        _syncLocationPuck().ignore();
-      },
-    );
+    _headingSubscription =
+        (widget.orientationService ?? DeviceOrientationService()).mapHeadings
+            .listen(
+              (heading) {
+                if (!mounted || _hidden) return;
+                if (!heading.isFinite) return;
+                _deviceHeading = heading;
+                _syncLocationPuck().ignore();
+                _setCompassTurnsForHeading(heading);
+              },
+              onError: (Object _) {
+                _deviceHeading = null;
+                _syncLocationPuck().ignore();
+              },
+            );
   }
 
   /// En haut de la carte plutôt qu'en SnackBar : le bas est pris par les
