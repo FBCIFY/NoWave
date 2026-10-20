@@ -242,8 +242,8 @@ void main() {
       expect(find.byKey(const ValueKey('alert-a')), findsOneWidget);
       await tester.pageBack();
       await tester.pumpAndSettle();
-      f.source.taps.add(pushMessage());
-      f.source.taps.add(pushMessage());
+      f.source.taps.add(pushMessage(recipientFirebaseUid: 'a'));
+      f.source.taps.add(pushMessage(recipientFirebaseUid: 'a'));
       await tester.pumpAndSettle();
       expect(find.byType(AlertReportScreen), findsNothing);
       expect(find.byType(MapScreen), findsOneWidget);
@@ -266,7 +266,7 @@ void main() {
         final f = _Session()..suspended = suspended;
         await f.mount(tester);
         await f.deleteAction(tester);
-        f.source.taps.add(pushMessage());
+        f.source.taps.add(pushMessage(recipientFirebaseUid: 'a'));
         await tester.tap(find.text('Supprimer définitivement mon compte'));
         await tester.pumpAndSettle();
         expect(find.byType(LoginScreen), findsOneWidget);
@@ -301,11 +301,16 @@ void main() {
       await tester.ensureVisible(find.text('Supprimer mon compte'));
       await tester.tap(find.text('Supprimer mon compte'));
       // Avant la frame suivante : le callback de l'ancien accueil est encore attaché.
-      f.source.taps.add(pushMessage());
+      f.source.taps.add(pushMessage(recipientFirebaseUid: 'a'));
       await tester.pumpAndSettle();
       expect(find.byType(AlertReportScreen), findsNothing);
       expect(find.byType(AccountDeletionScreen), findsOneWidget);
-      f.source.messages.add(pushMessage(id: 'foreground-during-deletion'));
+      f.source.messages.add(
+        pushMessage(
+          recipientFirebaseUid: 'a',
+          id: 'foreground-during-deletion',
+        ),
+      );
       expect(f.controller.foreground, isNull);
       expect(
         f.requests.where((r) => r.url.path.contains('/reports/')),

@@ -465,7 +465,7 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    final hidden = !TickerMode.of(context);
+    final hidden = !TickerMode.valuesOf(context).enabled;
     if (hidden == _routeHidden) return;
     _routeHidden = hidden;
     if (_hidden) {
@@ -1192,8 +1192,9 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
     try {
       camera = await map.getCameraState();
     } catch (_) {
-      if (mounted && intent == _reportIntent)
+      if (mounted && intent == _reportIntent) {
         widget.focusController?.setBlocked(false);
+      }
       return;
     }
     if (!mounted || intent != _reportIntent) return;

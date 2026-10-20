@@ -1,6 +1,5 @@
 import 'dart:async';
 import 'dart:convert';
-import 'dart:typed_data';
 
 import 'package:blueway/features/camera/domain/photo_capture.dart';
 import 'package:blueway/features/camera/domain/photo_report_draft.dart';

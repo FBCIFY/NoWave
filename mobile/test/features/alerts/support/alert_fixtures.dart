@@ -40,12 +40,13 @@ Map<String, dynamic> pageJson({
   'pages': pages,
 };
 Map<String, dynamic> pushData({
+  String recipientFirebaseUid = 'user-a',
   String id = 'alert-a',
   String reportId = 'report-a',
   int version = 1,
   DateTime? expiry,
 }) => {
-  'recipient_firebase_uid': 'user-a',
+  'recipient_firebase_uid': recipientFirebaseUid,
   'alert_id': id,
   'report_id': reportId,
   'report_version': '$version',
@@ -61,6 +62,7 @@ Map<String, dynamic> pushData({
       .toIso8601String(),
 };
 RemoteMessage pushMessage({
+  String recipientFirebaseUid = 'user-a',
   String id = 'alert-a',
   String reportId = 'report-a',
   int version = 1,
@@ -68,7 +70,13 @@ RemoteMessage pushMessage({
   DateTime? expiry,
 }) => RemoteMessage(
   messageId: messageId ?? 'message-$id',
-  data: pushData(id: id, reportId: reportId, version: version, expiry: expiry),
+  data: pushData(
+    recipientFirebaseUid: recipientFirebaseUid,
+    id: id,
+    reportId: reportId,
+    version: version,
+    expiry: expiry,
+  ),
 );
 
 class FakeAlertPushSource implements AlertPushSource {

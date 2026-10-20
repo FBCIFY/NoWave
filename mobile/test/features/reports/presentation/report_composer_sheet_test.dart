@@ -38,8 +38,9 @@ void main() {
                 onPublish: (_, description) async {
                   expect(description, 'Commentaire conservé');
                   attempts++;
-                  if (attempts == 1)
+                  if (attempts == 1) {
                     throw const ApiException(statusCode: 503, body: '');
+                  }
                 },
               ),
             ),
