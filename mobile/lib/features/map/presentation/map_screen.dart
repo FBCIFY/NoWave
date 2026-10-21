@@ -25,6 +25,7 @@ import '../../reports/data/manual_report_service.dart';
 import '../../reports/data/report_detail_service.dart';
 import '../../reports/domain/manual_report.dart';
 import '../../reports/domain/report_detail.dart';
+import '../../reports/domain/report_reach.dart';
 import '../../reports/presentation/report_composer_sheet.dart';
 import '../../reports/presentation/report_detail_sheet.dart';
 import '../data/buoy_layer.dart';
@@ -184,6 +185,7 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
     _syncGlobeRotation();
     _globeRotation.resumeWhenIdle();
     unawaited(_restoreOrientation());
+    unawaited(_keepReportPointInReach());
   }
 
   /// Zoom à partir duquel une rotation libre ne survit pas au lâcher.
@@ -252,6 +254,8 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
   CameraState? _cameraBeforeReport;
   bool _restoreFollowAfterReport = false;
   final ValueNotifier<Point?> _reportPoint = ValueNotifier(null);
+  // Centre du cercle de 1 km : le téléphone à l'ouverture, ou à la photo.
+  ({double latitude, double longitude})? _reportOrigin;
   final ValueNotifier<bool> _reportMarkerLifted = ValueNotifier(false);
   Timer? _reportMarkerDropTimer;
   final Uuid _uuid = const Uuid();
@@ -1614,12 +1618,29 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
     final intent = cameraIntent ?? ++_reportIntent;
     final position = _position;
     final map = _mapboxMap;
-    final start = photoDraft != null
-        ? Position(photoDraft.initialLongitude, photoDraft.initialLatitude)
+    final measurements = photoDraft?.capture.measurements;
+    final origin = measurements != null
+        ? (
+            latitude: measurements.observerLatitude,
+            longitude: measurements.observerLongitude,
+          )
         : position == null
         ? null
-        : Position(position.longitude, position.latitude);
-    if (start == null || map == null) {
+        : (latitude: position.latitude, longitude: position.longitude);
+    // Une estimation au-delà de 1 km se pose sur le bord, dans l'axe de la
+    // photo : la direction reste fiable, la distance beaucoup moins.
+    final reachable = origin == null
+        ? null
+        : ReportReach.clamp(
+            origin.latitude,
+            origin.longitude,
+            photoDraft?.initialLatitude ?? origin.latitude,
+            photoDraft?.initialLongitude ?? origin.longitude,
+          );
+    final start = reachable == null
+        ? null
+        : Position(reachable.longitude, reachable.latitude);
+    if (origin == null || start == null || map == null) {
       _showNotice(
         'Attendez que votre position GPS soit disponible.',
         MapNoticeKind.warning,
@@ -1647,8 +1668,10 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
       _pendingReport = null;
       _photoDraft = photoDraft;
       _isFollowing = false;
+      _reportOrigin = origin;
       _reportPoint.value = Point(coordinates: start);
     });
+    unawaited(_showReportReach(map, origin));
     unawaited(_positionMapOrnaments(map, editing: true));
     unawaited(_setMapTiltEnabled(map, false));
     await WidgetsBinding.instance.endOfFrame;
@@ -1691,6 +1714,7 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
     final resumeFollowing = _restoreFollowAfterReport;
     setState(() {
       _reportComposerOpen = false;
+      _reportOrigin = null;
       _reportPoint.value = null;
       _pendingReport = null;
       _photoDraft = null;
@@ -1703,6 +1727,7 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
     if (map != null) {
       unawaited(_positionMapOrnaments(map, editing: false));
       unawaited(_setMapTiltEnabled(map, true));
+      unawaited(_hideReportReach(map));
     }
     await WidgetsBinding.instance.endOfFrame;
 
@@ -1759,12 +1784,21 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
       throw const ReportPositionUnavailable();
     }
 
-    final longitude = double.parse(
-      point.coordinates.lng.toDouble().toStringAsFixed(6),
-    );
-    final latitude = double.parse(
-      point.coordinates.lat.toDouble().toStringAsFixed(6),
-    );
+    // Publication pendant un glissé au-delà du cercle : le bord fait foi.
+    final origin = _reportOrigin;
+    final reachable = origin == null
+        ? (
+            latitude: point.coordinates.lat.toDouble(),
+            longitude: point.coordinates.lng.toDouble(),
+          )
+        : ReportReach.clamp(
+            origin.latitude,
+            origin.longitude,
+            point.coordinates.lat.toDouble(),
+            point.coordinates.lng.toDouble(),
+          );
+    final longitude = double.parse(reachable.longitude.toStringAsFixed(6));
+    final latitude = double.parse(reachable.latitude.toStringAsFixed(6));
     final positioning = _photoDraft?.capture.measurements;
     // Même contenu qu'un envoi raté : on garde le même `client_report_id` pour
     // que le backend ne crée pas de doublon.
@@ -1838,10 +1872,13 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
   /// qui bouge dessous.
   String _reportHint() {
     final draft = _photoDraft;
-    if (draft == null) return 'Déplacez la carte pour placer le point';
+    if (draft == null) return 'Déplacez la carte : 1 km autour de vous au plus';
     final estimate = draft.estimate;
     if (estimate == null) return 'Placez le point sur l’objet photographié';
     final distance = estimate.distanceMeters;
+    if (distance > ReportReach.radiusMeters) {
+      return 'Estimé au-delà de 1 km · placez le point sur l’objet';
+    }
     final distanceText = distance < 1000
         ? '${distance.round()} m'
         : '${(distance / 1000).toStringAsFixed(1).replaceAll('.', ',')} km';
@@ -1857,6 +1894,103 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
       const Duration(milliseconds: 200),
       () => _reportMarkerLifted.value = false,
     );
+  }
+
+  static const _reportReachSource = 'report-reach';
+  static const _reportReachLayer = 'report-reach-outline';
+
+  /// Cercle discret de 1 km autour de l'origine du signalement.
+  Future<void> _showReportReach(
+    MapboxMap map,
+    ({double latitude, double longitude}) origin,
+  ) async {
+    final data = jsonEncode({
+      'type': 'Feature',
+      'properties': <String, Object>{},
+      'geometry': {
+        'type': 'LineString',
+        'coordinates': ReportReach.outline(origin.latitude, origin.longitude),
+      },
+    });
+    try {
+      if (await map.style.styleSourceExists(_reportReachSource)) {
+        await map.style.setStyleSourceProperty(
+          _reportReachSource,
+          'data',
+          data,
+        );
+      } else {
+        await map.style.addSource(
+          GeoJsonSource(id: _reportReachSource, data: data),
+        );
+      }
+      if (!await map.style.styleLayerExists(_reportReachLayer)) {
+        await map.style.addLayer(
+          LineLayer(
+            id: _reportReachLayer,
+            sourceId: _reportReachSource,
+            lineColor: 0xFFFFFFFF,
+            lineOpacity: 0.7,
+            lineWidth: 1.5,
+            lineDasharray: [2, 2],
+            lineEmissiveStrength: 1,
+          ),
+        );
+      }
+    } catch (_) {
+      // Sans cercle, le retour au bord garde la limite.
+    }
+  }
+
+  Future<void> _hideReportReach(MapboxMap map) async {
+    try {
+      if (await map.style.styleLayerExists(_reportReachLayer)) {
+        await map.style.removeStyleLayer(_reportReachLayer);
+      }
+      if (await map.style.styleSourceExists(_reportReachSource)) {
+        await map.style.removeStyleSource(_reportReachSource);
+      }
+    } catch (_) {
+      // Style déjà rechargé : le cercle a disparu avec lui.
+    }
+  }
+
+  /// Au lâcher, un point sorti du cercle revient sur son bord. Pendant le
+  /// glissé la carte reste libre : pas de mur sous les doigts.
+  Future<void> _keepReportPointInReach() async {
+    final map = _mapboxMap;
+    final origin = _reportOrigin;
+    if (!_reportComposerOpen || map == null || origin == null) return;
+    final intent = _reportIntent;
+    final point = await _updateReportPoint();
+    if (!mounted ||
+        point == null ||
+        intent != _reportIntent ||
+        _mapTouchActive ||
+        origin != _reportOrigin) {
+      return;
+    }
+    final latitude = point.coordinates.lat.toDouble();
+    final longitude = point.coordinates.lng.toDouble();
+    final edge = ReportReach.clamp(
+      origin.latitude,
+      origin.longitude,
+      latitude,
+      longitude,
+    );
+    if (edge.latitude == latitude && edge.longitude == longitude) return;
+    try {
+      // Le centre de la caméra est la pointe du repère (marge du signalement).
+      await _moveCamera(
+        map,
+        CameraOptions(
+          center: Point(coordinates: Position(edge.longitude, edge.latitude)),
+        ),
+        300,
+      );
+    } catch (_) {
+      // La publication ramène de toute façon le point sur le bord.
+    }
   }
 
   void _scheduleReportPointUpdate() {

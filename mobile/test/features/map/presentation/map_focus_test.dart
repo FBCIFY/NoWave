@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math' as math;
 import 'dart:convert';
 
 import 'package:blueway/features/camera/domain/photo_capture.dart';
@@ -14,6 +15,7 @@ import 'package:blueway/features/map/data/report_tiles.dart';
 import 'package:blueway/features/reports/data/report_detail_service.dart';
 import 'package:blueway/features/reports/domain/report_detail.dart';
 import 'package:blueway/features/reports/presentation/report_detail_sheet.dart';
+import 'package:blueway/features/reports/domain/report_reach.dart';
 import 'package:blueway/features/reports/presentation/report_composer_sheet.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -210,10 +212,69 @@ void main() {
       await tester.tap(find.text('Publier le signalement'));
       await tester.pump();
       expect(publications.requests, isEmpty);
-      conversion.complete(mb.Point(coordinates: mb.Position(8, 44)));
+      conversion.complete(mb.Point(coordinates: mb.Position(5.375, 43.293)));
       await pumpFrames(tester);
-      expect(publications.requests.single.longitude, 8);
-      expect(publications.requests.single.latitude, 44);
+      expect(publications.requests.single.longitude, 5.375);
+      expect(publications.requests.single.latitude, 43.293);
+    },
+  );
+
+  focusTestWidgets(
+    'point à 3 km : publié sur le bord du cercle de 1 km, même direction',
+    (tester) async {
+      gps.initial.complete(focusPosition());
+      final publications = _Publications();
+      await mount(tester, publicationService: publications);
+      await tester.tap(find.byTooltip('Créer un signalement'));
+      await pumpFrames(tester);
+      expect(map.style.layers, contains('report-reach-outline'));
+      final far = ReportReach.destination(43.29, 5.37, math.pi / 2, 3000);
+      map.onCoordinate = (_) async =>
+          mb.Point(coordinates: mb.Position(far.longitude, far.latitude));
+      await tester.tap(find.text('Pollution'));
+      await tester.pump();
+      await tester.tap(find.text('Publier le signalement'));
+      await pumpFrames(tester);
+      final request = publications.requests.single;
+      expect(
+        ReportReach.distance(43.29, 5.37, request.latitude, request.longitude),
+        closeTo(999, 1),
+      );
+      expect(request.latitude, closeTo(43.29, 0.001));
+      expect(request.longitude, greaterThan(5.37));
+      expect(map.style.layers, isNot(contains('report-reach-outline')));
+    },
+  );
+
+  focusTestWidgets(
+    'viseur lâché hors du cercle : la carte le ramène sur le bord',
+    (tester) async {
+      gps.initial.complete(focusPosition());
+      await mount(tester);
+      await tester.tap(find.byTooltip('Créer un signalement'));
+      await pumpFrames(tester);
+      map.easedCameras.clear();
+      final far = ReportReach.destination(43.29, 5.37, 0, 2500);
+      map.onCoordinate = (_) async =>
+          mb.Point(coordinates: mb.Position(far.longitude, far.latitude));
+      final gesture = await tester.startGesture(
+        tester.getCenter(find.byType(mb.MapWidget)),
+      );
+      await gesture.moveBy(const Offset(0, 120));
+      await gesture.up();
+      await tester.pump(const Duration(milliseconds: 300));
+      await pumpFrames(tester);
+      final center = map.easedCameras.last.center!.coordinates;
+      expect(
+        ReportReach.distance(
+          43.29,
+          5.37,
+          center.lat.toDouble(),
+          center.lng.toDouble(),
+        ),
+        closeTo(999, 1),
+      );
+      expect(center.lng.toDouble(), closeTo(5.37, 0.001));
     },
   );
 
