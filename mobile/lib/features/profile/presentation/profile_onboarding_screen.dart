@@ -92,6 +92,10 @@ class _ProfileOnboardingScreenState extends State<ProfileOnboardingScreen> {
   /// Un enregistrement a échoué : la page peut être passée.
   bool _failed = false;
 
+  /// Parcours terminé : la carte prend le relais, plus rien ne se touche
+  /// jusqu'à la fin du fondu.
+  bool _done = false;
+
   void _goTo(_Page page) {
     FocusManager.instance.primaryFocus?.unfocus();
     setState(() {
@@ -102,7 +106,7 @@ class _ProfileOnboardingScreenState extends State<ProfileOnboardingScreen> {
   }
 
   void _back() {
-    if (_isLoading) return;
+    if (_isLoading || _done) return;
     _goTo(switch (_page) {
       _Page.username || _Page.boatType => _Page.username,
       _Page.boatDetails => _Page.boatType,
@@ -371,6 +375,12 @@ class _ProfileOnboardingScreenState extends State<ProfileOnboardingScreen> {
 
     // Le chargement continue jusqu'au changement d'écran.
     if (!mounted) return;
+    _finish();
+  }
+
+  void _finish() {
+    if (_done) return;
+    setState(() => _done = true);
     widget.onDone();
   }
 
@@ -422,7 +432,10 @@ class _ProfileOnboardingScreenState extends State<ProfileOnboardingScreen> {
         if (!didPop) _back();
       },
       child: AuthPhotoLayout(
-        header: OnboardingProgress(step: _page.index + 1),
+        header: OnboardingProgress(
+          step: _page.index + 1,
+          stepCount: _Page.values.length,
+        ),
         page: _page.index,
         title: title,
         subtitle: subtitle,
@@ -472,13 +485,13 @@ class _ProfileOnboardingScreenState extends State<ProfileOnboardingScreen> {
                 onFieldSubmitted: (_) => submit(),
               ),
               ..._buildError(),
-              const SizedBox(height: 24),
+              const SizedBox(height: 20),
               AuthPrimaryButton(
                 label: _profile == null ? 'Créer mon profil' : 'Suivant',
                 onPressed: _isLoading ? null : submit,
                 isLoading: _isLoading,
               ),
-              const SizedBox(height: 8),
+              const SizedBox(height: 4),
               _SecondaryButton(
                 label: 'Se déconnecter',
                 onPressed: _isLoading ? null : widget.onSignOut,
@@ -497,7 +510,7 @@ class _ProfileOnboardingScreenState extends State<ProfileOnboardingScreen> {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         for (var i = 0; i < types.length; i += 2) ...[
-          if (i > 0) const SizedBox(height: 10),
+          if (i > 0) const SizedBox(height: 8),
           // Deux tuiles de même hauteur, même si un libellé passe sur deux
           // lignes.
           IntrinsicHeight(
@@ -505,7 +518,7 @@ class _ProfileOnboardingScreenState extends State<ProfileOnboardingScreen> {
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
                 for (final type in types.skip(i).take(2)) ...[
-                  if (type != types[i]) const SizedBox(width: 10),
+                  if (type != types[i]) const SizedBox(width: 8),
                   Expanded(
                     child: _BoatTypeTile(
                       type: type,
@@ -518,14 +531,14 @@ class _ProfileOnboardingScreenState extends State<ProfileOnboardingScreen> {
             ),
           ),
         ],
-        const SizedBox(height: 24),
+        const SizedBox(height: 20),
         AuthPrimaryButton(
           label: 'Suivant',
           onPressed: _type == null ? null : () => _goTo(_Page.boatDetails),
         ),
         // Un bateau déjà enregistré se supprime depuis le profil.
         if (_boat == null) ...[
-          const SizedBox(height: 8),
+          const SizedBox(height: 4),
           _SecondaryButton(
             label: 'Je n’ai pas de bateau',
             onPressed: _skipBoat,
@@ -571,14 +584,14 @@ class _ProfileOnboardingScreenState extends State<ProfileOnboardingScreen> {
           },
         ),
         ..._buildError(),
-        const SizedBox(height: 24),
+        const SizedBox(height: 20),
         AuthPrimaryButton(
           label: 'Suivant',
           onPressed: _isLoading ? null : _saveBoat,
           isLoading: _isLoading,
         ),
         if (_failed) ...[
-          const SizedBox(height: 8),
+          const SizedBox(height: 4),
           _SecondaryButton(
             label: 'Passer',
             onPressed: _isLoading ? null : () => _goTo(_Page.visibility),
@@ -601,7 +614,7 @@ class _ProfileOnboardingScreenState extends State<ProfileOnboardingScreen> {
               : (value) => setState(() => _showUserName = value),
         ),
         if (_boat != null) ...[
-          const SizedBox(height: 10),
+          const SizedBox(height: 8),
           _VisibilitySwitch(
             label: 'Afficher mon bateau',
             description:
@@ -614,14 +627,14 @@ class _ProfileOnboardingScreenState extends State<ProfileOnboardingScreen> {
           ),
         ],
         ..._buildError(),
-        const SizedBox(height: 24),
+        const SizedBox(height: 20),
         AuthPrimaryButton(
           label: 'Continuer',
           onPressed: _isLoading ? null : _savePreferences,
           isLoading: _isLoading,
         ),
         if (_failed) ...[
-          const SizedBox(height: 8),
+          const SizedBox(height: 4),
           _SecondaryButton(
             label: 'Passer',
             onPressed: _isLoading ? null : () => _goTo(_Page.alerts),
@@ -639,20 +652,20 @@ class _ProfileOnboardingScreenState extends State<ProfileOnboardingScreen> {
           'Vous pourrez changer d’avis à tout moment dans votre profil.',
           style: TextStyle(
             color: Colors.white.withValues(alpha: 0.60),
-            fontSize: 13,
+            fontSize: 11,
           ),
         ),
         ..._buildError(),
-        const SizedBox(height: 24),
+        const SizedBox(height: 20),
         AuthPrimaryButton(
           label: 'Activer les alertes',
-          onPressed: _isLoading ? null : _enableAlerts,
+          onPressed: _isLoading || _done ? null : _enableAlerts,
           isLoading: _isLoading,
         ),
-        const SizedBox(height: 8),
+        const SizedBox(height: 4),
         _SecondaryButton(
           label: 'Plus tard',
-          onPressed: _isLoading ? null : widget.onDone,
+          onPressed: _isLoading || _done ? null : _finish,
         ),
       ],
     );
@@ -695,7 +708,7 @@ class _BoatTypeTile extends StatelessWidget {
             ? AppColors.cyan500.withValues(alpha: 0.18)
             : Colors.white.withValues(alpha: 0.10),
         shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(14),
+          borderRadius: BorderRadius.circular(10),
           side: selected
               ? const BorderSide(color: AppColors.cyan500, width: 1.5)
               : BorderSide(color: Colors.white.withValues(alpha: 0.22)),
@@ -704,19 +717,19 @@ class _BoatTypeTile extends StatelessWidget {
         child: InkWell(
           onTap: onTap,
           child: ConstrainedBox(
-            constraints: const BoxConstraints(minHeight: 56),
+            constraints: const BoxConstraints(minHeight: 44),
             child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
               child: Row(
                 children: [
                   Icon(
                     selected ? Icons.check_circle : Icons.circle_outlined,
-                    size: 20,
+                    size: 16,
                     color: selected
                         ? AppColors.cyan500
                         : Colors.white.withValues(alpha: 0.45),
                   ),
-                  const SizedBox(width: 10),
+                  const SizedBox(width: 8),
                   Expanded(
                     child: Text(
                       type.label,
@@ -724,7 +737,7 @@ class _BoatTypeTile extends StatelessWidget {
                       overflow: TextOverflow.ellipsis,
                       style: TextStyle(
                         color: Colors.white,
-                        fontSize: 15,
+                        fontSize: 13,
                         fontWeight: selected
                             ? FontWeight.w600
                             : FontWeight.w500,
@@ -760,7 +773,7 @@ class _VisibilitySwitch extends StatelessWidget {
       child: Material(
         color: Colors.white.withValues(alpha: 0.10),
         shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(14),
+          borderRadius: BorderRadius.circular(10),
           side: BorderSide(color: Colors.white.withValues(alpha: 0.22)),
         ),
         clipBehavior: Clip.antiAlias,
@@ -768,7 +781,7 @@ class _VisibilitySwitch extends StatelessWidget {
         child: InkWell(
           onTap: onChanged == null ? null : () => onChanged!(!value),
           child: Padding(
-            padding: const EdgeInsets.fromLTRB(16, 12, 10, 12),
+            padding: const EdgeInsets.fromLTRB(12, 8, 8, 8),
             child: Row(
               children: [
                 Expanded(
@@ -779,7 +792,7 @@ class _VisibilitySwitch extends StatelessWidget {
                         label,
                         style: const TextStyle(
                           color: Colors.white,
-                          fontSize: 15,
+                          fontSize: 13,
                           fontWeight: FontWeight.w600,
                         ),
                       ),
@@ -788,14 +801,14 @@ class _VisibilitySwitch extends StatelessWidget {
                         description,
                         style: TextStyle(
                           color: Colors.white.withValues(alpha: 0.65),
-                          fontSize: 13,
+                          fontSize: 11,
                           height: 1.3,
                         ),
                       ),
                     ],
                   ),
                 ),
-                const SizedBox(width: 12),
+                const SizedBox(width: 8),
                 Switch(
                   value: value,
                   onChanged: onChanged,
@@ -824,9 +837,9 @@ class _SecondaryButton extends StatelessWidget {
       onPressed: onPressed,
       style: TextButton.styleFrom(
         foregroundColor: Colors.white.withValues(alpha: 0.70),
-        minimumSize: const Size(0, 48),
+        minimumSize: const Size(0, 36),
       ),
-      child: Text(label, style: const TextStyle(fontSize: 15)),
+      child: Text(label, style: const TextStyle(fontSize: 13)),
     );
   }
 }
@@ -839,21 +852,21 @@ class _ErrorMessage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.all(12),
+      padding: const EdgeInsets.all(10),
       decoration: BoxDecoration(
         color: Colors.red.withValues(alpha: 0.12),
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(10),
         border: Border.all(color: Colors.redAccent.withValues(alpha: 0.35)),
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Icon(Icons.error_outline, color: Color(0xFFFCA5A5), size: 18),
-          const SizedBox(width: 10),
+          const Icon(Icons.error_outline, color: Color(0xFFFCA5A5), size: 15),
+          const SizedBox(width: 8),
           Expanded(
             child: Text(
               message,
-              style: const TextStyle(color: Color(0xFFFECACA), fontSize: 12),
+              style: const TextStyle(color: Color(0xFFFECACA), fontSize: 11),
             ),
           ),
         ],

@@ -15,6 +15,7 @@ import '../../auth/presentation/widgets/flow_transition.dart';
 import '../../camera/data/position_estimate_service.dart';
 import '../../home/presentation/home_screen.dart';
 import '../../map/data/report_tiles.dart';
+import '../../map/presentation/map_intro_controller.dart';
 import '../../reports/data/manual_report_service.dart';
 import '../../reports/data/report_detail_service.dart';
 import '../data/account_deletion.dart';
@@ -67,6 +68,10 @@ class _ProfileGateState extends State<ProfileGate> with WidgetsBindingObserver {
   late Future<UserProfile?> _profileFuture;
   UserProfile? _latestProfile;
   bool _showOnboarding = false;
+
+  /// Arrivée sur la carte, créée avec le profil : l'accueil se charge alors
+  /// sous la suite de l'onboarding.
+  MapIntroController? _intro;
   Future<void>? _signingOut;
   bool _accessRevoked = false;
   bool _refreshingAccess = false;
@@ -132,6 +137,7 @@ class _ProfileGateState extends State<ProfileGate> with WidgetsBindingObserver {
   void dispose() {
     widget.inactiveUserEvents?.removeListener(_markAccessRevoked);
     WidgetsBinding.instance.removeObserver(this);
+    _intro?.dispose();
     super.dispose();
   }
 
@@ -179,11 +185,26 @@ class _ProfileGateState extends State<ProfileGate> with WidgetsBindingObserver {
   /// alertes) : les comptes existants ne la voient pas. Le profil renvoyé
   /// suffit, sans relecture : le parcours continue sur le même écran.
   void _onProfileSaved(UserProfile profile) {
+    // Un nouveau nom sur la même page garde l'arrivée déjà en préparation.
+    if (_intro?.covered != true) {
+      _intro?.dispose();
+      _intro = MapIntroController()..addListener(_handleIntro);
+    }
     setState(() {
       _showOnboarding = true;
       _latestProfile = profile;
       _profileFuture = Future<UserProfile?>.value(profile);
     });
+  }
+
+  void _handleIntro() {
+    if (mounted) setState(() {});
+  }
+
+  /// Fin du fondu : l'onboarding quitte l'arbre, l'accueil reste en place.
+  void _endOnboarding() {
+    if (!mounted || (_intro?.covered ?? true) || !_showOnboarding) return;
+    setState(() => _showOnboarding = false);
   }
 
   Future<UserProfile> _updatePreferences({
@@ -286,11 +307,13 @@ class _ProfileGateState extends State<ProfileGate> with WidgetsBindingObserver {
             onSignOut: () => unawaited(_signOut()),
             onDeleteAccount: () => unawaited(_openAccountDeletion()),
           );
-        } else if (_showOnboarding) {
+        } else if (_showOnboarding ||
+            (_intro != null && (_latestProfile ?? snapshot.data) != null)) {
           // Même étape que sans profil : le parcours garde son état et seules
-          // ses pages glissent.
+          // ses pages glissent. L'accueil, chargé dessous, reste sur cette
+          // étape après le fondu pour ne pas recréer la carte.
           step = 1;
-          screen = _buildOnboarding(_latestProfile ?? snapshot.data);
+          screen = _buildFirstVisit(_latestProfile ?? snapshot.data);
         } else if (snapshot.connectionState == ConnectionState.waiting &&
             // Rafraîchi au retour dans l'app : le profil affiché reste à
             // l'écran. Recréer l'accueil relancerait la carte, et l'ancien
@@ -334,36 +357,91 @@ class _ProfileGateState extends State<ProfileGate> with WidgetsBindingObserver {
           );
         } else if (snapshot.data case final profile?) {
           step = 4;
-          // Le profil existe : le backend accepte l'enregistrement du téléphone
-          // et sa position.
-          screen = DeviceRegistrar(
-            registration: widget.deviceRegistration,
-            child: DevicePositionTracker(
-              reporter: widget.devicePositionReporter,
-              runInBackground: (_latestProfile ?? profile).notificationsEnabled,
-              child: HomeScreen(
-                alertService: widget.alertService,
-                pushController: widget.pushController,
-                profileService: widget.profileService,
-                onDeleteAccount: _openAccountDeletion,
-                profile: _latestProfile ?? profile,
-                onUserInactive: () => unawaited(_refreshAccessStatus()),
-                onSignOut: () => _signOut(resumeDevices: true),
-                onUpdatePreferences: _updatePreferences,
-                reportService: widget.reportService,
-                positionEstimateService: widget.positionEstimateService,
-                reportTiles: widget.reportTiles,
-                reportDetailService: widget.reportDetailService,
-              ),
-            ),
-          );
+          screen = _buildHome(_latestProfile ?? profile);
         } else {
           step = 1;
-          screen = _buildOnboarding(null);
+          screen = _buildFirstVisit(null);
         }
 
         return FlowTransition(step: step, child: screen);
       },
+    );
+  }
+
+  /// Le profil existe : le backend accepte l'enregistrement du téléphone et
+  /// sa position. Avec [active] faux, l'accueil se charge sans rien démarrer.
+  Widget _buildHome(
+    UserProfile profile, {
+    bool active = true,
+    MapIntroController? intro,
+  }) {
+    return DeviceRegistrar(
+      registration: widget.deviceRegistration,
+      active: active,
+      child: DevicePositionTracker(
+        reporter: widget.devicePositionReporter,
+        runInBackground: profile.notificationsEnabled,
+        active: active,
+        child: HomeScreen(
+          alertService: widget.alertService,
+          pushController: widget.pushController,
+          profileService: widget.profileService,
+          onDeleteAccount: _openAccountDeletion,
+          profile: profile,
+          onUserInactive: () => unawaited(_refreshAccessStatus()),
+          onSignOut: () => _signOut(resumeDevices: true),
+          onUpdatePreferences: _updatePreferences,
+          reportService: widget.reportService,
+          positionEstimateService: widget.positionEstimateService,
+          reportTiles: widget.reportTiles,
+          reportDetailService: widget.reportDetailService,
+          intro: intro,
+        ),
+      ),
+    );
+  }
+
+  /// Premier passage : l'onboarding, puis, dès le profil créé, l'accueil qui
+  /// se charge dessous. À la fin, l'onboarding s'efface sur la carte. Les clés
+  /// gardent l'état de chacun quand l'autre apparaît ou disparaît.
+  Widget _buildFirstVisit(UserProfile? profile) {
+    final intro = _intro;
+    final showHome = intro != null && profile != null;
+    final covered = intro?.covered ?? true;
+    final fading = showHome && !covered;
+
+    return Stack(
+      fit: StackFit.expand,
+      children: [
+        if (showHome)
+          KeyedSubtree(
+            key: const ValueKey('home'),
+            child: IgnorePointer(
+              ignoring: covered,
+              child: ExcludeSemantics(
+                excluding: covered,
+                child: _buildHome(profile, active: !covered, intro: intro),
+              ),
+            ),
+          ),
+        if (!showHome || _showOnboarding)
+          KeyedSubtree(
+            key: const ValueKey('onboarding'),
+            child: IgnorePointer(
+              ignoring: fading,
+              child: ExcludeSemantics(
+                excluding: fading,
+                child: AnimatedOpacity(
+                  opacity: fading ? 0 : 1,
+                  duration: MapIntroController.fadeDuration,
+                  curve: Curves.easeOut,
+                  onEnd: _endOnboarding,
+                  child: _buildOnboarding(profile),
+                ),
+              ),
+            ),
+          ),
+      ],
     );
   }
 
@@ -375,7 +453,14 @@ class _ProfileGateState extends State<ProfileGate> with WidgetsBindingObserver {
       onUpdatePreferences: _updatePreferences,
       notificationPermissions: const NotificationPermissionService(),
       onSignOut: _signOut,
-      onDone: () => setState(() => _showOnboarding = false),
+      onDone: () {
+        final intro = _intro;
+        if (intro != null) {
+          intro.start();
+        } else {
+          setState(() => _showOnboarding = false);
+        }
+      },
     );
   }
 }

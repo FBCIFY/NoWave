@@ -12,6 +12,10 @@ class AuthTextField extends StatefulWidget {
   final IconData? icon;
   final bool obscureText;
   final bool enableInteractiveSelection;
+
+  /// Prend le focus à l'affichage, même si un autre champ l'a encore : le
+  /// clavier reste ouvert en passant d'une page à l'autre d'un parcours.
+  final bool autofocus;
   final int? maxLength;
   final List<TextInputFormatter>? inputFormatters;
   final TextInputType? keyboardType;
@@ -20,6 +24,10 @@ class AuthTextField extends StatefulWidget {
   final Iterable<String>? autofillHints;
   final String? Function(String?)? validator;
   final ValueChanged<String>? onFieldSubmitted;
+
+  /// Remplace le passage au champ suivant quand l'utilisateur valide au
+  /// clavier : le champ garde le focus, et le clavier reste ouvert.
+  final VoidCallback? onEditingComplete;
   final ValueChanged<String>? onChanged;
 
   const AuthTextField({
@@ -30,6 +38,7 @@ class AuthTextField extends StatefulWidget {
     this.icon,
     this.obscureText = false,
     this.enableInteractiveSelection = true,
+    this.autofocus = false,
     this.maxLength,
     this.inputFormatters,
     this.keyboardType,
@@ -38,6 +47,7 @@ class AuthTextField extends StatefulWidget {
     this.autofillHints,
     this.validator,
     this.onFieldSubmitted,
+    this.onEditingComplete,
     this.onChanged,
   });
 
@@ -46,6 +56,13 @@ class AuthTextField extends StatefulWidget {
 }
 
 class _AuthTextFieldState extends State<AuthTextField> {
+  static const _suffixButtonSize = 36.0;
+  static final _suffixButtonStyle = IconButton.styleFrom(
+    minimumSize: const Size.square(_suffixButtonSize),
+    padding: EdgeInsets.zero,
+    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+  );
+
   final _focusNode = FocusNode();
 
   late bool _isObscured;
@@ -55,6 +72,7 @@ class _AuthTextFieldState extends State<AuthTextField> {
   void initState() {
     super.initState();
     _isObscured = widget.obscureText;
+    if (widget.autofocus) _focusNode.requestFocus();
 
     _focusNode.addListener(() {
       if (mounted) {
@@ -74,12 +92,12 @@ class _AuthTextFieldState extends State<AuthTextField> {
   @override
   Widget build(BuildContext context) {
     final normalBorder = OutlineInputBorder(
-      borderRadius: BorderRadius.circular(14),
+      borderRadius: BorderRadius.circular(10),
       borderSide: BorderSide(color: Colors.white.withValues(alpha: 0.22)),
     );
 
     final focusedBorder = OutlineInputBorder(
-      borderRadius: BorderRadius.circular(14),
+      borderRadius: BorderRadius.circular(10),
       borderSide: const BorderSide(color: AppColors.cyan500, width: 1.5),
     );
 
@@ -90,12 +108,12 @@ class _AuthTextFieldState extends State<AuthTextField> {
           widget.label.toUpperCase(),
           style: TextStyle(
             color: Colors.white.withValues(alpha: 0.70),
-            fontSize: 12,
+            fontSize: 10,
             fontWeight: FontWeight.w600,
             letterSpacing: 1,
           ),
         ),
-        const SizedBox(height: 8),
+        const SizedBox(height: 6),
         TextFormField(
           controller: widget.controller,
           maxLength: widget.maxLength,
@@ -110,32 +128,41 @@ class _AuthTextFieldState extends State<AuthTextField> {
           autofillHints: widget.autofillHints,
           validator: widget.validator,
           onFieldSubmitted: widget.onFieldSubmitted,
+          onEditingComplete: widget.onEditingComplete,
           onTapOutside: (_) => _focusNode.unfocus(),
           autocorrect: false,
           enableSuggestions: !widget.obscureText,
           cursorColor: AppColors.cyan500,
-          style: const TextStyle(color: Colors.white, fontSize: 16),
+          style: const TextStyle(color: Colors.white, fontSize: 14),
           decoration: InputDecoration(
             hintText: widget.hintText,
             hintStyle: TextStyle(color: Colors.white.withValues(alpha: 0.35)),
             counterStyle: TextStyle(
               color: Colors.white.withValues(alpha: 0.30),
-              fontSize: 10,
+              fontSize: 9,
             ),
+            // Sinon, Flutter impose au champ 48 px de haut au minimum.
+            isDense: true,
             filled: true,
             fillColor: Colors.white.withValues(alpha: _hasFocus ? 0.16 : 0.10),
             contentPadding: const EdgeInsets.symmetric(
-              horizontal: 16,
-              vertical: 18,
+              horizontal: 12,
+              vertical: 12,
             ),
             prefixIcon: widget.icon == null
                 ? null
                 : Icon(
                     widget.icon,
-                    size: 22,
+                    size: 18,
                     color: AppColors.cyan500.withValues(alpha: 0.80),
                   ),
-            prefixIconConstraints: const BoxConstraints(minWidth: 50),
+            prefixIconConstraints: const BoxConstraints(minWidth: 40),
+            // Sans ça, les boutons du bout du champ lui imposent 48 px de
+            // haut : il grandirait en prenant le focus.
+            suffixIconConstraints: const BoxConstraints(
+              minWidth: _suffixButtonSize,
+              minHeight: _suffixButtonSize,
+            ),
             suffixIcon: widget.obscureText || _hasFocus
                 ? Row(
                     mainAxisSize: MainAxisSize.min,
@@ -147,6 +174,7 @@ class _AuthTextFieldState extends State<AuthTextField> {
                               _isObscured = !_isObscured;
                             });
                           },
+                          style: _suffixButtonStyle,
                           tooltip: _isObscured
                               ? 'Afficher le mot de passe'
                               : 'Masquer le mot de passe',
@@ -154,17 +182,18 @@ class _AuthTextFieldState extends State<AuthTextField> {
                             _isObscured
                                 ? Icons.visibility_outlined
                                 : Icons.visibility_off_outlined,
-                            size: 22,
+                            size: 18,
                             color: Colors.white.withValues(alpha: 0.55),
                           ),
                         ),
                       if (_hasFocus)
                         IconButton(
                           onPressed: _focusNode.unfocus,
+                          style: _suffixButtonStyle,
                           tooltip: 'Masquer le clavier',
                           icon: Icon(
                             Icons.keyboard_hide_outlined,
-                            size: 22,
+                            size: 18,
                             color: Colors.white.withValues(alpha: 0.60),
                           ),
                         ),
@@ -180,7 +209,7 @@ class _AuthTextFieldState extends State<AuthTextField> {
             focusedErrorBorder: focusedBorder.copyWith(
               borderSide: const BorderSide(color: Colors.redAccent),
             ),
-            errorStyle: const TextStyle(color: Color(0xFFFFCDD2), fontSize: 13),
+            errorStyle: const TextStyle(color: Color(0xFFFFCDD2), fontSize: 11),
           ),
         ),
       ],

@@ -186,7 +186,7 @@ class AuthPhotoLayout extends StatelessWidget {
                                             children: [
                                               if (header != null) ...[
                                                 header!,
-                                                const SizedBox(height: 20),
+                                                const SizedBox(height: 14),
                                               ],
                                               if (page case final page?)
                                                 _PageSwitcher(
@@ -238,23 +238,23 @@ class AuthPhotoLayout extends StatelessWidget {
           title,
           style: const TextStyle(
             color: Colors.white,
-            fontSize: 28,
+            fontSize: 20,
             fontWeight: FontWeight.w700,
             height: 1.15,
           ),
         ),
         if (subtitle != null) ...[
-          const SizedBox(height: 6),
+          const SizedBox(height: 4),
           Text(
             subtitle!,
             style: TextStyle(
               color: Colors.white.withValues(alpha: 0.75),
-              fontSize: 15,
+              fontSize: 13,
               height: 1.35,
             ),
           ),
         ],
-        const SizedBox(height: 24),
+        const SizedBox(height: 16),
         child,
       ],
     );

@@ -13,6 +13,7 @@ import '../../camera/data/position_estimate_service.dart';
 import '../../camera/domain/photo_report_draft.dart';
 import '../../camera/presentation/camera_screen.dart';
 import '../../map/data/report_tiles.dart';
+import '../../map/presentation/map_intro_controller.dart';
 import '../../map/presentation/map_screen.dart';
 import '../../profile/data/profile_service.dart';
 import '../../profile/domain/user_profile.dart';
@@ -36,6 +37,9 @@ class HomeScreen extends StatefulWidget {
   final ReportDetailService? reportDetailService;
   final VoidCallback? onUserInactive;
 
+  /// Arrivée sur la carte à la fin de l'onboarding, transmise à [MapScreen].
+  final MapIntroController? intro;
+
   const HomeScreen({
     super.key,
     this.profileService,
@@ -50,6 +54,7 @@ class HomeScreen extends StatefulWidget {
     this.reportTiles,
     this.reportDetailService,
     this.onUserInactive,
+    this.intro,
   });
 
   @override
@@ -214,6 +219,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
     final map = MapScreen(
       focusController: _mapFocusController,
+      intro: widget.intro,
       onOpenAlerts:
           widget.alertService == null || widget.reportDetailService == null
           ? null

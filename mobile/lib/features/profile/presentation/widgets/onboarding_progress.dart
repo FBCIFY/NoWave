@@ -2,15 +2,19 @@ import 'package:flutter/material.dart';
 
 import '../../../../app/theme.dart';
 
-/// Progression du premier passage : nom d'utilisateur, type de bateau, nom et
-/// pavillon, visibilité, alertes.
+/// Progression d'un parcours en plusieurs pages : l'inscription (e-mail, mot
+/// de passe, vérification), puis le premier passage du profil (nom
+/// d'utilisateur, type de bateau, nom et pavillon, visibilité, alertes).
 class OnboardingProgress extends StatelessWidget {
-  static const stepCount = 5;
-
   /// Étape affichée, de 1 à [stepCount].
   final int step;
+  final int stepCount;
 
-  const OnboardingProgress({super.key, required this.step});
+  const OnboardingProgress({
+    super.key,
+    required this.step,
+    required this.stepCount,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -26,12 +30,12 @@ class OnboardingProgress extends StatelessWidget {
             label.toUpperCase(),
             style: TextStyle(
               color: Colors.white.withValues(alpha: 0.70),
-              fontSize: 12,
+              fontSize: 10,
               fontWeight: FontWeight.w600,
               letterSpacing: 1,
             ),
           ),
-          const SizedBox(height: 8),
+          const SizedBox(height: 6),
           Row(
             children: [
               for (var i = 1; i <= stepCount; i++) ...[
@@ -39,7 +43,7 @@ class OnboardingProgress extends StatelessWidget {
                 Expanded(
                   child: AnimatedContainer(
                     duration: const Duration(milliseconds: 300),
-                    height: 4,
+                    height: 3,
                     decoration: BoxDecoration(
                       color: i <= step
                           ? AppColors.cyan500

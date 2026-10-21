@@ -3,11 +3,13 @@ import 'dart:convert';
 import 'package:blueway/features/auth/presentation/widgets/auth_photo_layout.dart';
 import 'package:blueway/features/camera/data/position_estimate_service.dart';
 import 'package:blueway/features/map/data/report_tiles.dart';
+import 'package:blueway/features/map/presentation/map_screen.dart';
 import 'package:blueway/features/profile/presentation/profile_gate.dart';
 import 'package:blueway/features/profile/presentation/profile_onboarding_screen.dart';
 import 'package:blueway/features/reports/data/manual_report_service.dart';
 import 'package:blueway/features/reports/data/report_detail_service.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 
@@ -17,7 +19,10 @@ class _Reports extends Fake implements ManualReportService {}
 
 class _Estimates extends Fake implements PositionEstimateService {}
 
-class _Tiles extends Fake implements ReportTiles {}
+class _Tiles extends Fake implements ReportTiles {
+  @override
+  void stopPulse() {}
+}
 
 class _Details extends Fake implements ReportDetailService {}
 
@@ -35,13 +40,21 @@ Map<String, Object?> _profileJson(Map<String, Object?> changes) => {
 };
 
 void main() {
-  testWidgets('création du profil : un seul écran du nom jusqu’aux alertes', (
+  testWidgets('création du profil : un seul écran du nom jusqu’à la carte', (
     tester,
   ) async {
     await tester.binding.setSurfaceSize(const Size(430, 932));
     addTearDown(() => tester.binding.setSurfaceSize(null));
     final f = AccountFixture();
     addTearDown(f.dispose);
+    // Localisation désactivée : la carte descendra sur la France.
+    const geolocator = MethodChannel('flutter.baseflow.com/geolocator');
+    final messenger = tester.binding.defaultBinaryMessenger;
+    messenger.setMockMethodCallHandler(
+      geolocator,
+      (call) async => call.method == 'isLocationServiceEnabled' ? false : null,
+    );
+    addTearDown(() => messenger.setMockMethodCallHandler(geolocator, null));
 
     var profileExists = false;
     f.respond = (request) async {
@@ -125,5 +138,31 @@ void main() {
     );
     expect(jsonDecode(f.requests[1].body), {'username': 'Marin'});
     expect(jsonDecode(f.requests.last.body), {'show_boat_info': true});
+    // La carte se charge déjà sous l'onboarding, sans enregistrer le
+    // téléphone.
+    expect(find.byType(MapScreen), findsOneWidget);
+
+    await tester.tap(find.text('Plus tard'));
+    await tester.pump();
+    expect(find.byType(ProfileOnboardingScreen), findsOneWidget);
+    // Sans carte native dans les tests : son attente maximale, puis le fondu.
+    await tester.pump(const Duration(seconds: 4));
+    await tester.pump();
+    expect(find.byType(ProfileOnboardingScreen), findsOneWidget);
+    await tester.pumpAndSettle();
+    expect(find.byType(ProfileOnboardingScreen), findsNothing);
+    expect(find.byType(MapScreen), findsOneWidget);
+    expect(
+      find.text(
+        'La localisation est désactivée. Activez-la dans les réglages.',
+      ),
+      findsOneWidget,
+    );
+    expect(
+      f.requests.map((r) => r.url.path),
+      contains('/api/v1/devices/current'),
+    );
+
+    await tester.pumpWidget(const SizedBox.shrink());
   });
 }

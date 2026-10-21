@@ -54,9 +54,21 @@ class FocusGps extends Fake implements LocationService {
   final positions = StreamController<geo.Position>.broadcast(sync: true);
   bool allowed = true;
   Future<geo.Position> Function()? onCurrent;
+  StateError? permissionError;
+  int permissionRequests = 0;
+  int currentRequests = 0;
   @override
-  Future<geo.Position> getCurrentPosition() =>
-      onCurrent?.call() ?? initial.future;
+  Future<void> requestPermission() async {
+    permissionRequests++;
+    if (permissionError case final error?) throw error;
+  }
+
+  @override
+  Future<geo.Position> getCurrentPosition() {
+    currentRequests++;
+    return onCurrent?.call() ?? initial.future;
+  }
+
   @override
   Stream<geo.Position> watchPosition() => positions.stream;
   @override

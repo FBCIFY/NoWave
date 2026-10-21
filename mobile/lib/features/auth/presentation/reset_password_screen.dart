@@ -106,9 +106,9 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
                     const Icon(
                       Icons.mark_email_read_outlined,
                       color: Color(0xFF22D3EE),
-                      size: 32,
+                      size: 24,
                     ),
-                    const SizedBox(width: 14),
+                    const SizedBox(width: 10),
                     Expanded(
                       child: Text(
                         'Si un compte existe pour cette adresse, '
@@ -116,14 +116,14 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
                         'Vérifiez également vos courriers indésirables.',
                         style: TextStyle(
                           color: Colors.white.withValues(alpha: 0.85),
-                          fontSize: 15,
+                          fontSize: 13,
                           height: 1.4,
                         ),
                       ),
                     ),
                   ],
                 ),
-                const SizedBox(height: 28),
+                const SizedBox(height: 20),
                 AuthPrimaryButton(
                   label: 'Retour à la connexion',
                   onPressed: () => Navigator.of(context).pop(),
@@ -157,16 +157,16 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
                     },
                   ),
                   if (_errorMessage != null) ...[
-                    const SizedBox(height: 16),
+                    const SizedBox(height: 12),
                     Text(
                       _errorMessage!,
                       style: const TextStyle(
                         color: Color(0xFFFCA5A5),
-                        fontSize: 14,
+                        fontSize: 12,
                       ),
                     ),
                   ],
-                  const SizedBox(height: 28),
+                  const SizedBox(height: 20),
                   AuthPrimaryButton(
                     label: 'Envoyer le lien',
                     onPressed: _isLoading ? null : _sendResetEmail,

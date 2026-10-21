@@ -35,6 +35,7 @@ import 'widgets/globe_moon.dart';
 import 'widgets/cloud_passage.dart';
 import 'map_alert_camera.dart';
 import 'map_focus_controller.dart';
+import 'map_intro_controller.dart';
 import 'report_marker.dart' as badges;
 export 'map_focus_controller.dart';
 import 'widgets/map_notice_banner.dart';
@@ -71,6 +72,10 @@ class MapScreen extends StatefulWidget {
   final VoidCallback? onUserInactive;
   final LocationService? locationService;
 
+  /// Arrivée depuis l'onboarding : la carte se charge sous lui et ne demande
+  /// la position qu'à sa fin, puis vole du globe jusqu'à l'utilisateur.
+  final MapIntroController? intro;
+
   const MapScreen({
     super.key,
     this.onOpenProfile,
@@ -83,6 +88,7 @@ class MapScreen extends StatefulWidget {
     this.reportDetailService,
     this.onUserInactive,
     this.locationService,
+    this.intro,
   });
 
   @override
@@ -178,9 +184,19 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
   final _locationMarker = LocationMarker();
   bool _nativeLocationConfigured = false;
 
+  /// Premier affichage complet de la carte, tuiles visibles comprises.
+  final _mapLoaded = Completer<void>();
+  bool _introStarted = false;
+
+  /// Le vol de l'arrivée n'est pas encore parti ; un doigt sur la carte
+  /// l'annule.
+  bool _introFlightPending = false;
+
   @override
   void initState() {
     super.initState();
+    widget.intro?.attach();
+    widget.intro?.addListener(_handleIntro);
     widget.focusController?.addListener(_handleFocusRequest);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) _handleFocusRequest();
@@ -196,7 +212,8 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
         (widget.orientationService ?? DeviceOrientationService()).mapHeadings
             .listen(
               (heading) {
-                if (!mounted || _hidden) return;
+                // Sous l'onboarding, la boussole ne redessine pas la carte.
+                if (!mounted || _hidden || _covered) return;
                 if (!heading.isFinite) return;
                 _deviceHeading = heading;
                 _syncLocationPuck().ignore();
@@ -526,6 +543,7 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
   }
 
   void _handleMapLoaded(MapLoadedEventData event) {
+    if (!_mapLoaded.isCompleted) _mapLoaded.complete();
     if (!mounted || _mapError == null) return;
     setState(() => _mapError = null);
   }
@@ -651,6 +669,13 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
   @override
   void didUpdateWidget(covariant MapScreen oldWidget) {
     super.didUpdateWidget(oldWidget);
+
+    if (oldWidget.intro != widget.intro) {
+      oldWidget.intro?.removeListener(_handleIntro);
+      oldWidget.intro?.detach();
+      widget.intro?.attach();
+      widget.intro?.addListener(_handleIntro);
+    }
 
     if (oldWidget.focusController != widget.focusController) {
       oldWidget.focusController?.removeListener(_handleFocusRequest);
@@ -1012,7 +1037,7 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
     widget.reportTiles?.updatePulse(
       map,
       zoom: zoom,
-      enabled: !_hidden && !_reduceMotion,
+      enabled: !_hidden && !_covered && !_reduceMotion,
     );
   }
 
@@ -1072,6 +1097,19 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
   /// raccourcit l'animation quand la distance est faible.
   static const _recenterMaxDuration = Duration(milliseconds: 1200);
 
+  /// Vol du globe jusqu'à l'utilisateur à la fin de l'onboarding.
+  static const _introFlightDuration = Duration(milliseconds: 3500);
+
+  /// Attente maximale de la carte avant le fondu, puis de la position avant
+  /// de partir vers la France.
+  static const _introWait = Duration(seconds: 4);
+
+  /// Sans position : la France entière, juste avant le passage des nuages
+  /// ([CloudPassageController.startZoom]).
+  static const _franceLongitude = 2.4;
+  static const _franceLatitude = 46.6;
+  static const _franceZoom = 4.2;
+
   /// Centre la carte sur l'utilisateur puis le suit à chaque nouvelle position.
   /// [animated] : vol jusqu'à l'utilisateur (bouton), sinon saut direct
   /// (lancement de la carte).
@@ -1106,7 +1144,11 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
     );
   }
 
-  Future<void> _locate({bool animated = false}) async {
+  Future<void> _locate({
+    bool animated = false,
+    Future<geo.Position>? fix,
+    ViewportTransition? flight,
+  }) async {
     final wasWatching = _positionSubscription != null;
     setState(() {
       _isLocating = true;
@@ -1114,7 +1156,7 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
     });
 
     try {
-      final position = await _locationService.getCurrentPosition();
+      final position = await (fix ?? _locationService.getCurrentPosition());
 
       if (!mounted) return;
       if (!MapAlertCamera.usable(position)) {
@@ -1173,7 +1215,12 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
         );
       }
 
-      if (animated) {
+      if (flight != null) {
+        // L'utilisateur a déjà pris la carte en main : pas de vol.
+        if (!_introFlightPending) return;
+        _introFlightPending = false;
+        _setViewport(followUser, transition: flight);
+      } else if (animated) {
         // Mapbox marque cette animation du viewport comme expérimentale.
         // ignore: experimental_member_use
         _setViewport(
@@ -1220,6 +1267,83 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
         });
       }
     }
+  }
+
+  bool get _covered => widget.intro?.covered ?? false;
+
+  void _handleIntro() {
+    final intro = widget.intro;
+    if (!mounted || intro == null) return;
+    if (intro.phase == MapIntroPhase.starting && !_introStarted) {
+      _introStarted = true;
+      unawaited(_playIntro(intro));
+    }
+    _syncHeatmapPulse();
+  }
+
+  /// Fin de l'onboarding : l'autorisation de position est demandée tant que
+  /// la photo couvre la carte, puis l'onboarding s'efface sur le globe et la
+  /// carte vole jusqu'à l'utilisateur.
+  Future<void> _playIntro(MapIntroController intro) async {
+    Future<geo.Position>? fix;
+    String? locationError;
+    try {
+      await _locationService.requestPermission();
+      // La position se cherche pendant l'attente de la carte et le fondu.
+      fix = _locationService.getCurrentPosition()..ignore();
+    } on StateError catch (error) {
+      locationError = error.message;
+    } catch (_) {
+      locationError = 'Impossible de récupérer votre position.';
+    }
+    if (!mounted) return;
+
+    try {
+      // Chargée pendant l'onboarding, la carte est en général déjà prête.
+      await _mapLoaded.future.timeout(_introWait);
+    } on TimeoutException {
+      // Tuiles encore en chemin : le globe se complète pendant le fondu.
+    }
+    if (!mounted) return;
+
+    _introFlightPending = true;
+    if (_reduceMotion) {
+      // Sans animation : la carte s'ouvre déjà sur l'utilisateur, ou sur la
+      // France.
+      await _arriveFromIntro(fix, locationError);
+      if (mounted) intro.reveal();
+      return;
+    }
+    intro.reveal();
+    await Future<void>.delayed(MapIntroController.fadeDuration);
+    if (!mounted) return;
+    await _arriveFromIntro(fix, locationError);
+  }
+
+  /// Vol jusqu'à l'utilisateur. GPS lent ou refusé : la France en attendant,
+  /// puis l'utilisateur si sa position arrive avant qu'il touche la carte.
+  Future<void> _arriveFromIntro(
+    Future<geo.Position>? fix,
+    String? locationError,
+  ) async {
+    if (fix != null) {
+      // Le vol part dès que la position arrive, même après ce délai.
+      await _locate(
+        fix: fix,
+        flight: const FlyViewportTransition(duration: _introFlightDuration),
+      ).timeout(_introWait, onTimeout: () {});
+    } else {
+      setState(() => _locationError = locationError);
+    }
+    if (!mounted || !_introFlightPending || _isFollowing) return;
+    _setViewport(
+      () => _viewport = CameraViewportState(
+        center: Point(coordinates: Position(_franceLongitude, _franceLatitude)),
+        zoom: _franceZoom,
+        pitch: 0,
+      ),
+      transition: const FlyViewportTransition(duration: _introFlightDuration),
+    );
   }
 
   /// Vrai si les deux positions s'affichent pareil, à la seconde d'arc.
@@ -1612,6 +1736,8 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
 
   @override
   void dispose() {
+    widget.intro?.removeListener(_handleIntro);
+    widget.intro?.detach();
     widget.focusController?.removeListener(_handleFocusRequest);
     widget.reportTiles?.stopPulse();
     _lifecycleListener?.dispose();
@@ -1676,6 +1802,7 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
               key: _mapAreaKey,
               onPointerDown: (_) {
                 _mapTouchActive = true;
+                _introFlightPending = false;
                 if (_selectedReport != null) {
                   _cameraFocusRevision++;
                   _selectionTouched = true;
@@ -1701,7 +1828,9 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
                     _positionMapOrnaments(map, editing: _reportComposerOpen),
                   );
                   _addReportInteractions(map);
-                  unawaited(_locate());
+                  // Sous l'onboarding, la position attend sa fin : pas de
+                  // fenêtre d'autorisation par-dessus ses pages.
+                  if (!_covered && !_introStarted) unawaited(_locate());
                 },
                 onMapLoadedListener: _handleMapLoaded,
                 onStyleLoadedListener: (_) {

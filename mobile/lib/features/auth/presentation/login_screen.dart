@@ -121,7 +121,7 @@ class _LoginScreenState extends State<LoginScreen> {
                   return null;
                 },
               ),
-              const SizedBox(height: 16),
+              const SizedBox(height: 12),
               AuthTextField(
                 controller: _passwordController,
                 label: 'Mot de passe',
@@ -160,21 +160,21 @@ class _LoginScreenState extends State<LoginScreen> {
                         },
                   style: TextButton.styleFrom(
                     foregroundColor: Colors.white.withValues(alpha: 0.85),
-                    minimumSize: const Size(0, 44),
+                    minimumSize: const Size(0, 36),
                   ),
                   child: const Text(
                     'Mot de passe oublié ?',
-                    style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
+                    style: TextStyle(fontSize: 12, fontWeight: FontWeight.w500),
                   ),
                 ),
               ),
               if (_errorMessage != null) ...[
-                const SizedBox(height: 16),
+                const SizedBox(height: 8),
                 Container(
-                  padding: const EdgeInsets.all(12),
+                  padding: const EdgeInsets.all(10),
                   decoration: BoxDecoration(
                     color: Colors.red.withValues(alpha: 0.12),
-                    borderRadius: BorderRadius.circular(12),
+                    borderRadius: BorderRadius.circular(10),
                     border: Border.all(
                       color: Colors.redAccent.withValues(alpha: 0.35),
                     ),
@@ -185,15 +185,15 @@ class _LoginScreenState extends State<LoginScreen> {
                       const Icon(
                         Icons.error_outline,
                         color: Color(0xFFFCA5A5),
-                        size: 18,
+                        size: 15,
                       ),
-                      const SizedBox(width: 10),
+                      const SizedBox(width: 8),
                       Expanded(
                         child: Text(
                           _errorMessage!,
                           style: const TextStyle(
                             color: Color(0xFFFECACA),
-                            fontSize: 12,
+                            fontSize: 11,
                           ),
                         ),
                       ),
@@ -201,13 +201,13 @@ class _LoginScreenState extends State<LoginScreen> {
                   ),
                 ),
               ],
-              const SizedBox(height: 12),
+              const SizedBox(height: 8),
               AuthPrimaryButton(
                 label: 'Connexion',
                 onPressed: _isLoading ? null : _signIn,
                 isLoading: _isLoading,
               ),
-              const SizedBox(height: 8),
+              const SizedBox(height: 4),
               Wrap(
                 alignment: WrapAlignment.center,
                 crossAxisAlignment: WrapCrossAlignment.center,
@@ -216,7 +216,7 @@ class _LoginScreenState extends State<LoginScreen> {
                     'Pas encore de compte ? ',
                     style: TextStyle(
                       color: Colors.white.withValues(alpha: 0.70),
-                      fontSize: 15,
+                      fontSize: 13,
                     ),
                   ),
                   TextButton(
@@ -238,13 +238,13 @@ class _LoginScreenState extends State<LoginScreen> {
                     style: TextButton.styleFrom(
                       foregroundColor: const Color(0xFF22D3EE),
                       padding: const EdgeInsets.symmetric(horizontal: 4),
-                      minimumSize: const Size(0, 44),
+                      minimumSize: const Size(0, 36),
                       tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                     ),
                     child: const Text(
                       'S’inscrire',
                       style: TextStyle(
-                        fontSize: 15,
+                        fontSize: 13,
                         fontWeight: FontWeight.w600,
                       ),
                     ),

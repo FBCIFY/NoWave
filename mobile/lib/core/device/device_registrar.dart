@@ -12,11 +12,16 @@ import 'device_registration.dart';
 /// refuse l'enregistrement.
 class DeviceRegistrar extends StatefulWidget {
   final DeviceRegistration registration;
+
+  /// Faux tant que la carte se charge sous l'onboarding : l'enregistrement
+  /// démarre à son arrivée.
+  final bool active;
   final Widget child;
 
   const DeviceRegistrar({
     super.key,
     required this.registration,
+    this.active = true,
     required this.child,
   });
 
@@ -30,12 +35,22 @@ class _DeviceRegistrarState extends State<DeviceRegistrar> {
   @override
   void initState() {
     super.initState();
-    unawaited(widget.registration.start());
+    if (widget.active) unawaited(widget.registration.start());
     // Au retour dans l'app, l'autorisation de notifications a pu changer :
     // dans les réglages, ou dans la fenêtre système qui met l'app en pause.
     _lifecycleListener = AppLifecycleListener(
-      onResume: () => unawaited(widget.registration.register()),
+      onResume: () {
+        if (widget.active) unawaited(widget.registration.register());
+      },
     );
+  }
+
+  @override
+  void didUpdateWidget(covariant DeviceRegistrar oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.active && !oldWidget.active) {
+      unawaited(widget.registration.start());
+    }
   }
 
   @override
