@@ -1336,6 +1336,9 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
         SymbolLayer(
           id: 'alert-selected-point',
           sourceId: 'alert-selected',
+          // Même plage que les badges : en dessous, la zone colorée prend
+          // le relais et le repère ne doit pas la recouvrir.
+          minZoom: ReportTiles.badgesMinZoom,
           iconImageExpression: ReportTiles.markerImageExpression(),
           iconSize: 1.15,
           iconAllowOverlap: true,

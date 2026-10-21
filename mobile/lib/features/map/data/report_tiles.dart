@@ -53,7 +53,7 @@ class ReportTiles {
 
   /// Zoom à partir duquel les badges remplacent la zone colorée : le
   /// backend ne regroupe plus les signalements.
-  static const _badgesMinZoom = 9.0;
+  static const badgesMinZoom = 9.0;
 
   /// Zoom où la zone colorée commence à s'effacer : elle est partie quand
   /// les badges arrivent. La zone ne va pas au-delà : sur
@@ -96,7 +96,7 @@ class ReportTiles {
     25.0,
     6.0,
     50.0,
-    _badgesMinZoom,
+    badgesMinZoom,
     80.0,
   ];
 
@@ -258,7 +258,7 @@ class ReportTiles {
         id: heatmapLayerId,
         sourceId: sourceId,
         sourceLayer: _sourceLayer,
-        maxZoom: _badgesMinZoom,
+        maxZoom: badgesMinZoom,
         // Sous les étiquettes du fond de carte, qui restent lisibles.
         slot: LayerSlot.MIDDLE,
         // Au cœur d'une tache, Mapbox compte environ 0,4 par unité de
@@ -281,7 +281,7 @@ class ReportTiles {
         heatmapOpacityExpression: _zoomRamp(
           _fadeStartZoom,
           1,
-          _badgesMinZoom,
+          badgesMinZoom,
           0,
         ),
       ),
@@ -292,7 +292,7 @@ class ReportTiles {
         id: clusterTapLayerId,
         sourceId: sourceId,
         sourceLayer: _sourceLayer,
-        maxZoom: _badgesMinZoom,
+        maxZoom: badgesMinZoom,
         slot: LayerSlot.MIDDLE,
         circleRadius: _clusterTapRadius,
         circleColor: _white,
@@ -305,13 +305,13 @@ class ReportTiles {
         id: pointsLayerId,
         sourceId: sourceId,
         sourceLayer: _sourceLayer,
-        minZoom: _badgesMinZoom,
+        minZoom: badgesMinZoom,
         filter: _isReport,
         iconImageExpression: markerImageExpression(),
         // À 9, la zone colorée est déjà masquée : le badge doit être visible.
         iconOpacity: 1,
         iconSizeExpression: _zoomRamp(
-          _badgesMinZoom,
+          badgesMinZoom,
           _badgeStartScale,
           _badgesFullZoom,
           1,

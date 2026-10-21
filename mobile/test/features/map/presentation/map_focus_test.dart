@@ -503,6 +503,8 @@ void main() {
       await pending;
       final layer = map.style.layers['alert-selected-point']!;
       expect(layer['type'], 'symbol');
+      // Caché au dézoom, comme les badges, au profit de la zone colorée.
+      expect(layer['minzoom'], ReportTiles.badgesMinZoom);
       expect(
         layer['layout']['icon-image'],
         contains(badges.ReportMarker.imageId(category)),
