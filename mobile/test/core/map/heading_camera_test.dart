@@ -118,6 +118,57 @@ void main() {
     expect(clock.active, isFalse);
   });
 
+  test(
+    'réduction des animations : une commande à la fois, puis le dernier cap',
+    () async {
+      final pending = Completer<void>();
+      final jumps = <double>[];
+      final slow = HeadingCamera(
+        rotate: (bearing) {
+          jumps.add(bearing);
+          return jumps.length == 1 ? pending.future : Future.value();
+        },
+        active: () => active,
+        createTicker: (frame) => _Clock(frame),
+      );
+      addTearDown(slow.dispose);
+      slow.aim(10, from: 0, reduceMotion: true);
+      slow.aim(20, from: 0, reduceMotion: true);
+      slow.aim(30, from: 0, reduceMotion: true);
+      await Future<void>.delayed(Duration.zero);
+      expect(jumps, [10]);
+      pending.complete();
+      await Future<void>.delayed(Duration.zero);
+      await Future<void>.delayed(Duration.zero);
+      // Les caps intermédiaires sont sautés : seul le dernier compte.
+      expect(jumps, [10, 30]);
+    },
+  );
+
+  test(
+    'réduction des animations : un toucher annule le cap en attente',
+    () async {
+      final pending = Completer<void>();
+      final jumps = <double>[];
+      final slow = HeadingCamera(
+        rotate: (bearing) {
+          jumps.add(bearing);
+          return pending.future;
+        },
+        active: () => active,
+        createTicker: (frame) => _Clock(frame),
+      );
+      addTearDown(slow.dispose);
+      slow.aim(10, from: 0, reduceMotion: true);
+      slow.aim(20, from: 0, reduceMotion: true);
+      slow.stop();
+      pending.complete();
+      await Future<void>.delayed(Duration.zero);
+      await Future<void>.delayed(Duration.zero);
+      expect(jumps, [10]);
+    },
+  );
+
   test('pas d’un pas : lissage exponentiel', () {
     final half = HeadingCamera.smoothing * 0.6931471805599453;
     expect(HeadingCamera.step(0, 100, half), closeTo(50, 1e-3));

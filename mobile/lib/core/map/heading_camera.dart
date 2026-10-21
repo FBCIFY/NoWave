@@ -31,6 +31,10 @@ class HeadingCamera {
   double _target = 0;
   Duration _last = Duration.zero;
   Future<void>? _pending;
+
+  /// A reduced-motion jump waits for the call in flight, then sends the
+  /// latest heading only.
+  bool _jumpQueued = false;
   bool _disposed = false;
 
   bool get isTurning => _ticker.isActive;
@@ -42,7 +46,7 @@ class HeadingCamera {
     _target = heading % 360;
     if (reduceMotion) {
       stop();
-      _rotate(_target).catchError((Object _) {});
+      _jump();
       return;
     }
     _bearing ??= from % 360;
@@ -55,6 +59,7 @@ class HeadingCamera {
   void stop() {
     if (_ticker.isActive) _ticker.stop();
     _bearing = null;
+    _jumpQueued = false;
   }
 
   /// Exponential smoothing along the shortest way round, in [0, 360).
@@ -80,6 +85,14 @@ class HeadingCamera {
     _pending = _send(next);
   }
 
+  void _jump() {
+    if (_pending != null) {
+      _jumpQueued = true;
+      return;
+    }
+    _pending = _send(_target);
+  }
+
   Future<void> _send(double bearing) async {
     try {
       await _rotate(bearing);
@@ -88,6 +101,10 @@ class HeadingCamera {
       stop();
     } finally {
       _pending = null;
+      if (_jumpQueued && !_disposed && _active()) {
+        _jumpQueued = false;
+        _jump();
+      }
     }
   }
 
