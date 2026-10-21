@@ -202,7 +202,7 @@ void main() {
     final screen = tester.view.physicalSize / tester.view.devicePixelRatio;
     final buttonBounds = tester.getRect(button);
     expect(buttonBounds.right, closeTo(screen.width - 16, 0.1));
-    expect(buttonBounds.bottom, closeTo(screen.height - 20, 0.1));
+    expect(buttonBounds.bottom, closeTo(screen.height - 180, 0.1));
     expect(
       buttonBounds.overlaps(
         tester.getRect(find.byTooltip('Créer un signalement')),

@@ -2445,7 +2445,7 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
           if (!_reportComposerOpen)
             Positioned(
               right: 16,
-              bottom: 20,
+              bottom: 180,
               child: SafeArea(
                 top: false,
                 child: Semantics(
