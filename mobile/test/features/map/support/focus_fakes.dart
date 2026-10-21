@@ -213,6 +213,7 @@ class FocusMap extends Fake implements mb.MapboxMap {
   final fitPadding = <mb.MbxEdgeInsets?>[];
   final cameras = <mb.CameraOptions>[];
   final easedCameras = <mb.CameraOptions>[];
+  final bounds = <mb.CameraBoundsOptions>[];
   double nativeZoom = 17;
   double width = 390, height = 844;
   Future<mb.CameraOptions> Function()? onFit;
@@ -226,6 +227,9 @@ class FocusMap extends Fake implements mb.MapboxMap {
 
   @override
   Future<mb.Size> getSize() async => mb.Size(width: width, height: height);
+  @override
+  Future<void> setBounds(mb.CameraBoundsOptions options) async =>
+      bounds.add(options);
   @override
   Future<mb.CameraOptions> cameraForCoordinatesPadding(
     List<mb.Point> coordinates,

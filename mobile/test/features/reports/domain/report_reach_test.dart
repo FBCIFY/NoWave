@@ -22,6 +22,17 @@ void main() {
     expect(kept.longitude, closeTo(sameAxis.longitude, 1e-7));
   });
 
+  test('le rectangle de la caméra contient tout le cercle, sans plus', () {
+    final box = ReportReach.bounds(lat, lon);
+    final outline = ReportReach.outline(lat, lon);
+    for (final point in outline) {
+      expect(point[0], inInclusiveRange(box.west - 1e-9, box.east + 1e-9));
+      expect(point[1], inInclusiveRange(box.south - 1e-9, box.north + 1e-9));
+    }
+    expect(ReportReach.distance(lat, lon, box.north, lon), closeTo(1000, 1));
+    expect(ReportReach.distance(lat, lon, lat, box.east), closeTo(1000, 1));
+  });
+
   test('le contour est fermé et à 1 km partout', () {
     final outline = ReportReach.outline(lat, lon);
     expect(outline.first[0], closeTo(outline.last[0], 1e-9));
