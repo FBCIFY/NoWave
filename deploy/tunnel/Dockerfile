@@ -1,4 +1,4 @@
-FROM --platform=$BUILDPLATFORM golang:1.26.9-alpine@sha256:cdfd4fe2da6b225d8b40c6b7a105736e548e83ff56d5d8f9394446eeb5eb84e0 AS builder
+FROM --platform=$BUILDPLATFORM golang:1.26.10-alpine@sha256:9ce231b28998b32e116927c61aa5c406183061d4f3f2d61b292c88e7f6bdf7ca AS builder
 ARG CLOUDFLARED_COMMIT=96d39adbc812dc7363834bda908970c1a2560a72
 WORKDIR /src
 RUN apk upgrade --no-cache && apk add --no-cache git
@@ -6,7 +6,8 @@ RUN git init && git remote add origin https://github.com/cloudflare/cloudflared.
     && git fetch --depth=1 origin "$CLOUDFLARED_COMMIT" && git checkout --detach "$CLOUDFLARED_COMMIT" \
     && test "$(git rev-parse HEAD)" = "$CLOUDFLARED_COMMIT"
 ENV GOFLAGS=-mod=mod
-RUN go get golang.org/x/crypto@v0.57.0 golang.org/x/net@v0.60.0 github.com/klauspost/compress@v1.18.7 && go mod tidy \
+RUN go get golang.org/x/crypto@v0.57.0 golang.org/x/net@v0.60.0 \
+       github.com/klauspost/compress@v1.18.7 && go mod tidy \
     && CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go list -deps ./cmd/cloudflared > /tmp/dependencies \
     && if grep -E '^golang.org/x/crypto/openpgp(/|$)' /tmp/dependencies; then exit 1; fi \
     && CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -trimpath \

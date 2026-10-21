@@ -573,7 +573,6 @@ greenlet==3.5.6 \
     # via
     #   -c backend/requirements-test.txt
     #   -r backend/requirements.txt
-    #   sqlalchemy
 grpcio==1.84.0 \
     --hash=sha256:026d757df86c5b7a41de8200b9a2cda454aaa5004cb0c7e3374c66eb82f61499 \
     --hash=sha256:06619ba1515e5ee69fb2a514e95dd8be05ce74cb3928d5b34f87f87c86fe3c27 \
