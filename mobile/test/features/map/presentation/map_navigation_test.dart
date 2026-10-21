@@ -184,6 +184,19 @@ void main() {
     });
   }
 
+  navigationTest('deuxième appui pendant le recentrage depuis le globe', (
+    tester,
+  ) async {
+    map.maxPitch = 0; // La contrainte native du globe est encore en place.
+    await mount(tester);
+    headings.values.add(90);
+    await press(tester, 'Recentrer sur ma position');
+    await press(tester, 'Suivre la direction du téléphone');
+    expect(viewport(tester).pitch, 85 * .45);
+    expect(bearing(tester), 90);
+    expect(find.byTooltip('Revenir au nord vrai à plat'), findsOneWidget);
+  });
+
   navigationTest(
     'le repère nord et la flèche passent le nord sans tour complet',
     (tester) async {

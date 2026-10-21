@@ -196,7 +196,12 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
       if (!mounted || map != _mapboxMap || revision != _rotationStyleRevision) {
         return;
       }
-      await _globePitch.synchronize(map, camera, editing: _reportComposerOpen);
+      await _globePitch.synchronize(
+        map,
+        camera,
+        editing: _reportComposerOpen,
+        followingPitch: _followingPitch,
+      );
       if (!mounted || map != _mapboxMap || revision != _rotationStyleRevision) {
         return;
       }
@@ -384,6 +389,13 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
     _viewport = const IdleViewportState();
   }
 
+  double? get _followingPitch {
+    final viewport = _viewport;
+    return _isFollowing && viewport is FollowPuckViewportState
+        ? viewport.pitch
+        : null;
+  }
+
   /// Un geste de l'utilisateur coupe le suivi GPS ; une rotation au doigt
   /// passe la boussole en mode manuel.
   void _handleMapCameraChange(CameraChangedEventData event) {
@@ -398,6 +410,7 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
           pitchMap,
           event.cameraState,
           editing: _reportComposerOpen,
+          followingPitch: _followingPitch,
         ),
       );
     }
@@ -538,9 +551,14 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
       }
       final bounds = await map.getBounds();
       if (!_navigationIsCurrent(request)) return;
-      if (!bounds.maxPitch.isFinite || bounds.maxPitch <= 0) {
+      if (!bounds.maxPitch.isFinite || bounds.maxPitch < 0) {
         throw StateError('Inclinaison indisponible.');
       }
+      // The globe temporarily pins the native maximum to zero. A second
+      // press during recentering must use the detailed map's actual maximum.
+      final maxPitch = bounds.maxPitch == 0
+          ? GlobePitchController.maxPitch
+          : bounds.maxPitch;
       final viewport = _viewport;
       if (viewport is! FollowPuckViewportState) return;
       final heading = _deviceHeading;
@@ -555,7 +573,7 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
           _viewport = FollowPuckViewportState(
             zoom: viewport.zoom,
             padding: viewport.padding,
-            pitch: bounds.maxPitch * 0.45,
+            pitch: maxPitch * 0.45,
             bearing: FollowPuckViewportStateBearingConstant(heading % 360),
           );
         },
