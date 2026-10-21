@@ -1,7 +1,6 @@
 import 'dart:convert';
-import 'dart:async';
 
-import 'buoy_layer_test.dart' show evaluate;
+import 'buoy_layer_test.dart' show evaluate, expectMarksFade;
 
 import 'package:blueway/features/map/data/hydrography_layer.dart';
 import 'package:flutter/services.dart';
@@ -14,7 +13,6 @@ class HydroMap extends Fake implements MapboxMap {
   final states = <String, bool>{};
   bool failQuery = false;
   List<QueriedRenderedFeature?> rendered = [];
-  Completer<List<QueriedRenderedFeature?>>? pendingQuery;
   @override
   Future<Size> getSize() async => Size(width: 360, height: 805);
   @override
@@ -24,7 +22,7 @@ class HydroMap extends Fake implements MapboxMap {
   ) async {
     expect(options.layerIds, ['nowave-depth-labels']);
     if (failQuery) throw StateError('native query failure');
-    return pendingQuery?.future ?? rendered;
+    return rendered;
   }
 
   @override
@@ -61,6 +59,15 @@ class HydroStyle extends Fake implements StyleManager {
   Future<bool> styleLayerExists(String id) async => layers.containsKey(id);
   @override
   Future<bool> hasStyleImage(String id) async => images.contains(id);
+  @override
+  Future<void> setStyleSourceProperty(
+    String id,
+    String property,
+    Object value,
+  ) async {
+    (sources[id] as Map)[property] = value;
+  }
+
   @override
   Future<void> setStyleSourceProperties(String id, String properties) async {
     sources[id]!.addAll(jsonDecode(properties) as Map);
@@ -99,177 +106,49 @@ class HydroStyle extends Fake implements StyleManager {
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
-  test('seuil exact 12 et contrat distinct de la densité des sondes', () async {
+  test('depth lines persist independently from label placement at every upper zoom', () async {
     final map = HydroMap();
-    await HydrographyLayer(apiBaseUrl: 'https://api.example.com/gateway/')
-        .addTo(map);
-    final layers = map.style.layers.values.toList();
-    final contours = layers.where((l) => l['source-layer'] == 'depth_contour');
-    expect(contours.length, 3);
-    for (final c in contours) {
-      expect(c['minzoom'], 12);
-      expect(11.9 >= (c['minzoom'] as num), isFalse);
-      expect(12.0 >= (c['minzoom'] as num), isTrue);
-      expect(c['slot'], 'middle');
+    await HydrographyLayer(apiBaseUrl: 'https://api.example.com/').addTo(map);
+    final lines = HydrographyLayer.layers().whereType<LineLayer>().where(
+      (l) => l.sourceId == HydrographyLayer.contourSourceId,
+    );
+    for (final line in lines) {
+      expect(line.minZoom, 13);
+      expect(line.maxZoom, isNull);
+      expect(line.lineOpacity, greaterThan(0));
+      expect(line.lineOpacityExpression, isNull);
+      expect(jsonEncode(line.filter), isNot(contains('feature-state')));
+      expect(jsonEncode(line.filter), isNot(contains('derivation')));
+      expect(jsonEncode(line.filter), isNot(contains('depth_label')));
     }
-    final major = contours.elementAt(1)['paint'] as Map;
-    final minor = contours.first['paint'] as Map;
-    expect(major['line-width'], greaterThan(minor['line-width']));
-    expect(
-      major['line-opacity'][4][2],
-      greaterThan(minor['line-opacity'][4][2]),
-    );
-    expect(major['line-opacity'][4][1], [
-      'boolean',
-      ['feature-state', 'label_visible'],
-      false,
-    ]);
-    final sounding = layers.singleWhere((l) => l['source-layer'] == 'sounding');
-    expect(sounding['minzoom'], 12);
-    expect(sounding['filter'], [
-      'match',
-      ['get', 'nature'],
-      ['modeled_grid_cell', 'point_sounding'],
-      true,
-      false,
-    ]);
-    expect(sounding['layout']['text-allow-overlap'], isFalse);
-    expect(sounding['layout']['text-ignore-placement'], isFalse);
-    expect(sounding['layout']['symbol-sort-key'], ['get', 'value_m']);
-    expect(sounding['layout']['icon-image'], isNull);
-    final hazard = layers.last;
-    expect(hazard['slot'], 'top');
-    expect(hazard['layout']['icon-allow-overlap'], isFalse);
-    expect(hazard['layout']['icon-ignore-placement'], isFalse);
-    expect(jsonEncode(hazard['layout']['icon-image']), contains('rock-awash'));
-    expect(
-      layers.where((l) => l['source-layer'] == 'underwater_hazard').length,
-      3,
-    );
-    final sources = map.style.sources.values.toList();
-    expect(sources.map((s) => s['minzoom']), [12, 12, 12]);
-    expect(sources.map((s) => s['maxzoom']), [14, 16, 14]);
-    expect(sources.every((s) => s['prefetch-zoom-delta'] == 0), isTrue);
-    expect(
-      [
-        sources.first,
-        sources.last,
-      ].every((s) => (s['tiles'] as List).single.toString().endsWith('?v=3')),
-      isTrue,
-    );
-    expect(sources[1]['tiles'].single, endsWith('?v=depths-4'));
-    expect(sources[1]['volatile'], isTrue);
-    expect(sources[0].containsKey('volatile'), isFalse);
-    expect(sources[2].containsKey('volatile'), isFalse);
-    expect(sources[1]['attribution'], contains('profondeurs modélisées'));
-    expect(sources[1]['attribution'], contains('DTM 2024'));
-    expect(sources[1]['attribution'], contains('CC BY 4.0'));
-  });
-  test(
-    'une ligne ne devient visible que si son chiffre est réellement placé',
-    () async {
-      final map = HydroMap()
-        ..rendered = [placedLabel(12), placedLabel(12), placedLabel(50)];
-      final layer = HydrographyLayer(
-        apiBaseUrl: 'https://api.example.com/gateway/',
-      );
-      await layer.synchronizeContourLabels(map);
-      expect(map.states, {'12': true, '50': true});
-      map.rendered = [placedLabel(50)];
-      await layer.synchronizeContourLabels(map);
-      expect(map.states, {'12': false, '50': true});
-      layer.invalidateContourLabels(map);
-      map.rendered = [];
-      await layer.synchronizeContourLabels(map);
-      expect(map.states.values.every((v) => !v), isTrue);
-    },
-  );
-  test('une panne de placement masque les lignes déjà visibles', () async {
-    final map = HydroMap()..rendered = [placedLabel(12)];
-    final layer = HydrographyLayer(
-      apiBaseUrl: 'https://api.example.com/gateway/',
-    );
-    await layer.synchronizeContourLabels(map);
-    expect(map.states['12'], true);
-    map.failQuery = true;
-    await layer.synchronizeContourLabels(map);
-    expect(map.states['12'], false);
-  });
-  test(
-    'une réponse de placement périmée ne réaffiche pas de courbes',
-    () async {
-      final map = HydroMap()..pendingQuery = Completer();
-      final layer = HydrographyLayer(
-        apiBaseUrl: 'https://api.example.com/gateway/',
-      );
-      final request = layer.synchronizeContourLabels(map);
-      await Future<void>.delayed(Duration.zero);
-      layer.invalidateContourLabels(map);
-      map.pendingQuery!.complete([placedLabel(12)]);
-      await request;
-      expect(map.states, isEmpty);
-    },
-  );
-  test(
-    'valeurs publiées, répétition native, tailles et précision régionale',
-    () async {
-      final map = HydroMap();
-      await HydrographyLayer(apiBaseUrl: 'https://api.example.com/gateway/')
-          .addTo(map);
-      final labels = map.style.layers['nowave-depth-labels']!;
-      final layout = labels['layout'];
-      expect(labels['minzoom'], 12);
-      expect(layout['text-field'], ['get', 'depth_label']);
-      expect(layout['symbol-placement'], 'line');
-      expect(layout['symbol-spacing'], HydrographyLayer.contourSymbolSpacing);
-      expect(layout['symbol-spacing'], [
-        'interpolate',
-        ['linear'],
-        ['zoom'],
-        12,
-        160,
-        14,
-        160,
-        16,
-        192,
-        18,
-        224,
-      ]);
-      expect(layout['text-rotation-alignment'], 'map');
-      expect(layout['text-keep-upright'], true);
-      expect(layout['text-allow-overlap'], false);
-      expect(layout['text-size'], HydrographyLayer.depthTextSize);
-      final sizes = HydrographyLayer.depthTextSize;
-      expect(sizes, [
-        'interpolate',
-        ['linear'],
-        ['zoom'],
-        12,
-        10.5,
-        14,
-        11.5,
-        16,
-        12.5,
-        18,
-        13.5,
-      ]);
-      for (final layer in map.style.layers.values.where(
-        (l) => l['source-layer'] == 'depth_contour',
-      )) {
-        expect(
-          jsonEncode(layer['filter']),
-          contains('published_dtm_contour_2022'),
-        );
-        expect(jsonEncode(layer['filter']), contains('["<",["zoom"],15]'));
-        expect(jsonEncode(layer['filter']), contains('depth_label'));
+    final labels = map.style.layers['nowave-depth-labels']!;
+    expect(labels['minzoom'], 13);
+    expect(labels['layout']['text-allow-overlap'], false);
+    expect(map.style.layers['nowave-depth-soundings']!['minzoom'], 13);
+    for (final layer in map.style.layers.values.where(
+      (l) => l['id'].toString().startsWith('nowave-hazard'),
+    )) {
+      expect(layer['minzoom'], 10);
+      final paint = layer['paint'] as Map;
+      switch (layer['type']) {
+        case 'fill':
+          expectMarksFade(paint['fill-opacity'], nominal: .07);
+        case 'line':
+          expectMarksFade(paint['line-opacity'], nominal: .8);
+        case 'symbol':
+          expectMarksFade(paint['icon-opacity']);
       }
-      final sounding = map.style.layers['nowave-depth-soundings']!['layout'];
-      expect(sounding['text-size'], sizes);
-      expect(sounding['text-field'], ['get', 'depth_label']);
-      expect(sounding['text-padding'], 2);
-      expect(sounding['icon-image'], isNull);
-    },
-  );
+    }
+    for (final source in map.style.sources.values) {
+      expect(source['type'], 'geojson');
+      expect(source['tolerance'], 0);
+      expect(source['maxzoom'], 18);
+      expect(source['attribution'], contains('DTM 2024'));
+    }
+    // No label queries or state writes exist: a missing/failed annotation
+    // cannot disable a previously visible line.
+    expect(map.states, isEmpty);
+  });
   test('familles de dangers et fallback inconnu sont distincts', () {
     final layer = HydrographyLayer.layers().last as SymbolLayer;
     final icons = [

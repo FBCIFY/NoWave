@@ -34,6 +34,15 @@ class MarineStyle extends Fake implements StyleManager {
   @override
   Future<bool> styleLayerExists(String id) async => layers.containsKey(id);
   @override
+  Future<void> setStyleSourceProperty(
+    String id,
+    String property,
+    Object value,
+  ) async {
+    (sources[id] as Map)[property] = value;
+  }
+
+  @override
   Future<void> setStyleSourceProperties(String id, String properties) async {
     sources[id]!.addAll(jsonDecode(properties) as Map);
   }
@@ -92,18 +101,10 @@ void main() {
       expect(source['maxzoom'], 14);
       expect(source['volatile'], true);
       expect(source['prefetch-zoom-delta'], 0);
-      expect(layer['slot'], 'bottom');
-      expect(layer['minzoom'], 4); // No marine tile requests in globe view.
+      expect(layer['slot'], 'middle');
+      expect(layer['minzoom'], 5); // No marine tile requests in globe view.
       expect(layer['maxzoom'], isNull); // Z14 tiles remain eligible at Z17+.
-      expect(layer['paint']['raster-opacity'], [
-        'interpolate',
-        ['linear'],
-        ['zoom'],
-        4,
-        0.0,
-        7,
-        1.0,
-      ]);
+      expect(layer['paint']['raster-opacity'], 1);
       expect(layer['paint']['raster-resampling'], 'linear');
       expect(layer['paint']['raster-contrast'], .08);
       expect(layer['paint']['raster-saturation'], .08);

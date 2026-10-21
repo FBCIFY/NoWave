@@ -42,11 +42,15 @@ class MarineTileService:
         emodnet = tuple(p for p in candidates if p.id == "emodnet-dtm-2024")
         return emodnet or tuple(p for p in candidates if p.id == "noaa-soundings")
 
-    async def get_tile(self, tile: Tile, family: MarineFamily):
+    async def get_tile(self, tile: Tile, family: MarineFamily, *, geojson=False):
         from app.infrastructure.marine.hydro_encoding import MIN_ZOOM
 
         started = time.monotonic()
-        key = (tile, family)
+        key = (tile, family, geojson)
+        if geojson:
+            from app.infrastructure.marine.viewport_encoding import encode_viewport_tile
+
+        encode = encode_viewport_tile if geojson else self.encoder
         async with self._flights[hash(key) % len(self._flights)]:
             cached = self._cache.get(key)
             if cached and cached[0] > time.monotonic():
@@ -54,7 +58,7 @@ class MarineTileService:
                 return cached[1]
             if tile.z < (6 if family == MarineFamily.HARBOURS else MIN_ZOOM.get(family, 10)):
                 return MarineTileResult(
-                    self.encoder(tile, family, []),
+                    encode(tile, family, []),
                     status="below-minzoom"
                     if family == MarineFamily.SOUNDINGS
                     else "ok",
@@ -72,7 +76,7 @@ class MarineTileService:
                 and all(tile.z < getattr(p, "min_zoom", 12) for p in providers)
             ):
                 return MarineTileResult(
-                    self.encoder(tile, family, []), status="below-minzoom"
+                    encode(tile, family, []), status="below-minzoom"
                 )
 
             async def fetch(provider):
@@ -139,7 +143,7 @@ class MarineTileService:
             else:
                 merged = merge_features(features, tile.bounds)
             result = MarineTileResult(
-                self.encoder(tile, family, merged.features),
+                encode(tile, family, merged.features),
                 failures,
                 tuple(sorted({f.source for f in merged.features})),
                 (

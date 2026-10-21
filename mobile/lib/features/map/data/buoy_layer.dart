@@ -3,6 +3,7 @@ import 'package:mapbox_maps_flutter/mapbox_maps_flutter.dart';
 import '../../../core/api/api_config.dart';
 import 'marine_icon_image.dart';
 import 'marine_tiles.dart';
+import '../../../core/map/marine/marine_zoom.dart';
 
 /// Bouées seules, normalisées et fusionnées par le backend NoWave.
 /// Symboles graphiques NoWave : assets/icons/buoys, avec règles IALA inchangées.
@@ -16,6 +17,7 @@ class BuoyLayer {
   static String tilesUrl({String? apiBaseUrl}) =>
       MarineTiles.template('seamarks', apiBaseUrl: apiBaseUrl);
   static const sourceLayer = 'seamark';
+  static const safetyLayerId = 'nowave-buoy-safety';
 
   static const _neutral = 'nowave-buoy-neutral';
   static const _variants = [
@@ -77,20 +79,20 @@ class BuoyLayer {
     }
     if (!await style.styleSourceExists(sourceId)) {
       await style.addSource(
-        VectorSource(
+        GeoJsonSource(
           id: sourceId,
-          tiles: [tilesUrl(apiBaseUrl: apiBaseUrl)],
-          // Les cinq types de bouées sont affichés dès z10, overzoom après z14.
-          minzoom: 10,
-          maxzoom: 14,
-          prefetchZoomDelta: 0,
-          tileNetworkRequestsDelay: 0.25,
+          data: '{"type":"FeatureCollection","features":[]}',
+          tolerance: 0,
+          maxzoom: 18,
           attribution: MarineTiles.attribution(apiBaseUrl: apiBaseUrl),
         ),
       );
     }
-    if (!await style.styleLayerExists(layerId)) {
-      await style.addLayer(layer());
+    for (final priority in [false, true]) {
+      final symbol = layer(priority: priority);
+      if (!await style.styleLayerExists(symbol.id)) {
+        await style.addLayer(symbol);
+      }
     }
   }
 
@@ -108,15 +110,14 @@ class BuoyLayer {
     }
   }
 
-  static SymbolLayer layer() => SymbolLayer(
-    id: layerId,
+  static SymbolLayer layer({bool priority = false}) => SymbolLayer(
+    id: priority ? safetyLayerId : layerId,
     sourceId: sourceId,
-    sourceLayer: sourceLayer,
     // Au-dessus des ports (MIDDLE), sous les reports sans slot. Le slot
     // explicite rend cet ordre indépendant de leurs installations asynchrones.
     slot: LayerSlot.TOP,
-    minZoom: 10,
-    filter: const [
+    minZoom: MarineZoom.marksPreload,
+    filter: [
       'all',
       [
         '==',
@@ -126,13 +127,9 @@ class BuoyLayer {
       [
         'match',
         ['get', 'type'],
-        [
-          'buoy_lateral',
-          'buoy_cardinal',
-          'buoy_isolated_danger',
-          'buoy_safe_water',
-          'buoy_special_purpose',
-        ],
+        priority
+            ? ['buoy_cardinal', 'buoy_isolated_danger']
+            : ['buoy_lateral', 'buoy_safe_water', 'buoy_special_purpose'],
         true,
         false,
       ],
@@ -151,7 +148,8 @@ class BuoyLayer {
       18,
       2.0,
     ],
-    iconAllowOverlap: false,
+    iconAllowOverlap: priority,
+    iconOpacityExpression: MarineZoom.marksOpacity(),
     // Participe aux collisions, y compris entre bouées. Les reports gardent
     // leur overlap existant et restent prioritaires. Pas de sous-échantillonnage
     // local ; seules les collisions écran peuvent masquer un symbole.

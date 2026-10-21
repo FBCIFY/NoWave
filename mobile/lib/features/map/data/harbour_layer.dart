@@ -2,10 +2,11 @@ import 'package:mapbox_maps_flutter/mapbox_maps_flutter.dart';
 
 import 'marine_icon_image.dart';
 import 'marine_tiles.dart';
+import '../../../core/map/marine/marine_zoom.dart';
 
 /// Qualified port places, independent of detailed quay/pier geometries.
 class HarbourLayer {
-  static const harbourMinZoom = 6.0;
+  static const harbourMinZoom = MarineZoom.harbours;
   static const sourceId = 'nowave-harbours';
   static const layerId = 'nowave-harbour-icons';
 
@@ -34,13 +35,11 @@ class HarbourLayer {
     final style = map.style;
     if (!await style.styleSourceExists(sourceId)) {
       await style.addSource(
-        VectorSource(
+        GeoJsonSource(
           id: sourceId,
-          tiles: [MarineTiles.template('harbours', apiBaseUrl: apiBaseUrl)],
-          minzoom: harbourMinZoom,
-          maxzoom: 14,
-          prefetchZoomDelta: 0,
-          tileNetworkRequestsDelay: 0.25,
+          data: '{"type":"FeatureCollection","features":[]}',
+          tolerance: 0,
+          maxzoom: 18,
           attribution: MarineTiles.attribution(apiBaseUrl: apiBaseUrl),
         ),
       );
@@ -66,7 +65,6 @@ class HarbourLayer {
   static SymbolLayer layer() => SymbolLayer(
     id: layerId,
     sourceId: sourceId,
-    sourceLayer: 'harbour',
     slot: LayerSlot.TOP,
     minZoom: harbourMinZoom,
     filter: const [
@@ -98,38 +96,16 @@ class HarbourLayer {
       18,
       1.12,
     ],
-    iconAllowOverlap: false,
+    iconAllowOverlap: true,
     iconIgnorePlacement: false,
     iconPadding: 3,
     iconAnchor: IconAnchor.CENTER,
     iconPitchAlignment: IconPitchAlignment.VIEWPORT,
     iconRotationAlignment: IconRotationAlignment.VIEWPORT,
     iconEmissiveStrength: 1,
-    // Named places first, with generic ports ahead of marinas. Equal priority
-    // is resolved in stable backend identity order, never by phone position.
-    symbolSortKeyExpression: const [
-      '+',
-      [
-        'case',
-        [
-          '==',
-          ['get', 'name'],
-          '',
-        ],
-        2,
-        0,
-      ],
-      [
-        'case',
-        [
-          '==',
-          ['get', 'category'],
-          'marina',
-        ],
-        1,
-        0,
-      ],
-    ],
+    // Selection is performed once against projected screen positions by
+    // MarineViewport; native placement must not evict a retained selection.
+    symbolSortKeyExpression: const ['get', 'selection_order'],
   );
 
   /// PNG NoWave 72x72 ; même asset et même dimension que les autres symboles.

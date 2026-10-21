@@ -81,6 +81,8 @@ def test_actual_nginx_navigation_with_warm_cache_and_protected_general_api():
 
     root = Path(__file__).resolve().parents[3]
     result = probe(nginx, root / "deploy/web/nginx.conf")
+    snapshots = next(c for c in result["cases"] if c["scenario"] == "geojson_viewport")
+    assert snapshots["requests"] == 45
     for case in result["cases"]:
         assert case["statuses"] == {200: case["requests"]}, case
         assert case["profile_status"] == 200, case

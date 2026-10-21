@@ -33,7 +33,8 @@ Compléter ensuite les valeurs :
 signalements, photos, alertes et tuiles authentifiées `/api/v1/map/tiles/`.
 `MARINE_API_BASE_URL` est facultative : renseignée, elle sélectionne un backend
 direct pour les seules sources publiques `bathymetry/`, `depth-contours/`,
-`soundings/`, `underwater-hazards/`, `seamarks/`, `port-infrastructure/` sous
+`soundings/`, `underwater-hazards/`, `seamarks/`, `port-infrastructure/`,
+`harbours/` et `marine-features/` sous
 `/api/v1/map/`, ainsi que leurs crédits `/api/v1/map/marine-sources`.
 Absente, vide ou composée d’espaces, elle conserve `API_BASE_URL` pour ces sources.
 `ApiConfig` construit toutes les URL avec la même validation et normalisation.
@@ -699,3 +700,23 @@ deux comptes réels et après relancement sont à consigner dans NW-128.
   réouverture. GPS haute précision et réveil du processeur (Android) : la
   batterie baisse plus vite ;
 - tests sur iPhone et Android en cours.
+
+
+## Seuils et continuité maritimes — NW-220
+
+Les sources publiques de symboles et de courbes sont préparées par requêtes
+GeoJSON explicites à `/api/v1/map/marine-features/{family}/{z}/{x}/{y}.geojson`.
+Le backend NW-220 doit être disponible avant de lancer cet APK ; un ancien
+backend répondra 404. Les routes MVT existantes restent disponibles.
+Le client public n'ajoute aucun token métier, y compris avec la même base URL.
+
+Les seuils fractionnaires sont centralisés dans
+`lib/core/map/marine/marine_zoom.dart` : raster Z5 ; préparation des ports Z6,
+affichage Z8 et enrichissement Z10 ; préparation des marques Z10, fondu linéaire
+de 0 % à Z10 à 100 % à Z12 (50 % à Z11) ;
+préparation des profondeurs Z12, affichage Z13. Un appui long sur la carte liste
+les objets proches, y compris les symboles masqués par collision.
+
+Voir [le contrat de conservation et ses limites](../docs/architecture/marine-zoom-persistence.md).
+Les courbes EMODnet généralisées conservées ne constituent pas des relevés de
+précision portuaire ni une carte officielle de navigation.

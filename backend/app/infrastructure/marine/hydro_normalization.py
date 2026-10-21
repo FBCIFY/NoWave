@@ -219,7 +219,7 @@ def select_soundings(features, zoom):
                 cells[key] = (order, f)
         for _, f in cells.values():
             assigned[f.id] = min(assigned[f.id], z)
-        if z == zoom:
+        if z == max(14, zoom):
             return [
                 replace(f, display_minzoom=assigned[f.id])
                 for _, f in sorted(cells.values(), key=lambda item: item[1].id)

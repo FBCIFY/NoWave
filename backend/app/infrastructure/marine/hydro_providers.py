@@ -291,7 +291,7 @@ class NoaaSoundingProvider(NoaaHydroProvider):
     """Original ENC soundings outside EMODnet, on a disk-free HTTP client."""
 
     id = "noaa-soundings"
-    min_zoom = 14
+    min_zoom = 12
 
     def covers(self, tile, family):
         return family == MarineFamily.SOUNDINGS and super().covers(tile, family)

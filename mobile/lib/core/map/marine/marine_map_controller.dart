@@ -2,6 +2,7 @@ import 'package:mapbox_maps_flutter/mapbox_maps_flutter.dart';
 
 import '../../api/api_config.dart';
 import 'marine_palette.dart';
+import 'marine_zoom.dart';
 
 /// Habillage marin commun de la carte NoWave.
 ///
@@ -73,19 +74,11 @@ class MarineMapController {
         RasterLayer(
           id: bathymetryLayerId,
           sourceId: bathymetrySourceId,
-          slot: LayerSlot.BOTTOM,
-          minZoom: 4,
-          // L'emprise régionale EMODnet ne doit pas former un rectangle
-          // contrasté sur le globe. Les détails apparaissent progressivement.
-          rasterOpacityExpression: const [
-            'interpolate',
-            ['linear'],
-            ['zoom'],
-            4,
-            0.0,
-            7,
-            1.0,
-          ],
+          // Above the globe's MIDDLE satellite/ocean decoration, otherwise
+          // those layers attenuate the nominally opaque raster at Z5–Z7.
+          slot: LayerSlot.MIDDLE,
+          minZoom: MarineZoom.raster,
+          rasterOpacity: 1,
           rasterFadeDuration: 150,
           rasterResampling: RasterResampling.LINEAR,
           rasterContrast: .08,

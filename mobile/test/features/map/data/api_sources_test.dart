@@ -79,6 +79,13 @@ void main() {
       void verify() {
         expect(map.style.sources.keys.toSet(), expected.keys.toSet());
         for (final entry in expected.entries) {
+          if (map.style.sources[entry.key]!['type'] == 'geojson') {
+            expect(
+              map.style.sources[entry.key]!['attribution'],
+              contains('api.example.com/proxy'),
+            );
+            continue;
+          }
           expect(map.style.sources[entry.key]!['tiles'], [
             'https://api.example.com/proxy/api/v1/map/${entry.value}',
           ]);
@@ -90,7 +97,7 @@ void main() {
           ),
           isTrue,
         );
-        expect(map.style.sources['nowave-soundings']!['volatile'], isTrue);
+        expect(map.style.sources['nowave-soundings']!['type'], 'geojson');
       }
 
       verify();
@@ -150,6 +157,7 @@ void main() {
         expect(map.style.sources.keys.toSet(), routes.keys.toSet());
         for (final entry in routes.entries) {
           final source = map.style.sources[entry.key]!;
+          if (source['type'] == 'geojson') continue;
           final url = (source['tiles'] as List).single as String;
           final expectedBase = entry.key == 'nowave-reports'
               ? ApiConfig.baseUrl
