@@ -71,9 +71,16 @@ void main() {
   mb.FollowPuckViewportState viewport(WidgetTester tester) =>
       widget(tester).viewport as mb.FollowPuckViewportState;
 
-  double bearing(WidgetTester tester) =>
-      (viewport(tester).bearing as mb.FollowPuckViewportStateBearingConstant)
-          .bearing;
+  // En mode cap, le natif laisse le cap à la caméra de cap : c'est le
+  // dernier cap envoyé à la carte qui compte.
+  double bearing(WidgetTester tester) => switch (viewport(tester).bearing) {
+    mb.FollowPuckViewportStateBearingConstant(:final bearing) => bearing,
+    _ =>
+      map.cameras
+          .lastWhere((camera) => camera.bearing != null)
+          .bearing!
+          .toDouble(),
+  };
 
   Future<void> mount(WidgetTester tester, {bool reduceMotion = false}) async {
     await tester.pumpWidget(
@@ -265,6 +272,38 @@ void main() {
     expect(viewport(tester).pitch, 60);
     await press(tester, 'Recentrer sur ma position');
     expect(viewport(tester).pitch, 0);
+  });
+
+  navigationTest('le cap tourne la carte en douceur, sans saut', (
+    tester,
+  ) async {
+    await mount(tester);
+    headings.values.add(60);
+    await press(tester, 'Recentrer sur ma position');
+    await press(tester, 'Suivre la direction du téléphone');
+    final following = viewport(tester);
+    expect(following.bearing, isNull);
+    expect(bearing(tester), 60);
+
+    map.cameras.clear();
+    headings.values.add(120);
+    for (var frame = 0; frame < 6; frame++) {
+      await tester.pump(const Duration(milliseconds: 16));
+    }
+    final turns = [
+      for (final camera in map.cameras) camera.bearing!.toDouble(),
+    ];
+    expect(turns.length, greaterThan(3));
+    for (var i = 1; i < turns.length; i++) {
+      expect(turns[i], greaterThanOrEqualTo(turns[i - 1]));
+      // Aucun pas visible d'une image à l'autre.
+      expect(turns[i] - turns[i - 1], lessThan(10));
+    }
+    expect(turns.last, inExclusiveRange(60, 120));
+    await tester.pumpAndSettle();
+    expect(bearing(tester), 120);
+    // Le suivi natif n'est pas recréé à chaque mesure.
+    expect(viewport(tester), same(following));
   });
 
   for (final maxPitch in [60.0, 85.0]) {

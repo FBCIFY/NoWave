@@ -18,6 +18,7 @@ import '../../../core/map/globe_style.dart';
 import '../../../core/map/globe_flight.dart';
 import '../../../core/map/globe_rotation_controller.dart';
 import '../../../core/map/globe_pitch_controller.dart';
+import '../../../core/map/heading_camera.dart';
 import '../../../core/map/map_config.dart';
 import '../../../core/map/map_motion.dart';
 import '../../../core/map/marine/marine_map_controller.dart';
@@ -143,6 +144,15 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
   );
   bool _rotationCameraReady = false;
   int _rotationStyleRevision = 0;
+  // Le suivi du cap laisse le cap au natif : la caméra tourne image par
+  // image vers la boussole au lieu de sauter à chaque mesure.
+  late final _headingCamera = HeadingCamera(
+    rotate: (bearing) async {
+      final map = _mapboxMap;
+      if (map != null) await map.setCamera(CameraOptions(bearing: bearing));
+    },
+    active: () => _headingCameraActive,
+  );
 
   void _syncGlobeRotation() {
     _globeRotation.configure(
@@ -479,29 +489,34 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
   }
 
   void _setCompassTurnsForHeading(double heading) {
+    _aimHeadingCamera(heading);
     final displayedHeading = (_compassTurns * 360) % 360;
     final change = (heading - displayedHeading + 540) % 360 - 180;
     if (change.abs() < 1) return;
-    setState(() {
-      _compassTurns += change / 360;
-      final viewport = _viewport;
-      if (_isFollowing &&
-          !_mapTouchActive &&
-          !_reportComposerOpen &&
-          _orientationMode == _MapOrientationMode.heading &&
-          viewport is FollowPuckViewportState) {
-        _viewport = FollowPuckViewportState(
-          zoom: viewport.zoom,
-          pitch: viewport.pitch,
-          padding: _navigationPadding(heading: true),
-          bearing: FollowPuckViewportStateBearingConstant(heading % 360),
-        );
-      }
-    });
+    setState(() => _compassTurns += change / 360);
+  }
+
+  bool get _headingCameraActive =>
+      mounted &&
+      !_hidden &&
+      _isFollowing &&
+      !_mapTouchActive &&
+      !_reportComposerOpen &&
+      _orientationMode == _MapOrientationMode.heading &&
+      _viewport is FollowPuckViewportState;
+
+  void _aimHeadingCamera(double heading) {
+    if (!_headingCameraActive) return;
+    _headingCamera.aim(
+      heading,
+      from: _cameraBearing,
+      reduceMotion: _reduceMotion,
+    );
   }
 
   /// Ne change aucun réglage des gestes, de l'inertie ou des déplacements.
   void _stopFollowing() {
+    _headingCamera.stop();
     _navigationRevision++;
     _isFollowing = false;
     _orientationMode = _MapOrientationMode.free;
@@ -757,13 +772,16 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
             zoom: viewport.zoom,
             padding: _navigationPadding(heading: true),
             pitch: maxPitch * 0.75,
-            bearing: FollowPuckViewportStateBearingConstant(heading % 360),
+            // Le cap reste à la caméra de cap.
+            bearing: null,
           );
         },
         transition: const DefaultViewportTransition(
           maxDuration: Duration(milliseconds: 350),
         ),
       );
+      _headingCamera.stop();
+      _aimHeadingCamera(heading);
     } catch (_) {
       if (!_navigationIsCurrent(request)) return;
       _showNotice('Impossible de changer l’orientation.', MapNoticeKind.error);
@@ -1495,6 +1513,7 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
   }
 
   void _interruptCameraMotion() {
+    _headingCamera.stop();
     _cameraMotionRevision++;
     _navigationRevision++;
     final map = _mapboxMap;
@@ -2108,16 +2127,21 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
             _MapOrientationMode.north => _navigationPadding(),
             _MapOrientationMode.free => camera?.padding,
           },
-          bearing: FollowPuckViewportStateBearingConstant(
-            switch (_orientationMode) {
-              _MapOrientationMode.north => 0,
-              _MapOrientationMode.heading =>
-                _deviceHeading ?? camera?.bearing ?? _cameraBearing,
-              _MapOrientationMode.free => camera?.bearing ?? _cameraBearing,
-            },
-          ),
+          bearing: switch (_orientationMode) {
+            _MapOrientationMode.north =>
+              const FollowPuckViewportStateBearingConstant(0),
+            _MapOrientationMode.heading => null,
+            _MapOrientationMode.free => FollowPuckViewportStateBearingConstant(
+              camera?.bearing ?? _cameraBearing,
+            ),
+          },
         );
       });
+      final heading = _deviceHeading;
+      if (heading != null) {
+        _headingCamera.stop();
+        _aimHeadingCamera(heading);
+      }
     }
     widget.focusController?.setBlocked(false);
     unawaited(_applySelection());
@@ -2453,6 +2477,7 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
     _globeRotation.dispose();
     _globePitch.dispose();
     _globeFlight.dispose();
+    _headingCamera.dispose();
     widget.focusController?.removeListener(_handleFocusRequest);
     _lifecycleListener?.dispose();
     WidgetsBinding.instance.removeObserver(this);

@@ -74,6 +74,7 @@ Future<MapIntroController> _pumpCoveredMap(
   WidgetTester tester,
   FocusGps gps, {
   DeviceOrientationService? headings,
+  _Map? map,
 }) async {
   final intro = MapIntroController();
   addTearDown(intro.dispose);
@@ -86,7 +87,7 @@ Future<MapIntroController> _pumpCoveredMap(
       ),
     ),
   );
-  _mapWidget(tester).onMapCreated!(_Map());
+  _mapWidget(tester).onMapCreated!(map ?? _Map());
   await tester.pump();
   _mapWidget(tester).onMapLoadedListener!(
     MapLoadedEventData.fromJson({
@@ -94,6 +95,15 @@ Future<MapIntroController> _pumpCoveredMap(
     }),
   );
   return intro;
+}
+
+/// Les autres tests gardent un setCamera absent : le vol d'arrivée s'y
+/// termine tout de suite.
+class _HeadingMap extends _Map {
+  final cameras = <CameraOptions>[];
+
+  @override
+  Future<void> setCamera(CameraOptions camera) async => cameras.add(camera);
 }
 
 void main() {
@@ -188,7 +198,13 @@ void main() {
       gps.onCurrent = () async => focusPosition();
       final headings = _Headings();
       addTearDown(headings.values.close);
-      final intro = await _pumpCoveredMap(tester, gps, headings: headings);
+      final map = _HeadingMap();
+      final intro = await _pumpCoveredMap(
+        tester,
+        gps,
+        headings: headings,
+        map: map,
+      );
       // iOS n'envoie qu'une mesure tant que le téléphone ne tourne pas.
       headings.values.add(90);
       await tester.pump();
@@ -203,10 +219,9 @@ void main() {
       await tester.tap(find.byTooltip('Suivre la direction du téléphone'));
       await tester.pumpAndSettle();
       final viewport = _mapWidget(tester).viewport as FollowPuckViewportState;
-      expect(
-        (viewport.bearing as FollowPuckViewportStateBearingConstant).bearing,
-        90,
-      );
+      // Le natif laisse le cap à la caméra de cap.
+      expect(viewport.bearing, isNull);
+      expect(map.cameras.last.bearing, 90);
       expect(find.byIcon(Icons.navigation), findsOneWidget);
 
       await tester.pumpWidget(const SizedBox.shrink());
