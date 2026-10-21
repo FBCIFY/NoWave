@@ -194,6 +194,28 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
   /// rotation libre ne survit pas au lâcher : le pôle Nord reste en haut.
   static const _freeRotationZoom = 5.0;
 
+  /// Écart maximal, sur le globe, entre les doigts et l'orientation choisie.
+  static const _globeRotationLimit = 30.0;
+
+  /// Sur le globe, les doigts butent à [_globeRotationLimit] du nord (ou du
+  /// cap figé par la boussole) : le globe ne se retourne pas sous les doigts.
+  void _limitGlobeRotation(CameraState camera) {
+    final map = _mapboxMap;
+    if (map == null || !_mapTouchActive || camera.zoom >= _freeRotationZoom) {
+      return;
+    }
+    final mode = _orientationMode == _MapOrientationMode.manual
+        ? _rotatedFrom
+        : _orientationMode;
+    final target = mode == _MapOrientationMode.heading
+        ? _selectedBearing ?? 0
+        : 0.0;
+    final offset = (camera.bearing - target + 540) % 360 - 180;
+    if (offset.abs() <= _globeRotationLimit + .5) return;
+    final limit = target + offset.sign * _globeRotationLimit;
+    map.setCamera(CameraOptions(bearing: limit)).ignore();
+  }
+
   /// Au lâcher, sur le globe, la carte revient à l'orientation choisie : le
   /// nord, ou le cap figé par la boussole si c'est lui que les doigts ont
   /// quitté.
@@ -456,6 +478,7 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
         ((bearing - _touchStartBearing + 540) % 360 - 180);
     final userRotatedMap = _mapTouchActive && touchBearingDelta.abs() > 2;
     if (bearingDelta.abs() >= 1) _cameraBearing = bearing;
+    _limitGlobeRotation(event.cameraState);
     if (_reportComposerOpen) {
       _liftReportMarker();
       _scheduleReportPointUpdate();

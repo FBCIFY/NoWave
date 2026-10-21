@@ -22,8 +22,12 @@ CameraChangedEventData _camera({
   },
 });
 
-/// Rotation à deux doigts de 40° au zoom donné, puis lâcher.
-Future<FocusMap> _rotateAndRelease(WidgetTester tester, double zoom) async {
+/// Rotation à deux doigts de [bearing] au zoom donné, puis lâcher.
+Future<FocusMap> _rotateAndRelease(
+  WidgetTester tester,
+  double zoom, {
+  double bearing = 40,
+}) async {
   await tester.pumpWidget(const MaterialApp(home: MapScreen()));
   final map = FocusMap();
   final widget = tester.widget<MapWidget>(find.byType(MapWidget));
@@ -35,7 +39,7 @@ Future<FocusMap> _rotateAndRelease(WidgetTester tester, double zoom) async {
   final gesture = await tester.startGesture(
     tester.getCenter(find.byType(MapWidget)),
   );
-  widget.onCameraChangeListener!(_camera(zoom: zoom, bearing: 40));
+  widget.onCameraChangeListener!(_camera(zoom: zoom, bearing: bearing));
   await tester.pump();
   await gesture.up();
   await tester.pump(const Duration(milliseconds: 300));
@@ -68,4 +72,32 @@ void main() {
       await tester.pumpWidget(const SizedBox.shrink());
     });
   }
+
+  /// Caps posés directement pendant le geste, sans animation.
+  List<double?> limits(FocusMap map) => [
+    for (final camera in map.cameras)
+      if (camera.bearing != null) camera.bearing?.toDouble(),
+  ];
+
+  testWidgets('globe : la rotation bute à 30° du nord pendant le geste', (
+    tester,
+  ) async {
+    var map = await _rotateAndRelease(tester, 3.0);
+    expect(limits(map), [30]);
+    await tester.pumpWidget(const SizedBox.shrink());
+
+    map = await _rotateAndRelease(tester, 3.0, bearing: 300);
+    expect(limits(map), [-30]);
+    await tester.pumpWidget(const SizedBox.shrink());
+
+    map = await _rotateAndRelease(tester, 3.0, bearing: 20);
+    expect(limits(map), isEmpty);
+    await tester.pumpWidget(const SizedBox.shrink());
+  });
+
+  testWidgets('dès les nuages, la rotation n’a pas de butée', (tester) async {
+    final map = await _rotateAndRelease(tester, 10.0, bearing: 120);
+    expect(limits(map), isEmpty);
+    await tester.pumpWidget(const SizedBox.shrink());
+  });
 }
