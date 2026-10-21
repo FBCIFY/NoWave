@@ -49,31 +49,24 @@ class GlobeStyle {
     'projection': {'name': 'globe'},
     'fog': {
       'range': [0.8, 8],
-      'color': '#6BBBD4',
-      'high-color': 'rgba(35, 125, 187, 0.65)',
-      'space-color': '#01030B',
+      'color': '#84D6F2',
+      'high-color': 'rgba(40, 145, 210, 0.70)',
+      // The native halo fades into the fixed Flutter space background.
+      'space-color': 'rgba(1, 3, 11, 0)',
       'horizon-blend': [
         'interpolate',
         ['linear'],
         ['zoom'],
         0,
-        0.008,
+        0.010,
         4,
         0.006,
         7,
         0.003,
       ],
-      'star-intensity': [
-        'interpolate',
-        ['linear'],
-        ['zoom'],
-        0,
-        0.65,
-        3,
-        0.4,
-        6,
-        0,
-      ],
+      // Native stars rotate with camera longitude. GlobeStars owns the stable
+      // field and preserves the previous zoom-dependent fade behind this map.
+      'star-intensity': 0,
     },
     'sources': {
       satelliteSource: {
