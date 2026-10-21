@@ -2,8 +2,9 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart' as geo;
 
+import '../../../app/theme.dart';
 import '../../../core/api/api_exception.dart';
-import '../../../core/location/coordinate_formatter.dart';
+import '../../map/presentation/widgets/map_panel.dart';
 import '../data/report_detail_service.dart';
 import '../domain/report_detail.dart';
 import 'report_category_style.dart';
@@ -11,7 +12,7 @@ import 'report_detail_format.dart';
 import 'report_photo_viewer.dart';
 
 /// Fiche d'un signalement touché sur la carte (US-11) : catégorie, date,
-/// position, distance, auteur, bateau et photo.
+/// distance, fin, photo, commentaire, auteur et bateau.
 class ReportDetailSheet extends StatefulWidget {
   const ReportDetailSheet({
     super.key,
@@ -38,59 +39,46 @@ class ReportDetailSheet extends StatefulWidget {
   /// Heure actuelle, remplaçable dans les tests.
   final DateTime Function() now;
 
-  /// Ouvre la fiche en bas de l'écran, par-dessus la carte.
-  static Future<void> show(
-    BuildContext context, {
-    required String reportId,
-    required Future<ReportDetail> Function(String reportId) loadReport,
-    required Future<Uint8List> Function(String url) loadPhoto,
-    ({double latitude, double longitude})? userPosition,
-    ValueChanged<double>? onLayout,
-  }) {
-    final sheetKey = GlobalKey();
-    void measure() {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        final box = sheetKey.currentContext?.findRenderObject();
-        if (box is RenderBox && box.hasSize) onLayout?.call(box.size.height);
-      });
-    }
-
-    return showModalBottomSheet<void>(
-      context: context,
-      showDragHandle: true,
-      isScrollControlled: true,
-      builder: (_) {
-        measure();
-        return NotificationListener<SizeChangedLayoutNotification>(
-          onNotification: (_) {
-            measure();
-            return false;
-          },
-          child: SizeChangedLayoutNotifier(
-            child: SizedBox(
-              key: sheetKey,
-              child: ReportDetailSheet(
-                reportId: reportId,
-                loadReport: (id) async {
-                  final report = await loadReport(id);
-                  // A cached response can replace the spinner without changing
-                  // the sheet height. Measure after successful content as well
-                  // as size changes so the map always receives a focus target.
-                  measure();
-                  return report;
-                },
-                loadPhoto: loadPhoto,
-                userPosition: userPosition,
-              ),
-            ),
-          ),
-        );
-      },
-    );
-  }
-
   @override
   State<ReportDetailSheet> createState() => _ReportDetailSheetState();
+}
+
+/// Fiche posée sur la carte : en bas après un badge touché, en haut depuis
+/// Mes alertes, avec un retour vers la liste.
+class ReportDetailPanel extends StatelessWidget {
+  const ReportDetailPanel({
+    super.key,
+    required this.reportId,
+    required this.loadReport,
+    required this.loadPhoto,
+    required this.onClose,
+    this.side = MapPanelSide.bottom,
+    this.onBack,
+    this.userPosition,
+  });
+
+  final String reportId;
+  final Future<ReportDetail> Function(String reportId) loadReport;
+  final Future<Uint8List> Function(String url) loadPhoto;
+  final ({double latitude, double longitude})? userPosition;
+  final VoidCallback onClose;
+  final MapPanelSide side;
+  final VoidCallback? onBack;
+
+  @override
+  Widget build(BuildContext context) => MapPanel(
+    side: side,
+    onClose: onClose,
+    onBack: onBack,
+    child: SingleChildScrollView(
+      child: ReportDetailSheet(
+        reportId: reportId,
+        loadReport: loadReport,
+        loadPhoto: loadPhoto,
+        userPosition: userPosition,
+      ),
+    ),
+  );
 }
 
 class _ReportDetailSheetState extends State<ReportDetailSheet> {
@@ -145,7 +133,8 @@ class _ReportDetailSheetState extends State<ReportDetailSheet> {
   }
 }
 
-/// Fiche chargée.
+/// Fiche chargée : en-tête, distance et fin, photo, commentaire, auteur, puis
+/// « Voir sur la carte » depuis l'historique.
 class _ReportDetailContent extends StatelessWidget {
   const _ReportDetailContent({
     required this.report,
@@ -166,7 +155,7 @@ class _ReportDetailContent extends StatelessWidget {
   /// Distance et direction depuis l'utilisateur, ex. `2,4 NM au NE`.
   String get _distance {
     final from = userPosition;
-    if (from == null) return 'Votre position est inconnue';
+    if (from == null) return 'Distance inconnue';
     final meters = geo.Geolocator.distanceBetween(
       from.latitude,
       from.longitude,
@@ -182,22 +171,14 @@ class _ReportDetailContent extends StatelessWidget {
     return '${formatNauticalMiles(meters)} au ${compassPoint(bearing)}';
   }
 
-  /// Nom de l'auteur, ou pourquoi il n'est pas affiché.
-  String get _author {
-    final author = report.author;
-    if (author == null) return 'Anonyme';
-    if (author.deleted) return 'Utilisateur supprimé';
-    return author.username ?? 'Anonyme';
-  }
-
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final category = report.category;
     final description = report.description;
-    final boat = report.boat;
     final photo = report.photo;
     final photoUrl = photo?.url;
+    final onShowOnMap = this.onShowOnMap;
 
     return SingleChildScrollView(
       child: Column(
@@ -206,82 +187,104 @@ class _ReportDetailContent extends StatelessWidget {
         children: [
           Row(
             children: [
-              CircleAvatar(
-                backgroundColor: category.color,
-                foregroundColor: Colors.white,
-                child: Icon(category.icon),
+              Container(
+                width: 48,
+                height: 48,
+                decoration: BoxDecoration(
+                  color: category.color,
+                  borderRadius: BorderRadius.circular(14),
+                ),
+                child: Icon(category.icon, color: Colors.white),
               ),
-              const SizedBox(width: 12),
+              const SizedBox(width: 14),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(category.label, style: theme.textTheme.titleLarge),
+                    Text(
+                      category.label,
+                      style: theme.textTheme.titleLarge?.copyWith(
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
                     Text(
                       'Observé ${formatDayTime(report.observedAt, now: now)}',
-                      style: theme.textTheme.bodyMedium,
+                      style: theme.textTheme.bodyMedium?.copyWith(
+                        color: theme.colorScheme.onSurfaceVariant,
+                      ),
                     ),
                   ],
                 ),
               ),
             ],
           ),
-          if (onShowOnMap != null)
-            _ShowOnMapButton(onPressed: () => onShowOnMap!(report)),
+          const SizedBox(height: 16),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              _InfoChip(icon: Icons.near_me_outlined, label: _distance),
+              _InfoChip(
+                icon: Icons.schedule,
+                label: 'Expire ${formatDayTime(report.expiresAt, now: now)}',
+              ),
+            ],
+          ),
+          if (photo != null) ...[
+            const SizedBox(height: 16),
+            if (photoUrl != null)
+              _ReportPhoto(
+                url: photoUrl,
+                loadPhoto: loadPhoto,
+                refreshUrl: refreshPhotoUrl,
+              )
+            else
+              _PhotoStatus(photo.status),
+          ],
           if (description != null && description.isNotEmpty) ...[
             const SizedBox(height: 16),
             Text(description, style: theme.textTheme.bodyLarge),
           ],
-          const SizedBox(height: 8),
-          _DetailRow(
-            icon: Icons.place_outlined,
-            label: 'Position',
-            value:
-                '${formatDms(report.latitude, isLatitude: true)}\n'
-                '${formatDms(report.longitude, isLatitude: false)}',
-          ),
-          _DetailRow(
-            icon: Icons.near_me_outlined,
-            label: 'Distance',
-            value: _distance,
-          ),
-          _DetailRow(
-            icon: Icons.person_outline,
-            label: 'Auteur',
-            value: _author,
-          ),
-          if (boat != null)
-            _DetailRow(
-              icon: Icons.sailing_outlined,
-              label: 'Bateau',
-              value: boat.name == null
-                  ? boat.type.label
-                  : '${boat.name} · ${boat.type.label}',
+          const SizedBox(height: 16),
+          _AuthorRow(author: report.author, boat: report.boat),
+          if (onShowOnMap != null) ...[
+            const SizedBox(height: 20),
+            _ShowOnMapButton(onPressed: () => onShowOnMap(report)),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+/// Petite information en pastille : distance, fin du signalement.
+class _InfoChip extends StatelessWidget {
+  const _InfoChip({required this.icon, required this.label});
+
+  final IconData icon;
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+      decoration: BoxDecoration(
+        color: AppColors.background,
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 16, color: theme.colorScheme.onSurfaceVariant),
+          const SizedBox(width: 6),
+          Flexible(
+            child: Text(
+              label,
+              style: theme.textTheme.labelLarge?.copyWith(
+                color: AppColors.text,
+              ),
             ),
-          if (photo != null)
-            _DetailRow(
-              icon: Icons.photo_camera_outlined,
-              label: 'Photo',
-              value: switch (photo.status) {
-                ReportPhotoStatus.pending => 'Envoi en cours',
-                // Sans URL, le backend ne la sert plus (masquée).
-                ReportPhotoStatus.uploaded when photoUrl == null =>
-                  'Indisponible',
-                ReportPhotoStatus.uploaded => null,
-                ReportPhotoStatus.failed => 'Envoi échoué',
-              },
-              child: photoUrl == null
-                  ? null
-                  : _ReportPhoto(
-                      url: photoUrl,
-                      loadPhoto: loadPhoto,
-                      refreshUrl: refreshPhotoUrl,
-                    ),
-            ),
-          _DetailRow(
-            icon: Icons.schedule,
-            label: 'Fin du signalement',
-            value: formatDayTime(report.expiresAt, now: now),
           ),
         ],
       ),
@@ -289,52 +292,91 @@ class _ReportDetailContent extends StatelessWidget {
   }
 }
 
-/// Une information de la fiche : icône, intitulé et valeur (texte, ou
-/// [child] comme la photo).
-class _DetailRow extends StatelessWidget {
-  const _DetailRow({
-    required this.icon,
-    required this.label,
-    required this.value,
-    this.child,
-  });
+/// Photo pas encore servie : en cours d'envoi, échouée ou masquée.
+class _PhotoStatus extends StatelessWidget {
+  const _PhotoStatus(this.status);
 
-  final IconData icon;
-  final String label;
-  final String? value;
-  final Widget? child;
+  final ReportPhotoStatus status;
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    return Padding(
-      padding: const EdgeInsets.only(top: 12),
+    final label = switch (status) {
+      ReportPhotoStatus.pending => 'Photo en cours d’envoi',
+      ReportPhotoStatus.failed => 'Envoi de la photo échoué',
+      // Sans URL, le backend ne la sert plus (masquée).
+      ReportPhotoStatus.uploaded => 'Photo indisponible',
+    };
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: AppColors.background,
+        borderRadius: BorderRadius.circular(12),
+      ),
       child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Icon(icon, color: theme.colorScheme.onSurfaceVariant),
-          const SizedBox(width: 16),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
+          Icon(
+            Icons.photo_camera_outlined,
+            color: theme.colorScheme.onSurfaceVariant,
+          ),
+          const SizedBox(width: 12),
+          Expanded(child: Text(label, style: theme.textTheme.bodyMedium)),
+        ],
+      ),
+    );
+  }
+}
+
+/// Auteur et bateau, selon ce que l'auteur accepte de montrer.
+class _AuthorRow extends StatelessWidget {
+  const _AuthorRow({required this.author, required this.boat});
+
+  final ReportAuthor? author;
+  final ReportBoat? boat;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final author = this.author;
+    final boat = this.boat;
+    final username = author == null || author.deleted ? null : author.username;
+    final name = switch (author) {
+      ReportAuthor(deleted: true) => 'Utilisateur supprimé',
+      _ => username ?? 'Anonyme',
+    };
+
+    return Row(
+      children: [
+        CircleAvatar(
+          radius: 18,
+          backgroundColor: AppColors.background,
+          foregroundColor: AppColors.blue600,
+          child: username == null || username.isEmpty
+              ? const Icon(Icons.person_outline, size: 20)
+              : Text(
+                  username.substring(0, 1).toUpperCase(),
+                  style: const TextStyle(fontWeight: FontWeight.w700),
+                ),
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(name, style: theme.textTheme.titleSmall),
+              if (boat != null)
                 Text(
-                  label,
-                  style: theme.textTheme.labelMedium?.copyWith(
+                  boat.name == null
+                      ? boat.type.label
+                      : '${boat.name} · ${boat.type.label}',
+                  style: theme.textTheme.bodySmall?.copyWith(
                     color: theme.colorScheme.onSurfaceVariant,
                   ),
                 ),
-                if (value case final value?)
-                  Text(value, style: theme.textTheme.bodyLarge),
-                if (child case final child?) ...[
-                  const SizedBox(height: 8),
-                  child,
-                ],
-              ],
-            ),
+            ],
           ),
-        ],
-      ),
+        ),
+      ],
     );
   }
 }
@@ -570,7 +612,7 @@ class _ShowOnMapButtonState extends State<_ShowOnMapButton> {
   }
 
   @override
-  Widget build(BuildContext context) => TextButton.icon(
+  Widget build(BuildContext context) => FilledButton.tonalIcon(
     onPressed: _busy ? null : _open,
     icon: const Icon(Icons.map_outlined),
     label: const Text('Voir sur la carte'),

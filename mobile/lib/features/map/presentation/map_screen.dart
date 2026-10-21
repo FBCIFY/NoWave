@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'dart:math' as math;
 import 'dart:ui' as ui;
 
+import 'package:flutter/foundation.dart' show kDebugMode;
 import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart' as geo;
 import 'package:mapbox_maps_flutter/mapbox_maps_flutter.dart';
@@ -23,6 +24,10 @@ import '../../../core/map/map_config.dart';
 import '../../../core/map/map_motion.dart';
 import '../../../core/map/marine/marine_map_controller.dart';
 import '../../../core/sensors/device_orientation_service.dart';
+import '../../alerts/data/alert_history_controller.dart';
+import '../../alerts/data/alert_service.dart';
+import '../../alerts/domain/alert.dart';
+import '../../alerts/presentation/alerts_panel.dart';
 import '../../camera/domain/capture_requirements.dart';
 import '../../camera/domain/photo_report_draft.dart';
 import '../../reports/data/manual_report_service.dart';
@@ -48,6 +53,7 @@ import 'map_intro_controller.dart';
 import 'report_marker.dart' as badges;
 export 'map_focus_controller.dart';
 import 'widgets/map_notice_banner.dart';
+import 'widgets/map_panel.dart';
 import 'widgets/map_scale_bar.dart';
 import 'widgets/map_zoom_badge.dart';
 import '../data/hydrography_layer.dart';
@@ -65,7 +71,10 @@ enum _MapOrientationMode { free, north, heading }
 /// l'utilisateur confirme ou corrige de la même façon.
 class MapScreen extends StatefulWidget {
   final VoidCallback? onOpenProfile;
-  final VoidCallback? onOpenAlerts;
+
+  /// Historique des alertes : le bouton « Mes alertes » l'ouvre en haut de
+  /// la carte. Absent, le bouton n'est pas affiché.
+  final AlertService? alertService;
   final MapFocusController? focusController;
   final DeviceOrientationService? orientationService;
 
@@ -88,7 +97,7 @@ class MapScreen extends StatefulWidget {
   const MapScreen({
     super.key,
     this.onOpenProfile,
-    this.onOpenAlerts,
+    this.alertService,
     this.focusController,
     this.orientationService,
     this.onOpenCamera,
@@ -364,14 +373,29 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
   Timer? _selectedExpiryTimer;
   bool _selectedExpired = false;
   ReportDetail? _selectedReport;
-  bool _selectedFromMapTap = false;
+  MapFocusOrigin _selectedOrigin = MapFocusOrigin.history;
 
-  /// Signalement dessiné par le repère de sélection, gardé après un
-  /// rechargement du style.
-  String? _selectedMarkerId;
-  bool _detailOpen = false;
+  /// Fiche ouverte en bas de la carte, et la vue à retrouver en la fermant.
+  String? _detailReportId;
+  MapFocusOrigin _detailOrigin = MapFocusOrigin.mapTap;
   int _detailRequest = 0;
-  double _selectedSheetHeight = 0;
+  bool _detailFocused = false;
+  CameraState? _cameraBeforeDetail;
+  bool get _detailOpen => _detailReportId != null;
+
+  /// Fiche mesurée, et dernière vue envoyée pour elle : la caméra suit sa
+  /// hauteur (chargement, puis photo).
+  final _detailPanelKey = GlobalKey();
+  CameraOptions? _detailCamera;
+
+  /// Mes alertes, en haut de la carte : sa liste reste chargée pendant
+  /// qu'une de ses fiches est ouverte à sa place. La croix rend la vue
+  /// d'avant, sauf si l'utilisateur a déplacé la carte.
+  AlertHistoryController? _alerts;
+  bool get _alertsOpen => _alerts != null;
+  CameraState? _cameraBeforeAlerts;
+  bool _alertsMoved = false;
+  int _alertsRequest = 0;
   int _cameraMotionRevision = 0;
   int _focusRevision = -1;
   bool _focusWithUser = false;
@@ -610,6 +634,14 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
     _beginMapGesture();
     _scheduleRotationAfterGesture();
     if (_reportComposerOpen) return;
+    if (_alertsOpen) _alertsMoved = true;
+    if (_detailOpen && _selectedReport != null) {
+      // La carte reste libre sous la fiche : on ne la recadre plus, ni à
+      // l'arrivée du détail ni à sa fermeture.
+      _cameraFocusRevision++;
+      _selectionTouched = true;
+      _focusCameraPending = false;
+    }
     if (!_isFollowing && _viewport is IdleViewportState) return;
     setState(_stopFollowing);
   }
@@ -1053,6 +1085,10 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
   /// bien plus large que son point touchable.
   static const _clusterTapRadius = 32.0;
 
+  /// Mise en valeur du signalement sélectionné.
+  static const _selectedMarkerScale = 1.35;
+  static const _selectedHaloRadius = 30.0;
+
   /// Niveaux de zoom gagnés en touchant une zone.
   static const _clusterZoomStep = 2.0;
 
@@ -1105,15 +1141,29 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
       _focusRevision = -1;
       _handleFocusRequest();
     }
+
+    if (oldWidget.alertService != widget.alertService && _alertsOpen) {
+      // Autre compte : son historique n'est pas celui affiché.
+      _dismissReportDetail();
+    }
   }
 
   void _handleFocusRequest() async {
     final controller = widget.focusController;
-    if (controller == null || _focusRevision == controller.revision) return;
+    if (controller == null) return;
+    if (controller.takeAlerts()) _openAlerts();
+    if (_focusRevision == controller.revision) return;
     _focusRevision = controller.revision;
     final report = controller.report;
     if (report == null && _selectedReport == null && controller.revision == 0) {
       return;
+    }
+    if ((_detailOpen && report?.id != _detailReportId) ||
+        (_alertsOpen &&
+            report != null &&
+            controller.origin == MapFocusOrigin.notification)) {
+      // Une notification ou un effacement remplace la fiche ouverte.
+      _dismissReportDetail();
     }
     _interruptCameraMotion();
     _cameraFocusRevision++;
@@ -1123,7 +1173,7 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
     _selectedExpiryTimer?.cancel();
     setState(() {
       _selectedReport = report;
-      _selectedFromMapTap = controller.origin == MapFocusOrigin.mapTap;
+      _selectedOrigin = controller.origin;
       _selectedExpired =
           report != null && !report.expiresAt.isAfter(DateTime.now());
       _focusWithUser = controller.includeUserPosition;
@@ -1207,12 +1257,7 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
           await _hideSelectedReport(map);
           continue;
         }
-        if (_selectedFromMapTap && report.id != _selectedMarkerId) {
-          // Le badge touché vient des tuiles : il est déjà sur la carte.
-          await _hideSelectedReport(map);
-        } else {
-          await _showSelectedReport();
-        }
+        await _showSelectedReport();
         if (!_isCurrentFocus(request)) continue;
         if (_focusCameraPending && !_selectionTouched) {
           final withUser = _focusWithUser;
@@ -1223,15 +1268,29 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
           if (!mounted) return;
           final currentCamera = await map.getCameraState();
           if (!mounted) return;
-          final camera = await MapAlertCamera.fit(
-            map,
-            report,
-            withUser ? position : null,
-            MediaQuery.paddingOf(context),
-            sheetHeight: withUser ? 0 : _selectedSheetHeight,
-            bearing: currentCamera.bearing,
-            pitch: currentCamera.pitch,
-          );
+          final camera = withUser
+              ? await MapAlertCamera.fit(
+                  map,
+                  report,
+                  position,
+                  MediaQuery.paddingOf(context),
+                  viewport: _mapViewport,
+                  bearing: currentCamera.bearing,
+                  pitch: currentCamera.pitch,
+                )
+              // Changer de fiche garde le rapprochement de la première.
+              : await MapAlertCamera.detail(
+                  map,
+                  report,
+                  from: _cameraBeforeDetail ?? currentCamera,
+                  bearing: currentCamera.bearing,
+                  viewport: _mapViewport,
+                  panelHeight: _detailPanelHeight,
+                  panelOnTop: _alertsOpen,
+                  minZoom: _selectedOrigin == MapFocusOrigin.history
+                      ? MapAlertCamera.historyMinZoom
+                      : 0,
+                );
           if (!_isCurrentFocus(request) ||
               cameraRequest != _cameraFocusRevision ||
               _selectionTouched ||
@@ -1250,6 +1309,16 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
           }
           await _stopGlobeRotation();
           if (!mounted || cameraRequest != _cameraFocusRevision) continue;
+          _detailCamera = null;
+          if (!withUser) {
+            // La fiche a pu grandir pendant le calcul : sa hauteur du moment.
+            camera.padding = MapAlertCamera.detailPadding(
+              _mapViewport,
+              _detailPanelHeight,
+              top: _alertsOpen,
+            );
+            _detailCamera = camera;
+          }
           await _moveCamera(
             map,
             camera,
@@ -1271,6 +1340,9 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
         }
         widget.focusController?.complete(request);
       } catch (error) {
+        // Un badge touché n'attend pas ce résultat : sans cette trace, un
+        // échec natif passe inaperçu.
+        if (kDebugMode) debugPrint('Cadrage de la carte impossible : $error');
         if (!mounted || request != _focusRevision) continue;
         _focusCameraPending = false;
         _latePositionFocus = false;
@@ -1295,6 +1367,52 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
           );
         }
       }
+    }
+  }
+
+  /// Taille de la carte d'après la mise en page Flutter.
+  ui.Size get _mapViewport =>
+      _mapAreaKey.currentContext?.size ?? MediaQuery.sizeOf(context);
+
+  /// Hauteur prise par la fiche sur la carte, marge du bord comprise.
+  double get _detailPanelHeight =>
+      _detailPanelKey.currentContext?.size?.height ?? _mapViewport.height / 2;
+
+  /// La fiche a changé de hauteur : le signalement reste au milieu de la
+  /// carte visible, sauf si l'utilisateur a déplacé la carte.
+  Future<void> _followDetailPanelHeight() async {
+    final map = _mapboxMap;
+    final target = _detailCamera;
+    if (!mounted || map == null || target == null || _selectionTouched) {
+      return;
+    }
+    final padding = MapAlertCamera.detailPadding(
+      _mapViewport,
+      _detailPanelHeight,
+      top: _alertsOpen,
+    );
+    if ((padding.top - (target.padding?.top ?? 0)).abs() < 1 &&
+        (padding.bottom - (target.padding?.bottom ?? 0)).abs() < 1) {
+      return;
+    }
+    final camera = CameraOptions(
+      center: target.center,
+      zoom: target.zoom,
+      bearing: target.bearing,
+      pitch: target.pitch,
+      padding: padding,
+    );
+    _detailCamera = camera;
+    try {
+      final current = await map.getCameraState();
+      if (!mounted || _detailCamera != camera || _selectionTouched) return;
+      await _moveCamera(
+        map,
+        camera,
+        MapMotion.focusDurationMs(current, camera),
+      );
+    } catch (_) {
+      // Carte remplacée : plus de vue à recaler.
     }
   }
 
@@ -1356,6 +1474,22 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
       await map.style.setStyleSourceProperty('alert-selected', 'data', data);
     }
 
+    if (!await map.style.styleLayerExists('alert-selected-halo') &&
+        !_selectedExpired) {
+      await map.style.addLayer(
+        CircleLayer(
+          id: 'alert-selected-halo',
+          sourceId: 'alert-selected',
+          minZoom: ReportTiles.badgesMinZoom,
+          circleRadius: _selectedHaloRadius,
+          circleColor: Colors.white.toARGB32(),
+          circleOpacity: .45,
+          circleStrokeColor: Colors.white.toARGB32(),
+          circleStrokeWidth: 3,
+          circleEmissiveStrength: 1,
+        ),
+      );
+    }
     if (!await map.style.styleLayerExists('alert-selected-point') &&
         !_selectedExpired) {
       await map.style.addLayer(
@@ -1366,21 +1500,26 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
           // le relais et le repère ne doit pas la recouvrir.
           minZoom: ReportTiles.badgesMinZoom,
           iconImageExpression: ReportTiles.markerImageExpression(),
-          iconSizeExpression: ReportTiles.markerSizeExpression(),
+          // Plus grand que les badges des tuiles, qu'il recouvre.
+          iconSizeExpression: ReportTiles.markerSizeExpression(
+            scale: _selectedMarkerScale,
+          ),
           iconAllowOverlap: true,
           iconIgnorePlacement: true,
           iconEmissiveStrength: 1,
         ),
       );
     }
+    // Halo puis badge, au-dessus de tous les autres signalements.
+    await map.style.moveStyleLayer('alert-selected-halo', LayerPosition());
     await map.style.moveStyleLayer('alert-selected-point', LayerPosition());
-    _selectedMarkerId = report.id;
   }
 
   Future<void> _hideSelectedReport(MapboxMap map) async {
-    _selectedMarkerId = null;
-    if (await map.style.styleLayerExists('alert-selected-point')) {
-      await map.style.removeStyleLayer('alert-selected-point');
+    for (final layer in ['alert-selected-point', 'alert-selected-halo']) {
+      if (await map.style.styleLayerExists(layer)) {
+        await map.style.removeStyleLayer(layer);
+      }
     }
     if (await map.style.styleSourceExists('alert-selected')) {
       await map.style.removeStyleSource('alert-selected');
@@ -1389,60 +1528,217 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
 
   /// Ouvre la fiche du signalement touché, sauf pendant une création.
   void _openReportDetail(FeaturesetFeature feature) {
-    final service = widget.reportDetailService;
     final reportId = feature.properties['report_id'];
-    if (!mounted || _reportComposerOpen || _detailOpen) return;
-    if (service == null || reportId is! String) return;
-    _detailOpen = true;
-    final detailRequest = ++_detailRequest;
-    final focusRevision = _focusRevision;
-    ReportDetail? loaded;
-    var focused = false;
-    AppHaptics.selection();
-    final position = _position;
-    unawaited(
-      ReportDetailSheet.show(
-        context,
-        reportId: reportId,
-        loadReport: (id) async {
-          final report = await service.fetchReport(id);
-          if (!report.expiresAt.isAfter(DateTime.now())) {
-            throw const ReportNotFoundException();
-          }
-          loaded = report;
-          return report;
-        },
-        loadPhoto: service.fetchPhoto,
-        userPosition: position == null
-            ? null
-            : (latitude: position.latitude, longitude: position.longitude),
-        onLayout: (height) {
-          final report = loaded;
-          if (!mounted ||
-              !_detailOpen ||
-              detailRequest != _detailRequest ||
-              focusRevision != _focusRevision ||
-              focused ||
-              report == null) {
-            return;
-          }
-          focused = true;
-          _selectedSheetHeight = height + 36; // Modal drag handle.
-          widget.focusController?.focus(report, origin: MapFocusOrigin.mapTap);
-        },
-      ).whenComplete(() {
-        if (!mounted || detailRequest != _detailRequest) return;
-        _detailOpen = false;
-        _detailRequest++;
-        _selectedSheetHeight = 0;
-        if (focused &&
-            widget.focusController?.origin == MapFocusOrigin.mapTap &&
-            _selectedReport?.id == loaded?.id &&
-            !_selectionTouched) {
-          unawaited(_clearDetailPadding());
-        }
-      }),
-    );
+    if (reportId is! String) return;
+    _openReportDetailById(reportId, origin: MapFocusOrigin.mapTap);
+  }
+
+  /// Fiche en bas de la carte ; la carte se cadre au-dessus dès le détail
+  /// chargé. Un autre badge touché remplace la fiche ouverte.
+  void _openReportDetailById(
+    String reportId, {
+    required MapFocusOrigin origin,
+  }) {
+    if (!mounted || _reportComposerOpen) return;
+    if (widget.reportDetailService == null || reportId == _detailReportId) {
+      return;
+    }
+    if (origin == MapFocusOrigin.mapTap) AppHaptics.selection();
+    final opening = !_detailOpen;
+    _detailCamera = null;
+    setState(() {
+      _detailReportId = reportId;
+      _detailOrigin = origin;
+      _detailRequest++;
+      _detailFocused = false;
+    });
+    if (opening) unawaited(_rememberCameraBeforeDetail(_detailRequest));
+  }
+
+  Future<void> _rememberCameraBeforeDetail(int request) async {
+    _cameraBeforeDetail = null;
+    final map = _mapboxMap;
+    if (map == null) return;
+    try {
+      final camera = await map.getCameraState();
+      if (mounted && _detailOpen && _cameraBeforeDetail == null) {
+        _cameraBeforeDetail = camera;
+      }
+    } catch (_) {
+      // Sans vue de départ, la fermeture laisse la carte en place.
+    }
+  }
+
+  Future<ReportDetail> _loadReportDetail(String reportId) async {
+    final request = _detailRequest;
+    final report = await widget.reportDetailService!.fetchReport(reportId);
+    if (!report.expiresAt.isAfter(DateTime.now())) {
+      throw const ReportNotFoundException();
+    }
+    if (mounted &&
+        request == _detailRequest &&
+        reportId == _detailReportId &&
+        !_detailFocused) {
+      _detailFocused = true;
+      widget.focusController?.focus(report, origin: _detailOrigin);
+    }
+    return report;
+  }
+
+  /// Fermée par l'utilisateur : la sélection s'efface et la carte revient à
+  /// la vue d'avant la fiche, sauf s'il l'a déplacée entre-temps.
+  void _closeReportDetail() {
+    if (!_detailOpen) return;
+    final before = _cameraBeforeDetail;
+    final restore = _detailFocused && !_selectionTouched && before != null;
+    final focused = _detailFocused;
+    _dismissReportDetail();
+    final controller = widget.focusController;
+    if (focused && controller?.report != null) controller!.clear();
+    if (restore) {
+      unawaited(_restoreCameraAfterDetail(before));
+    } else {
+      unawaited(_clearDetailPadding());
+    }
+  }
+
+  /// Retire la fiche et Mes alertes sans toucher à la carte.
+  void _dismissReportDetail() {
+    _leaveDetail();
+    _closeAlertsList();
+  }
+
+  void _leaveDetail() {
+    setState(() {
+      _detailReportId = null;
+      _detailRequest++;
+      _detailFocused = false;
+    });
+    _cameraBeforeDetail = null;
+    _detailCamera = null;
+  }
+
+  /// Bouton « Mes alertes » ou action « Historique » d'une notification.
+  void _openAlerts() {
+    final service = widget.alertService;
+    if (!mounted || service == null || _reportComposerOpen) return;
+    if (_alertsOpen) {
+      if (_detailOpen) _backToAlerts();
+      return;
+    }
+    CameraState? before;
+    if (_detailOpen) {
+      // La fiche du bas laisse sa place : la croix de Mes alertes rendra la
+      // vue d'avant elle.
+      if (_detailFocused && !_selectionTouched) before = _cameraBeforeDetail;
+      _leaveSelectedDetail();
+    }
+    setState(() {
+      _alerts = AlertHistoryController(service)..load();
+      _alertsMoved = false;
+    });
+    _cameraBeforeAlerts = before;
+    final request = ++_alertsRequest;
+    if (before == null) unawaited(_rememberCameraBeforeAlerts(request));
+  }
+
+  Future<void> _rememberCameraBeforeAlerts(int request) async {
+    final map = _mapboxMap;
+    if (map == null) return;
+    try {
+      final camera = await map.getCameraState();
+      if (mounted && request == _alertsRequest && _alertsOpen) {
+        _cameraBeforeAlerts ??= camera;
+      }
+    } catch (_) {
+      // Sans vue de départ, la croix laisse la carte en place.
+    }
+  }
+
+  /// Une alerte touchée : sa fiche prend la place de la liste, la carte se
+  /// cadre dessous.
+  void _openAlert(Alert alert) {
+    if (widget.focusController?.isBlocked ?? false) {
+      ScaffoldMessenger.of(context)
+        ..hideCurrentSnackBar()
+        ..showSnackBar(
+          const SnackBar(
+            content: Text(
+              'Terminez ou annulez votre signalement avant d’ouvrir l’alerte.',
+            ),
+          ),
+        );
+      return;
+    }
+    _openReportDetailById(alert.reportId, origin: MapFocusOrigin.history);
+  }
+
+  /// Flèche de retour : la liste revient, la carte reste où elle est.
+  void _backToAlerts() {
+    if (!_detailOpen) return;
+    _leaveSelectedDetail();
+  }
+
+  /// Fiche quittée sans recadrage : la sélection s'efface, la vue visible
+  /// ne bouge pas.
+  void _leaveSelectedDetail() {
+    final focused = _detailFocused;
+    _leaveDetail();
+    final controller = widget.focusController;
+    if (focused && controller?.report != null) controller!.clear();
+    if (focused) unawaited(_clearDetailPadding());
+  }
+
+  /// Croix de Mes alertes : la vue d'avant revient, sauf si l'utilisateur a
+  /// déplacé la carte entre-temps.
+  void _closeAlerts() {
+    if (!_alertsOpen) return;
+    final before = _cameraBeforeAlerts;
+    final focused = _detailFocused;
+    final restore = !_alertsMoved && before != null;
+    if (_detailOpen) _leaveDetail();
+    _closeAlertsList();
+    final controller = widget.focusController;
+    if (focused && controller?.report != null) controller!.clear();
+    if (restore) {
+      unawaited(_restoreCameraAfterDetail(before));
+    } else if (focused) {
+      unawaited(_clearDetailPadding());
+    }
+  }
+
+  void _closeAlertsList() {
+    final alerts = _alerts;
+    if (alerts == null) return;
+    setState(() => _alerts = null);
+    // Le panneau a encore besoin de la liste pendant sa dernière image.
+    WidgetsBinding.instance.addPostFrameCallback((_) => alerts.dispose());
+    _alertsRequest++;
+    _cameraBeforeAlerts = null;
+    _alertsMoved = false;
+  }
+
+  Future<void> _restoreCameraAfterDetail(CameraState before) async {
+    final map = _mapboxMap;
+    if (map == null) return;
+    try {
+      final current = await map.getCameraState();
+      if (!mounted) return;
+      final camera = CameraOptions(
+        center: before.center,
+        zoom: before.zoom,
+        bearing: before.bearing,
+        pitch: before.pitch,
+        padding: before.padding,
+      );
+      await _moveCamera(
+        map,
+        camera,
+        MapMotion.focusDurationMs(current, camera),
+      );
+    } catch (_) {
+      // A dismissed/replaced native map has no camera left to restore.
+    }
   }
 
   /// Closing the sheet does not trigger another flight. Re-express the
@@ -1454,7 +1750,7 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
     final request = _cameraMotionRevision;
     try {
       final camera = await map.getCameraState();
-      final size = await map.getSize();
+      final size = _mapViewport;
       final center = await map.coordinateForPixel(
         ScreenCoordinate(x: size.width / 2, y: size.height / 2),
       );
@@ -2513,6 +2809,7 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
     _reportMarkerDropTimer?.cancel();
     _noticeTimer?.cancel();
     _selectedExpiryTimer?.cancel();
+    _alerts?.dispose();
     _displayedZoom.dispose();
     _scaleCamera.dispose();
     _cameraTurns.dispose();
@@ -2530,6 +2827,11 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
   Widget build(BuildContext context) {
     final mediaQuery = MediaQuery.of(context);
     final keyboardVisible = mediaQuery.viewInsets.bottom > 0;
+    final panelOpen = _detailOpen || _alertsOpen;
+    final position = _position;
+    final userPosition = position == null
+        ? null
+        : (latitude: position.latitude, longitude: position.longitude);
     if (_reportComposerOpen && _wasKeyboardVisible && !keyboardVisible) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (mounted) _scheduleReportPointUpdate();
@@ -2692,7 +2994,8 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
                 ),
               ),
             ),
-          if (!_reportComposerOpen)
+          // Mes alertes prend la place des boutons du haut.
+          if (!_reportComposerOpen && !_alertsOpen)
             Positioned(
               top: 0,
               left: 0,
@@ -2740,11 +3043,12 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
                               ),
                             ),
                           ),
-                          if (widget.onOpenAlerts != null) ...[
+                          if (widget.alertService != null &&
+                              widget.reportDetailService != null) ...[
                             const SizedBox(width: 12),
                             _PoppingMapButton(
                               tooltip: 'Mes alertes',
-                              onPressed: widget.onOpenAlerts,
+                              onPressed: _openAlerts,
                               icon: const Icon(
                                 Icons.notifications_outlined,
                                 color: Color(0xFF243243),
@@ -2800,7 +3104,8 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
                 ),
               ),
             ),
-          if (!_reportComposerOpen)
+          // Un panneau ouvert prend la place des boutons du bas.
+          if (!_reportComposerOpen && !panelOpen)
             Positioned(
               bottom: 16,
               left: 0,
@@ -2836,14 +3141,14 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
                 ),
               ),
             ),
-          if (!_reportComposerOpen)
+          if (!_reportComposerOpen && !panelOpen)
             Positioned(
               right: 16,
               // Sous les boutons de droite, à la hauteur du logo Mapbox.
               bottom: mediaQuery.viewPadding.bottom + 4,
               child: MapScaleBar(camera: _scaleCamera),
             ),
-          if (!_reportComposerOpen)
+          if (!_reportComposerOpen && !panelOpen)
             Positioned(
               right: 16,
               bottom: 260,
@@ -2876,6 +3181,48 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
                       ),
                     ),
                   ),
+                ),
+              ),
+            ),
+          if (panelOpen && !_reportComposerOpen)
+            Positioned(
+              key: ValueKey(_alertsOpen ? 'alerts-panel' : 'report-detail'),
+              left: 0,
+              right: 0,
+              top: _alertsOpen ? 0 : null,
+              bottom: _alertsOpen ? null : 0,
+              child: NotificationListener<SizeChangedLayoutNotification>(
+                onNotification: (_) {
+                  // Après la mise en page : la nouvelle hauteur est connue.
+                  WidgetsBinding.instance.addPostFrameCallback(
+                    (_) => unawaited(_followDetailPanelHeight()),
+                  );
+                  return true;
+                },
+                child: SizeChangedLayoutNotifier(
+                  key: _detailPanelKey,
+                  child: !_detailOpen
+                      ? AlertsPanel(
+                          history: _alerts!,
+                          onOpen: _openAlert,
+                          onClose: _closeAlerts,
+                          userPosition: userPosition,
+                        )
+                      : ReportDetailPanel(
+                          // Un autre badge touché repart d'un chargement neuf.
+                          key: ValueKey(_detailReportId),
+                          reportId: _detailReportId!,
+                          loadReport: _loadReportDetail,
+                          loadPhoto: widget.reportDetailService!.fetchPhoto,
+                          userPosition: userPosition,
+                          side: _alertsOpen
+                              ? MapPanelSide.top
+                              : MapPanelSide.bottom,
+                          onBack: _alertsOpen ? _backToAlerts : null,
+                          onClose: _alertsOpen
+                              ? _closeAlerts
+                              : _closeReportDetail,
+                        ),
                 ),
               ),
             ),

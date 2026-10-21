@@ -162,8 +162,13 @@ class ReportTiles {
       ReportMarker.imageId(category);
 
   /// Taille partagée par les badges ordinaires et la sélection.
-  static List<Object> markerSizeExpression() =>
-      _zoomRamp(badgesMinZoom, _badgeStartScale, _badgesFullZoom, 1);
+  /// [scale] grossit le badge du signalement sélectionné.
+  static List<Object> markerSizeExpression({double scale = 1}) => _zoomRamp(
+    badgesMinZoom,
+    _badgeStartScale * scale,
+    _badgesFullZoom,
+    scale,
+  );
 
   /// Expression partagée par les badges ordinaires et la sélection.
   static List<Object> markerImageExpression() => [

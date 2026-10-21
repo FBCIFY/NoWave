@@ -68,12 +68,13 @@ void main() {
     expect(find.text('Animal marin'), findsOneWidget);
     expect(find.text('Observé aujourd’hui à 09:30'), findsOneWidget);
     expect(find.text('Dauphins'), findsOneWidget);
-    expect(find.text('43° 2′ 24″ N\n5° 0′ 0″ E'), findsOneWidget);
+    // La position en degrés n'est plus affichée : le point est sur la carte.
+    expect(find.textContaining('43° 2′'), findsNothing);
     expect(find.text('2,4 NM au N'), findsOneWidget);
     expect(find.text('marin'), findsOneWidget);
     expect(find.text('Albatros · Semi-rigide'), findsOneWidget);
-    expect(find.text('Envoi en cours'), findsOneWidget);
-    expect(find.text('aujourd’hui à 15:30'), findsOneWidget);
+    expect(find.text('Photo en cours d’envoi'), findsOneWidget);
+    expect(find.text('Expire aujourd’hui à 15:30'), findsOneWidget);
   });
 
   testWidgets('indique un auteur supprimé et cache le reste', (tester) async {
@@ -89,8 +90,8 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Utilisateur supprimé'), findsOneWidget);
-    expect(find.text('Bateau'), findsNothing);
-    expect(find.text('Photo'), findsNothing);
+    expect(find.textContaining('Albatros'), findsNothing);
+    expect(find.byIcon(Icons.photo_camera_outlined), findsNothing);
   });
 
   testWidgets('dit qu’un signalement disparu n’est plus disponible', (
@@ -306,7 +307,7 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      expect(find.text('Indisponible'), findsOneWidget);
+      expect(find.text('Photo indisponible'), findsOneWidget);
       expect(find.bySemanticsLabel('Chargement de la photo'), findsNothing);
     });
   });

@@ -7,8 +7,7 @@ import 'package:blueway/core/device/device_registration.dart';
 import 'package:blueway/core/device/device_service.dart';
 import 'package:blueway/core/notifications/alert_push_controller.dart';
 import 'package:blueway/features/alerts/data/alert_service.dart';
-import 'package:blueway/features/alerts/presentation/alert_report_screen.dart';
-import 'package:blueway/features/alerts/presentation/alerts_screen.dart';
+import 'package:blueway/features/alerts/presentation/alerts_panel.dart';
 import 'package:blueway/features/map/presentation/map_screen.dart';
 import 'package:blueway/features/auth/data/auth_service.dart';
 import 'package:blueway/features/auth/presentation/auth_gate.dart';
@@ -240,12 +239,11 @@ void main() {
       await tester.tap(find.byTooltip('Mes alertes'));
       await tester.pumpAndSettle();
       expect(find.byKey(const ValueKey('alert-a')), findsOneWidget);
-      await tester.pageBack();
+      await tester.tap(find.byTooltip('Fermer'));
       await tester.pumpAndSettle();
       f.source.taps.add(pushMessage(recipientFirebaseUid: 'a'));
       f.source.taps.add(pushMessage(recipientFirebaseUid: 'a'));
       await tester.pumpAndSettle();
-      expect(find.byType(AlertReportScreen), findsNothing);
       expect(find.byType(MapScreen), findsOneWidget);
       expect(
         find.text('Ce signalement n’est plus disponible.'),
@@ -282,7 +280,6 @@ void main() {
         f.suspended = false;
         f.auth.login('b');
         await tester.pumpAndSettle();
-        expect(find.byType(AlertReportScreen), findsNothing);
         expect(
           f.requests.where((r) => r.url.path.contains('/reports/')),
           isEmpty,
@@ -303,7 +300,6 @@ void main() {
       // Avant la frame suivante : le callback de l'ancien accueil est encore attaché.
       f.source.taps.add(pushMessage(recipientFirebaseUid: 'a'));
       await tester.pumpAndSettle();
-      expect(find.byType(AlertReportScreen), findsNothing);
       expect(find.byType(AccountDeletionScreen), findsOneWidget);
       f.source.messages.add(
         pushMessage(
@@ -318,7 +314,6 @@ void main() {
       );
       await tester.tap(find.text('Annuler'));
       await tester.pumpAndSettle();
-      expect(find.byType(AlertReportScreen), findsNothing);
       expect(find.byType(MapScreen), findsOneWidget);
       expect(
         find.text('Ce signalement n’est plus disponible.'),
@@ -347,7 +342,7 @@ void main() {
       );
       f.pendingHistory = null;
       await tester.pumpAndSettle();
-      expect(find.byType(AlertsScreen), findsNothing);
+      expect(find.byType(AlertsPanel), findsNothing);
       await tester.tap(find.byTooltip('Mes alertes'));
       await tester.pumpAndSettle();
       expect(find.byKey(const ValueKey('private-a')), findsNothing);

@@ -7,7 +7,22 @@ import 'package:mapbox_maps_flutter/mapbox_maps_flutter.dart';
 import '../../reports/domain/report_detail.dart';
 
 /// Fits the native map's actual viewport, not a zoom chosen from a distance table.
+///
+/// [viewport] vient de la mise en page Flutter : `MapboxMap.getSize()` lève
+/// « Not available. » sur iOS.
 class MapAlertCamera {
+  /// Fiche ouverte : la carte se rapproche un peu de la vue de départ.
+  static const detailZoomStep = 1.5;
+  static const detailMaxZoom = 17.0;
+
+  /// Depuis Mes alertes, la vue de départ peut être très large.
+  static const historyMinZoom = 14.0;
+
+  /// Fiche ouverte : la carte s'incline un peu, dans une plage confortable.
+  static const detailPitchStep = 15.0;
+  static const detailMinPitch = 35.0;
+  static const detailMaxPitch = 55.0;
+
   static bool usable(geo.Position? position) =>
       position != null &&
       position.latitude.isFinite &&
@@ -32,24 +47,14 @@ class MapAlertCamera {
     ReportDetail report,
     geo.Position? position,
     widgets.EdgeInsets safe, {
-    double sheetHeight = 0,
+    required widgets.Size viewport,
     double bearing = 0,
     double pitch = 0,
   }) async {
-    final viewport = await map.getSize();
     if (viewport.width <= 0 || viewport.height <= 0) {
       throw StateError('Map viewport is not ready');
     }
-    final margins = padding(
-      widgets.Size(viewport.width, viewport.height),
-      safe,
-    );
-    if (sheetHeight > 0) {
-      margins.bottom = math.min(sheetHeight + 20, viewport.height * .78);
-      margins.top = math.min(safe.top + 48, viewport.height * .15);
-      margins.left = math.min(24, viewport.width * .1);
-      margins.right = margins.left;
-    }
+    final margins = padding(viewport, safe);
     final target = Point(
       coordinates: Position(report.longitude, report.latitude),
     );
@@ -83,5 +88,52 @@ class MapAlertCamera {
       throw StateError('Native camera fitting failed');
     }
     return camera;
+  }
+
+  /// La fiche occupe [panelHeight] en bas, ou en haut avec [top] (Mes
+  /// alertes) : le centre vise le milieu de la carte restée visible.
+  static MbxEdgeInsets detailPadding(
+    widgets.Size viewport,
+    double panelHeight, {
+    bool top = false,
+  }) {
+    final height = panelHeight.clamp(0, viewport.height).toDouble();
+    return MbxEdgeInsets(
+      top: top ? height : 0,
+      left: 0,
+      bottom: top ? 0 : height,
+      right: 0,
+    );
+  }
+
+  /// Fiche ouverte : le signalement au centre de la carte visible à côté
+  /// de la fiche, un peu plus près et un peu plus incliné que la vue [from].
+  static Future<CameraOptions> detail(
+    MapboxMap map,
+    ReportDetail report, {
+    required CameraState from,
+    required double bearing,
+    required widgets.Size viewport,
+    required double panelHeight,
+    bool panelOnTop = false,
+    double minZoom = 0,
+  }) async {
+    if (viewport.width <= 0 || viewport.height <= 0) {
+      throw StateError('Map viewport is not ready');
+    }
+    // Une carte déjà plus proche ou plus penchée n'est pas reculée.
+    final zoom = from.zoom >= detailMaxZoom
+        ? from.zoom
+        : math.min(from.zoom + detailZoomStep, detailMaxZoom);
+    final pitch = from.pitch >= detailMaxPitch
+        ? from.pitch
+        : (from.pitch + detailPitchStep).clamp(detailMinPitch, detailMaxPitch);
+    return CameraOptions(
+      center: Point(coordinates: Position(report.longitude, report.latitude)),
+      zoom: math.max(zoom, minZoom),
+      pitch: pitch.toDouble(),
+      bearing: bearing,
+      padding: detailPadding(viewport, panelHeight, top: panelOnTop),
+    );
   }
 }

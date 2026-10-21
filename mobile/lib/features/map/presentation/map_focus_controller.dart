@@ -11,11 +11,15 @@ class MapFocusController extends ChangeNotifier {
   ReportDetail? _report;
   bool _blocked = false;
   MapFocusOrigin origin = MapFocusOrigin.history;
-  bool get includeUserPosition => origin != MapFocusOrigin.mapTap;
+
+  /// Seule une notification cadre aussi l'utilisateur : depuis la carte ou
+  /// Mes alertes, la fiche s'ouvre et la caméra vise le signalement seul.
+  bool get includeUserPosition => origin == MapFocusOrigin.notification;
   int revision = 0;
   Completer<void>? _completion;
   Completer<void>? _unblocked;
   bool Function()? _isCurrent;
+  bool _alertsRequested = false;
 
   ReportDetail? get report => _report;
   bool get isBlocked => _blocked;
@@ -40,6 +44,22 @@ class MapFocusController extends ChangeNotifier {
     if (_blocked) return false;
     _select(report, origin: origin);
     return true;
+  }
+
+  /// Mes alertes s'ouvre en panneau sur la carte : la carte le prend en
+  /// charge à son prochain passage.
+  bool openAlerts() {
+    if (_blocked) return false;
+    _alertsRequested = true;
+    notifyListeners();
+    return true;
+  }
+
+  /// Rend la demande d'ouverture une seule fois.
+  bool takeAlerts() {
+    final requested = _alertsRequested;
+    _alertsRequested = false;
+    return requested;
   }
 
   Future<void> focusAlert(ReportDetail report, {bool Function()? isCurrent}) {

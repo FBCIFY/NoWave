@@ -6,8 +6,7 @@ import 'package:blueway/core/device/device_position_reporter.dart';
 import 'package:blueway/core/device/device_registration.dart';
 import 'package:blueway/core/notifications/alert_push_controller.dart';
 import 'package:blueway/features/alerts/data/alert_service.dart';
-import 'package:blueway/features/alerts/presentation/alert_report_screen.dart';
-import 'package:blueway/features/alerts/presentation/alerts_screen.dart';
+import 'package:blueway/features/alerts/presentation/alerts_panel.dart';
 import 'package:blueway/features/auth/data/auth_service.dart';
 import 'package:blueway/features/auth/presentation/auth_gate.dart';
 import 'package:blueway/features/auth/presentation/login_screen.dart';
@@ -19,6 +18,7 @@ import 'package:blueway/features/profile/data/profile_service.dart';
 import 'package:blueway/features/profile/presentation/suspended_account_screen.dart';
 import 'package:blueway/features/reports/data/manual_report_service.dart';
 import 'package:blueway/features/reports/data/report_detail_service.dart';
+import 'package:blueway/features/reports/presentation/report_detail_sheet.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -209,7 +209,7 @@ void main() {
       expect(f.calls, isEmpty);
       f.auth.changes.add(_User('user-a'));
       await tester.pumpAndSettle();
-      expect(find.byType(AlertReportScreen), findsNothing);
+      expect(find.byType(ReportDetailSheet), findsNothing);
       expect(find.byType(MapScreen), findsOneWidget);
       expect(find.textContaining('n’est plus disponible'), findsOneWidget);
       expect(f.calls, ['/api/v1/users/me', '/api/v1/reports/report-a']);
@@ -218,7 +218,7 @@ void main() {
       expect(f.calls, hasLength(2));
       f.auth.changes.add(null);
       await tester.pumpAndSettle();
-      expect(find.byType(AlertReportScreen), findsNothing);
+      expect(find.byType(ReportDetailSheet), findsNothing);
       expect(find.byType(LoginScreen), findsOneWidget);
       await tester.pumpWidget(const SizedBox.shrink());
     },
@@ -242,7 +242,7 @@ void main() {
       );
       f.source.taps.add(pushMessage(id: 'alert-b', reportId: 'report-b'));
       await tester.pumpAndSettle();
-      expect(find.byType(AlertReportScreen, skipOffstage: false), findsNothing);
+      expect(find.byType(ReportDetailSheet, skipOffstage: false), findsNothing);
       expect(find.byType(MapScreen, skipOffstage: false), findsOneWidget);
       expect(tester.state(find.byType(MapScreen)), same(mainMap));
       expect(
@@ -334,7 +334,7 @@ void main() {
 
     expect(f.responseOrder, ['profile-refresh', 'report']);
     expect(find.byType(MapScreen), findsOneWidget);
-    expect(find.byType(AlertReportScreen), findsNothing);
+    expect(find.byType(ReportDetailSheet), findsNothing);
 
     final map = tester.widget<MapScreen>(find.byType(MapScreen));
     expect(map.focusController?.report?.id, 'report-a');
@@ -351,22 +351,26 @@ void main() {
     f.source.taps.add(pushMessage());
     await tester.pumpAndSettle();
     expect(find.byType(SuspendedAccountScreen), findsOneWidget);
-    expect(find.byType(AlertReportScreen), findsNothing);
+    expect(find.byType(ReportDetailSheet), findsNothing);
     expect(f.calls, ['/api/v1/users/me']);
     await tester.pumpWidget(const SizedBox.shrink());
   });
-  testWidgets('accueil ouvre l’historique puis la fiche existante', (
+  testWidgets('accueil ouvre l’historique puis la fiche sur la carte', (
     tester,
   ) async {
-    final f = await mount(tester);
+    final f = await mount(tester, reportAvailable: true);
     f.auth.changes.add(_User('user-a'));
     await tester.pumpAndSettle();
     await tester.tap(find.byTooltip('Mes alertes'));
     await tester.pumpAndSettle();
-    expect(find.byType(AlertsScreen), findsOneWidget);
+    expect(find.byType(AlertsPanel), findsOneWidget);
     await tester.tap(find.byKey(const ValueKey('alert-a')));
     await tester.pumpAndSettle();
-    expect(find.byType(AlertReportScreen), findsOneWidget);
+    expect(find.byType(AlertsPanel), findsNothing);
+    expect(find.byType(MapScreen), findsOneWidget);
+    expect(find.byType(ReportDetailSheet), findsOneWidget);
+    // Déjà sur la carte : pas de bouton pour y revenir.
+    expect(find.text('Voir sur la carte'), findsNothing);
     expect(f.calls, [
       '/api/v1/users/me',
       '/api/v1/users/me/alerts',
@@ -408,7 +412,7 @@ void main() {
   );
 
   testWidgets(
-    'Voir sur la carte reste bloqué pendant un signalement en cours',
+    'Mes alertes n’ouvre pas la fiche pendant un signalement en cours',
     (tester) async {
       final f = await mount(tester, reportAvailable: true);
 
@@ -426,16 +430,12 @@ void main() {
       await tester.tap(find.byKey(const ValueKey('alert-a')));
       await tester.pumpAndSettle();
 
-      expect(find.byType(AlertReportScreen), findsOneWidget);
-
-      await tester.tap(find.text('Voir sur la carte'));
-      await tester.pumpAndSettle();
-
-      expect(find.byType(AlertReportScreen), findsOneWidget);
+      expect(find.byType(AlertsPanel), findsOneWidget);
+      expect(find.byType(ReportDetailSheet), findsNothing);
       expect(focusController.report, isNull);
       expect(
         find.text(
-          'Terminez ou annulez votre signalement avant de centrer la carte.',
+          'Terminez ou annulez votre signalement avant d’ouvrir l’alerte.',
         ),
         findsOneWidget,
       );
@@ -447,7 +447,7 @@ void main() {
   );
 
   testWidgets(
-    'Voir sur la carte revient à la MapScreen principale et la cible',
+    'Mes alertes revient à la MapScreen principale et cible le signalement',
     (tester) async {
       final f = await mount(tester, reportAvailable: true);
 
@@ -459,34 +459,23 @@ void main() {
       await tester.tap(find.byTooltip('Mes alertes'));
       await tester.pumpAndSettle();
 
-      expect(find.byType(AlertsScreen), findsOneWidget);
+      expect(find.byType(AlertsPanel), findsOneWidget);
 
       await tester.tap(find.byKey(const ValueKey('alert-a')));
       await tester.pumpAndSettle();
 
-      expect(find.byType(AlertReportScreen), findsOneWidget);
-
-      await tester.tap(find.text('Voir sur la carte'));
-      await tester.pumpAndSettle();
-
-      expect(find.byType(AlertsScreen), findsNothing);
-      expect(find.byType(AlertReportScreen), findsNothing);
-      expect(find.byType(MapScreen), findsOneWidget);
-
-      final map = tester.widget<MapScreen>(find.byType(MapScreen));
-      final selected = map.focusController?.report;
-
-      expect(selected, isNotNull);
-      expect(selected!.id, 'report-a');
-      expect(selected.longitude, 6);
-      expect(selected.latitude, 44);
+      expect(find.byType(AlertsPanel), findsNothing);
+      expect(find.byType(ReportDetailSheet), findsOneWidget);
 
       final focus = tester
           .widget<MapScreen>(find.byType(MapScreen))
           .focusController!;
+      expect(focus.report!.id, 'report-a');
       expect(focus.report!.longitude, 6);
       expect(focus.report!.latitude, 44);
-      expect(focus.includeUserPosition, isTrue);
+      expect(focus.origin, MapFocusOrigin.history);
+      // La fiche couvre le bas : la caméra vise le signalement seul.
+      expect(focus.includeUserPosition, isFalse);
       // The native fit is applied when the map is ready, without first
       // declaring a conflicting viewport that would cause an instant jump.
       expect(
@@ -496,7 +485,7 @@ void main() {
 
       expect(
         f.calls.where((path) => path == '/api/v1/reports/report-a').length,
-        2,
+        1,
       );
 
       await tester.pumpWidget(const SizedBox.shrink());

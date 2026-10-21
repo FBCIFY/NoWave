@@ -7,6 +7,7 @@ import 'package:blueway/core/location/location_service.dart';
 import 'package:blueway/features/reports/domain/report_detail.dart';
 import 'package:blueway/features/map/presentation/report_marker.dart';
 import 'package:blueway/features/reports/domain/manual_report.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:geolocator/geolocator.dart' as geo;
 import 'package:mapbox_maps_flutter/mapbox_maps_flutter.dart' as mb;
@@ -237,8 +238,10 @@ class FocusMap extends Fake implements mb.MapboxMap {
     interactions.add(interaction);
   }
 
+  /// Comme le plugin iOS : la taille vient de la mise en page Flutter.
   @override
-  Future<mb.Size> getSize() async => mb.Size(width: width, height: height);
+  Future<mb.Size> getSize() async =>
+      throw PlatformException(code: '0', message: 'Not available.');
   @override
   Future<mb.CameraOptions> cameraForCoordinatesPadding(
     List<mb.Point> coordinates,
