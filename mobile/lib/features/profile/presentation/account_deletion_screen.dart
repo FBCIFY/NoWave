@@ -47,6 +47,28 @@ class _AccountDeletionScreenState extends State<AccountDeletionScreen> {
     }
   }
 
+  Future<void> _leave() async {
+    if (_busy) return;
+    setState(() {
+      _busy = true;
+      _failed = false;
+    });
+    try {
+      await widget.deletion.leave();
+      if (mounted) {
+        setState(() => _busy = false);
+        widget.onDone();
+      }
+    } catch (_) {
+      if (mounted) {
+        setState(() {
+          _busy = false;
+          _failed = true;
+        });
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final pending = widget.deletion.pending;
@@ -74,7 +96,7 @@ class _AccountDeletionScreenState extends State<AccountDeletionScreen> {
               const Padding(
                 padding: EdgeInsets.symmetric(vertical: 16),
                 child: Text(
-                  'Impossible de terminer. Vérifiez votre connexion et réessayez. Si votre session est refusée, la suppression ne peut pas être confirmée depuis ce téléphone : contactez le support.',
+                  'Impossible de terminer. Vérifiez votre connexion et réessayez, ou déconnectez-vous : la suppression reprendra à votre prochaine connexion. Si le problème persiste, contactez le support.',
                 ),
               ),
             const SizedBox(height: 24),
@@ -89,11 +111,12 @@ class _AccountDeletionScreenState extends State<AccountDeletionScreen> {
                   pending ? 'Réessayer' : 'Supprimer définitivement mon compte',
                 ),
               ),
-              if (!pending)
-                TextButton(
-                  onPressed: widget.onCancel,
-                  child: const Text('Annuler'),
-                ),
+              // Une demande déjà envoyée ne s'annule plus, mais l'utilisateur
+              // peut toujours quitter cet écran.
+              TextButton(
+                onPressed: pending ? _leave : widget.onCancel,
+                child: Text(pending ? 'Se déconnecter' : 'Annuler'),
+              ),
             ],
           ],
         ),
