@@ -1382,8 +1382,9 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
   /// raccourcit l'animation quand la distance est faible.
   static const _recenterMaxDuration = Duration(milliseconds: 1200);
 
-  /// Vol du globe jusqu'à l'utilisateur à la fin de l'onboarding.
-  static const _introFlightDuration = Duration(milliseconds: 4900);
+  /// Vol du globe jusqu'à l'utilisateur à la fin de l'onboarding : première
+  /// vue de la carte, assez lent pour suivre la descente.
+  static const _introFlightDuration = Duration(milliseconds: 6500);
 
   /// Attente maximale de la carte avant le fondu, puis de la position avant
   /// de partir vers la France.
