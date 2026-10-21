@@ -142,16 +142,9 @@ class _AuthGateState extends State<AuthGate> {
           );
         }
 
-        // Le bouton retour du téléphone ramène de l'inscription à la connexion.
-        return PopScope(
-          canPop: step != 1,
-          onPopInvokedWithResult: (didPop, _) {
-            if (!didPop && step == 1) {
-              setState(() => _showRegistration = false);
-            }
-          },
-          child: FlowTransition(step: step, child: screen),
-        );
+        // Le bouton retour du téléphone est géré par l'inscription : page
+        // précédente, puis connexion.
+        return FlowTransition(step: step, child: screen);
       },
     );
   }

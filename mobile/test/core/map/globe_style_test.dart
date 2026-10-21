@@ -59,6 +59,10 @@ void main() {
       final basemap = (document['imports'] as List).single as Map;
       expect(basemap['id'], 'basemap');
       expect(basemap['url'], 'mapbox://styles/mapbox/standard');
+      expect(basemap['config']['colorLand'], '#E8E0CC');
+      expect(basemap['config']['colorGreenspace'], '#C1D0AF');
+      expect(basemap['config']['showRoadLabels'], false);
+      expect(basemap['config']['showAdminBoundaries'], false);
       final sources = document['sources'] as Map;
       expect(sources[GlobeStyle.waterSource]['type'], 'vector');
       expect(
@@ -84,12 +88,48 @@ void main() {
       final layers = document['layers'] as List;
       expect(layers.map((l) => l['id']).toSet().length, layers.length);
       for (final layer in layers) {
-        expect(layer['slot'], 'bottom');
+        // Above Standard's roads, below its place labels.
+        expect(layer['slot'], 'middle');
         expect(layer['maxzoom'], lessThanOrEqualTo(7));
       }
       final ocean = layers.singleWhere((l) => l['id'] == 'nowave-earth-ocean');
       expect(ocean['source-layer'], 'water');
       expect(ocean['source'], GlobeStyle.waterSource);
+    },
+  );
+
+  test(
+    'atmosphère cyan native : interpolation continue et espace conservé',
+    () {
+      final document = jsonDecode(
+        jsonEncode(GlobeStyle.document(Uri.parse('file:///globe/'))),
+      ) as Map;
+      final fog = document['fog'] as Map;
+      expect(fog['color'], '#84D6F2');
+      expect(fog['high-color'], 'rgba(40, 145, 210, 0.70)');
+      expect(fog['space-color'], 'rgba(1, 3, 11, 0)');
+      expect(fog['range'], [.8, 8]);
+      expect(fog['horizon-blend'], [
+        'interpolate',
+        ['linear'],
+        ['zoom'],
+        0,
+        .010,
+        4,
+        .006,
+        7,
+        .003,
+      ]);
+      expect(fog['star-intensity'], 0);
+      final stops = fog['horizon-blend'] as List;
+      for (var index = 3; index < stops.length; index += 2) {
+        expect(stops[index + 1], inInclusiveRange(0, 1));
+        if (index > 3) expect(stops[index], greaterThan(stops[index - 2]));
+      }
+      expect(
+        (document['layers'] as List).any((layer) => layer['type'] == 'sky'),
+        false,
+      );
     },
   );
 
@@ -142,7 +182,7 @@ void main() {
       map.style.fail = false;
       await presentation.synchronize(map, 6);
       expect(map.style.config['showPlaceLabels'], true);
-      expect(map.style.config['showAdminBoundaries'], true);
+      expect(map.style.config.containsKey('showAdminBoundaries'), isFalse);
     },
   );
 
@@ -173,8 +213,12 @@ void main() {
           );
           expect(map.style.config['lightPreset'], 'day');
           expect(map.style.config['theme'], 'faded');
+          expect(map.style.config['colorLand'], '#E8E0CC');
+          expect(map.style.config['colorGreenspace'], '#C1D0AF');
+          expect(map.style.config['showRoadLabels'], false);
+          expect(map.style.config['showPointOfInterestLabels'], false);
           expect(map.style.config['showPlaceLabels'], zoom >= 4);
-          expect(map.style.config['showAdminBoundaries'], zoom >= 4);
+          expect(map.style.config['showAdminBoundaries'], false);
         }
       }
     },

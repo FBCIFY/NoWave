@@ -15,6 +15,23 @@ class LocationService {
   /// Lève une [StateError] avec un message prêt à afficher si la localisation
   /// est désactivée ou refusée.
   Future<Position> getCurrentPosition() async {
+    await requestPermission();
+
+    return Geolocator.getCurrentPosition(
+      locationSettings: const LocationSettings(
+        accuracy: LocationAccuracy.high,
+        timeLimit: Duration(seconds: 15),
+      ),
+    );
+  }
+
+  /// Demande l'autorisation si besoin, sans attendre de position : à la fin
+  /// de l'onboarding, la fenêtre du téléphone s'ouvre avant le fondu vers la
+  /// carte.
+  ///
+  /// Lève une [StateError] avec un message prêt à afficher si la localisation
+  /// est désactivée ou refusée.
+  Future<void> requestPermission() async {
     final serviceEnabled = await Geolocator.isLocationServiceEnabled();
 
     if (!serviceEnabled) {
@@ -38,13 +55,6 @@ class LocationService {
         'L’accès à votre position est bloqué. Autorisez-le dans les réglages.',
       );
     }
-
-    return Geolocator.getCurrentPosition(
-      locationSettings: const LocationSettings(
-        accuracy: LocationAccuracy.high,
-        timeLimit: Duration(seconds: 15),
-      ),
-    );
   }
 
   /// Vrai si le suivi peut démarrer sans rien demander à l'utilisateur :

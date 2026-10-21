@@ -268,15 +268,9 @@ void main() {
     headings.values.add(60);
     await press(tester, 'Recentrer sur ma position');
     await press(tester, 'Suivre la direction du téléphone');
-    final listener = tester.widget<Listener>(
-      find
-          .ancestor(
-            of: find.byType(mb.MapWidget),
-            matching: find.byType(Listener),
-          )
-          .first,
+    final gesture = await tester.startGesture(
+      tester.getCenter(find.byType(mb.MapWidget)),
     );
-    listener.onPointerDown!(const PointerDownEvent(position: Offset(100, 100)));
     headings.values.add(90);
     await tester.pump();
     expect(bearing(tester), 60);
@@ -295,7 +289,7 @@ void main() {
         },
       }),
     );
-    listener.onPointerUp!(const PointerUpEvent(position: Offset(100, 100)));
+    await gesture.up();
     headings.values.add(150);
     await tester.pumpAndSettle();
     expect(widget(tester).viewport, isA<mb.IdleViewportState>());
@@ -377,6 +371,7 @@ void main() {
     );
     button.onPressed!();
     button.onPressed!();
+    await tester.pump();
     expect(requests, 1);
     widget(tester).onScrollListener!(getGesture());
     pending.complete(focusPosition());

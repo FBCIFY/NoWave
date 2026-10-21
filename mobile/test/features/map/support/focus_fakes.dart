@@ -1,6 +1,8 @@
 import 'dart:async';
 import 'dart:convert';
 
+import 'package:image/image.dart' as img;
+
 import 'package:blueway/core/location/location_service.dart';
 import 'package:blueway/features/reports/domain/report_detail.dart';
 import 'package:blueway/features/map/presentation/report_marker.dart';
@@ -52,9 +54,21 @@ class FocusGps extends Fake implements LocationService {
   final positions = StreamController<geo.Position>.broadcast(sync: true);
   bool allowed = true;
   Future<geo.Position> Function()? onCurrent;
+  StateError? permissionError;
+  int permissionRequests = 0;
+  int currentRequests = 0;
   @override
-  Future<geo.Position> getCurrentPosition() =>
-      onCurrent?.call() ?? initial.future;
+  Future<void> requestPermission() async {
+    permissionRequests++;
+    if (permissionError case final error?) throw error;
+  }
+
+  @override
+  Future<geo.Position> getCurrentPosition() {
+    currentRequests++;
+    return onCurrent?.call() ?? initial.future;
+  }
+
   @override
   Stream<geo.Position> watchPosition() => positions.stream;
   @override
@@ -90,7 +104,10 @@ class FocusStyle extends Fake implements mb.StyleManager {
     mb.ImageContent? content,
   ) async {
     if (imageGate != null) await imageGate;
-    expectSync(image.data.take(8), [137, 80, 78, 71, 13, 10, 26, 10]);
+    final decoded = img.decodePng(image.data);
+    expectSync(decoded, isNotNull);
+    expectSync(decoded!.width, image.width);
+    expectSync(decoded.height, image.height);
     expectSync(scale, ReportMarker.pixelRatio);
     images[id] = image;
     imageRegistrations.add(id);

@@ -2,7 +2,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 
 import '../data/auth_service.dart';
-import 'widgets/auth_layout.dart';
+import 'widgets/auth_photo_layout.dart';
 import 'widgets/auth_primary_button.dart';
 import 'widgets/auth_text_field.dart';
 
@@ -88,28 +88,42 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return AuthLayout(
+    return AuthPhotoLayout(
       title: 'Mot de passe oublié',
-      subtitle: 'Réinitialiser votre accès NoWave',
+      subtitle: _isSent
+          ? null
+          : 'Saisissez l’adresse e-mail de votre compte. '
+                'Nous vous enverrons un lien pour choisir '
+                'un nouveau mot de passe.',
       showBackButton: true,
       child: _isSent
           ? Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                const Icon(
-                  Icons.mark_email_read_outlined,
-                  color: Color(0xFF22D3EE),
-                  size: 48,
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Icon(
+                      Icons.mark_email_read_outlined,
+                      color: Color(0xFF22D3EE),
+                      size: 24,
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Text(
+                        'Si un compte existe pour cette adresse, '
+                        'vous recevrez un lien de réinitialisation. '
+                        'Vérifiez également vos courriers indésirables.',
+                        style: TextStyle(
+                          color: Colors.white.withValues(alpha: 0.85),
+                          fontSize: 13,
+                          height: 1.4,
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
-                const SizedBox(height: 24),
-                const Text(
-                  'Si un compte existe pour cette adresse, '
-                  'vous recevrez un lien de réinitialisation. '
-                  'Vérifiez également vos courriers indésirables.',
-                  textAlign: TextAlign.center,
-                  style: TextStyle(color: Colors.white, fontSize: 14),
-                ),
-                const SizedBox(height: 28),
+                const SizedBox(height: 20),
                 AuthPrimaryButton(
                   label: 'Retour à la connexion',
                   onPressed: () => Navigator.of(context).pop(),
@@ -121,14 +135,6 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  const Text(
-                    'Saisissez l’adresse e-mail de votre compte. '
-                    'Nous vous enverrons un lien pour choisir '
-                    'un nouveau mot de passe.',
-                    textAlign: TextAlign.center,
-                    style: TextStyle(color: Colors.white70, fontSize: 14),
-                  ),
-                  const SizedBox(height: 28),
                   AuthTextField(
                     controller: _emailController,
                     label: 'E-mail',
@@ -151,7 +157,7 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
                     },
                   ),
                   if (_errorMessage != null) ...[
-                    const SizedBox(height: 16),
+                    const SizedBox(height: 12),
                     Text(
                       _errorMessage!,
                       style: const TextStyle(
@@ -160,7 +166,7 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
                       ),
                     ),
                   ],
-                  const SizedBox(height: 28),
+                  const SizedBox(height: 20),
                   AuthPrimaryButton(
                     label: 'Envoyer le lien',
                     onPressed: _isLoading ? null : _sendResetEmail,

@@ -3,6 +3,8 @@ import 'dart:io';
 
 import 'package:flutter/services.dart';
 
+import 'marine/marine_palette.dart';
+
 /// One native style, from the globe to the harbour. No style swap on zoom.
 class GlobeStyle {
   static const satelliteSource = 'nowave-satellite';
@@ -41,37 +43,30 @@ class GlobeStyle {
       {
         'id': 'basemap',
         'url': 'mapbox://styles/mapbox/standard',
-        'config': {'lightPreset': 'day'},
+        'config': MarinePalette.basemapConfig,
       },
     ],
     'projection': {'name': 'globe'},
     'fog': {
       'range': [0.8, 8],
-      'color': '#6BBBD4',
-      'high-color': 'rgba(35, 125, 187, 0.65)',
-      'space-color': '#01030B',
+      'color': '#84D6F2',
+      'high-color': 'rgba(40, 145, 210, 0.70)',
+      // The native halo fades into the fixed Flutter space background.
+      'space-color': 'rgba(1, 3, 11, 0)',
       'horizon-blend': [
         'interpolate',
         ['linear'],
         ['zoom'],
         0,
-        0.008,
+        0.010,
         4,
         0.006,
         7,
         0.003,
       ],
-      'star-intensity': [
-        'interpolate',
-        ['linear'],
-        ['zoom'],
-        0,
-        0.65,
-        3,
-        0.4,
-        6,
-        0,
-      ],
+      // Native stars rotate with camera longitude. GlobeStars owns the stable
+      // field and preserves the previous zoom-dependent fade behind this map.
+      'star-intensity': 0,
     },
     'sources': {
       satelliteSource: {
@@ -106,11 +101,14 @@ class GlobeStyle {
         },
     },
     'layers': [
+      // Standard has no option to hide roads. The middle slot draws the
+      // decoration above roads, still below place labels and the
+      // NoWave layers added later in the same slot.
       {
         'id': 'nowave-earth-satellite',
         'type': 'raster',
         'source': satelliteSource,
-        'slot': 'bottom',
+        'slot': 'middle',
         'maxzoom': 7,
         'paint': {
           'raster-opacity': [
@@ -131,7 +129,7 @@ class GlobeStyle {
         'type': 'fill',
         'source': waterSource,
         'source-layer': 'water',
-        'slot': 'bottom',
+        'slot': 'middle',
         'maxzoom': 7,
         'paint': {
           'fill-color': '#0A4E87',
@@ -152,7 +150,7 @@ class GlobeStyle {
           'id': 'nowave-earth-clouds-$name',
           'type': 'raster',
           'source': 'nowave-clouds-$name',
-          'slot': 'bottom',
+          'slot': 'middle',
           'maxzoom': 5,
           'paint': {
             'raster-opacity': [

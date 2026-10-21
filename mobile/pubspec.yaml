@@ -45,8 +45,14 @@ flutter:
   assets:
     - assets/globe/
     - assets/models/location_puck.glb
+    - assets/images/
     - assets/icons/buoys/
     - assets/icons/fixed-aids/
+    - assets/icons/harbours/
+    # Fonds des écrans de connexion, d'inscription et de création de profil.
+    - assets/images/auth/
+    # Logo NoWave (variantes 2.0x et 3.0x choisies selon l'écran).
+    - assets/images/brand/
 
   # Raleway, la police du logo NoWave (licence OFL dans le même dossier).
   # Embarquée plutôt que téléchargée : elle reste disponible hors réseau.

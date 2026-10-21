@@ -15,6 +15,7 @@ class MarineStyle extends Fake implements StyleManager {
   final sources = <String, Map>{};
   final layers = <String, Map>{};
   final images = <String>{};
+  final config = <String, Object>{};
   bool reject = false;
   @override
   Future<void> setProjection(StyleProjection projection) async {}
@@ -25,8 +26,7 @@ class MarineStyle extends Fake implements StyleManager {
     Object value,
   ) async {
     expect(id, 'basemap');
-    expect(config, 'colorWater');
-    expect(value, '#E6F7FD');
+    this.config[config] = value;
   }
 
   @override
@@ -83,6 +83,11 @@ void main() {
       expect(map.style.layers.length, 1);
       final source = map.style.sources.values.single;
       final layer = map.style.layers.values.single;
+      expect(map.style.config['colorLand'], '#E8E0CC');
+      expect(map.style.config['colorGreenspace'], '#C1D0AF');
+      expect(map.style.config['colorWater'], '#E6F7FD');
+      expect(map.style.config['showRoadLabels'], false);
+      expect(map.style.config['showPointOfInterestLabels'], false);
       expect(source['tiles'], ['$local?v=coast-feather-2']);
       expect(source['maxzoom'], 14);
       expect(source['volatile'], true);
@@ -100,6 +105,8 @@ void main() {
         1.0,
       ]);
       expect(layer['paint']['raster-resampling'], 'linear');
+      expect(layer['paint']['raster-contrast'], .08);
+      expect(layer['paint']['raster-saturation'], .08);
       map.style.sources.clear();
       map.style.layers.clear();
       await marine.install(map);

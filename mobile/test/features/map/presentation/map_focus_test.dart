@@ -494,9 +494,10 @@ void main() {
     expect(map.style.sources.keys.where((id) => id.startsWith('alert-')), [
       'alert-selected',
     ]);
-    expect(map.style.images.keys, [
-      badges.ReportMarker.imageId(ReportCategory.marineAnimal),
-    ]);
+    expect(
+      map.style.images.keys.where((id) => id.startsWith('nowave-report-')),
+      [badges.ReportMarker.imageId(ReportCategory.marineAnimal)],
+    );
     expect(map.cameras, hasLength(1));
   });
 
@@ -727,9 +728,6 @@ void main() {
       // event for the selecting touch. This touch is not a cancellation.
       mapListener.onPointerDown!(
         const PointerDownEvent(position: Offset(200, 300)),
-      );
-      mapListener.onPointerUp!(
-        const PointerUpEvent(position: Offset(200, 300)),
       );
       await pumpFrames(tester);
       expect(reports.calls, ['report-a']);

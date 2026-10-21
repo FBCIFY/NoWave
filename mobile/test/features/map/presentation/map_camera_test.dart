@@ -34,7 +34,7 @@ class _Map extends Fake implements MapboxMap {
   Future<CameraState> getCameraState() async => CameraState(
     center: Point(coordinates: Position(-4.49, 48.38)),
     zoom: 2,
-    pitch: 40,
+    pitch: 0,
     bearing: 0,
     padding: MbxEdgeInsets(top: 0, left: 0, right: 0, bottom: 0),
   );
@@ -56,26 +56,32 @@ void main() {
   });
   tearDown(() => gps.close());
 
-  testWidgets('GPS : globe initial puis suivi et recentrage au zoom de dev', (
+  testWidgets('GPS : suivi dès le lancement puis recentrage volontaire', (
     tester,
   ) async {
     await tester.pumpWidget(MaterialApp(home: MapScreen(locationService: gps)));
     final map = _Map();
     tester.widget<MapWidget>(find.byType(MapWidget)).onMapCreated!(map);
     await tester.pumpAndSettle();
-    // Le globe reste la vue avant localisation ; le GPS reprend ensuite
-    // le suivi de dev, y compris au recentrage depuis un zoom éloigné.
     expect(map.flights, isEmpty);
-    var viewport =
+    final initial =
         tester.widget<MapWidget>(find.byType(MapWidget)).viewport
             as FollowPuckViewportState;
-    expect(viewport.zoom, 14);
-    expect(viewport.pitch, 60);
+    expect(initial.zoom, 14);
+    expect(initial.pitch, 60);
+    expect(gps.positions.hasListener, true);
+    expect(find.textContaining('Lat.'), findsOneWidget);
+    gps.positions.add(focusPosition(latitude: 43.30));
+    await tester.pumpAndSettle();
+    expect(
+      tester.widget<MapWidget>(find.byType(MapWidget)).viewport,
+      same(initial),
+    );
 
     await tester.tap(find.byTooltip('Recentrer sur ma position'));
     await tester.pumpAndSettle();
     expect(map.flights, isEmpty);
-    viewport =
+    final viewport =
         tester.widget<MapWidget>(find.byType(MapWidget)).viewport
             as FollowPuckViewportState;
     expect(viewport.zoom, 14);
@@ -103,6 +109,8 @@ void main() {
       expect(find.text('Z 0.7'), findsOneWidget);
       final map = tester.widget<MapWidget>(find.byType(MapWidget));
       expect(map.mapOptions?.constrainMode, ConstrainMode.NONE);
+      expect(map.isOpaque, false);
+      expect(map.textureView, true);
       final viewport = map.viewport as CameraViewportState;
       expect(viewport.center?.coordinates.lng, 15);
       expect(viewport.center?.coordinates.lat, 12);

@@ -17,12 +17,17 @@ class DevicePositionTracker extends StatefulWidget {
   /// l'utilisateur a activé les alertes : le backend ne choisit les
   /// destinataires que parmi eux.
   final bool runInBackground;
+
+  /// Faux tant que la carte se charge sous l'onboarding : le suivi démarre à
+  /// son arrivée.
+  final bool active;
   final Widget child;
 
   const DevicePositionTracker({
     super.key,
     required this.reporter,
     this.runInBackground = false,
+    this.active = true,
     required this.child,
   });
 
@@ -37,15 +42,21 @@ class _DevicePositionTrackerState extends State<DevicePositionTracker> {
   void initState() {
     super.initState();
     unawaited(widget.reporter.setBackground(widget.runInBackground));
-    unawaited(widget.reporter.start());
+    if (widget.active) unawaited(widget.reporter.start());
     // `hide` et pas `pause` : une fenêtre système (autorisation de
     // notifications) ne doit pas couper le suivi. `resume` : la localisation
     // vient peut-être d'être autorisée dans une de ces fenêtres, le suivi
     // s'abonne alors sans attendre le prochain envoi.
     _lifecycleListener = AppLifecycleListener(
-      onHide: () => unawaited(widget.reporter.appHidden()),
-      onShow: () => unawaited(widget.reporter.start()),
-      onResume: () => unawaited(widget.reporter.start()),
+      onHide: () {
+        if (widget.active) unawaited(widget.reporter.appHidden());
+      },
+      onShow: () {
+        if (widget.active) unawaited(widget.reporter.start());
+      },
+      onResume: () {
+        if (widget.active) unawaited(widget.reporter.start());
+      },
     );
   }
 
@@ -54,6 +65,9 @@ class _DevicePositionTrackerState extends State<DevicePositionTracker> {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.runInBackground != widget.runInBackground) {
       unawaited(widget.reporter.setBackground(widget.runInBackground));
+    }
+    if (widget.active && !oldWidget.active) {
+      unawaited(widget.reporter.start());
     }
   }
 

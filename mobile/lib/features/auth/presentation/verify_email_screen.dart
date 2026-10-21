@@ -2,11 +2,13 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 
+import '../../profile/presentation/widgets/onboarding_progress.dart';
 import '../data/auth_service.dart';
-import 'widgets/auth_layout.dart';
+import 'register_screen.dart';
+import 'widgets/auth_photo_layout.dart';
 import 'widgets/auth_primary_button.dart';
 
-/// Attente de la vérification de l'e-mail.
+/// Attente de la vérification de l'e-mail, dernière étape de l'inscription.
 ///
 /// Vérifie toutes les 5 secondes et au retour dans l'app. Dès que l'adresse
 /// est vérifiée, `AuthGate` passe automatiquement au profil.
@@ -140,68 +142,60 @@ class _VerifyEmailScreenState extends State<VerifyEmailScreen>
   Widget build(BuildContext context) {
     final email = widget.authService.currentUser?.email;
 
-    return AuthLayout(
-      title: 'Vérification',
+    return AuthPhotoLayout(
+      header: const OnboardingProgress(
+        step: RegisterScreen.stepCount,
+        stepCount: RegisterScreen.stepCount,
+      ),
+      title: 'Vérifiez votre e-mail',
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Center(
-            child: Container(
-              width: 88,
-              height: 88,
-              decoration: BoxDecoration(
-                color: Colors.white.withValues(alpha: 0.08),
-                shape: BoxShape.circle,
-                border: Border.all(color: Colors.white.withValues(alpha: 0.15)),
-              ),
-              child: const Icon(
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Icon(
                 Icons.mark_email_unread_outlined,
                 color: Color(0xFF22D3EE),
-                size: 40,
+                size: 24,
               ),
-            ),
-          ),
-          const SizedBox(height: 24),
-          const Text(
-            'Vérifiez votre adresse e-mail',
-            textAlign: TextAlign.center,
-            style: TextStyle(
-              color: Colors.white,
-              fontSize: 22,
-              fontWeight: FontWeight.w600,
-            ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      email == null
+                          ? 'Un lien de vérification vous a été envoyé.'
+                          : 'Un lien de vérification a été envoyé à',
+                      style: TextStyle(
+                        color: Colors.white.withValues(alpha: 0.80),
+                        fontSize: 13,
+                        height: 1.4,
+                      ),
+                    ),
+                    if (email != null) ...[
+                      const SizedBox(height: 2),
+                      Text(
+                        email,
+                        style: const TextStyle(
+                          color: Color(0xFF22D3EE),
+                          fontSize: 14,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+            ],
           ),
           const SizedBox(height: 12),
-          Text(
-            email == null
-                ? 'Un lien de vérification vous a été envoyé.'
-                : 'Un lien de vérification a été envoyé à',
-            textAlign: TextAlign.center,
-            style: TextStyle(
-              color: Colors.white.withValues(alpha: 0.55),
-              fontSize: 13,
-              height: 1.4,
-            ),
-          ),
-          if (email != null) ...[
-            const SizedBox(height: 4),
-            Text(
-              email,
-              textAlign: TextAlign.center,
-              style: const TextStyle(
-                color: Color(0xFF22D3EE),
-                fontSize: 13,
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-          ],
-          const SizedBox(height: 14),
           Row(
-            mainAxisAlignment: MainAxisAlignment.center,
             children: [
               SizedBox(
-                width: 14,
-                height: 14,
+                width: 12,
+                height: 12,
                 child: CircularProgressIndicator(
                   strokeWidth: 1.5,
                   color: const Color(0xFF22D3EE).withValues(alpha: 0.65),
@@ -211,9 +205,8 @@ class _VerifyEmailScreenState extends State<VerifyEmailScreen>
               Flexible(
                 child: Text(
                   'Actualisation automatique de la vérification…',
-                  textAlign: TextAlign.center,
                   style: TextStyle(
-                    color: Colors.white.withValues(alpha: 0.35),
+                    color: Colors.white.withValues(alpha: 0.60),
                     fontSize: 11,
                   ),
                 ),
@@ -221,12 +214,12 @@ class _VerifyEmailScreenState extends State<VerifyEmailScreen>
             ],
           ),
           if (_message != null) ...[
-            const SizedBox(height: 20),
+            const SizedBox(height: 14),
             Container(
-              padding: const EdgeInsets.all(12),
+              padding: const EdgeInsets.all(10),
               decoration: BoxDecoration(
                 color: Colors.white.withValues(alpha: 0.08),
-                borderRadius: BorderRadius.circular(12),
+                borderRadius: BorderRadius.circular(10),
                 border: Border.all(color: Colors.white.withValues(alpha: 0.15)),
               ),
               child: Text(
@@ -236,27 +229,32 @@ class _VerifyEmailScreenState extends State<VerifyEmailScreen>
               ),
             ),
           ],
-          const SizedBox(height: 28),
+          const SizedBox(height: 20),
           AuthPrimaryButton(
             label: 'Vérifier maintenant',
             onPressed: _isLoading ? null : () => _checkVerification(),
             isLoading: _isLoading,
             showArrow: false,
           ),
-          const SizedBox(height: 8),
+          const SizedBox(height: 4),
           TextButton(
             onPressed: _isLoading ? null : _resendEmail,
             style: TextButton.styleFrom(
-              foregroundColor: const Color(0xFF22D3EE).withValues(alpha: 0.75),
+              foregroundColor: const Color(0xFF22D3EE),
+              minimumSize: const Size(0, 36),
             ),
-            child: const Text('Renvoyer le courriel'),
+            child: const Text(
+              'Renvoyer le courriel',
+              style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+            ),
           ),
           TextButton(
             onPressed: _isLoading ? null : _signOut,
             style: TextButton.styleFrom(
-              foregroundColor: Colors.white.withValues(alpha: 0.45),
+              foregroundColor: Colors.white.withValues(alpha: 0.70),
+              minimumSize: const Size(0, 36),
             ),
-            child: const Text('Se déconnecter'),
+            child: const Text('Se déconnecter', style: TextStyle(fontSize: 13)),
           ),
         ],
       ),

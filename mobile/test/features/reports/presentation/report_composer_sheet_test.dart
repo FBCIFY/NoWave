@@ -224,7 +224,8 @@ void main() {
     await tester.tap(find.text('Pollution'));
     await tester.pump();
     expect(find.text('Choisissez une catégorie'), findsNothing);
-    await tester.enterText(find.byType(TextField), '  Pollution visible  ');
+    // La première lettre passe en majuscule.
+    await tester.enterText(find.byType(TextField), '  pollution visible  ');
     await tester.tap(publish);
     await tester.pump();
     expect(attempts, 1);

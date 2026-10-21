@@ -30,31 +30,31 @@ class AuthPrimaryButton extends StatelessWidget {
           gradient: const LinearGradient(
             colors: [AppColors.cyan500, AppColors.blue600],
           ),
-          borderRadius: BorderRadius.circular(12),
+          borderRadius: BorderRadius.circular(10),
           boxShadow: [
             BoxShadow(
               color: AppColors.blue950.withValues(alpha: 0.40),
-              blurRadius: 16,
-              offset: const Offset(0, 8),
+              blurRadius: 12,
+              offset: const Offset(0, 6),
             ),
           ],
         ),
         child: SizedBox(
           width: double.infinity,
-          height: 52,
+          height: 44,
           child: TextButton(
             onPressed: enabled ? onPressed : null,
             style: TextButton.styleFrom(
               foregroundColor: Colors.white,
               disabledForegroundColor: Colors.white,
               shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(12),
+                borderRadius: BorderRadius.circular(10),
               ),
             ),
             child: isLoading
                 ? const SizedBox(
-                    width: 20,
-                    height: 20,
+                    width: 16,
+                    height: 16,
                     child: CircularProgressIndicator(
                       strokeWidth: 2,
                       color: Colors.white,
@@ -66,12 +66,12 @@ class AuthPrimaryButton extends StatelessWidget {
                       Text(
                         label,
                         style: const TextStyle(
-                          fontSize: 16,
+                          fontSize: 14,
                           fontWeight: FontWeight.w600,
                         ),
                       ),
                       if (showArrow) ...[
-                        const SizedBox(width: 8),
+                        const SizedBox(width: 6),
                         const Icon(Icons.chevron_right, size: 18),
                       ],
                     ],

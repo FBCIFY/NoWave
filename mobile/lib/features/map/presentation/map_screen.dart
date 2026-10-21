@@ -11,10 +11,12 @@ import 'package:uuid/uuid.dart';
 import '../../../core/haptics/app_haptics.dart';
 import '../../../core/location/coordinate_formatter.dart';
 import '../../../core/location/location_service.dart';
-import '../../../core/map/accuracy_halo.dart';
+import '../../../core/map/location_marker.dart';
 import '../../../core/map/cloud_passage_controller.dart';
 import '../../../core/map/globe_presentation.dart';
 import '../../../core/map/globe_style.dart';
+import '../../../core/map/globe_rotation_controller.dart';
+import '../../../core/map/globe_pitch_controller.dart';
 import '../../../core/map/map_config.dart';
 import '../../../core/map/map_motion.dart';
 import '../../../core/map/marine/marine_map_controller.dart';
@@ -33,9 +35,11 @@ import '../data/harbour_layer.dart';
 import '../data/report_layer_controller.dart';
 import '../data/report_tiles.dart';
 import 'widgets/globe_moon.dart';
+import 'widgets/globe_stars.dart';
 import 'widgets/cloud_passage.dart';
 import 'map_alert_camera.dart';
 import 'map_focus_controller.dart';
+import 'map_intro_controller.dart';
 import 'report_marker.dart' as badges;
 export 'map_focus_controller.dart';
 import 'widgets/map_notice_banner.dart';
@@ -71,6 +75,10 @@ class MapScreen extends StatefulWidget {
   final VoidCallback? onUserInactive;
   final LocationService? locationService;
 
+  /// Arrivée depuis l'onboarding : la carte se charge sous lui et ne demande
+  /// la position qu'à sa fin, puis vole du globe jusqu'à l'utilisateur.
+  final MapIntroController? intro;
+
   const MapScreen({
     super.key,
     this.onOpenProfile,
@@ -83,6 +91,7 @@ class MapScreen extends StatefulWidget {
     this.reportDetailService,
     this.onUserInactive,
     this.locationService,
+    this.intro,
   });
 
   @override
@@ -100,7 +109,12 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
   final _cameraTurns = ValueNotifier<double>(0);
   double _compassTurns = 0;
   bool _isFollowing = false;
-  bool _mapTouchActive = false;
+  final Set<int> _mapPointers = {};
+  bool _mapPanZoomActive = false;
+  bool get _mapTouchActive => _mapPointers.isNotEmpty || _mapPanZoomActive;
+  bool _userCameraMotion = false;
+  int _mapGestureRevision = 0;
+  Timer? _rotationGestureTimer;
   double _touchStartBearing = 0;
   _MapOrientationMode _orientationMode = _MapOrientationMode.free;
   bool _navigationBusy = false;
@@ -110,6 +124,90 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
   MapboxMap? _mapboxMap;
   final _marineMap = MarineMapController();
   final _globePresentation = GlobePresentation();
+  final _globePitch = GlobePitchController();
+  late final _globeRotation = GlobeRotationController(
+    moveCamera: (camera) async {
+      final map = _mapboxMap;
+      if (mounted && !_hidden && map != null) await map.setCamera(camera);
+    },
+  );
+  bool _rotationCameraReady = false;
+  int _rotationStyleRevision = 0;
+
+  void _syncGlobeRotation() {
+    _globeRotation.configure(
+      ready:
+          _rotationCameraReady &&
+          _styleReady &&
+          _mapError == null &&
+          !_isFollowing &&
+          !_userCameraMotion &&
+          !_mapTouchActive &&
+          !_reportComposerOpen &&
+          !_focusCameraPending &&
+          _selectedReport == null,
+      visible: !_hidden,
+      reduceMotion: _reduceMotion,
+    );
+  }
+
+  Future<void> _stopGlobeRotation() {
+    _rotationGestureTimer?.cancel();
+    _userCameraMotion = false;
+    return _globeRotation.stopForInteraction();
+  }
+
+  void _beginMapGesture({bool newTouch = false}) {
+    if (newTouch || !_userCameraMotion) {
+      unawaited(_stopGlobeRotation());
+      _mapGestureRevision++;
+      _userCameraMotion = true;
+    }
+    _rotationGestureTimer?.cancel();
+  }
+
+  void _scheduleRotationAfterGesture() {
+    _rotationGestureTimer?.cancel();
+    if (!_userCameraMotion || _mapTouchActive) return;
+    // Native idle also waits for tiles. Camera silence handles slow networks,
+    // while every inertial camera event postpones activation until motion ends.
+    _rotationGestureTimer = Timer(
+      const Duration(milliseconds: 250),
+      _completeMapGesture,
+    );
+  }
+
+  void _completeMapGesture() {
+    if (!mounted || _hidden || _mapTouchActive || !_userCameraMotion) return;
+    _rotationGestureTimer?.cancel();
+    _userCameraMotion = false;
+    _syncGlobeRotation();
+    _globeRotation.resumeWhenIdle();
+  }
+
+  Future<void> _prepareGlobeRotation() async {
+    final revision = ++_rotationStyleRevision;
+    _rotationCameraReady = false;
+    _syncGlobeRotation();
+    final map = _mapboxMap;
+    if (map == null) return;
+    try {
+      final camera = await map.getCameraState();
+      if (!mounted || map != _mapboxMap || revision != _rotationStyleRevision) {
+        return;
+      }
+      await _globePitch.synchronize(map, camera, editing: _reportComposerOpen);
+      if (!mounted || map != _mapboxMap || revision != _rotationStyleRevision) {
+        return;
+      }
+      _globeRotation.cameraChanged(camera);
+      _rotationCameraReady = true;
+      _syncGlobeRotation();
+    } catch (_) {
+      // A later native camera event can establish readiness.
+    }
+  }
+
   final _cloudPassage = CloudPassageController();
   final _hydrographyLayer = HydrographyLayer();
   final _buoyLayer = BuoyLayer();
@@ -180,25 +278,32 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
     connectNetwork: OfflineSwitch.shared.setMapboxStackConnected,
   );
 
-  /// Halo de précision du GPS, sous le curseur et sous les signalements :
-  /// un danger reste lisible même quand la position est approximative.
-  final _accuracyHalo = AccuracyHalo(below: ReportTiles.heatmapLayerId);
+  final _locationMarker = LocationMarker();
+  bool _nativeLocationConfigured = false;
 
-  /// Curseur affiché : point bleu de loin (true), flèche 3D de près (false),
-  /// null avant la première position.
-  bool? _puckZoomedOut;
-  bool? _puckHasHeading;
+  /// Premier affichage complet de la carte, tuiles visibles comprises.
+  final _mapLoaded = Completer<void>();
+  bool _introStarted = false;
+
+  /// Le vol de l'arrivée n'est pas encore parti ; un doigt sur la carte
+  /// l'annule.
+  bool _introFlightPending = false;
 
   @override
   void initState() {
     super.initState();
+    final lifecycle = WidgetsBinding.instance.lifecycleState;
+    _appHidden = lifecycle != null && lifecycle != AppLifecycleState.resumed;
+    widget.intro?.attach();
+    widget.intro?.addListener(_handleIntro);
     widget.focusController?.addListener(_handleFocusRequest);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) _handleFocusRequest();
     });
     _lifecycleListener = AppLifecycleListener(
+      onInactive: _pauseMapUpdates,
       onHide: _pauseMapUpdates,
-      onShow: _resumeMapUpdates,
+      onResume: _resumeMapUpdates,
     );
     _startReportTilesTokenRenewal();
     _reportLayer.status.addListener(_handleReportLayerStatus);
@@ -209,7 +314,11 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
               (heading) {
                 if (!mounted || _hidden) return;
                 if (!heading.isFinite) return;
+                // Sous l'onboarding, le cap est gardé sans redessiner la
+                // carte : iOS n'envoie une nouvelle mesure qu'après 2° de
+                // rotation, l'arrivée doit déjà avoir la flèche.
                 _deviceHeading = heading;
+                if (_covered) return;
                 _syncLocationPuck().ignore();
                 _setCompassTurnsForHeading(heading);
               },
@@ -279,11 +388,35 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
   /// passe la boussole en mode manuel.
   void _handleMapCameraChange(CameraChangedEventData event) {
     if (!mounted || _hidden) return;
+    final wasRotating = _globeRotation.isRotating;
+    final previousZoom = _cameraZoom;
+    if (_userCameraMotion) _scheduleRotationAfterGesture();
+    final pitchMap = _mapboxMap;
+    if (pitchMap != null) {
+      unawaited(
+        _globePitch.synchronize(
+          pitchMap,
+          event.cameraState,
+          editing: _reportComposerOpen,
+        ),
+      );
+    }
+    _globeRotation.cameraChanged(event.cameraState);
+    if (_styleReady) _rotationCameraReady = true;
+    _syncGlobeRotation();
+    _cameraZoom = event.cameraState.zoom;
+    _displayedZoom.value = event.cameraState.zoom;
+    // Longitude-only rotation leaves zoom-dependent presentation unchanged.
+    // Native geographic layers still move; GPS/heading streams update the puck.
+    // Avoid rebuilding its image and querying the viewport on each frame.
+    if ((wasRotating || _globeRotation.isRotating) &&
+        previousZoom == event.cameraState.zoom &&
+        GlobeRotationController.allowsZoom(event.cameraState.zoom)) {
+      return;
+    }
     _reportMapRevision++;
     final map = _mapboxMap;
     if (map != null) _hydrographyLayer.invalidateContourLabels(map);
-    _cameraZoom = event.cameraState.zoom;
-    _displayedZoom.value = event.cameraState.zoom;
     _cloudPassage.setCamera(
       zoom: event.cameraState.zoom,
       longitude: event.cameraState.center.coordinates.lng.toDouble(),
@@ -317,6 +450,8 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
   }
 
   void _handleMapGesture(MapContentGestureContext _) {
+    _beginMapGesture();
+    _scheduleRotationAfterGesture();
     if (_reportComposerOpen) return;
     if (!_isFollowing && _viewport is IdleViewportState) return;
     setState(_stopFollowing);
@@ -339,14 +474,16 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
             marginBottom: bottom,
           ),
         ),
+        // Le « i » obligatoire suit le logo, loin des boutons de droite.
         map.attribution.updateSettings(
           AttributionSettings(
             position: editing
-                ? OrnamentPosition.TOP_RIGHT
-                : OrnamentPosition.BOTTOM_RIGHT,
-            marginRight: 16,
+                ? OrnamentPosition.TOP_LEFT
+                : OrnamentPosition.BOTTOM_LEFT,
+            marginLeft: 106,
             marginTop: editing ? 64 : 4,
             marginBottom: bottom,
+            iconColor: 0x99FFFFFF,
           ),
         ),
       ]);
@@ -393,6 +530,8 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
         await _locate(animated: true, navigationRequest: request);
         return;
       }
+      await _stopGlobeRotation();
+      if (!_navigationIsCurrent(request)) return;
       if (_deviceHeading == null) {
         _showNotice('Cap du téléphone indisponible.', MapNoticeKind.error);
         return;
@@ -480,6 +619,7 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
     setState(() {
       _mapError = 'Impossible de charger la carte. Vérifiez votre connexion et réessayez.';
     });
+    _syncGlobeRotation();
   }
 
   /// Une tuile des signalements s'est chargée : la couche répond de nouveau.
@@ -543,12 +683,14 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
   /// L'app n'est plus visible : ni battement, ni renouvellement du token,
   /// ni réseau pour Mapbox.
   void _pauseMapUpdates() {
+    if (_appHidden) return;
     _appHidden = true;
     _suspendVisualUpdates();
   }
 
   void _suspendVisualUpdates() {
     _interruptCameraMotion();
+    _syncGlobeRotation();
     widget.reportTiles?.stopPulse();
     _reportTilesTokenTimer?.cancel();
     _reportLayer.pause();
@@ -558,11 +700,13 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
   /// avant de rebrancher Mapbox, qui redemande alors les tuiles ; la couche
   /// manquante est réinstallée.
   void _resumeMapUpdates() {
+    if (!_appHidden) return;
     _appHidden = false;
     if (!_hidden) _restoreVisualUpdates();
   }
 
   void _restoreVisualUpdates() {
+    _syncGlobeRotation();
     _syncHeatmapPulse();
     _reportLayer.resume();
     _startReportTilesTokenRenewal();
@@ -575,7 +719,9 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
         _locationService
             .canWatchPosition()
             .then((allowed) {
-              if (allowed && mounted && !_isLocating) unawaited(_locate());
+              if (allowed && mounted && !_isLocating) {
+                unawaited(_locate(recenter: false));
+              }
             })
             .catchError((Object _) {}),
       );
@@ -585,6 +731,7 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
+    _syncGlobeRotation();
     final hidden = !TickerMode.valuesOf(context).enabled;
     if (hidden == _routeHidden) return;
     _routeHidden = hidden;
@@ -596,8 +743,10 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
   }
 
   void _handleMapLoaded(MapLoadedEventData event) {
+    if (!_mapLoaded.isCompleted) _mapLoaded.complete();
     if (!mounted || _mapError == null) return;
     setState(() => _mapError = null);
+    _syncGlobeRotation();
   }
 
   /// Installe l'habillage marin sans bloquer la carte en cas d'échec.
@@ -723,6 +872,13 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
   void didUpdateWidget(covariant MapScreen oldWidget) {
     super.didUpdateWidget(oldWidget);
 
+    if (oldWidget.intro != widget.intro) {
+      oldWidget.intro?.removeListener(_handleIntro);
+      oldWidget.intro?.detach();
+      widget.intro?.attach();
+      widget.intro?.addListener(_handleIntro);
+    }
+
     if (oldWidget.focusController != widget.focusController) {
       oldWidget.focusController?.removeListener(_handleFocusRequest);
       widget.focusController?.addListener(_handleFocusRequest);
@@ -731,7 +887,7 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
     }
   }
 
-  void _handleFocusRequest() {
+  void _handleFocusRequest() async {
     final controller = widget.focusController;
     if (controller == null || _focusRevision == controller.revision) return;
     _focusRevision = controller.revision;
@@ -741,6 +897,9 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
     }
     _interruptCameraMotion();
     _cameraFocusRevision++;
+    final revision = _focusRevision;
+    await _stopGlobeRotation();
+    if (!mounted || revision != _focusRevision) return;
     _selectedExpiryTimer?.cancel();
     setState(() {
       _selectedReport = report;
@@ -868,6 +1027,8 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
               _reportComposerOpen) {
             continue;
           }
+          await _stopGlobeRotation();
+          if (!mounted || cameraRequest != _cameraFocusRevision) continue;
           await _moveCamera(
             map,
             camera,
@@ -949,7 +1110,7 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
     });
 
     final imageId = badges.ReportMarker.imageId(report.category);
-    final pixels = await badges.ReportMarker.paintCategory(report.category);
+    final png = await badges.ReportMarker.paintCategory(report.category);
     // Independent of MVT authorization/installation. addStyleImage replaces
     // an existing image, so replaying this after a style reload is safe.
     final side = (badges.ReportMarker.size * badges.ReportMarker.pixelRatio)
@@ -957,7 +1118,7 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
     await map.style.addStyleImage(
       imageId,
       badges.ReportMarker.pixelRatio,
-      MbxImage(width: side, height: side, data: pixels),
+      MbxImage(width: side, height: side, data: png),
       false,
       [],
       [],
@@ -1115,6 +1276,7 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
     if (map != null) {
       unawaited(MapMotion.configure(map, reduceMotion: _reduceMotion));
     }
+    _syncGlobeRotation();
   }
 
   /// L'utilisateur a demandé moins d'animations : « Supprimer les
@@ -1152,6 +1314,8 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
     final request = ++_cameraMotionRevision;
     await map.cancelCameraAnimation();
     if (!mounted || request != _cameraMotionRevision || _hidden) return;
+    await _stopGlobeRotation();
+    if (!mounted || request != _cameraMotionRevision || _hidden) return;
     if (_reduceMotion) {
       await map.setCamera(camera);
     } else {
@@ -1168,49 +1332,36 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
     widget.reportTiles?.updatePulse(
       map,
       zoom: zoom,
-      enabled: !_hidden && !_reduceMotion,
+      enabled: !_hidden && !_covered && !_reduceMotion,
     );
   }
 
-  /// Point bleu de loin, flèche 3D de près. Mapbox ne change de curseur
-  /// que quand le zoom franchit le seuil.
+  /// Repère NoWave piloté par le même cap que la boussole.
   Future<void> _syncLocationPuck() async {
     final map = _mapboxMap;
-    if (!mounted || _hidden || map == null || _position == null) return;
-    final hasHeading = _deviceHeading != null;
-    final zoomedOut =
-        (_cameraZoom ?? _userZoom) < MapConfig.detailedPuckMinZoom;
-    if (zoomedOut == _puckZoomedOut && hasHeading == _puckHasHeading) return;
-    _puckZoomedOut = zoomedOut;
-    _puckHasHeading = hasHeading;
-    try {
-      await map.location.updateSettings(
-        MapConfig.locationPuckSettings(
-          zoomedOut: zoomedOut,
-          hasHeading: hasHeading,
-        ),
-      );
-    } catch (_) {
-      // Réessayé au prochain mouvement de la caméra.
-      _puckZoomedOut = null;
-      rethrow;
+    final position = _position;
+    if (!mounted || _hidden || map == null || position == null) return;
+    if (!_nativeLocationConfigured) {
+      _nativeLocationConfigured = true;
+      try {
+        await map.location.updateSettings(MapConfig.locationPuckSettings());
+      } catch (_) {
+        _nativeLocationConfigured = false;
+        rethrow;
+      }
     }
-  }
-
-  /// Place le halo de précision sur [position], ou sur la dernière position
-  /// connue après un chargement de style.
-  void _showAccuracyHalo([geo.Position? position]) {
-    final map = _mapboxMap;
-    final at = position ?? _position;
-    if (_hidden || map == null || at == null) return;
-    unawaited(
-      _accuracyHalo.show(
-        map,
-        latitude: at.latitude,
-        longitude: at.longitude,
-        accuracy: at.accuracy,
-      ),
-    );
+    if (!mounted || _hidden || _mapboxMap != map || !_styleReady) return;
+    // Un style en cours de chargement ne doit pas bloquer le recentrage.
+    // La prochaine mesure de cap ou de position retente le dessin.
+    _locationMarker
+        .update(
+          map,
+          pixelRatio: MediaQuery.devicePixelRatioOf(context),
+          latitude: position.latitude,
+          longitude: position.longitude,
+          heading: _deviceHeading,
+        )
+        .ignore();
   }
 
   Future<void> _retryMapLoad() async {
@@ -1222,6 +1373,9 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
       _mapError = null;
       _styleReady = false;
     });
+    _rotationCameraReady = false;
+    _rotationStyleRevision++;
+    _syncGlobeRotation();
 
     try {
       await map.loadStyleURI(MapConfig.styleUrl);
@@ -1234,23 +1388,33 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
     }
   }
 
-  /// Zoom sur l'utilisateur au lancement et à chaque recentrage.
+  /// Zoom du recentrage volontaire sur l’utilisateur.
   static const _userZoom = 14.0;
 
   /// Durée maximale du vol vers l'utilisateur au recentrage : Mapbox
   /// raccourcit l'animation quand la distance est faible.
   static const _recenterMaxDuration = Duration(milliseconds: 500);
 
-  /// Centre la carte sur l'utilisateur puis le suit à chaque nouvelle position.
-  /// [animated] : vol jusqu'à l'utilisateur (bouton), sinon saut direct
-  /// (lancement de la carte).
+  /// Vol du globe jusqu'à l'utilisateur à la fin de l'onboarding.
+  static const _introFlightDuration = Duration(milliseconds: 4900);
+
+  /// Attente maximale de la carte avant le fondu, puis de la position avant
+  /// de partir vers la France.
+  static const _introWait = Duration(seconds: 4);
+
+  /// Sans position : la France entière, juste avant le passage des nuages
+  /// ([CloudPassageController.startZoom]).
+  static const _franceLongitude = 2.4;
+  static const _franceLatitude = 46.6;
+  static const _franceZoom = 4.2;
+
+  /// Acquisition indépendante de la caméra, y compris pendant l'accueil.
   void _watchPosition() {
     // Flux partagé avec le suivi des alertes (NW-159), qui peut continuer
     // en arrière-plan : la carte ignore alors les positions.
     _positionSubscription ??= _locationService.watchPosition().listen(
       (position) {
         if (!mounted || _hidden || !MapAlertCamera.usable(position)) return;
-        _showAccuracyHalo(position);
         final previous = _position;
         _position = position;
         _positionForSelectedReport();
@@ -1276,8 +1440,19 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
     );
   }
 
-  Future<void> _locate({bool animated = false, int? navigationRequest}) async {
+  Future<void> _locate({
+    bool animated = false,
+    bool recenter = true,
+    Future<geo.Position>? fix,
+    ViewportTransition? flight,
+    int? navigationRequest,
+  }) async {
     final request = navigationRequest ?? _navigationRevision;
+    if (recenter) {
+      await _stopGlobeRotation();
+      if (!mounted) return;
+    }
+    final gestureRevision = _mapGestureRevision;
     final wasWatching = _positionSubscription != null;
     setState(() {
       _isLocating = true;
@@ -1285,7 +1460,7 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
     });
 
     try {
-      final position = await _locationService.getCurrentPosition();
+      final position = await (fix ?? _locationService.getCurrentPosition());
 
       if (!mounted) return;
       if (!MapAlertCamera.usable(position)) {
@@ -1295,19 +1470,19 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
       setState(() {
         _position = position;
       });
-      _showAccuracyHalo(position);
       _watchPosition();
       _positionForSelectedReport();
 
       // Curseur remis à chaque recentrage, adapté au zoom actuel.
-      _puckZoomedOut = null;
+      _nativeLocationConfigured = false;
       await _syncLocationPuck();
 
       if (!mounted) return;
 
-      // A late fix must not undo a gesture, a report framing or a hidden route.
+      if (!recenter || gestureRevision != _mapGestureRevision) return;
+      // A late fix must not undo a gesture, report framing or hidden route.
       if (!_navigationIsCurrent(request)) return;
-      if (!animated && _selectedReport != null) return;
+      if (!animated && _focusWithUser && _selectedReport != null) return;
       if (animated) {
         _cameraFocusRevision++;
         _selectionTouched = true;
@@ -1325,6 +1500,7 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
       if (!mounted) return;
 
       if (!_navigationIsCurrent(request)) return;
+      if (gestureRevision != _mapGestureRevision) return;
 
       void followUser() {
         _isFollowing = true;
@@ -1332,12 +1508,21 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
         _viewport = FollowPuckViewportState(
           zoom: _userZoom,
           bearing: const FollowPuckViewportStateBearingConstant(0),
-          // Le cadrage de lancement est conservé. Le bouton remet à plat.
-          pitch: animated ? 0 : previousCamera?.pitch ?? 60,
+          pitch: animated
+              ? 0
+              : previousCamera != null &&
+                    previousCamera.zoom >= GlobePitchController.detailedZoom
+              ? previousCamera.pitch
+              : _globePitch.detailedPitch,
         );
       }
 
-      if (animated) {
+      if (flight != null) {
+        // L'utilisateur a déjà pris la carte en main : pas de vol.
+        if (!_introFlightPending) return;
+        _introFlightPending = false;
+        _setViewport(followUser, transition: flight);
+      } else if (animated) {
         // Mapbox marque cette animation du viewport comme expérimentale.
         // ignore: experimental_member_use
         _setViewport(
@@ -1396,6 +1581,87 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
     }
   }
 
+  bool get _covered => widget.intro?.covered ?? false;
+
+  void _handleIntro() {
+    final intro = widget.intro;
+    if (!mounted || intro == null) return;
+    if (intro.phase == MapIntroPhase.starting && !_introStarted) {
+      _introStarted = true;
+      unawaited(_playIntro(intro));
+    }
+    final heading = _deviceHeading;
+    if (!intro.covered && heading != null) {
+      _setCompassTurnsForHeading(heading);
+    }
+    _syncHeatmapPulse();
+  }
+
+  /// Fin de l'onboarding : l'autorisation de position est demandée tant que
+  /// la photo couvre la carte, puis l'onboarding s'efface sur le globe et la
+  /// carte vole jusqu'à l'utilisateur.
+  Future<void> _playIntro(MapIntroController intro) async {
+    Future<geo.Position>? fix;
+    String? locationError;
+    try {
+      await _locationService.requestPermission();
+      // La position se cherche pendant l'attente de la carte et le fondu.
+      fix = _locationService.getCurrentPosition()..ignore();
+    } on StateError catch (error) {
+      locationError = error.message;
+    } catch (_) {
+      locationError = 'Impossible de récupérer votre position.';
+    }
+    if (!mounted) return;
+
+    try {
+      // Chargée pendant l'onboarding, la carte est en général déjà prête.
+      await _mapLoaded.future.timeout(_introWait);
+    } on TimeoutException {
+      // Tuiles encore en chemin : le globe se complète pendant le fondu.
+    }
+    if (!mounted) return;
+
+    _introFlightPending = true;
+    if (_reduceMotion) {
+      // Sans animation : la carte s'ouvre déjà sur l'utilisateur, ou sur la
+      // France.
+      await _arriveFromIntro(fix, locationError);
+      if (mounted) intro.reveal();
+      return;
+    }
+    intro.reveal();
+    await Future<void>.delayed(MapIntroController.fadeDuration);
+    if (!mounted) return;
+    await _arriveFromIntro(fix, locationError);
+  }
+
+  /// Vol jusqu'à l'utilisateur. GPS lent ou refusé : la France en attendant,
+  /// puis l'utilisateur si sa position arrive avant qu'il touche la carte.
+  Future<void> _arriveFromIntro(
+    Future<geo.Position>? fix,
+    String? locationError,
+  ) async {
+    if (fix != null) {
+      // Le vol part dès que la position arrive, même après ce délai.
+      await _locate(
+        fix: fix,
+        flight: const FlyViewportTransition(duration: _introFlightDuration),
+      ).timeout(_introWait, onTimeout: () {});
+    } else {
+      setState(() => _locationError = locationError);
+    }
+    if (!mounted || !_introFlightPending || _isFollowing) return;
+    _setViewport(
+      () => _viewport = CameraViewportState(
+        center: Point(coordinates: Position(_franceLongitude, _franceLatitude)),
+        zoom: _franceZoom,
+        pitch: 0,
+      ),
+      transition: const FlyViewportTransition(duration: _introFlightDuration),
+    );
+  }
+
   /// Vrai si les deux positions s'affichent pareil, à la seconde d'arc.
   static bool _sameDisplayedCoordinates(geo.Position a, geo.Position b) =>
       formatDms(a.latitude, isLatitude: true) ==
@@ -1404,6 +1670,8 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
           formatDms(b.longitude, isLatitude: false);
 
   Future<void> _openCamera() async {
+    await _stopGlobeRotation();
+    if (!mounted) return;
     final intent = ++_reportIntent;
     widget.focusController?.setBlocked(true);
     try {
@@ -1441,7 +1709,8 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
     PhotoReportDraft? photoDraft,
     int? cameraIntent,
   }) async {
-    if (_reportComposerOpen) return;
+    await _stopGlobeRotation();
+    if (!mounted || _reportComposerOpen) return;
     final intent = cameraIntent ?? ++_reportIntent;
     final position = _position;
     final map = _mapboxMap;
@@ -1708,11 +1977,11 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
   /// distances autour du point à placer.
   Future<void> _setMapTiltEnabled(MapboxMap map, bool enabled) async {
     try {
-      await map.gestures.updateSettings(
-        GesturesSettings(pitchEnabled: enabled),
-      );
+      final camera = await map.getCameraState();
+      if (!mounted || map != _mapboxMap) return;
+      await _globePitch.synchronize(map, camera, editing: !enabled);
     } catch (_) {
-      // Réglages des gestes indisponibles : l'inclinaison reste possible.
+      // The next native camera event also applies the pitch policy.
     }
   }
 
@@ -1792,6 +2061,11 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
 
   @override
   void dispose() {
+    widget.intro?.removeListener(_handleIntro);
+    widget.intro?.detach();
+    _rotationGestureTimer?.cancel();
+    _globeRotation.dispose();
+    _globePitch.dispose();
     widget.focusController?.removeListener(_handleFocusRequest);
     widget.reportTiles?.stopPulse();
     _lifecycleListener?.dispose();
@@ -1848,19 +2122,32 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
 
     // Pendant un signalement, le retour arrière est géré par
     // ReportComposerSheet : il passe par la même confirmation que la croix.
-    return Scaffold(
+    final screen = Scaffold(
       resizeToAvoidBottomInset: false,
       body: Stack(
         children: [
+          // Both decorations stay behind the transparent native platform view.
+          // A retained Flutter background keeps the moon visible while Mapbox
+          // continuously redraws; opaque globe surfaces occlude it naturally.
+          Positioned.fill(
+            child: RepaintBoundary(
+              child: Stack(
+                fit: StackFit.expand,
+                children: [
+                  GlobeStars(zoom: _displayedZoom),
+                  GlobeMoon(zoom: _displayedZoom),
+                ],
+              ),
+            ),
+          ),
           Positioned.fill(
             child: Listener(
               key: _mapAreaKey,
-              onPointerDown: (_) {
+              behavior: HitTestBehavior.opaque,
+              onPointerDown: (event) {
+                _introFlightPending = false;
                 if (!_detailOpen) _interruptCameraMotion();
-                _mapTouchActive = true;
-                // On iOS the native feature tap may arrive before Flutter's
-                // pointer-down for that same touch. It must not cancel the
-                // selection just opened by the native callback.
+                // The native report tap can precede this pointer event on iOS.
                 if (_selectedReport != null && !_detailOpen) {
                   _cameraFocusRevision++;
                   _selectionTouched = true;
@@ -1870,9 +2157,11 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
                 }
                 _touchStartBearing = _cameraBearing;
               },
-              onPointerUp: (_) => _mapTouchActive = false,
-              onPointerCancel: (_) => _mapTouchActive = false,
               child: MapWidget(
+                // The fixed Flutter stars show through the native space only;
+                // globe surfaces and atmospheric fog remain native Mapbox.
+                isOpaque: false,
+                textureView: true,
                 // The default HEIGHT_ONLY constraint locks latitude near
                 // the equator at the minimum zoom on tall phone screens.
                 mapOptions: MapOptions(
@@ -1889,12 +2178,17 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
                     _positionMapOrnaments(map, editing: _reportComposerOpen),
                   );
                   _addReportInteractions(map);
-                  unawaited(_locate());
+                  // Sous l'onboarding, la position attend sa fin : pas de
+                  // fenêtre d'autorisation par-dessus ses pages.
+                  if (!_covered && !_introStarted) unawaited(_locate());
                 },
                 onMapLoadedListener: _handleMapLoaded,
                 onStyleLoadedListener: (_) {
                   _styleReady = true;
+                  unawaited(_prepareGlobeRotation());
                   _globePresentation.styleLoaded();
+                  _nativeLocationConfigured = false;
+                  _syncLocationPuck().ignore();
                   final map = _mapboxMap;
                   if (map != null) {
                     unawaited(
@@ -1905,7 +2199,6 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
                     );
                   }
                   unawaited(_installMarineLayers());
-                  _showAccuracyHalo();
                   unawaited(_applySelection());
                   if (widget.reportTiles != null) _reportLayer.styleLoaded();
                 },
@@ -1913,7 +2206,7 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
                 onSourceDataLoadedListener: _handleSourceDataLoaded,
                 onCameraChangeListener: _handleMapCameraChange,
                 onRenderFrameFinishedListener: (event) {
-                  if (!mounted || _hidden) return;
+                  if (!mounted || _hidden || _globeRotation.isRotating) return;
                   // Placement can finish before unrelated network tiles do.
                   if (!event.placementChanged) return;
                   final map = _mapboxMap;
@@ -1922,7 +2215,8 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
                   }
                 },
                 onMapIdleListener: (_) {
-                  if (!mounted || _hidden) return;
+                  _completeMapGesture();
+                  if (!mounted || _hidden || _globeRotation.isRotating) return;
                   final map = _mapboxMap;
                   if (map != null) {
                     unawaited(_hydrographyLayer.synchronizeContourLabels(map));
@@ -1935,7 +2229,6 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
               ),
             ),
           ),
-          Positioned.fill(child: GlobeMoon(zoom: _displayedZoom)),
           Positioned.fill(child: CloudPassage(camera: _cloudPassage)),
           if (_mapError != null)
             Positioned.fill(
@@ -2229,6 +2522,34 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
           ],
         ],
       ),
+    );
+    return Listener(
+      behavior: HitTestBehavior.opaque,
+      onPointerDown: (event) {
+        _beginMapGesture(newTouch: !_mapTouchActive);
+        _mapPointers.add(event.pointer);
+      },
+      onPointerSignal: (_) {
+        _beginMapGesture();
+        _scheduleRotationAfterGesture();
+      },
+      onPointerPanZoomStart: (_) {
+        _beginMapGesture(newTouch: true);
+        _mapPanZoomActive = true;
+      },
+      onPointerPanZoomEnd: (_) {
+        _mapPanZoomActive = false;
+        _scheduleRotationAfterGesture();
+      },
+      onPointerUp: (event) {
+        _mapPointers.remove(event.pointer);
+        _scheduleRotationAfterGesture();
+      },
+      onPointerCancel: (event) {
+        _mapPointers.remove(event.pointer);
+        _scheduleRotationAfterGesture();
+      },
+      child: screen,
     );
   }
 }

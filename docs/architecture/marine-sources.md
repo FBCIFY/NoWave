@@ -210,8 +210,16 @@ un extrait complet. Le parent z12 est partagé entre tuiles détaillées, avec m
 
 Le cache HTTP est SQLite local persistant (`MARINE_CACHE_DIR`, défaut
 `~/.cache/nowave/marine`), 512 Mio de corps maximum, réponse limitée à 8 Mio.
-Monter ce répertoire sur un volume persistant en production et assurer les droits
-d'écriture. Pas de Redis. Les verrous fixes évitent de créer une serrure par URL.
+En production, `deploy/compose.yaml` fixe `MARINE_CACHE_DIR` à
+`/var/cache/nowave/marine` et y monte le volume nommé `marine-cache`. L'image
+prépare ce répertoire pour l'utilisateur API `10001:10001` : Docker initialise
+ainsi les droits du volume neuf sans lancer l'API en root. Le répertoire entier
+est monté pour conserver SQLite et ses fichiers `-wal` / `-shm` ensemble, même
+après recréation du conteneur. `read_only: true` reste actif partout ailleurs.
+Ne pas utiliser `docker compose down --volumes` sur l'installation persistante.
+Un volume préexistant créé avec d'autres droits nécessite de corriger son
+propriétaire avant redémarrage ; ne pas effacer le cache pour contourner cela.
+Pas de Redis. Les verrous fixes évitent de créer une serrure par URL.
 OSM: au moins 7 jours, davantage si max-age le demande; pas d'éviction anticipée
 d'une entrée fraîche pour gagner de la place. Cache plein/non inscriptible: source
 dégradée, pas de contournement du cache OSM. User-Agent NoWave avec site joignable;

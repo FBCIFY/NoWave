@@ -14,7 +14,7 @@ void main() {
     expect(find.byTooltip('Recentrer sur ma position'), findsOneWidget);
     expect(
       find.byTooltip('Aligner la carte sur le cap actuel'),
-      findsOneWidget,
+      findsNothing,
     );
   });
 }

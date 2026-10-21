@@ -248,6 +248,14 @@ La carte utilise :
 - le style Mapbox Standard pour le fond ;
 - Geolocator pour récupérer la position de l’appareil.
 
+La palette `MarinePalette` met la mer en avant : terre beige, végétation
+vert sauge, routes et noms de lieux atténués. Les
+écussons routiers, points d’intérêt terrestres, transports et objets 3D du
+fond Standard sont masqués. La bathymétrie gagne légèrement en contraste
+et en saturation ; les couches de repères marins gardent leurs couleurs.
+La palette est appliquée dès le chargement du style et après chaque
+rechargement, sans effacer les réglages de visibilité des noms selon le zoom.
+
 L’écran permet de demander la permission de localisation, d’afficher la
 position en degrés, minutes et secondes (par exemple `48° 23′ 12″ N`), et de
 recentrer la carte. Déplacer la carte ne
@@ -461,8 +469,10 @@ restent possibles pendant une forte rafale.
 
 ### Position de l'utilisateur
 
-De près, la flèche 3D (voir plus bas) ; de loin, un point bleu, plus lisible.
-Un halo bleu sous les signalements montre la précision du GPS.
+La flèche orange NoWave indique la position et suit le même cap que la
+boussole. Elle est plus petite de loin et agrandie de 12,5 % aux deux niveaux
+de détail. Aucun point bleu ni halo de précision ne la recouvre. Sans cap
+disponible, un point orange neutre indique la position.
 
 ### Limites connues
 
@@ -556,13 +566,17 @@ au nord vrai :
 
 ### Flèche de position
 
-La position de l’utilisateur est affichée par une flèche 3D qui suit le cap
-du téléphone. Le modèle `assets/models/location_puck.glb` est généré par un
-script ; pour le modifier, changer le script puis, depuis `mobile/` :
+Les images `assets/images/nowave_arrow_small.png` et
+`nowave_arrow_large.png` pointent vers le nord à 0°. `LocationMarker` les
+affiche dans une couche native `LocationIndicatorLayer`, à l’échelle 1,125,
+en utilisant le cap de `DeviceOrientationService.mapHeadings`. Un cap de
+350° reste 350° ; Mapbox applique la rotation et l’inclinaison de la carte.
+Le point `nowave_dot_no_heading.png` remplace la flèche quand le cap manque.
 
-```bash
-python3 tool/make_location_puck.py assets/models/location_puck.glb
-```
+Le composant de localisation Mapbox reste actif, avec ses images masquées,
+pour conserver le suivi et le recentrage. Il ne dessine ni point bleu ni
+cercle de précision. Le modèle 3D historique et son générateur restent dans
+le dépôt, mais ne sont plus utilisés pour ce repère.
 
 ### Limites connues
 

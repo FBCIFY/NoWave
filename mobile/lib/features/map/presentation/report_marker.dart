@@ -9,7 +9,7 @@ import '../../reports/presentation/report_category_style.dart';
 /// Badge d'un signalement sur la carte : le carré arrondi du choix de
 /// catégorie, avec son icône, posé sur une petite ombre.
 ///
-/// Mapbox n'affiche pas de widget : le badge est dessiné une fois en PNG,
+/// Mapbox n'affiche pas de widget : le badge est dessiné une fois puis encodé en PNG,
 /// puis ajouté au style comme image.
 abstract final class ReportMarker {
   /// Résolution du dessin : net sur les écrans les plus denses.
@@ -32,19 +32,20 @@ abstract final class ReportMarker {
       'nowave-report-${category.apiValue}';
 
   // Only successful renders are cached; a failed render can be retried.
-  // Pixels survive style reloads, while registration belongs to each style.
-  static final _categoryPixels = <ReportCategory, Uint8List>{};
+  // Encoded images survive reloads; registration belongs to each style.
+  static final _categoryImages = <ReportCategory, Uint8List>{};
 
   static Future<Uint8List> paintCategory(ReportCategory category) async {
-    final cached = _categoryPixels[category];
+    final cached = _categoryImages[category];
     if (cached != null) return cached;
     final pixels = await paint(icon: category.icon, color: category.color);
-    _categoryPixels[category] = pixels;
+    _categoryImages[category] = pixels;
     return pixels;
   }
 
-  /// The Flutter SDK's iOS UIImage(data:) and Android BitmapFactory adapters
-  /// both decode an encoded image, even though the native core accepts RGBA.
+  /// Le pont Android de mapbox_maps_flutter 2.30.1 appelle
+  /// BitmapFactory.decodeByteArray : transmettre une image PNG encodée.
+  /// Les dimensions MbxImage restent celles de cette image, à densité 3×.
   static Future<Uint8List> paint({
     required IconData icon,
     required Color color,
