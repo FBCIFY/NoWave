@@ -161,6 +161,10 @@ class ReportTiles {
   static String _markerIdOf(ReportCategory category) =>
       ReportMarker.imageId(category);
 
+  /// Taille partagée par les badges ordinaires et la sélection.
+  static List<Object> markerSizeExpression() =>
+      _zoomRamp(badgesMinZoom, _badgeStartScale, _badgesFullZoom, 1);
+
   /// Expression partagée par les badges ordinaires et la sélection.
   static List<Object> markerImageExpression() => [
     'match',
@@ -310,12 +314,7 @@ class ReportTiles {
         iconImageExpression: markerImageExpression(),
         // À 9, la zone colorée est déjà masquée : le badge doit être visible.
         iconOpacity: 1,
-        iconSizeExpression: _zoomRamp(
-          badgesMinZoom,
-          _badgeStartScale,
-          _badgesFullZoom,
-          1,
-        ),
+        iconSizeExpression: markerSizeExpression(),
         // Tous les signalements restent visibles, même serrés : en masquer
         // un ferait disparaître un danger.
         iconAllowOverlap: true,

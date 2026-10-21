@@ -364,6 +364,11 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
   Timer? _selectedExpiryTimer;
   bool _selectedExpired = false;
   ReportDetail? _selectedReport;
+  bool _selectedFromMapTap = false;
+
+  /// Signalement dessiné par le repère de sélection, gardé après un
+  /// rechargement du style.
+  String? _selectedMarkerId;
   bool _detailOpen = false;
   int _detailRequest = 0;
   double _selectedSheetHeight = 0;
@@ -1118,6 +1123,7 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
     _selectedExpiryTimer?.cancel();
     setState(() {
       _selectedReport = report;
+      _selectedFromMapTap = controller.origin == MapFocusOrigin.mapTap;
       _selectedExpired =
           report != null && !report.expiresAt.isAfter(DateTime.now());
       _focusWithUser = controller.includeUserPosition;
@@ -1198,15 +1204,15 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
       try {
         if (!_isCurrentFocus(request)) continue;
         if (report == null || _selectedExpired) {
-          if (await map.style.styleLayerExists('alert-selected-point')) {
-            await map.style.removeStyleLayer('alert-selected-point');
-          }
-          if (await map.style.styleSourceExists('alert-selected')) {
-            await map.style.removeStyleSource('alert-selected');
-          }
+          await _hideSelectedReport(map);
           continue;
         }
-        await _showSelectedReport();
+        if (_selectedFromMapTap && report.id != _selectedMarkerId) {
+          // Le badge touché vient des tuiles : il est déjà sur la carte.
+          await _hideSelectedReport(map);
+        } else {
+          await _showSelectedReport();
+        }
         if (!_isCurrentFocus(request)) continue;
         if (_focusCameraPending && !_selectionTouched) {
           final withUser = _focusWithUser;
@@ -1306,7 +1312,9 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
     unawaited(_applySelection());
   }
 
-  /// Repère explicite de la sélection, indépendant du chargement des MVT.
+  /// Repère explicite de la sélection, indépendant du chargement des MVT :
+  /// une alerte ouverte depuis une notification ou l'historique reste
+  /// visible même si sa tuile n'est pas encore à jour.
   Future<void> _showSelectedReport() async {
     final report = _selectedReport;
     final map = _mapboxMap;
@@ -1358,7 +1366,7 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
           // le relais et le repère ne doit pas la recouvrir.
           minZoom: ReportTiles.badgesMinZoom,
           iconImageExpression: ReportTiles.markerImageExpression(),
-          iconSize: 1.15,
+          iconSizeExpression: ReportTiles.markerSizeExpression(),
           iconAllowOverlap: true,
           iconIgnorePlacement: true,
           iconEmissiveStrength: 1,
@@ -1366,6 +1374,17 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
       );
     }
     await map.style.moveStyleLayer('alert-selected-point', LayerPosition());
+    _selectedMarkerId = report.id;
+  }
+
+  Future<void> _hideSelectedReport(MapboxMap map) async {
+    _selectedMarkerId = null;
+    if (await map.style.styleLayerExists('alert-selected-point')) {
+      await map.style.removeStyleLayer('alert-selected-point');
+    }
+    if (await map.style.styleSourceExists('alert-selected')) {
+      await map.style.removeStyleSource('alert-selected');
+    }
   }
 
   /// Ouvre la fiche du signalement touché, sauf pendant une création.

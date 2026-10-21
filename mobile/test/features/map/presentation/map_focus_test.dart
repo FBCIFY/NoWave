@@ -505,6 +505,8 @@ void main() {
       expect(layer['type'], 'symbol');
       // Caché au dézoom, comme les badges, au profit de la zone colorée.
       expect(layer['minzoom'], ReportTiles.badgesMinZoom);
+      // Même taille que les badges des tuiles.
+      expect(layer['layout']['icon-size'], ReportTiles.markerSizeExpression());
       expect(
         layer['layout']['icon-image'],
         contains(badges.ReportMarker.imageId(category)),
@@ -782,6 +784,8 @@ void main() {
       expect(reports.calls, ['report-a']);
       expect(find.byType(ReportDetailSheet), findsOneWidget);
       expect(focus.origin, MapFocusOrigin.mapTap);
+      // Le repère de la notification est celui qu'on vient de toucher.
+      expect(map.style.layers, contains('alert-selected-point'));
       expect(map.easedCameras, hasLength(2));
       expect(map.easedCameras.last.padding!.bottom, greaterThan(150));
     },
@@ -813,6 +817,8 @@ void main() {
       reports.response!.complete(focusReport());
       await pumpFrames(tester);
       expect(focus.origin, MapFocusOrigin.mapTap);
+      // Le badge touché est déjà dessiné par les tuiles : pas de doublon.
+      expect(map.style.layers, isNot(contains('alert-selected-point')));
       expect(map.easedCameras, hasLength(1));
       expect(map.easedCameras.single.padding!.bottom, greaterThan(150));
       gps.initial.complete(focusPosition());
