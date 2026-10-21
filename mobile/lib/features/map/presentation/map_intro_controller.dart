@@ -19,7 +19,7 @@ enum MapIntroPhase {
 /// du globe pour descendre jusqu'à l'utilisateur.
 class MapIntroController extends ChangeNotifier {
   /// Fondu de l'onboarding ; le vol commence à sa fin.
-  static const fadeDuration = Duration(milliseconds: 700);
+  static const fadeDuration = Duration(milliseconds: 1000);
 
   MapIntroPhase _phase = MapIntroPhase.covered;
   bool _attached = false;

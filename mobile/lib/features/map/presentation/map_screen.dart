@@ -307,10 +307,13 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
         (widget.orientationService ?? DeviceOrientationService()).mapHeadings
             .listen(
               (heading) {
-                // Sous l'onboarding, la boussole ne redessine pas la carte.
-                if (!mounted || _hidden || _covered) return;
+                if (!mounted || _hidden) return;
                 if (!heading.isFinite) return;
+                // Sous l'onboarding, le cap est gardé sans redessiner la
+                // carte : iOS n'envoie une nouvelle mesure qu'après 2° de
+                // rotation, l'arrivée doit déjà avoir la flèche.
                 _deviceHeading = heading;
+                if (_covered) return;
                 _syncLocationPuck().ignore();
                 _setCompassTurnsForHeading(heading);
               },
@@ -439,14 +442,16 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
             marginBottom: bottom,
           ),
         ),
+        // Le « i » obligatoire suit le logo, loin des boutons de droite.
         map.attribution.updateSettings(
           AttributionSettings(
             position: editing
-                ? OrnamentPosition.TOP_RIGHT
-                : OrnamentPosition.BOTTOM_RIGHT,
-            marginRight: 16,
+                ? OrnamentPosition.TOP_LEFT
+                : OrnamentPosition.BOTTOM_LEFT,
+            marginLeft: 106,
             marginTop: editing ? 64 : 4,
             marginBottom: bottom,
+            iconColor: 0x99FFFFFF,
           ),
         ),
       ]);
@@ -1254,7 +1259,7 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
   static const _recenterMaxDuration = Duration(milliseconds: 1200);
 
   /// Vol du globe jusqu'à l'utilisateur à la fin de l'onboarding.
-  static const _introFlightDuration = Duration(milliseconds: 3500);
+  static const _introFlightDuration = Duration(milliseconds: 4900);
 
   /// Attente maximale de la carte avant le fondu, puis de la position avant
   /// de partir vers la France.
@@ -1445,6 +1450,10 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
     if (intro.phase == MapIntroPhase.starting && !_introStarted) {
       _introStarted = true;
       unawaited(_playIntro(intro));
+    }
+    final heading = _deviceHeading;
+    if (!intro.covered && heading != null) {
+      _setCompassTurnsForHeading(heading);
     }
     _syncHeatmapPulse();
   }

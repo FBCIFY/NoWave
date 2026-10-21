@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:blueway/core/map/globe_style.dart';
+import 'package:blueway/core/sensors/device_orientation_service.dart';
 import 'package:blueway/features/map/presentation/map_intro_controller.dart';
 import 'package:blueway/features/map/presentation/map_screen.dart';
 import 'package:flutter/material.dart';
@@ -23,6 +24,12 @@ class _Compass extends Fake implements CompassSettingsInterface {
 class _Scale extends Fake implements ScaleBarSettingsInterface {
   @override
   Future<void> updateSettings(ScaleBarSettings settings) async {}
+}
+
+class _Headings extends DeviceOrientationService {
+  final values = StreamController<double>.broadcast(sync: true);
+  @override
+  Stream<double> get mapHeadings => values.stream;
 }
 
 class _Map extends Fake implements MapboxMap {
@@ -49,13 +56,18 @@ MapWidget _mapWidget(WidgetTester tester) =>
 /// Carte sous l'onboarding, créée puis chargée.
 Future<MapIntroController> _pumpCoveredMap(
   WidgetTester tester,
-  FocusGps gps,
-) async {
+  FocusGps gps, {
+  DeviceOrientationService? headings,
+}) async {
   final intro = MapIntroController();
   addTearDown(intro.dispose);
   await tester.pumpWidget(
     MaterialApp(
-      home: MapScreen(locationService: gps, intro: intro),
+      home: MapScreen(
+        locationService: gps,
+        orientationService: headings,
+        intro: intro,
+      ),
     ),
   );
   _mapWidget(tester).onMapCreated!(_Map());
@@ -149,6 +161,37 @@ void main() {
       await tester.pump();
       await tester.pump();
       expect(_mapWidget(tester).viewport, isA<FollowPuckViewportState>());
+
+      await tester.pumpWidget(const SizedBox.shrink());
+    },
+  );
+
+  testWidgets(
+    'cap mesuré sous l’onboarding : la boussole l’affiche dès l’arrivée',
+    (tester) async {
+      gps.onCurrent = () async => focusPosition();
+      final headings = _Headings();
+      addTearDown(headings.values.close);
+      final intro = await _pumpCoveredMap(tester, gps, headings: headings);
+      double compassTurns() => tester
+          .widget<AnimatedRotation>(
+            find.ancestor(
+              of: find.byIcon(Icons.navigation),
+              matching: find.byType(AnimatedRotation),
+            ),
+          )
+          .turns;
+
+      // iOS n'envoie qu'une mesure tant que le téléphone ne tourne pas.
+      headings.values.add(90);
+      await tester.pump();
+      expect(compassTurns(), 0);
+
+      intro.start();
+      await tester.pump();
+      expect(compassTurns(), closeTo(0.25, 1e-9));
+      await tester.pump(MapIntroController.fadeDuration);
+      await tester.pump();
 
       await tester.pumpWidget(const SizedBox.shrink());
     },
