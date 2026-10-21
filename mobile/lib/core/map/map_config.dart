@@ -52,13 +52,18 @@ class MapConfig {
 
   /// Double tap + glissé : Mapbox zoome sans que l'utilisateur le veuille.
   /// Le zoom à un doigt passe par les bords de l'écran (MapEdgeZoom).
-  static Future<void> disableQuickZoom(MapboxMap map) async {
+  static Future<void> disableQuickZoom(MapboxMap map) =>
+      updateGestures(map, GesturesSettings(quickZoomEnabled: false));
+
+  /// Réglage partiel des gestes : les champs laissés à null ne changent pas.
+  static Future<void> updateGestures(
+    MapboxMap map,
+    GesturesSettings settings,
+  ) async {
     try {
-      await map.gestures.updateSettings(
-        GesturesSettings(quickZoomEnabled: false),
-      );
+      await map.gestures.updateSettings(settings);
     } catch (_) {
-      // Gestes non réglables : le double tap + glissé reste actif.
+      // Gestes non réglables : Mapbox garde les réglages précédents.
     }
   }
 }

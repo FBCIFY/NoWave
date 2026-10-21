@@ -194,6 +194,13 @@ class _Compass extends Fake implements mb.CompassSettingsInterface {
   Future<void> updateSettings(mb.CompassSettings settings) async {}
 }
 
+class FocusGestures extends Fake implements mb.GesturesSettingsInterface {
+  final settings = <mb.GesturesSettings>[];
+  @override
+  Future<void> updateSettings(mb.GesturesSettings settings) async =>
+      this.settings.add(settings);
+}
+
 class _Scale extends Fake implements mb.ScaleBarSettingsInterface {
   @override
   Future<void> updateSettings(mb.ScaleBarSettings settings) async {}
@@ -208,6 +215,8 @@ class FocusMap extends Fake implements mb.MapboxMap {
   final compass = _Compass();
   @override
   final scaleBar = _Scale();
+  @override
+  final FocusGestures gestures = FocusGestures();
   final interactions = <mb.TypedInteraction>[];
   final fittedCoordinates = <List<mb.Point>>[];
   final fitPadding = <mb.MbxEdgeInsets?>[];

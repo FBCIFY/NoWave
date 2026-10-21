@@ -100,4 +100,63 @@ void main() {
     expect(limits(map), isEmpty);
     await tester.pumpWidget(const SizedBox.shrink());
   });
+
+  /// Réglages des gestes envoyés à Mapbox, pour un seul champ.
+  List<bool?> gestures(FocusMap map, bool? Function(GesturesSettings) field) =>
+      [
+        for (final settings in map.gestures.settings)
+          if (field(settings) != null) field(settings),
+      ];
+
+  testWidgets('globe : deux doigts ne déplacent pas la carte', (tester) async {
+    await tester.pumpWidget(const MaterialApp(home: MapScreen()));
+    final map = FocusMap();
+    final widget = tester.widget<MapWidget>(find.byType(MapWidget));
+    widget.onMapCreated!(map);
+    await tester.pump();
+    for (final zoom in [3.0, 4.0, 6.0, 12.0, 2.0]) {
+      widget.onCameraChangeListener!(_camera(zoom: zoom, bearing: 0));
+      await tester.pump();
+    }
+    // Envoyé seulement au passage des nuages, pas à chaque image.
+    expect(gestures(map, (settings) => settings.pinchPanEnabled), [
+      false,
+      true,
+      false,
+    ]);
+    await tester.pumpWidget(const SizedBox.shrink());
+  });
+
+  testWidgets('globe : à la butée, la rotation se coupe jusqu’au lâcher', (
+    tester,
+  ) async {
+    await tester.pumpWidget(const MaterialApp(home: MapScreen()));
+    final map = FocusMap();
+    final widget = tester.widget<MapWidget>(find.byType(MapWidget));
+    widget.onMapCreated!(map);
+    await tester.pump();
+    widget.onCameraChangeListener!(_camera(zoom: 3, bearing: 0));
+    await tester.pump();
+    bool? rotate(GesturesSettings settings) => settings.rotateEnabled;
+
+    final first = await tester.startGesture(const Offset(150, 400));
+    final second = await tester.startGesture(const Offset(250, 400));
+    widget.onCameraChangeListener!(_camera(zoom: 3, bearing: 20));
+    await tester.pump();
+    expect(gestures(map, rotate), isEmpty);
+    for (final bearing in [40.0, 45.0]) {
+      widget.onCameraChangeListener!(_camera(zoom: 3, bearing: bearing));
+      await tester.pump();
+    }
+    expect(gestures(map, rotate), [false]);
+
+    // Un doigt encore posé : la rotation reste coupée.
+    await first.up();
+    await tester.pump();
+    expect(gestures(map, rotate), [false]);
+    await second.up();
+    await tester.pump(const Duration(milliseconds: 300));
+    expect(gestures(map, rotate), [false, true]);
+    await tester.pumpWidget(const SizedBox.shrink());
+  });
 }

@@ -201,8 +201,38 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
   /// Écart maximal, sur le globe, entre les doigts et l'orientation choisie.
   static const _globeRotationLimit = 30.0;
 
+  /// Déplacement à deux doigts réglé dans Mapbox (null : pas encore réglé).
+  bool? _pinchPanEnabled;
+
+  /// Rotation des doigts coupée par la butée du globe, rendue au lâcher.
+  bool _globeRotationLocked = false;
+
+  /// Sur le globe, deux doigts tournent et zooment sans déplacer la carte :
+  /// le déplacement se mêlait à la rotation et la carte glissait de côté.
+  void _syncPinchPan(MapboxMap map, double zoom) {
+    final enabled = zoom >= _freeRotationZoom;
+    if (enabled == _pinchPanEnabled) return;
+    _pinchPanEnabled = enabled;
+    unawaited(
+      MapConfig.updateGestures(map, GesturesSettings(pinchPanEnabled: enabled)),
+    );
+  }
+
+  /// Tous les doigts levés : la rotation coupée à la butée revient.
+  void _releaseGlobeRotation() {
+    final map = _mapboxMap;
+    if (!_globeRotationLocked || _mapTouchActive || map == null) return;
+    _globeRotationLocked = false;
+    unawaited(
+      MapConfig.updateGestures(map, GesturesSettings(rotateEnabled: true)),
+    );
+  }
+
   /// Sur le globe, les doigts butent à [_globeRotationLimit] du nord (ou du
   /// cap figé par la boussole) : le globe ne se retourne pas sous les doigts.
+  /// À la butée, la rotation des doigts est coupée jusqu'au lâcher : sinon
+  /// Mapbox la recalcule à chaque image, contre le cap posé ici, et la carte
+  /// tremble.
   void _limitGlobeRotation(CameraState camera) {
     final map = _mapboxMap;
     if (map == null || !_mapTouchActive || camera.zoom >= _freeRotationZoom) {
@@ -217,6 +247,12 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
     final offset = (camera.bearing - target + 540) % 360 - 180;
     if (offset.abs() <= _globeRotationLimit + .5) return;
     final limit = target + offset.sign * _globeRotationLimit;
+    if (!_globeRotationLocked) {
+      _globeRotationLocked = true;
+      unawaited(
+        MapConfig.updateGestures(map, GesturesSettings(rotateEnabled: false)),
+      );
+    }
     map.setCamera(CameraOptions(bearing: limit)).ignore();
   }
 
@@ -442,6 +478,7 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
     if (_userCameraMotion) _scheduleRotationAfterGesture();
     final pitchMap = _mapboxMap;
     if (pitchMap != null) {
+      _syncPinchPan(pitchMap, event.cameraState.zoom);
       unawaited(
         _globePitch.synchronize(
           pitchMap,
@@ -2336,6 +2373,8 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
                 ),
                 onMapCreated: (map) {
                   setState(() => _mapboxMap = map);
+                  _pinchPanEnabled = null;
+                  _globeRotationLocked = false;
                   unawaited(MapConfig.hideDefaultOrnaments(map));
                   unawaited(MapConfig.disableQuickZoom(map));
                   unawaited(
@@ -2721,14 +2760,17 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
       },
       onPointerPanZoomEnd: (_) {
         _mapPanZoomActive = false;
+        _releaseGlobeRotation();
         _scheduleRotationAfterGesture();
       },
       onPointerUp: (event) {
         _mapPointers.remove(event.pointer);
+        _releaseGlobeRotation();
         _scheduleRotationAfterGesture();
       },
       onPointerCancel: (event) {
         _mapPointers.remove(event.pointer);
+        _releaseGlobeRotation();
         _scheduleRotationAfterGesture();
       },
       child: screen,
