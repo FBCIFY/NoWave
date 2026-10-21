@@ -82,23 +82,6 @@ class ReportReach {
     );
   }
 
-  /// Rectangle qui entoure la zone, pour borner la caméra.
-  static ({double south, double west, double north, double east}) bounds(
-    double latitude,
-    double longitude,
-  ) {
-    final north = destination(latitude, longitude, 0, radiusMeters);
-    final east = destination(latitude, longitude, math.pi / 2, radiusMeters);
-    final south = destination(latitude, longitude, math.pi, radiusMeters);
-    final west = destination(latitude, longitude, -math.pi / 2, radiusMeters);
-    return (
-      south: south.latitude,
-      west: west.longitude,
-      north: north.latitude,
-      east: east.longitude,
-    );
-  }
-
   /// Contour fermé de la zone, pour l'afficher sur la carte.
   static List<List<double>> outline(double latitude, double longitude) => [
     for (var step = 0; step <= 72; step++)

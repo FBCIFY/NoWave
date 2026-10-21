@@ -243,7 +243,6 @@ void main() {
       await tester.tap(find.byTooltip('Créer un signalement'));
       await pumpFrames(tester);
       map.easedCameras.clear();
-      expect(map.bounds.where((b) => b.bounds != null), isEmpty);
       final far = ReportReach.destination(43.29, 5.37, 0, 2500);
       map.onCoordinate = (_) async =>
           mb.Point(coordinates: mb.Position(far.longitude, far.latitude));
@@ -265,18 +264,6 @@ void main() {
         closeTo(999, 1),
       );
       expect(center.lng.toDouble(), closeTo(5.37, 0.001));
-
-      // Dès le toucher, Mapbox borne la caméra autour du cercle.
-      final limit = map.bounds.lastWhere((b) => b.bounds != null).bounds!;
-      expect(limit.infiniteBounds, isFalse);
-      final box = ReportReach.bounds(43.29, 5.37);
-      expect(limit.northeast.coordinates.lat, closeTo(box.north, 1e-9));
-      expect(limit.southwest.coordinates.lng, closeTo(box.west, 1e-9));
-
-      // À la fermeture, la caméra redevient libre.
-      await tester.tap(find.byTooltip('Fermer'));
-      await pumpFrames(tester);
-      expect(map.bounds.last.bounds!.infiniteBounds, isTrue);
     },
   );
 

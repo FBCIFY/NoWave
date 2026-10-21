@@ -160,9 +160,6 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
   }
 
   void _beginMapGesture({bool newTouch = false}) {
-    if (_reportComposerOpen && !_reportBoundsActive) {
-      unawaited(_limitCameraToReach(_reportOrigin));
-    }
     if (newTouch || !_userCameraMotion) {
       unawaited(_stopGlobeRotation());
       _mapGestureRevision++;
@@ -263,10 +260,6 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
   final _fixedAidLayer = FixedAidLayer();
   String? _mapError;
   bool _reportComposerOpen = false;
-
-  /// Caméra bornée autour de la zone du signalement, posée au premier
-  /// toucher pour ne pas couper le vol d'ouverture.
-  bool _reportBoundsActive = false;
   int _reportIntent = 0;
   CameraState? _cameraBeforeReport;
   bool _restoreFollowAfterReport = false;
@@ -1738,8 +1731,6 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
       unawaited(_hideReportReach(map));
     }
     await WidgetsBinding.instance.endOfFrame;
-    // Sans ça, Mapbox garderait la caméra prisonnière de la zone.
-    await _limitCameraToReach(null);
 
     if (map != null && camera != null) {
       try {
@@ -1949,38 +1940,6 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
       }
     } catch (_) {
       // Sans cercle, le retour au bord garde la limite.
-    }
-  }
-
-  /// Pendant le glissé, le centre de la caméra, qui porte la pointe du
-  /// viseur, bute sur le carré qui entoure le cercle. Mapbox ne sait borner
-  /// qu'un rectangle : dans les coins, le lâcher ramène le point sur le
-  /// cercle. Sans [origin], la caméra redevient libre.
-  Future<void> _limitCameraToReach(
-    ({double latitude, double longitude})? origin,
-  ) async {
-    final map = _mapboxMap;
-    if (map == null || (origin == null && !_reportBoundsActive)) return;
-    _reportBoundsActive = origin != null;
-    final box = origin == null
-        ? null
-        : ReportReach.bounds(origin.latitude, origin.longitude);
-    try {
-      await map.setBounds(
-        CameraBoundsOptions(
-          bounds: CoordinateBounds(
-            southwest: Point(
-              coordinates: Position(box?.west ?? 0, box?.south ?? 0),
-            ),
-            northeast: Point(
-              coordinates: Position(box?.east ?? 0, box?.north ?? 0),
-            ),
-            infiniteBounds: box == null,
-          ),
-        ),
-      );
-    } catch (_) {
-      // Sans borne native, le retour au bord au lâcher garde la limite.
     }
   }
 
