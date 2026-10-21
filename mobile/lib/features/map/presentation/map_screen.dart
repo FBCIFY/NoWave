@@ -189,11 +189,12 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
     unawaited(_keepReportPointInReach());
   }
 
-  /// Zoom à partir duquel une rotation libre ne survit pas au lâcher.
-  static const _orientationLockZoom = 7.0;
+  /// Zoom à partir duquel une rotation libre ne survit pas au lâcher. En
+  /// dessous, le globe entier tient à l'écran et reste libre.
+  static const _orientationLockZoom = 2.0;
 
-  /// Au lâcher, de près, la carte revient à l'orientation choisie : le nord,
-  /// ou le cap figé par la boussole si c'est lui que les doigts ont quitté.
+  /// Au lâcher, la carte revient à l'orientation choisie : le nord, ou le
+  /// cap figé par la boussole si c'est lui que les doigts ont quitté.
   Future<void> _restoreOrientation() async {
     final map = _mapboxMap;
     final zoom = _cameraZoom;
@@ -219,7 +220,13 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
       );
     } catch (_) {
       // La prochaine fin de geste retente.
+      return;
     }
+    // Le retour au nord a coupé la rotation du globe : elle reprend comme
+    // après un geste, une fois la caméra immobile.
+    if (!mounted || _mapTouchActive) return;
+    _userCameraMotion = true;
+    _scheduleRotationAfterGesture();
   }
 
   Future<void> _prepareGlobeRotation() async {
