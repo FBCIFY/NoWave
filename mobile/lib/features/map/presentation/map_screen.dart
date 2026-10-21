@@ -21,6 +21,7 @@ import '../../../core/map/globe_pitch_controller.dart';
 import '../../../core/map/map_config.dart';
 import '../../../core/map/marine/marine_map_controller.dart';
 import '../../../core/sensors/device_orientation_service.dart';
+import '../../camera/domain/capture_requirements.dart';
 import '../../camera/domain/photo_report_draft.dart';
 import '../../reports/data/manual_report_service.dart';
 import '../../reports/data/report_detail_service.dart';
@@ -1698,6 +1699,21 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
     final position = _position;
     final map = _mapboxMap;
     final measurements = photoDraft?.capture.measurements;
+    // GPS coupé ou décroché : la carte garde sa dernière position. Le cercle
+    // de 1 km ne doit pas se poser là où l'on était, même âge que la photo.
+    if (measurements == null &&
+        position != null &&
+        !isCaptureMeasurementFresh(
+          position.timestamp,
+          DateTime.now(),
+          maxCaptureGpsAge,
+        )) {
+      _showNotice(
+        'Position GPS trop ancienne. Attendez une nouvelle mesure.',
+        MapNoticeKind.warning,
+      );
+      return;
+    }
     final origin = measurements != null
         ? (
             latitude: measurements.observerLatitude,
