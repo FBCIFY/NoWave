@@ -19,10 +19,7 @@ class _Reports extends Fake implements ManualReportService {}
 
 class _Estimates extends Fake implements PositionEstimateService {}
 
-class _Tiles extends Fake implements ReportTiles {
-  @override
-  void stopPulse() {}
-}
+class _Tiles extends Fake implements ReportTiles {}
 
 class _Details extends Fake implements ReportDetailService {}
 

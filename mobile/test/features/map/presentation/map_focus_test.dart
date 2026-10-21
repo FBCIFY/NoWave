@@ -64,8 +64,6 @@ class _Publications extends Fake implements ManualReportService {
 
 class _LateTiles extends Fake implements ReportTiles {
   final ready = Completer<void>();
-  final pulseEnabled = <bool>[];
-  int stops = 0;
   @override
   Future<void> addTo(mb.MapboxMap map) async {
     await ready.future;
@@ -76,15 +74,6 @@ class _LateTiles extends Fake implements ReportTiles {
       ),
     );
   }
-
-  @override
-  void stopPulse() => stops++;
-  @override
-  void updatePulse(
-    mb.MapboxMap map, {
-    required double zoom,
-    required bool enabled,
-  }) => pulseEnabled.add(enabled);
 }
 
 Future<void> pumpFrames(WidgetTester tester) async {
@@ -343,16 +332,17 @@ void main() {
           'dev.flutter.pigeon.mapbox_maps_flutter._OfflineSwitch.setMapboxStackConnected';
       final messenger =
           TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger;
-      messenger.setMockMessageHandler(
-        channel,
-        (_) async =>
-            const StandardMessageCodec().encodeMessage(<Object?>[null]),
-      );
+      final connected = <Object?>[];
+      messenger.setMockMessageHandler(channel, (message) async {
+        final arguments =
+            const StandardMessageCodec().decodeMessage(message) as List;
+        connected.add(arguments.first);
+        return const StandardMessageCodec().encodeMessage(<Object?>[null]);
+      });
       addTearDown(() => messenger.setMockMessageHandler(channel, null));
       final tiles = _LateTiles()..ready.complete();
       gps.initial.complete(focusPosition());
       await mount(tester, tiles: tiles);
-      expect(tiles.pulseEnabled, contains(true));
       final navigator = Navigator.of(tester.element(find.byType(MapScreen)));
       unawaited(
         navigator.push(
@@ -362,15 +352,11 @@ void main() {
         ),
       );
       await pumpFrames(tester);
-      expect(tiles.stops, greaterThan(0));
-      final updates = tiles.pulseEnabled.length;
-      gps.positions.add(focusPosition(longitude: 7));
-      await pumpFrames(tester);
-      expect(tiles.pulseEnabled.length, updates);
+      // Mapbox perd le réseau tant que la carte est cachée.
+      expect(connected.last, isFalse);
       navigator.pop();
       await pumpFrames(tester);
-      expect(tiles.pulseEnabled.length, greaterThan(updates));
-      expect(tiles.pulseEnabled.last, isTrue);
+      expect(connected.last, isTrue);
     },
   );
 

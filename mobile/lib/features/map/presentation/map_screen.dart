@@ -290,8 +290,7 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
   bool _selectionDirty = false;
   int _cameraFocusRevision = 0;
 
-  /// Dernier zoom connu, pour relancer le battement de la heatmap au
-  /// retour au premier plan.
+  /// Dernier zoom connu de la caméra.
   double? _cameraZoom;
   final _displayedZoom = ValueNotifier<double>(GlobeStyle.initialZoom);
   final _scaleCamera = ValueNotifier<MapScaleCamera>((
@@ -299,8 +298,8 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
     latitude: 0,
   ));
 
-  /// Coupe le battement de la heatmap, le renouvellement du token des
-  /// tuiles et le réseau de Mapbox quand l'app n'est plus visible.
+  /// Coupe le renouvellement du token des tuiles et le réseau de Mapbox
+  /// quand l'app n'est plus visible.
   AppLifecycleListener? _lifecycleListener;
 
   /// App en arrière-plan, entre [_pauseMapUpdates] et [_resumeMapUpdates].
@@ -440,7 +439,6 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
     if (map != null) {
       unawaited(_globePresentation.synchronize(map, event.cameraState.zoom));
     }
-    _syncHeatmapPulse();
     _syncLocationPuck().ignore();
     final bearing = event.cameraState.bearing;
     final bearingDelta = ((bearing - _cameraBearing + 540) % 360 - 180);
@@ -674,8 +672,8 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
     await reportTiles.authorize(map);
   }
 
-  /// L'app n'est plus visible : ni battement, ni renouvellement du token,
-  /// ni réseau pour Mapbox.
+  /// L'app n'est plus visible : ni renouvellement du token, ni réseau pour
+  /// Mapbox.
   void _pauseMapUpdates() {
     if (_appHidden) return;
     _appHidden = true;
@@ -684,7 +682,6 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
 
   void _suspendVisualUpdates() {
     _syncGlobeRotation();
-    widget.reportTiles?.stopPulse();
     _reportTilesTokenTimer?.cancel();
     _reportLayer.pause();
   }
@@ -700,7 +697,6 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
 
   void _restoreVisualUpdates() {
     _syncGlobeRotation();
-    _syncHeatmapPulse();
     _reportLayer.resume();
     _startReportTilesTokenRenewal();
     if (_focusWithUser &&
@@ -813,8 +809,6 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
     await reportTiles.addTo(map);
     // MVT may arrive after the selection; keep its badge above ordinary points.
     if (_selectedReport != null) unawaited(_applySelection());
-    _cameraZoom ??= (await map.getCameraState()).zoom;
-    _syncHeatmapPulse();
   }
 
   /// Marge autour du doigt pour toucher un badge, en pixels.
@@ -1202,7 +1196,6 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
   /// Réglage d'accessibilité changé pendant que la carte est ouverte.
   @override
   void didChangeAccessibilityFeatures() {
-    _syncHeatmapPulse();
     _syncGlobeRotation();
   }
 
@@ -1236,19 +1229,6 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
     } else {
       await map.easeTo(camera, MapAnimationOptions(duration: duration));
     }
-  }
-
-  /// La heatmap bat tant qu'elle est visible, sauf si l'utilisateur a
-  /// demandé moins d'animations dans les réglages du téléphone.
-  void _syncHeatmapPulse() {
-    final map = _mapboxMap;
-    final zoom = _cameraZoom;
-    if (!mounted || map == null || zoom == null) return;
-    widget.reportTiles?.updatePulse(
-      map,
-      zoom: zoom,
-      enabled: !_hidden && !_covered && !_reduceMotion,
-    );
   }
 
   /// Repère NoWave piloté par le même cap que la boussole.
@@ -1507,7 +1487,6 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
     if (!intro.covered && heading != null) {
       _setCompassTurnsForHeading(heading);
     }
-    _syncHeatmapPulse();
   }
 
   /// Fin de l'onboarding : l'autorisation de position est demandée tant que
@@ -2104,7 +2083,6 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
     _globeRotation.dispose();
     _globePitch.dispose();
     widget.focusController?.removeListener(_handleFocusRequest);
-    widget.reportTiles?.stopPulse();
     _lifecycleListener?.dispose();
     WidgetsBinding.instance.removeObserver(this);
     _reportTilesTokenTimer?.cancel();

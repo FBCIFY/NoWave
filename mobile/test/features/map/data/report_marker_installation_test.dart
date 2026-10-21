@@ -55,6 +55,5 @@ void main() {
       map.style.layers.keys.where((id) => id == ReportTiles.pointsLayerId),
       hasLength(1),
     );
-    tiles.stopPulse();
   });
 }

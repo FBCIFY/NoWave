@@ -1,5 +1,3 @@
-import 'dart:async';
-import 'dart:math' as math;
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
@@ -87,44 +85,25 @@ class ReportTiles {
   ];
 
   /// Rayon de la zone colorée en pixels, aux zooms 0, 6 et 9 : assez
-  /// large pour se lire comme une zone et pas comme un point.
-  static const _heatmapRadii = [
-    (0.0, 25.0),
-    (6.0, 50.0),
-    (_badgesMinZoom, 80.0),
-  ];
-
-  /// Durée d'un battement complet de la zone colorée.
-  static const _pulsePeriod = Duration(seconds: 2);
-
-  /// Agrandissement maximal du rayon au milieu d'un battement : +25 %.
-  static const _pulseAmplitude = 0.25;
-
-  /// Intervalle entre deux mises à jour du rayon, soit 20 images par
-  /// seconde : fluide sans surcharger la carte.
-  static const _pulseFrame = Duration(milliseconds: 50);
-
-  /// Rayon de la zone colorée selon le zoom, multiplié par [scale] pendant
-  /// le battement.
+  /// large pour se lire comme une zone et pas comme un point. Le rayon reste
+  /// fixe, comme sur Snap Map.
   @visibleForTesting
-  static List<Object> heatmapRadiusExpression([double scale = 1]) => [
+  static const heatmapRadiusExpression = [
     'interpolate',
     ['linear'],
     ['zoom'],
-    for (final (zoom, radius) in _heatmapRadii) ...[zoom, radius * scale],
+    0.0,
+    25.0,
+    6.0,
+    50.0,
+    _badgesMinZoom,
+    80.0,
   ];
 
-  /// Facteur du rayon après [elapsed] : part de 1, monte à 1,25 à
-  /// mi-battement puis redescend, sans à-coup.
-  @visibleForTesting
-  static double pulseScale(Duration elapsed) {
-    final phase = elapsed.inMicroseconds / _pulsePeriod.inMicroseconds;
-    return 1 + _pulseAmplitude * (1 - math.cos(2 * math.pi * phase)) / 2;
-  }
-
-  /// Couleur selon la densité, comme Snap Map : transparent, puis violet,
-  /// bleu, vert, jaune, orange, rouge, et un cœur rouge foncé sur les zones
-  /// très chargées.
+  /// Couleur selon la densité, comme Snap Map : violet, bleu, vert, jaune,
+  /// orange, rouge, et un cœur rouge foncé sur les zones très chargées. Le
+  /// bord est presque transparent et le centre opaque, pour que la zone se
+  /// fonde dans la carte.
   @visibleForTesting
   static const heatmapColorExpression = [
     'interpolate',
@@ -133,21 +112,21 @@ class ReportTiles {
     0,
     'rgba(139, 92, 246, 0)',
     0.05,
-    'rgba(139, 92, 246, 0.5)',
+    'rgba(139, 92, 246, 0.2)',
     0.15,
-    'rgb(139, 92, 246)',
+    'rgba(139, 92, 246, 0.4)',
     0.3,
-    'rgb(59, 130, 246)',
+    'rgba(59, 130, 246, 0.55)',
     0.45,
-    'rgb(34, 197, 94)',
+    'rgba(34, 197, 94, 0.7)',
     0.6,
-    'rgb(250, 204, 21)',
+    'rgba(250, 204, 21, 0.8)',
     0.75,
-    'rgb(249, 115, 22)',
+    'rgba(249, 115, 22, 0.9)',
     0.9,
     'rgb(220, 38, 38)',
     1,
-    'rgb(127, 29, 29)',
+    'rgb(110, 20, 20)',
   ];
 
   /// Valeur qui suit le zoom : [start] au zoom [from], [end] au zoom [to],
@@ -206,65 +185,6 @@ class ReportTiles {
   /// Badges PNG, dessinés au premier affichage puis réutilisés à chaque
   /// chargement de style.
   Future<Map<String, Uint8List>>? _markers;
-
-  /// Battement en cours ; null quand la zone colorée est fixe.
-  Timer? _pulseTimer;
-
-  /// Temps écoulé depuis le début du battement.
-  final _pulseClock = Stopwatch();
-
-  /// Mise à jour du rayon encore en cours : on saute l'image suivante
-  /// plutôt que d'empiler les appels.
-  bool _pulseUpdating = false;
-
-  /// Fait battre la zone colorée tant qu'elle est visible, c'est-à-dire
-  /// sous le zoom des badges, et que l'animation est permise.
-  void updatePulse(
-    MapboxMap map, {
-    required double zoom,
-    required bool enabled,
-  }) {
-    if (enabled && zoom < _badgesMinZoom) {
-      _startPulse(map);
-    } else {
-      stopPulse();
-    }
-  }
-
-  /// Arrête le battement ; à appeler quand l'app passe en arrière-plan ou
-  /// que la carte disparaît.
-  void stopPulse() {
-    _pulseTimer?.cancel();
-    _pulseTimer = null;
-    _pulseClock
-      ..stop()
-      ..reset();
-  }
-
-  /// Lance le battement s'il ne tourne pas déjà.
-  void _startPulse(MapboxMap map) {
-    if (_pulseTimer != null) return;
-    _pulseClock.start();
-    _pulseTimer = Timer.periodic(_pulseFrame, (_) => _pulseStep(map));
-  }
-
-  /// Une image du battement : applique le rayon du moment.
-  Future<void> _pulseStep(MapboxMap map) async {
-    if (_pulseUpdating) return;
-    _pulseUpdating = true;
-    try {
-      await map.style.setStyleLayerProperty(
-        heatmapLayerId,
-        'heatmap-radius',
-        heatmapRadiusExpression(pulseScale(_pulseClock.elapsed)),
-      );
-    } catch (_) {
-      // Couche absente le temps d'un rechargement du style : l'image
-      // suivante réessaiera.
-    } finally {
-      _pulseUpdating = false;
-    }
-  }
 
   /// Donne le token à Mapbox, pour les requêtes vers le backend seulement :
   /// le fond de carte, servi par Mapbox, ne doit pas le recevoir.
@@ -356,11 +276,11 @@ class ReportTiles {
           30,
           2.5,
         ],
-        heatmapRadiusExpression: heatmapRadiusExpression(),
+        heatmapRadiusExpression: heatmapRadiusExpression,
         heatmapColorExpression: heatmapColorExpression,
         heatmapOpacityExpression: _zoomRamp(
           _fadeStartZoom,
-          0.85,
+          1,
           _badgesMinZoom,
           0,
         ),
