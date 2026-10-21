@@ -15,6 +15,7 @@ import '../../../core/map/location_marker.dart';
 import '../../../core/map/cloud_passage_controller.dart';
 import '../../../core/map/globe_presentation.dart';
 import '../../../core/map/globe_style.dart';
+import '../../../core/map/globe_flight.dart';
 import '../../../core/map/globe_rotation_controller.dart';
 import '../../../core/map/globe_pitch_controller.dart';
 import '../../../core/map/map_config.dart';
@@ -127,6 +128,7 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
   final _marineMap = MarineMapController();
   final _globePresentation = GlobePresentation();
   final _globePitch = GlobePitchController();
+  final _globeFlight = GlobeFlight();
   late final _globeRotation = GlobeRotationController(
     moveCamera: (camera) async {
       final map = _mapboxMap;
@@ -1375,7 +1377,7 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
     bool animated = false,
     bool recenter = true,
     Future<geo.Position>? fix,
-    ViewportTransition? flight,
+    Duration? flight,
   }) async {
     if (recenter) {
       await _stopGlobeRotation();
@@ -1430,24 +1432,19 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
 
       if (gestureRevision != _mapGestureRevision) return;
 
+      final bearing = switch (_orientationMode) {
+        _MapOrientationMode.north => 0.0,
+        _MapOrientationMode.heading =>
+          _selectedBearing ?? previousCamera?.bearing ?? _cameraBearing,
+        _MapOrientationMode.manual => previousCamera?.bearing ?? _cameraBearing,
+      };
       void followUser() {
         _isFollowing = true;
         _viewport = FollowPuckViewportState(
           // Toujours le zoom du lancement : après un dézoom sur le globe,
           // recentrer doit aussi ramener au niveau de la rue.
           zoom: _userZoom,
-          bearing: switch (_orientationMode) {
-            _MapOrientationMode.north =>
-              const FollowPuckViewportStateBearingConstant(0),
-            _MapOrientationMode.heading =>
-              FollowPuckViewportStateBearingConstant(
-                _selectedBearing ?? previousCamera?.bearing ?? _cameraBearing,
-              ),
-            _MapOrientationMode.manual =>
-              FollowPuckViewportStateBearingConstant(
-                previousCamera?.bearing ?? _cameraBearing,
-              ),
-          },
+          bearing: FollowPuckViewportStateBearingConstant(bearing),
           pitch:
               previousCamera != null &&
                   previousCamera.zoom >= GlobePitchController.detailedZoom
@@ -1460,7 +1457,14 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
         // L'utilisateur a déjà pris la carte en main : pas de vol.
         if (!_introFlightPending) return;
         _introFlightPending = false;
-        _setViewport(followUser, transition: flight);
+        unawaited(
+          _flyToUser(
+            position,
+            bearing: bearing,
+            duration: flight,
+            arrive: followUser,
+          ),
+        );
       } else if (animated) {
         // Mapbox marque cette animation du viewport comme expérimentale.
         // ignore: experimental_member_use
@@ -1564,6 +1568,57 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
     await _arriveFromIntro(fix, locationError);
   }
 
+  /// Vol du globe jusqu'à l'utilisateur, tracé ici et non par le viewport
+  /// Mapbox : son vol incline la caméra au fil du temps, alors que le globe
+  /// la garde à plat ; elle basculait d'un coup après les nuages. Ici,
+  /// l'inclinaison suit le zoom ([GlobePitchController.pitchAt]), comme au
+  /// doigt. À l'arrivée, le suivi GPS ([arrive]) prend le relais sans saut.
+  Future<void> _flyToUser(
+    geo.Position position, {
+    required double bearing,
+    required Duration duration,
+    required VoidCallback arrive,
+  }) async {
+    final map = _mapboxMap;
+    CameraState? start;
+    try {
+      if (map != null && !_reduceMotion) start = await map.getCameraState();
+    } catch (_) {
+      // Pas de caméra de départ : arrivée directe.
+    }
+    if (!mounted) return;
+    if (map == null || start == null) return setState(arrive);
+
+    final gestureRevision = _mapGestureRevision;
+    setState(() => _viewport = const IdleViewportState());
+    final arrived = await _globeFlight.fly(
+      path: GlobeFlightPath(
+        from: (
+          longitude: start.center.coordinates.lng.toDouble(),
+          latitude: start.center.coordinates.lat.toDouble(),
+          zoom: start.zoom,
+          bearing: start.bearing,
+        ),
+        to: (
+          longitude: position.longitude,
+          latitude: position.latitude,
+          zoom: _userZoom,
+          bearing: bearing,
+        ),
+        viewport: MediaQuery.sizeOf(context),
+      ),
+      duration: duration,
+      pitchAt: (zoom) =>
+          GlobePitchController.pitchAt(zoom, _globePitch.detailedPitch),
+      moveCamera: map.setCamera,
+      // Un geste de l'utilisateur lui rend la carte là où elle est.
+      interrupted: () =>
+          !mounted || _hidden || gestureRevision != _mapGestureRevision,
+    );
+    if (!mounted || !arrived || gestureRevision != _mapGestureRevision) return;
+    setState(arrive);
+  }
+
   /// Vol jusqu'à l'utilisateur. GPS lent ou refusé : la France en attendant,
   /// puis l'utilisateur si sa position arrive avant qu'il touche la carte.
   Future<void> _arriveFromIntro(
@@ -1574,7 +1629,7 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
       // Le vol part dès que la position arrive, même après ce délai.
       await _locate(
         fix: fix,
-        flight: const FlyViewportTransition(duration: _introFlightDuration),
+        flight: _introFlightDuration,
       ).timeout(_introWait, onTimeout: () {});
     } else {
       setState(() => _locationError = locationError);
@@ -2118,6 +2173,7 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
     _rotationGestureTimer?.cancel();
     _globeRotation.dispose();
     _globePitch.dispose();
+    _globeFlight.dispose();
     widget.focusController?.removeListener(_handleFocusRequest);
     _lifecycleListener?.dispose();
     WidgetsBinding.instance.removeObserver(this);
