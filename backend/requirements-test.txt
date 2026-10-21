@@ -23,7 +23,7 @@ botocore==1.43.108
     #   s3transfer
 cachecontrol==0.14.4
     # via firebase-admin
-certifi==2026.7.22
+certifi==2026.10.19
     # via
     #   httpcore
     #   httpx
@@ -76,7 +76,6 @@ greenlet==3.5.6
     # via
     #   -r backend/requirements-test.in
     #   -r backend/requirements.txt
-    #   sqlalchemy
 grpcio==1.84.0
     # via
     #   google-api-core
@@ -131,7 +130,7 @@ opentelemetry-api==1.44.0
     # via google-api-core
 packaging==26.3
     # via pytest
-pillow==12.3.0
+pillow==13.0.0
     # via -r backend/requirements.txt
 pluggy==1.6.0
     # via pytest
