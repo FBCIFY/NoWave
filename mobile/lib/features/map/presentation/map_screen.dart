@@ -43,9 +43,8 @@ import 'widgets/map_zoom_badge.dart';
 import '../data/hydrography_layer.dart';
 import 'widgets/report_marker.dart';
 
-/// Nord en haut, carte tournée selon le cap du téléphone, ou rotation libre
-/// faite au doigt.
-enum _MapOrientationMode { north, heading, manual }
+/// Le cycle explicite du bouton commence après le premier recentrage.
+enum _MapOrientationMode { free, north, heading }
 
 /// Carte principale : position GPS, suivi de l'utilisateur, boussole et
 /// création d'un signalement.
@@ -97,13 +96,15 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
 
   geo.Position? _position;
   double? _deviceHeading;
-  double? _selectedBearing;
   double _cameraBearing = 0;
+  final _cameraTurns = ValueNotifier<double>(0);
   double _compassTurns = 0;
   bool _isFollowing = false;
   bool _mapTouchActive = false;
   double _touchStartBearing = 0;
-  _MapOrientationMode _orientationMode = _MapOrientationMode.north;
+  _MapOrientationMode _orientationMode = _MapOrientationMode.free;
+  bool _navigationBusy = false;
+  int _navigationRevision = 0;
   bool _isLocating = false;
   String? _locationError;
   MapboxMap? _mapboxMap;
@@ -213,8 +214,16 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
                 _setCompassTurnsForHeading(heading);
               },
               onError: (Object _) {
+                if (!mounted || _hidden) return;
                 _deviceHeading = null;
                 _syncLocationPuck().ignore();
+                if (_isFollowing &&
+                    _orientationMode == _MapOrientationMode.heading) {
+                  _showNotice(
+                    'Cap du téléphone indisponible.',
+                    MapNoticeKind.error,
+                  );
+                }
               },
             );
   }
@@ -240,7 +249,30 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
     final displayedHeading = (_compassTurns * 360) % 360;
     final change = (heading - displayedHeading + 540) % 360 - 180;
     if (change.abs() < 1) return;
-    setState(() => _compassTurns += change / 360);
+    setState(() {
+      _compassTurns += change / 360;
+      final viewport = _viewport;
+      if (_isFollowing &&
+          !_mapTouchActive &&
+          !_reportComposerOpen &&
+          _orientationMode == _MapOrientationMode.heading &&
+          viewport is FollowPuckViewportState) {
+        _viewport = FollowPuckViewportState(
+          zoom: viewport.zoom,
+          pitch: viewport.pitch,
+          padding: viewport.padding,
+          bearing: FollowPuckViewportStateBearingConstant(heading % 360),
+        );
+      }
+    });
+  }
+
+  /// Ne change aucun réglage des gestes, de l'inertie ou des déplacements.
+  void _stopFollowing() {
+    _navigationRevision++;
+    _isFollowing = false;
+    _orientationMode = _MapOrientationMode.free;
+    _viewport = const IdleViewportState();
   }
 
   /// Un geste de l'utilisateur coupe le suivi GPS ; une rotation au doigt
@@ -270,7 +302,10 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
     final touchBearingDelta =
         ((bearing - _touchStartBearing + 540) % 360 - 180);
     final userRotatedMap = _mapTouchActive && touchBearingDelta.abs() > 2;
-    if (bearingDelta.abs() >= 1) _cameraBearing = bearing;
+    if (bearingDelta.abs() >= 1) {
+      _cameraBearing = bearing;
+      _cameraTurns.value += bearingDelta / 360;
+    }
     if (_reportComposerOpen) {
       _liftReportMarker();
       _scheduleReportPointUpdate();
@@ -278,16 +313,13 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
     }
     if (!userMovedMap && !userRotatedMap) return;
 
-    setState(() {
-      _isFollowing = false;
-      if (userRotatedMap) _orientationMode = _MapOrientationMode.manual;
-    });
+    setState(_stopFollowing);
   }
 
   void _handleMapGesture(MapContentGestureContext _) {
     if (_reportComposerOpen) return;
-    if (!_isFollowing) return;
-    setState(() => _isFollowing = false);
+    if (!_isFollowing && _viewport is IdleViewportState) return;
+    setState(_stopFollowing);
   }
 
   Future<void> _positionMapOrnaments(
@@ -323,54 +355,80 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
     }
   }
 
-  /// Bascule entre nord en haut et cap du téléphone.
-  Future<void> _toggleCompass() async {
+  bool _navigationIsCurrent(int request) =>
+      mounted &&
+      !_hidden &&
+      !_reportComposerOpen &&
+      request == _navigationRevision;
+
+  String get _navigationAction =>
+      _isFollowing && _orientationMode == _MapOrientationMode.north
+      ? 'Suivre la direction du téléphone'
+      : _isFollowing && _orientationMode == _MapOrientationMode.heading
+      ? 'Revenir au nord vrai à plat'
+      : 'Recentrer sur ma position';
+
+  String get _navigationLabel => switch (_isFollowing
+      ? _orientationMode
+      : _MapOrientationMode.free) {
+    _MapOrientationMode.free => 'Carte libre',
+    _MapOrientationMode.north => 'Centré sur ma position, nord vrai en haut',
+    _MapOrientationMode.heading =>
+      'Centré sur ma position, direction du téléphone',
+  };
+
+  /// Un appui recentre au nord à plat, le suivant suit la direction.
+  Future<void> _navigateUser() async {
     final map = _mapboxMap;
-    if (map == null) return;
-    final previousMode = _orientationMode;
-    final previousSelectedBearing = _selectedBearing;
-    final nextMode = _orientationMode == _MapOrientationMode.north
-        ? _MapOrientationMode.heading
-        : _MapOrientationMode.north;
-    final heading = _deviceHeading;
-    if (nextMode == _MapOrientationMode.heading && heading == null) {
-      _showNotice('Cap du téléphone indisponible.', MapNoticeKind.error);
+    if (map == null || _mapError != null || _navigationBusy || _isLocating) {
       return;
     }
+    final followHeading =
+        _isFollowing && _orientationMode == _MapOrientationMode.north;
+    final request = ++_navigationRevision;
+    setState(() => _navigationBusy = true);
     AppHaptics.selection();
-    final targetBearing = nextMode == _MapOrientationMode.north
-        ? 0.0
-        : heading!;
-
     try {
-      if (_isFollowing) {
-        final camera = await map.getCameraState();
-        if (!mounted) return;
-        // Mapbox marque cette animation du viewport comme expérimentale.
-        // ignore: experimental_member_use
-        _setViewport(() {
-          _orientationMode = nextMode;
-          _selectedBearing = targetBearing;
-          _viewport = FollowPuckViewportState(
-            zoom: camera.zoom,
-            pitch: camera.pitch,
-            bearing: FollowPuckViewportStateBearingConstant(targetBearing),
-          );
-        });
-      } else {
-        setState(() {
-          _orientationMode = nextMode;
-          _selectedBearing = targetBearing;
-        });
-        await _moveCamera(map, CameraOptions(bearing: targetBearing), 350);
+      if (!followHeading) {
+        await _locate(animated: true, navigationRequest: request);
+        return;
       }
+      if (_deviceHeading == null) {
+        _showNotice('Cap du téléphone indisponible.', MapNoticeKind.error);
+        return;
+      }
+      final bounds = await map.getBounds();
+      if (!_navigationIsCurrent(request)) return;
+      if (!bounds.maxPitch.isFinite || bounds.maxPitch <= 0) {
+        throw StateError('Inclinaison indisponible.');
+      }
+      final viewport = _viewport;
+      if (viewport is! FollowPuckViewportState) return;
+      final heading = _deviceHeading;
+      if (heading == null) {
+        _showNotice('Cap du téléphone indisponible.', MapNoticeKind.error);
+        return;
+      }
+      // ignore: experimental_member_use
+      _setViewport(
+        () {
+          _orientationMode = _MapOrientationMode.heading;
+          _viewport = FollowPuckViewportState(
+            zoom: viewport.zoom,
+            padding: viewport.padding,
+            pitch: bounds.maxPitch * 0.45,
+            bearing: FollowPuckViewportStateBearingConstant(heading % 360),
+          );
+        },
+        transition: const DefaultViewportTransition(
+          maxDuration: Duration(milliseconds: 350),
+        ),
+      );
     } catch (_) {
-      if (!mounted) return;
-      setState(() {
-        _orientationMode = previousMode;
-        _selectedBearing = previousSelectedBearing;
-      });
+      if (!_navigationIsCurrent(request)) return;
       _showNotice('Impossible de changer l’orientation.', MapNoticeKind.error);
+    } finally {
+      if (mounted) setState(() => _navigationBusy = false);
     }
   }
 
@@ -677,12 +735,12 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
     final controller = widget.focusController;
     if (controller == null || _focusRevision == controller.revision) return;
     _focusRevision = controller.revision;
-    _interruptCameraMotion();
-    _cameraFocusRevision++;
     final report = controller.report;
     if (report == null && _selectedReport == null && controller.revision == 0) {
       return;
     }
+    _interruptCameraMotion();
+    _cameraFocusRevision++;
     _selectedExpiryTimer?.cancel();
     setState(() {
       _selectedReport = report;
@@ -694,8 +752,7 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
       _positionFallback = false;
       _selectionTouched = false;
       if (!_reportComposerOpen) {
-        _isFollowing = false;
-        _viewport = const IdleViewportState();
+        _stopFollowing();
       }
     });
     if (report != null) {
@@ -802,8 +859,7 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
             continue;
           }
           setState(() {
-            _isFollowing = false;
-            _viewport = const IdleViewportState();
+            _stopFollowing();
           });
           await WidgetsBinding.instance.endOfFrame;
           if (!_isCurrentFocus(request) ||
@@ -1038,8 +1094,7 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
       if (!mounted) return;
       // Le suivi GPS reprendrait la caméra pendant l'animation.
       setState(() {
-        _isFollowing = false;
-        _viewport = const IdleViewportState();
+        _stopFollowing();
       });
       await WidgetsBinding.instance.endOfFrame;
       await _moveCamera(
@@ -1082,6 +1137,7 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
 
   void _interruptCameraMotion() {
     _cameraMotionRevision++;
+    _navigationRevision++;
     final map = _mapboxMap;
     if (map != null) {
       unawaited(map.cancelCameraAnimation().catchError((Object _) {}));
@@ -1220,7 +1276,8 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
     );
   }
 
-  Future<void> _locate({bool animated = false}) async {
+  Future<void> _locate({bool animated = false, int? navigationRequest}) async {
+    final request = navigationRequest ?? _navigationRevision;
     final wasWatching = _positionSubscription != null;
     setState(() {
       _isLocating = true;
@@ -1248,7 +1305,8 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
 
       if (!mounted) return;
 
-      // A GPS request started before the push must not undo its fitted camera.
+      // A late fix must not undo a gesture, a report framing or a hidden route.
+      if (!_navigationIsCurrent(request)) return;
       if (!animated && _selectedReport != null) return;
       if (animated) {
         _cameraFocusRevision++;
@@ -1266,25 +1324,16 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
 
       if (!mounted) return;
 
+      if (!_navigationIsCurrent(request)) return;
+
       void followUser() {
         _isFollowing = true;
+        if (animated) _orientationMode = _MapOrientationMode.north;
         _viewport = FollowPuckViewportState(
-          // Toujours le zoom du lancement : après un dézoom sur le globe,
-          // recentrer doit aussi ramener au niveau de la rue.
           zoom: _userZoom,
-          bearing: switch (_orientationMode) {
-            _MapOrientationMode.north =>
-              const FollowPuckViewportStateBearingConstant(0),
-            _MapOrientationMode.heading =>
-              FollowPuckViewportStateBearingConstant(
-                _selectedBearing ?? previousCamera?.bearing ?? _cameraBearing,
-              ),
-            _MapOrientationMode.manual =>
-              FollowPuckViewportStateBearingConstant(
-                previousCamera?.bearing ?? _cameraBearing,
-              ),
-          },
-          pitch: previousCamera?.pitch ?? 60,
+          bearing: const FollowPuckViewportStateBearingConstant(0),
+          // Le cadrage de lancement est conservé. Le bouton remet à plat.
+          pitch: animated ? 0 : previousCamera?.pitch ?? 60,
         );
       }
 
@@ -1301,20 +1350,30 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
         setState(followUser);
       }
     } on StateError catch (error) {
-      if (!mounted) return;
-
+      if (!_navigationIsCurrent(request)) return;
+      if (animated) _showNotice(error.message, MapNoticeKind.error);
       setState(() {
         _locationError = error.message;
       });
     } on TimeoutException {
-      if (!mounted) return;
-
+      if (!_navigationIsCurrent(request)) return;
+      if (animated) {
+        _showNotice(
+          'Position introuvable pour le moment. Réessayez.',
+          MapNoticeKind.error,
+        );
+      }
       setState(() {
         _locationError = 'Position introuvable pour le moment. Réessayez.';
       });
     } catch (_) {
-      if (!mounted) return;
-
+      if (!_navigationIsCurrent(request)) return;
+      if (animated) {
+        _showNotice(
+          'Impossible de récupérer votre position.',
+          MapNoticeKind.error,
+        );
+      }
       setState(() {
         _locationError = 'Impossible de récupérer votre position.';
       });
@@ -1399,6 +1458,7 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
       return;
     }
 
+    _navigationRevision++;
     widget.focusController?.setBlocked(true);
     CameraState camera;
     try {
@@ -1504,7 +1564,12 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
           pitch: camera?.pitch ?? 60,
           padding: camera?.padding,
           bearing: FollowPuckViewportStateBearingConstant(
-            camera?.bearing ?? _cameraBearing,
+            switch (_orientationMode) {
+              _MapOrientationMode.north => 0,
+              _MapOrientationMode.heading =>
+                _deviceHeading ?? camera?.bearing ?? _cameraBearing,
+              _MapOrientationMode.free => camera?.bearing ?? _cameraBearing,
+            },
           ),
         );
       });
@@ -1739,6 +1804,7 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
     _noticeTimer?.cancel();
     _selectedExpiryTimer?.cancel();
     _displayedZoom.dispose();
+    _cameraTurns.dispose();
     _cloudPassage.dispose();
     _reportPoint.dispose();
     _reportMarkerLifted.dispose();
@@ -2042,59 +2108,48 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
             ),
           if (!_reportComposerOpen)
             Positioned(
-              right: 16,
-              bottom: 80,
+              left: 0,
+              right: 0,
+              bottom: 70,
               child: SafeArea(
                 top: false,
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    _PoppingMapButton(
-                      tooltip: _orientationMode == _MapOrientationMode.north
-                          ? 'Aligner la carte sur le cap actuel'
-                          : 'Orienter la carte vers le nord',
-                      onPressed: _mapboxMap == null || _mapError != null
+                child: Center(
+                  child: Semantics(
+                    label: _navigationLabel,
+                    value: _isLocating || _navigationBusy
+                        ? 'Localisation…'
+                        : null,
+                    child: _PoppingMapButton(
+                      tooltip: _navigationAction,
+                      onPressed:
+                          _isLocating ||
+                              _navigationBusy ||
+                              _mapboxMap == null ||
+                              _mapError != null
                           ? null
-                          : () => unawaited(_toggleCompass()),
-                      icon: _CompassGlyph(headingTurns: _compassTurns),
-                    ),
-                    const SizedBox(height: 12),
-                    _PoppingMapButton(
-                      tooltip: 'Recentrer sur ma position',
-                      onPressed: _isLocating || _mapboxMap == null
-                          ? null
-                          : () {
-                              AppHaptics.selection();
-                              unawaited(_locate(animated: true));
-                            },
-                      icon: _isLocating
-                          ? const SizedBox(
-                              width: 20,
-                              height: 20,
-                              child: CircularProgressIndicator(strokeWidth: 2),
+                          : () => unawaited(_navigateUser()),
+                      icon: _isLocating || _navigationBusy
+                          ? const SizedBox.square(
+                              dimension: 20,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                                color: Color(0xFF329CFF),
+                              ),
                             )
-                          : Stack(
-                              alignment: Alignment.center,
-                              children: [
-                                const Icon(
-                                  Icons.my_location,
-                                  color: Color(0xFF243243),
-                                ),
-                                AnimatedContainer(
-                                  duration: const Duration(milliseconds: 220),
-                                  width: 7,
-                                  height: 7,
-                                  decoration: BoxDecoration(
-                                    color: _isFollowing
-                                        ? const Color(0xFF329CFF)
-                                        : const Color(0xFF243243),
-                                    shape: BoxShape.circle,
+                          : ValueListenableBuilder<double>(
+                              valueListenable: _cameraTurns,
+                              builder: (context, cameraTurns, _) =>
+                                  _NavigationGlyph(
+                                    mode: _isFollowing
+                                        ? _orientationMode
+                                        : _MapOrientationMode.free,
+                                    headingTurns: _compassTurns - cameraTurns,
+                                    northTurns: -cameraTurns,
+                                    reduceMotion: _reduceMotion,
                                   ),
-                                ),
-                              ],
                             ),
                     ),
-                  ],
+                  ),
                 ),
               ),
             ),
@@ -2178,32 +2233,78 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
   }
 }
 
-/// Icône de la boussole, qui tourne avec le cap du téléphone.
-class _CompassGlyph extends StatelessWidget {
-  const _CompassGlyph({required this.headingTurns});
+/// Cible, nord vrai ou direction : aucune mention technique sur le bouton.
+class _NavigationGlyph extends StatelessWidget {
+  const _NavigationGlyph({
+    required this.mode,
+    required this.headingTurns,
+    required this.northTurns,
+    required this.reduceMotion,
+  });
 
+  final _MapOrientationMode mode;
   final double headingTurns;
+  final double northTurns;
+  final bool reduceMotion;
 
   @override
   Widget build(BuildContext context) {
-    return SizedBox.square(
-      dimension: 26,
-      child: Stack(
-        alignment: Alignment.center,
-        children: [
-          const Positioned.fill(
-            child: CustomPaint(painter: _CompassRingPainter()),
-          ),
-          AnimatedRotation(
-            turns: headingTurns,
-            duration: const Duration(milliseconds: 180),
-            child: const Icon(
-              Icons.navigation,
-              size: 18,
-              color: Color(0xFF329CFF),
-            ),
-          ),
-        ],
+    const blue = Color(0xFF329CFF);
+    const ink = Color(0xFF243243);
+    final duration = reduceMotion
+        ? Duration.zero
+        : const Duration(milliseconds: 180);
+    return ExcludeSemantics(
+      child: SizedBox.square(
+        dimension: 30,
+        child: Stack(
+          alignment: Alignment.center,
+          children: [
+            if (mode == _MapOrientationMode.free)
+              const Icon(Icons.my_location, color: ink, size: 24)
+            else ...[
+              AnimatedRotation(
+                turns: northTurns,
+                duration: duration,
+                child: SizedBox.square(
+                  dimension: 30,
+                  child: Stack(
+                    alignment: Alignment.center,
+                    children: [
+                      const Positioned.fill(
+                        child: CustomPaint(painter: _CompassRingPainter()),
+                      ),
+                      Positioned(
+                        top: 0,
+                        child: ColoredBox(
+                          color: const Color(0xFFF6F8FA),
+                          child: Text(
+                            'N',
+                            style: TextStyle(
+                              fontFamily: 'Raleway',
+                              fontSize: 8,
+                              height: 1,
+                              fontWeight: FontWeight.w800,
+                              color: ink,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              if (mode == _MapOrientationMode.north)
+                const Icon(Icons.gps_fixed, size: 18, color: blue)
+              else
+                AnimatedRotation(
+                  turns: headingTurns,
+                  duration: duration,
+                  child: const Icon(Icons.navigation, size: 19, color: blue),
+                ),
+            ],
+          ],
+        ),
       ),
     );
   }
@@ -2215,24 +2316,17 @@ class _CompassRingPainter extends CustomPainter {
   @override
   void paint(Canvas canvas, ui.Size size) {
     final center = Offset(size.width / 2, size.height / 2);
-    final radius = size.width * 0.44;
+    final radius = size.width * 0.40;
     final ring = Paint()
       ..color = const Color(0xFF243243)
       ..style = PaintingStyle.stroke
-      ..strokeWidth = 1.8;
-    canvas.drawCircle(center, radius, ring);
-
-    final northMark = Paint()
-      ..color = const Color(0xFFFF5757)
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 3.2
-      ..strokeCap = StrokeCap.round;
+      ..strokeWidth = 1.5;
     canvas.drawArc(
       Rect.fromCircle(center: center, radius: radius),
-      -math.pi / 2 - 0.20,
-      0.40,
+      -math.pi / 2 + 0.26,
+      2 * math.pi - 0.52,
       false,
-      northMark,
+      ring,
     );
   }
 
@@ -2284,10 +2378,17 @@ class _PoppingMapButtonState extends State<_PoppingMapButton>
         ),
         child: IconButton(
           tooltip: widget.tooltip,
+          constraints: const BoxConstraints(minWidth: 48, minHeight: 48),
           onPressed: widget.onPressed == null
               ? null
               : () {
-                  _controller.forward(from: 0);
+                  final reduceMotion =
+                      MediaQuery.disableAnimationsOf(context) ||
+                      View.of(context)
+                          .platformDispatcher
+                          .accessibilityFeatures
+                          .reduceMotion;
+                  if (!reduceMotion) _controller.forward(from: 0);
                   widget.onPressed!();
                 },
           icon: IconTheme(
