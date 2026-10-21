@@ -92,12 +92,12 @@ void main() {
       expect(map.style.layers.length, 1);
       final source = map.style.sources.values.single;
       final layer = map.style.layers.values.single;
-      expect(map.style.config['colorLand'], '#E8E0CC');
-      expect(map.style.config['colorGreenspace'], '#C1D0AF');
-      expect(map.style.config['colorWater'], '#E6F7FD');
+      expect(map.style.config['colorLand'], '#C4AD80');
+      expect(map.style.config['colorGreenspace'], '#627545');
+      expect(map.style.config['colorWater'], '#002D51');
       expect(map.style.config['showRoadLabels'], false);
       expect(map.style.config['showPointOfInterestLabels'], false);
-      expect(source['tiles'], ['$local?v=coast-feather-2']);
+      expect(source['tiles'], ['$local?v=marine-palette-3']);
       expect(source['maxzoom'], 14);
       expect(source['volatile'], true);
       expect(source['prefetch-zoom-delta'], 0);
@@ -106,13 +106,13 @@ void main() {
       expect(layer['maxzoom'], isNull); // Z14 tiles remain eligible at Z17+.
       expect(layer['paint']['raster-opacity'], 1);
       expect(layer['paint']['raster-resampling'], 'linear');
-      expect(layer['paint']['raster-contrast'], .08);
-      expect(layer['paint']['raster-saturation'], .08);
+      expect(layer['paint']['raster-contrast'], 0);
+      expect(layer['paint']['raster-saturation'], 0);
       map.style.sources.clear();
       map.style.layers.clear();
       await marine.install(map);
       expect(map.style.sources.values.single['tiles'], [
-        '$local?v=coast-feather-2',
+        '$local?v=marine-palette-3',
       ]);
       expect(map.style.layers.length, 1);
     },
@@ -130,7 +130,7 @@ void main() {
     await MarineMapController(bathymetryTilesUrl: '$local?region=europe')
         .install(map);
     expect(map.style.sources.values.single['tiles'], [
-      '$local?region=europe&v=coast-feather-2',
+      '$local?region=europe&v=marine-palette-3',
     ]);
   });
 

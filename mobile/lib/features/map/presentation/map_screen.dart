@@ -12,7 +12,6 @@ import '../../../core/haptics/app_haptics.dart';
 import '../../../core/location/coordinate_formatter.dart';
 import '../../../core/location/location_service.dart';
 import '../../../core/map/location_marker.dart';
-import '../../../core/map/cloud_passage_controller.dart';
 import '../../../core/map/globe_presentation.dart';
 import '../../../core/map/globe_style.dart';
 import '../../../core/map/globe_rotation_controller.dart';
@@ -36,9 +35,7 @@ import '../data/marine_viewport.dart';
 import '../data/marine_debug.dart';
 import '../data/report_layer_controller.dart';
 import '../data/report_tiles.dart';
-import 'widgets/globe_moon.dart';
 import 'widgets/globe_stars.dart';
-import 'widgets/cloud_passage.dart';
 import 'map_alert_camera.dart';
 import 'map_focus_controller.dart';
 import 'map_intro_controller.dart';
@@ -209,7 +206,6 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
     }
   }
 
-  final _cloudPassage = CloudPassageController();
   final _hydrographyLayer = HydrographyLayer();
   final _marineViewport = MarineViewport();
   bool _marineInteractionAdded = false;
@@ -386,13 +382,6 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
     _reportMapRevision++;
     final map = _mapboxMap;
     if (map != null) _marineViewport.schedule(map, cameraChanged: true);
-    _cloudPassage.setCamera(
-      zoom: event.cameraState.zoom,
-      longitude: event.cameraState.center.coordinates.lng.toDouble(),
-      latitude: event.cameraState.center.coordinates.lat.toDouble(),
-      bearing: event.cameraState.bearing,
-      pitch: event.cameraState.pitch,
-    );
     if (map != null) {
       unawaited(_globePresentation.synchronize(map, event.cameraState.zoom));
     }
@@ -1386,8 +1375,7 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
   /// de partir vers la France.
   static const _introWait = Duration(seconds: 4);
 
-  /// Sans position : la France entière, juste avant le passage des nuages
-  /// ([CloudPassageController.startZoom]).
+  /// Sans position : la France entière.
   static const _franceLongitude = 2.4;
   static const _franceLatitude = 46.6;
   static const _franceZoom = 4.2;
@@ -2055,7 +2043,6 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
     _noticeTimer?.cancel();
     _selectedExpiryTimer?.cancel();
     _displayedZoom.dispose();
-    _cloudPassage.dispose();
     _reportPoint.dispose();
     _reportMarkerLifted.dispose();
     final subscription = _positionSubscription;
@@ -2102,17 +2089,12 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
       resizeToAvoidBottomInset: false,
       body: Stack(
         children: [
-          // Both decorations stay behind the transparent native platform view.
-          // A retained Flutter background keeps the moon visible while Mapbox
-          // continuously redraws; opaque globe surfaces occlude it naturally.
+          // Fixed stars behind the transparent native globe and atmosphere.
           Positioned.fill(
             child: RepaintBoundary(
               child: Stack(
                 fit: StackFit.expand,
-                children: [
-                  GlobeStars(zoom: _displayedZoom),
-                  GlobeMoon(zoom: _displayedZoom),
-                ],
+                children: [GlobeStars(zoom: _displayedZoom)],
               ),
             ),
           ),
@@ -2184,7 +2166,6 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
               ),
             ),
           ),
-          Positioned.fill(child: CloudPassage(camera: _cloudPassage)),
           if (_mapError != null)
             Positioned.fill(
               child: ColoredBox(

@@ -19,7 +19,7 @@ class MarineMapController {
   static const String bathymetrySourceId = 'nowave-bathymetry';
   static const String bathymetryLayerId = 'nowave-bathymetry-raster';
 
-  /// Fond marin accordé aux zones côtières claires du raster.
+  /// Fond marin sans données, dans la même palette que le raster.
   static const String deepWaterColor = MarinePalette.water;
 
   Future<void> install(MapboxMap map) async {
@@ -53,9 +53,9 @@ class MarineMapController {
       await style.addSource(
         RasterSource(
           id: bathymetrySourceId,
-          // Separate clipped coast tiles from the previous unmasked cache.
+          // Versioned palette separates cached pixels without purging caches.
           tiles: [
-            ApiConfig.withQueryParameters(tilesUrl, {'v': 'coast-feather-2'}),
+            ApiConfig.withQueryParameters(tilesUrl, {'v': 'marine-palette-3'}),
           ],
           tileSize: 256,
           minzoom: 0,
@@ -74,15 +74,14 @@ class MarineMapController {
         RasterLayer(
           id: bathymetryLayerId,
           sourceId: bathymetrySourceId,
-          // Above the globe's MIDDLE satellite/ocean decoration, otherwise
-          // those layers attenuate the nominally opaque raster at Z5–Z7.
+          // Preserve the NW-220 raster slot and opacity from Z5.
           slot: LayerSlot.MIDDLE,
           minZoom: MarineZoom.raster,
           rasterOpacity: 1,
           rasterFadeDuration: 150,
           rasterResampling: RasterResampling.LINEAR,
-          rasterContrast: .08,
-          rasterSaturation: .08,
+          rasterContrast: 0,
+          rasterSaturation: 0,
         ),
       );
     }

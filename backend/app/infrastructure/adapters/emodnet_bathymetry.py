@@ -40,12 +40,12 @@ _EMODNET_RAMP = (
 )
 
 _NOWAVE_RAMP = (
-    (230, 247, 253),  # #E6F7FD
-    (210, 240, 251),  # #D2F0FB
-    (183, 228, 247),  # #B7E4F7
-    (143, 208, 238),  # #8FD0EE
-    (92, 179, 223),   # #5CB3DF
-    (30, 111, 168),   # #1E6FA8
+    (97, 170, 164),  # #61AAA4 — shallow end of the observed EMODnet ramp
+    (14, 105, 133),  # #0E6985
+    (1, 74, 107),    # #014A6B
+    (0, 50, 90),     # #00325A
+    (0, 45, 81),     # #002D51
+    (0, 23, 49),     # #001731 — deep end, not a new numeric depth threshold
 )
 
 # Demi-circonférence du monde en Web Mercator EPSG:3857.

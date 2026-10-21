@@ -65,7 +65,7 @@ void main() {
       await install();
       final expected = {
         'nowave-bathymetry':
-            'bathymetry/{z}/{x}/{y}.png?tenant=eu&v=coast-feather-2',
+            'bathymetry/{z}/{x}/{y}.png?tenant=eu&v=marine-palette-3',
         'nowave-depth-contours': 'depth-contours/{z}/{x}/{y}.pbf?tenant=eu&v=3',
         'nowave-soundings': 'soundings/{z}/{x}/{y}.pbf?tenant=eu&v=depths-4',
         'nowave-underwater-hazards':
@@ -145,7 +145,7 @@ void main() {
         await BuoyLayer().addTo(map);
         await ReportTiles(getIdToken: () async => 'unit-token').addTo(map);
         final routes = {
-          'nowave-bathymetry': 'bathymetry/{z}/{x}/{y}.png?v=coast-feather-2',
+          'nowave-bathymetry': 'bathymetry/{z}/{x}/{y}.png?v=marine-palette-3',
           'nowave-depth-contours': 'depth-contours/{z}/{x}/{y}.pbf?v=3',
           'nowave-soundings': 'soundings/{z}/{x}/{y}.pbf?v=depths-4',
           'nowave-underwater-hazards': 'underwater-hazards/{z}/{x}/{y}.pbf?v=3',

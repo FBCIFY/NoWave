@@ -17,8 +17,8 @@ void main() {
       await tester.pumpWidget(const MyApp(home: MapScreen()));
       final widget = tester.widget<MapWidget>(find.byType(MapWidget));
       for (final (type, source) in [
-        (MapLoadErrorType.SOURCE, GlobeStyle.satelliteSource),
-        (MapLoadErrorType.TILE, 'nowave-clouds-ne'),
+        (MapLoadErrorType.SOURCE, GlobeStyle.terrainSource),
+        (MapLoadErrorType.TILE, GlobeStyle.terrainSource),
         (MapLoadErrorType.SOURCE, BuoyLayer.sourceId),
         (MapLoadErrorType.TILE, BuoyLayer.sourceId),
         (MapLoadErrorType.TILE, PortLayer.sourceId),

@@ -52,15 +52,15 @@ void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
   test(
-    'native style preserves Standard and bounded, georeferenced decoration',
+    'native style preserves Standard with real vector classes and no imagery',
     () {
       final document = GlobeStyle.document(Uri.parse('file:///globe/'));
       expect(jsonDecode(jsonEncode(document))['projection']['name'], 'globe');
       final basemap = (document['imports'] as List).single as Map;
       expect(basemap['id'], 'basemap');
       expect(basemap['url'], 'mapbox://styles/mapbox/standard');
-      expect(basemap['config']['colorLand'], '#E8E0CC');
-      expect(basemap['config']['colorGreenspace'], '#C1D0AF');
+      expect(basemap['config']['colorLand'], '#C4AD80');
+      expect(basemap['config']['colorGreenspace'], '#627545');
       expect(basemap['config']['showRoadLabels'], false);
       expect(basemap['config']['showAdminBoundaries'], false);
       final sources = document['sources'] as Map;
@@ -72,25 +72,32 @@ void main() {
       expect(document['center'], [15.0, 12.0]);
       expect(document['zoom'], GlobeStyle.initialZoom);
       expect(
-        sources[GlobeStyle.creditsSource]['attribution'],
-        contains('NASA'),
+        sources.keys,
+        unorderedEquals([GlobeStyle.waterSource, GlobeStyle.terrainSource]),
       );
-      expect(sources[GlobeStyle.creditsSource]['data']['features'], isEmpty);
-      expect(sources[GlobeStyle.satelliteSource]['maxzoom'], 7);
-      expect(sources[GlobeStyle.satelliteSource]['prefetch-zoom-delta'], 0);
-      for (final name in GlobeStyle.imageNames) {
-        final source = sources['nowave-clouds-$name'];
-        expect(source['url'], 'file:///globe/$name.png');
-        final coordinates = source['coordinates'] as List<List<double>>;
-        expect(coordinates[1][0] - coordinates[0][0], 180);
-        expect(coordinates[0][1], greaterThan(coordinates[2][1]));
-      }
+      expect(sources.values.every((s) => s['type'] == 'vector'), isTrue);
       final layers = document['layers'] as List;
       expect(layers.map((l) => l['id']).toSet().length, layers.length);
-      for (final layer in layers) {
-        // Above Standard's roads, below its place labels.
-        expect(layer['slot'], 'middle');
-        expect(layer['maxzoom'], lessThanOrEqualTo(7));
+      expect(jsonEncode(document), isNot(contains('satellite')));
+      expect(jsonEncode(document), isNot(contains('cloud')));
+      expect(jsonEncode(document), isNot(contains('moon')));
+      final cover = layers.singleWhere((l) => l['id'] == 'nowave-landcover');
+      expect(cover['source-layer'], 'landcover');
+      expect(cover['slot'], 'bottom');
+      for (final layer in layers.where((l) => l['source-layer'] == 'admin')) {
+        expect(layer['paint']['line-opacity'], .18);
+        expect(layer['paint']['line-width'], .6);
+        expect(layer['paint']['line-color'], '#F0F0F0');
+        expect(
+          layer['filter'],
+          contains(
+            equals([
+              '==',
+              ['get', 'admin_level'],
+              0,
+            ]),
+          ),
+        );
       }
       final ocean = layers.singleWhere((l) => l['id'] == 'nowave-earth-ocean');
       expect(ocean['source-layer'], 'water');
@@ -133,23 +140,16 @@ void main() {
     },
   );
 
-  test(
-    'bundle exports a valid local style with all four actual raster files',
-    () async {
-      final uri = await GlobeStyle.prepare();
-      final style =
-          jsonDecode(await File.fromUri(Uri.parse(uri)).readAsString()) as Map;
-      for (final source in (style['sources'] as Map).values) {
-        if (source['type'] != 'image') continue;
-        final file = File.fromUri(Uri.parse(source['url'] as String));
-        expect(await file.exists(), isTrue);
-        final bytes = await file.readAsBytes();
-        expect(bytes.take(8), [137, 80, 78, 71, 13, 10, 26, 10]);
-        expect(ByteData.sublistView(bytes).getUint32(16), 512);
-        expect(ByteData.sublistView(bytes).getUint32(20), 512);
-      }
-    },
-  );
+  test('bundle exports the same vector style without image assets', () async {
+    final uri = await GlobeStyle.prepare();
+    final style =
+        jsonDecode(await File.fromUri(Uri.parse(uri)).readAsString()) as Map;
+    expect(style, GlobeStyle.document(Uri.parse(uri).resolve('.')));
+    expect(
+      (style['sources'] as Map).values.every((s) => s['type'] == 'vector'),
+      isTrue,
+    );
+  });
 
   test(
     'labels: crossing only, both directions, reload, retry after failure',
@@ -213,8 +213,8 @@ void main() {
           );
           expect(map.style.config['lightPreset'], 'day');
           expect(map.style.config['theme'], 'faded');
-          expect(map.style.config['colorLand'], '#E8E0CC');
-          expect(map.style.config['colorGreenspace'], '#C1D0AF');
+          expect(map.style.config['colorLand'], '#C4AD80');
+          expect(map.style.config['colorGreenspace'], '#627545');
           expect(map.style.config['showRoadLabels'], false);
           expect(map.style.config['showPointOfInterestLabels'], false);
           expect(map.style.config['showPlaceLabels'], zoom >= 4);
