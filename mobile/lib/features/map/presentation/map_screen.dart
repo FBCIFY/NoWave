@@ -482,6 +482,9 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
     });
   }
 
+  /// Hauteur réservée au « i » de Mapbox sous le logo.
+  static const _attributionHeight = 24.0;
+
   Future<void> _positionMapOrnaments(
     MapboxMap map, {
     required bool editing,
@@ -496,7 +499,8 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
                 : OrnamentPosition.BOTTOM_LEFT,
             marginLeft: 16,
             marginTop: editing ? 64 : 4,
-            marginBottom: bottom,
+            // En bas, le « i » passe sous le logo, loin du bouton +.
+            marginBottom: bottom + _attributionHeight,
           ),
         ),
         // Le « i » obligatoire suit le logo, loin des boutons de droite.
@@ -505,7 +509,7 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
             position: editing
                 ? OrnamentPosition.TOP_LEFT
                 : OrnamentPosition.BOTTOM_LEFT,
-            marginLeft: 106,
+            marginLeft: editing ? 106 : 16,
             marginTop: editing ? 64 : 4,
             marginBottom: bottom,
             iconColor: 0x99FFFFFF,
@@ -2415,9 +2419,9 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
             ),
           if (!_reportComposerOpen)
             Positioned(
-              left: 16,
-              // Juste au-dessus du logo Mapbox, placé à viewPadding + 4.
-              bottom: mediaQuery.viewPadding.bottom + 30,
+              right: 16,
+              // Sous les boutons de droite, à la hauteur du logo Mapbox.
+              bottom: mediaQuery.viewPadding.bottom + 4,
               child: MapScaleBar(camera: _scaleCamera),
             ),
           if (!_reportComposerOpen)
