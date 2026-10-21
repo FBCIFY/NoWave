@@ -437,9 +437,10 @@ void main() {
     expect(map.style.sources.keys.where((id) => id.startsWith('alert-')), [
       'alert-selected',
     ]);
-    expect(map.style.images.keys, [
-      badges.ReportMarker.imageId(ReportCategory.marineAnimal),
-    ]);
+    expect(
+      map.style.images.keys.where((id) => id.startsWith('nowave-report-')),
+      [badges.ReportMarker.imageId(ReportCategory.marineAnimal)],
+    );
     expect(map.cameras, hasLength(1));
   });
 

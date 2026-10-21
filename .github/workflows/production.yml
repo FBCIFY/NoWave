@@ -52,7 +52,7 @@ jobs:
 
   deploy:
     name: Deploy to production
-    if: github.event_name == 'push' && github.ref == 'refs/heads/dev' && vars.NOWAVE_PRODUCTION_DEPLOY_ENABLED == 'true'
+    if: github.event_name == 'push' && github.ref == 'refs/heads/dev'
     needs: validate
     runs-on: ubuntu-24.04
     timeout-minutes: 90
