@@ -105,7 +105,84 @@ void main() {
     gestureState: mb.GestureState.changed,
   );
 
-  navigationTest('un seul bouton : nord à plat, direction à 45 %, puis nord', (
+  void cameraBearing(WidgetTester tester, double bearing) =>
+      widget(tester).onCameraChangeListener!(
+        mb.CameraChangedEventData.fromJson({
+          'timestamp': 0,
+          'cameraState': {
+            'center': {
+              'type': 'Point',
+              'coordinates': [5.37, 43.29],
+            },
+            'zoom': 14.0,
+            'pitch': 0.0,
+            'bearing': bearing,
+            'padding': {'top': 0.0, 'left': 0.0, 'bottom': 0.0, 'right': 0.0},
+          },
+        }),
+      );
+
+  navigationTest(
+    'le nord rouge reste visible en carte libre et pendant le GPS',
+    (tester) async {
+      await mount(tester);
+      final north = find.byKey(const ValueKey('navigation-north-marker'));
+      expect(north, findsOneWidget);
+      expect(
+        tester.widget<Text>(find.text('N')).style!.color,
+        const Color(0xFFBF5360),
+      );
+      headings.values.add(120);
+      await press(tester, 'Recentrer sur ma position');
+      await press(tester, 'Suivre la direction du téléphone');
+      widget(tester).onScrollListener!(getGesture());
+      cameraBearing(tester, 120);
+      await tester.pumpAndSettle();
+      expect(find.byTooltip('Recentrer sur ma position'), findsOneWidget);
+      expect(north, findsOneWidget);
+      final center = tester.getCenter(
+        find.byKey(const ValueKey('navigation-center-glyph')),
+      );
+      expect(tester.getCenter(north).dx, lessThan(center.dx));
+      expect(tester.getCenter(north).dy, greaterThan(center.dy));
+
+      final pending = Completer<geo.Position>();
+      gps.onCurrent = () => pending.future;
+      await tester.tap(find.byTooltip('Recentrer sur ma position'));
+      await tester.pump();
+      expect(find.byType(CircularProgressIndicator), findsOneWidget);
+      expect(north, findsOneWidget);
+      pending.complete(focusPosition());
+      await tester.pumpAndSettle();
+      expect(north, findsOneWidget);
+    },
+  );
+
+  navigationTest('le nord reste droit et ne chevauche jamais la cible', (
+    tester,
+  ) async {
+    await mount(tester);
+    final north = find.byKey(const ValueKey('navigation-north-marker'));
+    final center = find.byKey(const ValueKey('navigation-center-glyph'));
+    final button = find.byTooltip('Recentrer sur ma position');
+    for (var bearing = 0; bearing < 360; bearing += 15) {
+      cameraBearing(tester, bearing.toDouble());
+      await tester.pumpAndSettle();
+      final marker = tester.getRect(north);
+      expect(
+        marker.overlaps(tester.getRect(center)),
+        isFalse,
+        reason: 'chevauchement au cap $bearing',
+      );
+      expect(tester.getRect(button).contains(marker.topLeft), isTrue);
+      expect(tester.getRect(button).contains(marker.bottomRight), isTrue);
+      final transform = tester.renderObject(north).getTransformTo(null);
+      expect(transform.storage[1], closeTo(0, 0.0001));
+      expect(transform.storage[4], closeTo(0, 0.0001));
+    }
+  });
+
+  navigationTest('un seul bouton : nord à plat, direction à 75 %, puis nord', (
     tester,
   ) async {
     await mount(tester);
@@ -129,7 +206,7 @@ void main() {
     await tester.pumpAndSettle();
     await press(tester, 'Suivre la direction du téléphone');
     expect(viewport(tester).zoom, 14);
-    expect(viewport(tester).pitch, 36);
+    expect(viewport(tester).pitch, 60);
     expect(bearing(tester), 123);
     expect(find.byIcon(Icons.navigation), findsOneWidget);
     expect(find.byIcon(Icons.gps_fixed), findsNothing);
@@ -137,7 +214,7 @@ void main() {
     headings.values.add(210);
     await tester.pumpAndSettle();
     expect(bearing(tester), 210);
-    expect(viewport(tester).pitch, 36);
+    expect(viewport(tester).pitch, 60);
     await press(tester, 'Revenir au nord vrai à plat');
     expect(bearing(tester), 0);
     expect(viewport(tester).pitch, 0);
@@ -180,7 +257,7 @@ void main() {
       headings.values.add(45);
       await press(tester, 'Recentrer sur ma position');
       await press(tester, 'Suivre la direction du téléphone');
-      expect(viewport(tester).pitch, maxPitch * 0.45);
+      expect(viewport(tester).pitch, maxPitch * 0.75);
     });
   }
 
@@ -192,7 +269,7 @@ void main() {
     headings.values.add(90);
     await press(tester, 'Recentrer sur ma position');
     await press(tester, 'Suivre la direction du téléphone');
-    expect(viewport(tester).pitch, 85 * .45);
+    expect(viewport(tester).pitch, 85 * .75);
     expect(bearing(tester), 90);
     expect(find.byTooltip('Revenir au nord vrai à plat'), findsOneWidget);
   });
@@ -225,7 +302,7 @@ void main() {
       expect(widget(tester).viewport, isA<mb.FollowPuckViewportState>());
       await touch.up();
       await tester.pumpAndSettle();
-      expect(viewport(tester).pitch, 36);
+      expect(viewport(tester).pitch, 60);
       expect(bearing(tester), 90);
       expect(find.byTooltip('Revenir au nord vrai à plat'), findsOneWidget);
     },
@@ -247,7 +324,7 @@ void main() {
               'coordinates': [5.37, 43.29],
             },
             'zoom': 14.0,
-            'pitch': 36.0,
+            'pitch': 60.0,
             'bearing': value,
             'padding': {'top': 0.0, 'left': 0.0, 'bottom': 0.0, 'right': 0.0},
           },
@@ -330,7 +407,7 @@ void main() {
             'coordinates': [5.37, 43.29],
           },
           'zoom': 14.0,
-          'pitch': 36.0,
+          'pitch': 60.0,
           'bearing': 120.0,
           'padding': {'top': 0.0, 'left': 0.0, 'bottom': 0.0, 'right': 0.0},
         },
@@ -375,7 +452,7 @@ void main() {
     await press(tester, 'Suivre la direction du téléphone');
     gps.onCurrent = () => Future.error(TimeoutException('GPS'));
     await press(tester, 'Revenir au nord vrai à plat');
-    expect(viewport(tester).pitch, 36);
+    expect(viewport(tester).pitch, 60);
     expect(bearing(tester), 45);
     expect(find.byTooltip('Revenir au nord vrai à plat'), findsOneWidget);
     expect(
@@ -396,7 +473,7 @@ void main() {
       expect(find.text('Impossible de changer l’orientation.'), findsOneWidget);
       map.onBounds = null;
       await press(tester, 'Suivre la direction du téléphone');
-      expect(viewport(tester).pitch, 36);
+      expect(viewport(tester).pitch, 60);
     },
   );
 
@@ -454,7 +531,7 @@ void main() {
     headings.values.add(60);
     await press(tester, 'Recentrer sur ma position');
     await press(tester, 'Suivre la direction du téléphone');
-    map.cameraPitch = 36;
+    map.cameraPitch = 60;
     map.cameraBearing = 60;
     await press(tester, 'Créer un signalement');
     expect(find.byTooltip('Revenir au nord vrai à plat'), findsNothing);
@@ -462,7 +539,7 @@ void main() {
     await tester.pumpAndSettle();
     expect(widget(tester).viewport, isA<mb.CameraViewportState>());
     await press(tester, 'Fermer');
-    expect(viewport(tester).pitch, 36);
+    expect(viewport(tester).pitch, 60);
     expect(bearing(tester), 120);
     headings.values.add(180);
     await tester.pumpAndSettle();
@@ -491,7 +568,7 @@ void main() {
       )) {
         expect(rotation.duration, Duration.zero);
       }
-      expect(viewport(tester).pitch, 36);
+      expect(viewport(tester).pitch, 60);
       expect(map.animationDurations, isEmpty);
     } finally {
       semantics.dispose();

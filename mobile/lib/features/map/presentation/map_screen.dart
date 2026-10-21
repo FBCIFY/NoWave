@@ -525,7 +525,7 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
   String get _navigationLabel => switch (_isFollowing
       ? _orientationMode
       : _MapOrientationMode.free) {
-    _MapOrientationMode.free => 'Carte libre',
+    _MapOrientationMode.free => 'Carte libre, nord indiqué',
     _MapOrientationMode.north => 'Centré sur ma position, nord vrai en haut',
     _MapOrientationMode.heading =>
       'Centré sur ma position, direction du téléphone',
@@ -577,7 +577,7 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
           _viewport = FollowPuckViewportState(
             zoom: viewport.zoom,
             padding: viewport.padding,
-            pitch: maxPitch * 0.45,
+            pitch: maxPitch * 0.75,
             bearing: FollowPuckViewportStateBearingConstant(heading % 360),
           );
         },
@@ -2450,26 +2450,18 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
                               _mapError != null
                           ? null
                           : () => unawaited(_navigateUser()),
-                      icon: _isLocating || _navigationBusy
-                          ? const SizedBox.square(
-                              dimension: 20,
-                              child: CircularProgressIndicator(
-                                strokeWidth: 2,
-                                color: Color(0xFF329CFF),
-                              ),
-                            )
-                          : ValueListenableBuilder<double>(
-                              valueListenable: _cameraTurns,
-                              builder: (context, cameraTurns, _) =>
-                                  _NavigationGlyph(
-                                    mode: _isFollowing
-                                        ? _orientationMode
-                                        : _MapOrientationMode.free,
-                                    headingTurns: _compassTurns - cameraTurns,
-                                    northTurns: -cameraTurns,
-                                    reduceMotion: _reduceMotion,
-                                  ),
-                            ),
+                      icon: ValueListenableBuilder<double>(
+                        valueListenable: _cameraTurns,
+                        builder: (context, cameraTurns, _) => _NavigationGlyph(
+                          mode: _isFollowing
+                              ? _orientationMode
+                              : _MapOrientationMode.free,
+                          headingTurns: _compassTurns - cameraTurns,
+                          northTurns: -cameraTurns,
+                          reduceMotion: _reduceMotion,
+                          busy: _isLocating || _navigationBusy,
+                        ),
+                      ),
                     ),
                   ),
                 ),
@@ -2590,12 +2582,14 @@ class _NavigationGlyph extends StatelessWidget {
     required this.headingTurns,
     required this.northTurns,
     required this.reduceMotion,
+    required this.busy,
   });
 
   final _MapOrientationMode mode;
   final double headingTurns;
   final double northTurns;
   final bool reduceMotion;
+  final bool busy;
 
   @override
   Widget build(BuildContext context) {
@@ -2606,53 +2600,79 @@ class _NavigationGlyph extends StatelessWidget {
         : const Duration(milliseconds: 180);
     return ExcludeSemantics(
       child: SizedBox.square(
-        dimension: 30,
+        dimension: 40,
         child: Stack(
           alignment: Alignment.center,
+          clipBehavior: Clip.none,
           children: [
-            if (mode == _MapOrientationMode.free)
-              const Icon(Icons.my_location, color: ink, size: 24)
-            else ...[
-              AnimatedRotation(
-                turns: northTurns,
-                duration: duration,
-                child: SizedBox.square(
-                  dimension: 30,
-                  child: Stack(
-                    alignment: Alignment.center,
-                    children: [
-                      const Positioned.fill(
-                        child: CustomPaint(painter: _CompassRingPainter()),
-                      ),
-                      Positioned(
-                        top: 0,
-                        child: ColoredBox(
-                          color: const Color(0xFFF6F8FA),
-                          child: Text(
-                            'N',
-                            style: TextStyle(
-                              fontFamily: 'Raleway',
-                              fontSize: 8,
-                              height: 1,
-                              fontWeight: FontWeight.w800,
-                              color: ink,
+            AnimatedRotation(
+              key: const ValueKey('navigation-compass-rotation'),
+              turns: northTurns,
+              duration: duration,
+              child: SizedBox.square(
+                dimension: 40,
+                child: Stack(
+                  alignment: Alignment.center,
+                  clipBehavior: Clip.none,
+                  children: [
+                    const Positioned.fill(
+                      child: CustomPaint(painter: _CompassRingPainter()),
+                    ),
+                    Positioned(
+                      top: -5,
+                      // Orbit around the central action, keeping the label
+                      // upright and clear of the target/arrow at every angle.
+                      child: AnimatedRotation(
+                        turns: -northTurns,
+                        duration: duration,
+                        child: const SizedBox(
+                          key: ValueKey('navigation-north-marker'),
+                          width: 8,
+                          height: 10,
+                          child: Center(
+                            child: Text(
+                              'N',
+                              style: TextStyle(
+                                fontFamily: 'Raleway',
+                                fontSize: 9,
+                                height: 1,
+                                fontWeight: FontWeight.w800,
+                                color: Color(0xFFBF5360),
+                              ),
                             ),
                           ),
                         ),
                       ),
-                    ],
-                  ),
+                    ),
+                  ],
                 ),
               ),
-              if (mode == _MapOrientationMode.north)
-                const Icon(Icons.gps_fixed, size: 18, color: blue)
-              else
-                AnimatedRotation(
-                  turns: headingTurns,
-                  duration: duration,
-                  child: const Icon(Icons.navigation, size: 19, color: blue),
-                ),
-            ],
+            ),
+            SizedBox.square(
+              key: const ValueKey('navigation-center-glyph'),
+              dimension: 18,
+              child: busy
+                  ? const Padding(
+                      padding: EdgeInsets.all(1),
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: blue,
+                      ),
+                    )
+                  : mode == _MapOrientationMode.free
+                  ? const Icon(Icons.my_location, color: ink, size: 18)
+                  : mode == _MapOrientationMode.north
+                  ? const Icon(Icons.gps_fixed, size: 18, color: blue)
+                  : AnimatedRotation(
+                      turns: headingTurns,
+                      duration: duration,
+                      child: const Icon(
+                        Icons.navigation,
+                        size: 18,
+                        color: blue,
+                      ),
+                    ),
+            ),
           ],
         ),
       ),
@@ -2666,11 +2686,11 @@ class _CompassRingPainter extends CustomPainter {
   @override
   void paint(Canvas canvas, ui.Size size) {
     final center = Offset(size.width / 2, size.height / 2);
-    final radius = size.width * 0.40;
+    final radius = size.width * 0.37;
     final ring = Paint()
-      ..color = const Color(0xFF243243)
+      ..color = const Color(0x708094A8)
       ..style = PaintingStyle.stroke
-      ..strokeWidth = 1.5;
+      ..strokeWidth = 1.2;
     canvas.drawArc(
       Rect.fromCircle(center: center, radius: radius),
       -math.pi / 2 + 0.26,
@@ -2678,6 +2698,15 @@ class _CompassRingPainter extends CustomPainter {
       false,
       ring,
     );
+    for (var index = 1; index < 4; index++) {
+      final angle = -math.pi / 2 + index * math.pi / 2;
+      final direction = Offset(math.cos(angle), math.sin(angle));
+      canvas.drawLine(
+        center + direction * (radius - 1.8),
+        center + direction * radius,
+        ring,
+      );
+    }
   }
 
   @override
