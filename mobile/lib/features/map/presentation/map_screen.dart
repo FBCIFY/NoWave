@@ -1412,6 +1412,7 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
 
   /// Zoom du recentrage volontaire sur l’utilisateur.
   static const _userZoom = 14.0;
+  static const _navigationZoom = 12.0;
 
   /// Durée maximale du vol vers l'utilisateur au recentrage : Mapbox
   /// raccourcit l'animation quand la distance est faible.
@@ -1528,7 +1529,7 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
         _isFollowing = true;
         if (animated) _orientationMode = _MapOrientationMode.north;
         _viewport = FollowPuckViewportState(
-          zoom: _userZoom,
+          zoom: animated ? _navigationZoom : _userZoom,
           bearing: const FollowPuckViewportStateBearingConstant(0),
           pitch: animated
               ? 0

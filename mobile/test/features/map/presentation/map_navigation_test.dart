@@ -190,7 +190,7 @@ void main() {
     expect(find.byTooltip('Aligner la carte sur le cap actuel'), findsNothing);
     expect(find.byTooltip('Orienter la carte vers le nord'), findsNothing);
     await press(tester, 'Recentrer sur ma position');
-    expect(viewport(tester).zoom, 14);
+    expect(viewport(tester).zoom, 12);
     expect(viewport(tester).pitch, 0);
     expect(bearing(tester), 0);
     expect(find.text('N'), findsOneWidget);
@@ -205,7 +205,7 @@ void main() {
     gps.positions.add(focusPosition(latitude: 43.30));
     await tester.pumpAndSettle();
     await press(tester, 'Suivre la direction du téléphone');
-    expect(viewport(tester).zoom, 14);
+    expect(viewport(tester).zoom, 12);
     expect(viewport(tester).pitch, 60);
     expect(bearing(tester), 123);
     expect(find.byIcon(Icons.navigation), findsOneWidget);
