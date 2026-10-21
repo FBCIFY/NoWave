@@ -811,16 +811,16 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
   /// Marge autour du doigt pour toucher un badge, en pixels.
   static const _badgeTapRadius = 8.0;
 
-  /// Marge autour du doigt pour toucher le nombre d'une zone : la zone
-  /// colorée est bien plus large que le nombre.
+  /// Marge autour du doigt pour toucher une zone : la tache colorée est
+  /// bien plus large que son point touchable.
   static const _clusterTapRadius = 32.0;
 
   /// Niveaux de zoom gagnés en touchant une zone.
   static const _clusterZoomStep = 2.0;
 
-  /// Toucher un badge ouvre sa fiche ; toucher le nombre d'une zone
-  /// rapproche la carte. Les interactions restent valables après un
-  /// changement de style, qui ne fait que recréer les couches.
+  /// Toucher un badge ouvre sa fiche ; toucher une zone colorée rapproche
+  /// la carte. Les interactions restent valables après un changement de
+  /// style, qui ne fait que recréer les couches.
   void _addReportInteractions(MapboxMap map) {
     // Selection exists independently from the optional MVT source.
     if (widget.reportDetailService != null) {
@@ -842,7 +842,7 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
     );
     map.addInteraction(
       TapInteraction(
-        FeaturesetDescriptor(layerId: ReportTiles.countLayerId),
+        FeaturesetDescriptor(layerId: ReportTiles.clusterTapLayerId),
         (feature, context) =>
             unawaited(_zoomIntoCluster(feature, context.point)),
         radius: _clusterTapRadius,

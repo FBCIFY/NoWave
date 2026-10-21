@@ -6,7 +6,6 @@ import 'package:flutter/material.dart';
 import 'package:mapbox_maps_flutter/mapbox_maps_flutter.dart';
 
 import '../../../core/api/api_config.dart';
-import '../../../core/map/marine/marine_palette.dart';
 import '../../reports/domain/manual_report.dart';
 import '../presentation/report_marker.dart';
 
@@ -16,9 +15,9 @@ import '../presentation/report_marker.dart';
 ///
 /// Jusqu'au zoom 8, le backend regroupe les signalements proches : un
 /// regroupement porte `cluster` et `cluster_count`, sans `report_id` ni
-/// `category`. De loin, la carte montre donc une zone colorée selon le
-/// nombre de signalements, avec ce nombre écrit dessus ; de près, un badge
-/// par signalement.
+/// `category`. De loin, la carte montre donc une carte de chaleur plate,
+/// sans chiffre, du violet au rouge selon le nombre de signalements ; de
+/// près, un badge par signalement.
 class ReportTiles {
   factory ReportTiles({
     required Future<String> Function() getIdToken,
@@ -35,8 +34,9 @@ class ReportTiles {
   /// Zone colorée, plus chaude là où les signalements sont nombreux.
   static const heatmapLayerId = 'nowave-reports-heatmap';
 
-  /// Nombre de signalements écrit sur chaque zone.
-  static const countLayerId = 'nowave-reports-count';
+  /// Point invisible sur chaque zone, que le doigt peut toucher : Mapbox
+  /// ne sait pas dire quelle zone d'une heatmap a été touchée.
+  static const clusterTapLayerId = 'nowave-reports-cluster-tap';
 
   /// Nom de la couche à l'intérieur des tuiles, fixé par le backend.
   static const _sourceLayer = 'reports';
@@ -57,8 +57,8 @@ class ReportTiles {
   /// backend ne regroupe plus les signalements.
   static const _badgesMinZoom = 9.0;
 
-  /// Zoom où la zone colorée et son nombre commencent à s'effacer : ils
-  /// sont partis quand les badges arrivent. La zone ne va pas au-delà : sur
+  /// Zoom où la zone colorée commence à s'effacer : elle est partie quand
+  /// les badges arrivent. La zone ne va pas au-delà : sur
   /// les tuiles du zoom 9, chaque signalement chaufferait séparément et les
   /// voisins s'additionneraient jusqu'au rouge.
   static const _fadeStartZoom = 8.5;
@@ -69,10 +69,15 @@ class ReportTiles {
   /// Taille des badges au début du fondu, avant de grandir jusqu'à 1.
   static const _badgeStartScale = 0.6;
 
-  /// Bleu marine du nombre, détouré de blanc : lisible sur le jaune comme
-  /// sur le rouge.
-  static const _countColor = 0xFF172554;
   static const _white = 0xFFFFFFFF;
+
+  /// Rayon du point touchable, en pixels ; la marge du doigt s'y ajoute.
+  static const _clusterTapRadius = 16.0;
+
+  /// Assez pour que Mapbox garde le point touchable, trop peu pour le voir :
+  /// une couche à opacité nulle n'est pas dessinée et peut être ignorée au
+  /// toucher.
+  static const _invisibleOpacity = 0.01;
 
   /// Nombre de signalements d'une feature : 1 pour un signalement seul.
   static const _count = [
@@ -116,6 +121,34 @@ class ReportTiles {
     final phase = elapsed.inMicroseconds / _pulsePeriod.inMicroseconds;
     return 1 + _pulseAmplitude * (1 - math.cos(2 * math.pi * phase)) / 2;
   }
+
+  /// Couleur selon la densité, comme Snap Map : transparent, puis violet,
+  /// bleu, vert, jaune, orange, rouge, et un cœur rouge foncé sur les zones
+  /// très chargées.
+  @visibleForTesting
+  static const heatmapColorExpression = [
+    'interpolate',
+    ['linear'],
+    ['heatmap-density'],
+    0,
+    'rgba(139, 92, 246, 0)',
+    0.05,
+    'rgba(139, 92, 246, 0.5)',
+    0.15,
+    'rgb(139, 92, 246)',
+    0.3,
+    'rgb(59, 130, 246)',
+    0.45,
+    'rgb(34, 197, 94)',
+    0.6,
+    'rgb(250, 204, 21)',
+    0.75,
+    'rgb(249, 115, 22)',
+    0.9,
+    'rgb(220, 38, 38)',
+    1,
+    'rgb(127, 29, 29)',
+  ];
 
   /// Valeur qui suit le zoom : [start] au zoom [from], [end] au zoom [to],
   /// et entre les deux une transition régulière.
@@ -308,7 +341,10 @@ class ReportTiles {
         maxZoom: _badgesMinZoom,
         // Sous les étiquettes du fond de carte, qui restent lisibles.
         slot: LayerSlot.MIDDLE,
-        // Un signalement seul chauffe à moitié, dix ou plus à fond.
+        // Au cœur d'une tache, Mapbox compte environ 0,4 par unité de
+        // poids : un signalement seul reste violet ou bleu, une dizaine
+        // passe au jaune, une trentaine atteint le rouge foncé. Au dézoom,
+        // les taches voisines s'additionnent et changent de couleur.
         heatmapWeightExpression: [
           'interpolate',
           ['linear'],
@@ -316,26 +352,12 @@ class ReportTiles {
           1,
           0.5,
           10,
-          1,
+          1.5,
+          30,
+          2.5,
         ],
         heatmapRadiusExpression: heatmapRadiusExpression(),
-        // Du jaune au rouge, sans vert : peu de signalements ne veut pas
-        // dire que la zone est sûre.
-        heatmapColorExpression: [
-          'interpolate',
-          ['linear'],
-          ['heatmap-density'],
-          0,
-          'rgba(250, 204, 21, 0)',
-          0.15,
-          'rgba(250, 204, 21, 0.55)',
-          0.4,
-          'rgb(250, 204, 21)',
-          0.7,
-          'rgb(249, 115, 22)',
-          1,
-          'rgb(220, 38, 38)',
-        ],
+        heatmapColorExpression: heatmapColorExpression,
         heatmapOpacityExpression: _zoomRamp(
           _fadeStartZoom,
           0.85,
@@ -346,23 +368,15 @@ class ReportTiles {
     );
     await _addLayerOnce(
       style,
-      SymbolLayer(
-        id: countLayerId,
+      CircleLayer(
+        id: clusterTapLayerId,
         sourceId: sourceId,
         sourceLayer: _sourceLayer,
         maxZoom: _badgesMinZoom,
-        textFieldExpression: ['to-string', _count],
-        textFont: MarinePalette.labelFont,
-        textSize: 14,
-        textColor: _countColor,
-        textHaloColor: _white,
-        textHaloWidth: .75,
-        textOpacityExpression: _zoomRamp(_fadeStartZoom, 1, _badgesMinZoom, 0),
-        // Deux nombres qui se chevauchent seraient illisibles : le second
-        // s'efface, la zone colorée montre quand même ses signalements. Le
-        // fond de carte, lui, n'est pas masqué.
-        textIgnorePlacement: true,
-        textEmissiveStrength: _fullBrightness,
+        slot: LayerSlot.MIDDLE,
+        circleRadius: _clusterTapRadius,
+        circleColor: _white,
+        circleOpacity: _invisibleOpacity,
       ),
     );
     await _addLayerOnce(

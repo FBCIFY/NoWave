@@ -50,6 +50,26 @@ void main() {
     expect(pulsed, [for (final r in base) r * 1.25]);
   });
 
+  test('zones colorées du violet au rouge foncé, sans chiffre', () {
+    const expression = ReportTiles.heatmapColorExpression;
+    // Après ['interpolate', ['linear'], ['heatmap-density']] : des paires
+    // densité/couleur.
+    final stops = [
+      for (var i = 3; i < expression.length; i += 2) expression[i] as num,
+    ];
+    final colors = [
+      for (var i = 4; i < expression.length; i += 2) expression[i],
+    ];
+
+    expect(stops.first, 0);
+    expect(stops.last, 1);
+    expect(stops, orderedEquals([...stops]..sort()));
+    expect(colors.first, 'rgba(139, 92, 246, 0)');
+    expect(colors.last, 'rgb(127, 29, 29)');
+    expect(colors, contains('rgb(59, 130, 246)'));
+    expect(colors, contains('rgb(34, 197, 94)'));
+  });
+
   test('reconnaît un refus d’accès aux tuiles', () {
     const prefix = 'Failed to load tile: HTTP status code';
 
