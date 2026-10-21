@@ -19,6 +19,34 @@ abstract final class AuthBackgrounds {
   static final current = all[math.Random().nextInt(all.length)];
 }
 
+/// Chargement entre deux écrans à photo (vérification de l'e-mail, puis
+/// profil) : la même photo qu'avant et après, au lieu d'un écran blanc qui
+/// glisse entre les deux.
+class AuthPhotoLoading extends StatelessWidget {
+  const AuthPhotoLoading({super.key});
+
+  @override
+  Widget build(BuildContext context) => AnnotatedRegion<SystemUiOverlayStyle>(
+    value: SystemUiOverlayStyle.dark,
+    child: Scaffold(
+      backgroundColor: AppColors.slate900,
+      body: Stack(
+        fit: StackFit.expand,
+        children: [
+          Image.asset(
+            AuthBackgrounds.current,
+            fit: BoxFit.cover,
+            gaplessPlayback: true,
+            errorBuilder: (context, error, stackTrace) =>
+                const ColoredBox(color: AppColors.slate900),
+          ),
+          const Center(child: CircularProgressIndicator(color: Colors.white)),
+        ],
+      ),
+    ),
+  );
+}
+
 /// Mise en page des écrans d'authentification et de création de profil :
 /// photo plein écran ([AuthBackgrounds.current]), logo en haut, titre et
 /// formulaire en bas sur un voile sombre.
@@ -43,6 +71,15 @@ class AuthPhotoLayout extends StatelessWidget {
   /// revenant en arrière ; la photo et le logo ne bougent pas.
   final int? page;
 
+  /// Hauteur minimale du titre et du formulaire posés en bas : un formulaire
+  /// plus court garde son titre à la même hauteur qu'un plus long, la place
+  /// en trop va sous le formulaire.
+  final double? formMinHeight;
+
+  /// Hauteur du titre et du formulaire de connexion, sans message d'erreur :
+  /// les écrans qui en partent alignent leur titre sur « Bienvenue ».
+  static const signInFormHeight = 380.0;
+
   const AuthPhotoLayout({
     super.key,
     required this.title,
@@ -52,6 +89,7 @@ class AuthPhotoLayout extends StatelessWidget {
     this.onBack,
     this.header,
     this.page,
+    this.formMinHeight,
   });
 
   /// Hauteur du fondu en haut de la zone qui défile.
@@ -235,7 +273,13 @@ class AuthPhotoLayout extends StatelessWidget {
     children: [
       CustomPaint(
         painter: const _FormScrimPainter(),
-        child: _formWidth(_pageContent(Alignment.bottomCenter)),
+        child: ConstrainedBox(
+          constraints: BoxConstraints(minHeight: formMinHeight ?? 0),
+          child: Align(
+            alignment: Alignment.topCenter,
+            child: _formWidth(_pageContent(Alignment.bottomCenter)),
+          ),
+        ),
       ),
       _logo(isCompact),
     ],

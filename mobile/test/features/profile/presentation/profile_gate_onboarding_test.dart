@@ -93,6 +93,8 @@ void main() {
         ),
       ),
     );
+    // Profil en cours de chargement : la photo, pas un écran blanc.
+    expect(find.byType(AuthPhotoLoading), findsOneWidget);
     await tester.pumpAndSettle();
     expect(find.text('ÉTAPE 1 SUR 5'), findsOneWidget);
 

@@ -96,6 +96,7 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
                 'Nous vous enverrons un lien pour choisir '
                 'un nouveau mot de passe.',
       showBackButton: true,
+      formMinHeight: AuthPhotoLayout.signInFormHeight,
       child: _isSent
           ? Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,

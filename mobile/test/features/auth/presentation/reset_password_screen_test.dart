@@ -94,4 +94,25 @@ void main() {
 
     expect(find.textContaining('Si un compte existe'), findsOneWidget);
   });
+
+  testWidgets('titre à la même hauteur que « Bienvenue », avant et après '
+      'l’envoi', (tester) async {
+    await tester.binding.setSurfaceSize(const Size(393, 852));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    final authService = _FakeAuthService();
+
+    await tester.pumpWidget(
+      MaterialApp(home: LoginScreen(authService: authService)),
+    );
+    final signInTitle = tester.getTopLeft(find.text('Bienvenue')).dy;
+
+    await tester.tap(find.text('Mot de passe oublié ?'));
+    await tester.pumpAndSettle();
+    expect(tester.getTopLeft(find.text('Mot de passe oublié')).dy, signInTitle);
+
+    await tester.enterText(find.byType(TextFormField), 'test@example.com');
+    await tester.tap(find.text('Envoyer le lien'));
+    await tester.pumpAndSettle();
+    expect(tester.getTopLeft(find.text('Mot de passe oublié')).dy, signInTitle);
+  });
 }
