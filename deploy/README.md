@@ -95,6 +95,17 @@ le plafond de 30 connexions/IP des autres routes. Le cache
 marin persistant réduit les appels fournisseurs mais ne réduit pas le nombre
 de requêtes reçues par Nginx : ces protections sont complémentaires.
 
+La bathymétrie visuelle conserve également ses PNG terminés (couleurs et masque
+côtier inclus) dans `MARINE_CACHE_DIR/bathymetry.sqlite3`, pendant 24 heures,
+avec un plafond de 128 Mio sur disque et 32 Mio en mémoire. Le cache est
+versionné avec le rendu côtier ; toute modification de couleurs ou de masque
+doit changer cette version et celle de l'URL mobile. Les demandes simultanées
+de la même tuile partagent un seul rendu. Au maximum huit rendus occupent les
+workers, les autres attendent de façon asynchrone (file bornée à 128 tuiles).
+Un échec n'est jamais enregistré comme un océan vide et aucun masque côtier
+n'est contourné. Le cache disque natif mobile réutilise ces PNG publics selon
+leur durée HTTP, sans modifier le cache des sondes numériques.
+
 Pour reproduire sans charge publique, utiliser `backend/tools/probe_marine_rate_limits.py`
 avec un binaire Nginx local. Ce scénario ne contacte que le loopback et un
 fournisseur synthétique, après préchauffage du vrai cache `MarineHTTP`.
