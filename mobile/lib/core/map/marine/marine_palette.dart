@@ -22,6 +22,7 @@ class MarinePalette {
     'showRoadLabels': false,
     'showPointOfInterestLabels': false,
     'showTransitLabels': false,
+    'showAdminBoundaries': false,
     'show3dObjects': false,
   };
 }

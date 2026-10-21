@@ -101,11 +101,14 @@ class GlobeStyle {
         },
     },
     'layers': [
+      // Standard has no option to hide roads. The middle slot draws the
+      // decoration above roads, still below place labels and the
+      // NoWave layers added later in the same slot.
       {
         'id': 'nowave-earth-satellite',
         'type': 'raster',
         'source': satelliteSource,
-        'slot': 'bottom',
+        'slot': 'middle',
         'maxzoom': 7,
         'paint': {
           'raster-opacity': [
@@ -126,7 +129,7 @@ class GlobeStyle {
         'type': 'fill',
         'source': waterSource,
         'source-layer': 'water',
-        'slot': 'bottom',
+        'slot': 'middle',
         'maxzoom': 7,
         'paint': {
           'fill-color': '#0A4E87',
@@ -147,7 +150,7 @@ class GlobeStyle {
           'id': 'nowave-earth-clouds-$name',
           'type': 'raster',
           'source': 'nowave-clouds-$name',
-          'slot': 'bottom',
+          'slot': 'middle',
           'maxzoom': 5,
           'paint': {
             'raster-opacity': [

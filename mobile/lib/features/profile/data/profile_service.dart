@@ -6,7 +6,8 @@ import '../domain/user_profile.dart';
 import '../domain/boat.dart';
 
 /// Accès au profil NoWave côté backend (`api/v1/users/me`) : lecture,
-/// création et mise à jour des préférences, avec le token Firebase.
+/// création, changement du nom d'utilisateur et mise à jour des préférences,
+/// avec le token Firebase.
 class ProfileService {
   static const String _profilePath = 'api/v1/users/me';
 
@@ -46,6 +47,22 @@ class ProfileService {
     final token = await _getIdToken();
 
     final response = await _apiService.post(
+      _profilePath,
+      headers: {
+        'Authorization': 'Bearer $token',
+        'Content-Type': 'application/json',
+      },
+      body: jsonEncode({'username': username.trim()}),
+    );
+
+    return _decodeProfile(response);
+  }
+
+  /// Le backend répond 409 `username_already_exists` si le nom est pris.
+  Future<UserProfile> updateUsername(String username) async {
+    final token = await _getIdToken();
+
+    final response = await _apiService.patch(
       _profilePath,
       headers: {
         'Authorization': 'Bearer $token',

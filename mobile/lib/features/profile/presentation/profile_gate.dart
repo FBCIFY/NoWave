@@ -15,20 +15,21 @@ import '../../auth/presentation/widgets/flow_transition.dart';
 import '../../camera/data/position_estimate_service.dart';
 import '../../home/presentation/home_screen.dart';
 import '../../map/data/report_tiles.dart';
+import '../../map/presentation/map_intro_controller.dart';
 import '../../reports/data/manual_report_service.dart';
 import '../../reports/data/report_detail_service.dart';
 import '../data/account_deletion.dart';
 import '../data/profile_service.dart';
 import '../domain/user_profile.dart';
 import 'account_deletion_screen.dart';
-import 'alerts_onboarding_screen.dart';
-import 'profile_setup_screen.dart';
+import 'profile_onboarding_screen.dart';
 import 'sign_out_dialog.dart';
 import 'suspended_account_screen.dart';
 
 /// Second aiguillage, une fois l'e-mail vérifié : charge le profil puis
-/// affiche la création du profil, l'écran d'alertes (une seule fois, juste
-/// après la création) ou l'accueil.
+/// affiche le premier passage ([ProfileOnboardingScreen] : création du profil,
+/// puis bateau, visibilité et alertes, une seule fois, juste après la
+/// création) ou l'accueil.
 ///
 /// Garde aussi le dernier profil modifié pour que l'accueil reste à jour.
 class ProfileGate extends StatefulWidget {
@@ -65,9 +66,12 @@ class ProfileGate extends StatefulWidget {
 
 class _ProfileGateState extends State<ProfileGate> with WidgetsBindingObserver {
   late Future<UserProfile?> _profileFuture;
-  bool _profileWasJustCreated = false;
   UserProfile? _latestProfile;
-  bool _showAlertsOnboarding = false;
+  bool _showOnboarding = false;
+
+  /// Arrivée sur la carte, créée avec le profil : l'accueil se charge alors
+  /// sous la suite de l'onboarding.
+  MapIntroController? _intro;
   Future<void>? _signingOut;
   bool _accessRevoked = false;
   bool _refreshingAccess = false;
@@ -133,6 +137,7 @@ class _ProfileGateState extends State<ProfileGate> with WidgetsBindingObserver {
   void dispose() {
     widget.inactiveUserEvents?.removeListener(_markAccessRevoked);
     WidgetsBinding.instance.removeObserver(this);
+    _intro?.dispose();
     super.dispose();
   }
 
@@ -171,17 +176,35 @@ class _ProfileGateState extends State<ProfileGate> with WidgetsBindingObserver {
 
   void _reloadProfile() {
     setState(() {
-      _profileWasJustCreated = true;
       _latestProfile = null;
       _profileFuture = _loadInitialProfile();
     });
   }
 
-  /// Seul chemin qui affiche l'écran d'alertes : les comptes existants ne le
-  /// voient pas.
-  void _onProfileCreated() {
-    _showAlertsOnboarding = true;
-    _reloadProfile();
+  /// Seul chemin qui affiche la suite du premier passage (bateau, visibilité,
+  /// alertes) : les comptes existants ne la voient pas. Le profil renvoyé
+  /// suffit, sans relecture : le parcours continue sur le même écran.
+  void _onProfileSaved(UserProfile profile) {
+    // Un nouveau nom sur la même page garde l'arrivée déjà en préparation.
+    if (_intro?.covered != true) {
+      _intro?.dispose();
+      _intro = MapIntroController()..addListener(_handleIntro);
+    }
+    setState(() {
+      _showOnboarding = true;
+      _latestProfile = profile;
+      _profileFuture = Future<UserProfile?>.value(profile);
+    });
+  }
+
+  void _handleIntro() {
+    if (mounted) setState(() {});
+  }
+
+  /// Fin du fondu : l'onboarding quitte l'arbre, l'accueil reste en place.
+  void _endOnboarding() {
+    if (!mounted || (_intro?.covered ?? true) || !_showOnboarding) return;
+    setState(() => _showOnboarding = false);
   }
 
   Future<UserProfile> _updatePreferences({
@@ -258,14 +281,14 @@ class _ProfileGateState extends State<ProfileGate> with WidgetsBindingObserver {
                   snapshot.hasData) &&
               !snapshot.hasError &&
               snapshot.data?.status == 'active' &&
-              !_showAlertsOnboarding &&
+              !_showOnboarding &&
               _signingOut == null,
         );
         late final int step;
         late final Widget screen;
 
         if (_deletingAccount) {
-          step = 5;
+          step = 6;
           screen = AccountDeletionScreen(
             deletion: _accountDeletion,
             onCancel: () => setState(() => _deletingAccount = false),
@@ -279,29 +302,27 @@ class _ProfileGateState extends State<ProfileGate> with WidgetsBindingObserver {
             },
           );
         } else if (_accessRevoked || snapshot.data?.status == 'suspended') {
-          step = 4;
+          step = 5;
           screen = SuspendedAccountScreen(
             onSignOut: () => unawaited(_signOut()),
             onDeleteAccount: () => unawaited(_openAccountDeletion()),
           );
+        } else if (_showOnboarding ||
+            (_intro != null && (_latestProfile ?? snapshot.data) != null)) {
+          // Même étape que sans profil : le parcours garde son état et seules
+          // ses pages glissent. L'accueil, chargé dessous, reste sur cette
+          // étape après le fondu pour ne pas recréer la carte.
+          step = 1;
+          screen = _buildFirstVisit(_latestProfile ?? snapshot.data);
         } else if (snapshot.connectionState == ConnectionState.waiting &&
             // Rafraîchi au retour dans l'app : le profil affiché reste à
             // l'écran. Recréer l'accueil relancerait la carte, et l'ancien
             // suivi GPS arrêterait le nouveau en disparaissant.
             !snapshot.hasData) {
-          if (_profileWasJustCreated) {
-            step = 1;
-            screen = ProfileSetupScreen(
-              profileService: widget.profileService,
-              onProfileCreated: _onProfileCreated,
-              onSignOut: _signOut,
-            );
-          } else {
-            step = 0;
-            screen = const Scaffold(
-              body: Center(child: CircularProgressIndicator()),
-            );
-          }
+          step = 0;
+          screen = const Scaffold(
+            body: Center(child: CircularProgressIndicator()),
+          );
         } else if (snapshot.hasError) {
           step = 0;
           screen = Scaffold(
@@ -334,49 +355,111 @@ class _ProfileGateState extends State<ProfileGate> with WidgetsBindingObserver {
               ),
             ),
           );
-        } else if (snapshot.data != null && _showAlertsOnboarding) {
-          step = 2;
-          screen = AlertsOnboardingScreen(
-            onEnableAlerts: () =>
-                _updatePreferences(notificationsEnabled: true),
-            onDone: () => setState(() => _showAlertsOnboarding = false),
-            notificationPermissions: const NotificationPermissionService(),
-          );
         } else if (snapshot.data case final profile?) {
-          step = 3;
-          // Le profil existe : le backend accepte l'enregistrement du téléphone
-          // et sa position.
-          screen = DeviceRegistrar(
-            registration: widget.deviceRegistration,
-            child: DevicePositionTracker(
-              reporter: widget.devicePositionReporter,
-              runInBackground: (_latestProfile ?? profile).notificationsEnabled,
-              child: HomeScreen(
-                alertService: widget.alertService,
-                pushController: widget.pushController,
-                profileService: widget.profileService,
-                onDeleteAccount: _openAccountDeletion,
-                profile: _latestProfile ?? profile,
-                onUserInactive: () => unawaited(_refreshAccessStatus()),
-                onSignOut: () => _signOut(resumeDevices: true),
-                onUpdatePreferences: _updatePreferences,
-                reportService: widget.reportService,
-                positionEstimateService: widget.positionEstimateService,
-                reportTiles: widget.reportTiles,
-                reportDetailService: widget.reportDetailService,
-              ),
-            ),
-          );
+          step = 4;
+          screen = _buildHome(_latestProfile ?? profile);
         } else {
           step = 1;
-          screen = ProfileSetupScreen(
-            profileService: widget.profileService,
-            onProfileCreated: _onProfileCreated,
-            onSignOut: _signOut,
-          );
+          screen = _buildFirstVisit(null);
         }
 
         return FlowTransition(step: step, child: screen);
+      },
+    );
+  }
+
+  /// Le profil existe : le backend accepte l'enregistrement du téléphone et
+  /// sa position. Avec [active] faux, l'accueil se charge sans rien démarrer.
+  Widget _buildHome(
+    UserProfile profile, {
+    bool active = true,
+    MapIntroController? intro,
+  }) {
+    return DeviceRegistrar(
+      registration: widget.deviceRegistration,
+      active: active,
+      child: DevicePositionTracker(
+        reporter: widget.devicePositionReporter,
+        runInBackground: profile.notificationsEnabled,
+        active: active,
+        child: HomeScreen(
+          alertService: widget.alertService,
+          pushController: widget.pushController,
+          profileService: widget.profileService,
+          onDeleteAccount: _openAccountDeletion,
+          profile: profile,
+          onUserInactive: () => unawaited(_refreshAccessStatus()),
+          onSignOut: () => _signOut(resumeDevices: true),
+          onUpdatePreferences: _updatePreferences,
+          reportService: widget.reportService,
+          positionEstimateService: widget.positionEstimateService,
+          reportTiles: widget.reportTiles,
+          reportDetailService: widget.reportDetailService,
+          intro: intro,
+        ),
+      ),
+    );
+  }
+
+  /// Premier passage : l'onboarding, puis, dès le profil créé, l'accueil qui
+  /// se charge dessous. À la fin, l'onboarding s'efface sur la carte. Les clés
+  /// gardent l'état de chacun quand l'autre apparaît ou disparaît.
+  Widget _buildFirstVisit(UserProfile? profile) {
+    final intro = _intro;
+    final showHome = intro != null && profile != null;
+    final covered = intro?.covered ?? true;
+    final fading = showHome && !covered;
+
+    return Stack(
+      fit: StackFit.expand,
+      children: [
+        if (showHome)
+          KeyedSubtree(
+            key: const ValueKey('home'),
+            child: IgnorePointer(
+              ignoring: covered,
+              child: ExcludeSemantics(
+                excluding: covered,
+                child: _buildHome(profile, active: !covered, intro: intro),
+              ),
+            ),
+          ),
+        if (!showHome || _showOnboarding)
+          KeyedSubtree(
+            key: const ValueKey('onboarding'),
+            child: IgnorePointer(
+              ignoring: fading,
+              child: ExcludeSemantics(
+                excluding: fading,
+                child: AnimatedOpacity(
+                  opacity: fading ? 0 : 1,
+                  duration: MapIntroController.fadeDuration,
+                  curve: Curves.easeOut,
+                  onEnd: _endOnboarding,
+                  child: _buildOnboarding(profile),
+                ),
+              ),
+            ),
+          ),
+      ],
+    );
+  }
+
+  Widget _buildOnboarding(UserProfile? profile) {
+    return ProfileOnboardingScreen(
+      profile: profile,
+      profileService: widget.profileService,
+      onProfileSaved: _onProfileSaved,
+      onUpdatePreferences: _updatePreferences,
+      notificationPermissions: const NotificationPermissionService(),
+      onSignOut: _signOut,
+      onDone: () {
+        final intro = _intro;
+        if (intro != null) {
+          intro.start();
+        } else {
+          setState(() => _showOnboarding = false);
+        }
       },
     );
   }

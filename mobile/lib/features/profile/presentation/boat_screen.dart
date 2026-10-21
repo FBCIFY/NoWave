@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../../core/api/api_exception.dart';
+import '../../../core/text/capitalize_first_letter_formatter.dart';
 import '../data/profile_service.dart';
 import '../domain/boat.dart';
 
@@ -180,6 +181,8 @@ class _BoatScreenState extends State<BoatScreen> {
                       labelText: 'Nom (facultatif)',
                     ),
                     maxLength: 100,
+                    textCapitalization: TextCapitalization.words,
+                    inputFormatters: const [CapitalizeFirstLetterFormatter()],
                     validator: (value) => (value?.trim().length ?? 0) > 100
                         ? '100 caractères maximum.'
                         : null,

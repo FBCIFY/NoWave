@@ -7,6 +7,7 @@ import 'package:flutter/material.dart';
 
 import '../../../core/api/api_exception.dart';
 import '../../../core/haptics/app_haptics.dart';
+import '../../../core/text/capitalize_first_letter_formatter.dart';
 import '../domain/manual_report.dart';
 import 'report_category_style.dart';
 import 'report_photo_viewer.dart';
@@ -509,6 +510,8 @@ class _ReportComposerSheetState extends State<ReportComposerSheet> {
       maxLength: _commentMaxLength,
       maxLines: 2,
       minLines: 1,
+      textCapitalization: TextCapitalization.sentences,
+      inputFormatters: const [CapitalizeFirstLetterFormatter()],
       textInputAction: TextInputAction.done,
       onSubmitted: (_) => FocusScope.of(context).unfocus(),
       // Sur mobile, Flutter garde le clavier ouvert par défaut quand on touche

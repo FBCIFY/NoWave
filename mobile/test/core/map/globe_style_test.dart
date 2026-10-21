@@ -62,6 +62,7 @@ void main() {
       expect(basemap['config']['colorLand'], '#E8E0CC');
       expect(basemap['config']['colorGreenspace'], '#C1D0AF');
       expect(basemap['config']['showRoadLabels'], false);
+      expect(basemap['config']['showAdminBoundaries'], false);
       final sources = document['sources'] as Map;
       expect(sources[GlobeStyle.waterSource]['type'], 'vector');
       expect(
@@ -87,7 +88,8 @@ void main() {
       final layers = document['layers'] as List;
       expect(layers.map((l) => l['id']).toSet().length, layers.length);
       for (final layer in layers) {
-        expect(layer['slot'], 'bottom');
+        // Above Standard's roads, below its place labels.
+        expect(layer['slot'], 'middle');
         expect(layer['maxzoom'], lessThanOrEqualTo(7));
       }
       final ocean = layers.singleWhere((l) => l['id'] == 'nowave-earth-ocean');
@@ -180,7 +182,7 @@ void main() {
       map.style.fail = false;
       await presentation.synchronize(map, 6);
       expect(map.style.config['showPlaceLabels'], true);
-      expect(map.style.config['showAdminBoundaries'], true);
+      expect(map.style.config.containsKey('showAdminBoundaries'), isFalse);
     },
   );
 
@@ -216,7 +218,7 @@ void main() {
           expect(map.style.config['showRoadLabels'], false);
           expect(map.style.config['showPointOfInterestLabels'], false);
           expect(map.style.config['showPlaceLabels'], zoom >= 4);
-          expect(map.style.config['showAdminBoundaries'], zoom >= 4);
+          expect(map.style.config['showAdminBoundaries'], false);
         }
       }
     },

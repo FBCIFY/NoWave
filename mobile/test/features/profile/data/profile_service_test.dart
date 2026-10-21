@@ -87,6 +87,28 @@ void main() {
     expect(profile.username, 'vadim');
   });
 
+  test('change le nom d’utilisateur par un PATCH partiel', () async {
+    final client = MockClient((request) async {
+      expect(request.method, 'PATCH');
+      expect(
+        request.url,
+        Uri.parse('https://api.blueway.test/api/v1/users/me'),
+      );
+      expect(request.headers['authorization'], 'Bearer firebase-token-de-test');
+      expect(request.headers['content-type'], 'application/json');
+      expect(jsonDecode(request.body), {'username': 'Marin'});
+
+      return http.Response(
+        jsonEncode({...profileJson, 'username': 'Marin'}),
+        200,
+      );
+    });
+
+    final profile = await createService(client).updateUsername('  Marin  ');
+
+    expect(profile.username, 'Marin');
+  });
+
   test('met à jour uniquement la préférence modifiée', () async {
     final client = MockClient((request) async {
       expect(request.method, 'PATCH');
