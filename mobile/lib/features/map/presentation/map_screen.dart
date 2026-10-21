@@ -117,6 +117,8 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
   Timer? _rotationGestureTimer;
   double _touchStartBearing = 0;
   _MapOrientationMode _orientationMode = _MapOrientationMode.north;
+  // Orientation quittée par la dernière rotation à deux doigts.
+  _MapOrientationMode _rotatedFrom = _MapOrientationMode.north;
   bool _isLocating = false;
   String? _locationError;
   MapboxMap? _mapboxMap;
@@ -181,6 +183,40 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
     _userCameraMotion = false;
     _syncGlobeRotation();
     _globeRotation.resumeWhenIdle();
+    unawaited(_restoreOrientation());
+  }
+
+  /// Zoom à partir duquel une rotation libre ne survit pas au lâcher.
+  static const _orientationLockZoom = 7.0;
+
+  /// Au lâcher, de près, la carte revient à l'orientation choisie : le nord,
+  /// ou le cap figé par la boussole si c'est lui que les doigts ont quitté.
+  Future<void> _restoreOrientation() async {
+    final map = _mapboxMap;
+    final zoom = _cameraZoom;
+    if (map == null ||
+        zoom == null ||
+        zoom < _orientationLockZoom ||
+        _orientationMode != _MapOrientationMode.manual) {
+      return;
+    }
+    final heading =
+        _rotatedFrom == _MapOrientationMode.heading && _selectedBearing != null;
+    setState(() {
+      _orientationMode = heading
+          ? _MapOrientationMode.heading
+          : _MapOrientationMode.north;
+      if (!heading) _selectedBearing = 0;
+    });
+    try {
+      await _moveCamera(
+        map,
+        CameraOptions(bearing: heading ? _selectedBearing : 0),
+        300,
+      );
+    } catch (_) {
+      // La prochaine fin de geste retente.
+    }
   }
 
   Future<void> _prepareGlobeRotation() async {
@@ -410,7 +446,10 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
     setState(() {
       _isFollowing = false;
       _viewport = const IdleViewportState();
-      if (userRotatedMap) _orientationMode = _MapOrientationMode.manual;
+      if (userRotatedMap && _orientationMode != _MapOrientationMode.manual) {
+        _rotatedFrom = _orientationMode;
+        _orientationMode = _MapOrientationMode.manual;
+      }
     });
   }
 
