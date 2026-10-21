@@ -33,8 +33,8 @@ class AuthPhotoLayout extends StatelessWidget {
   final bool showBackButton;
   final VoidCallback? onBack;
 
-  /// Affiché au-dessus du titre (progression d'un parcours). Il ne glisse
-  /// pas avec les pages.
+  /// Affiché en haut, à droite du bouton retour (progression d'un parcours).
+  /// Sa place est fixe : il ne suit ni la hauteur des pages ni le clavier.
   final Widget? header;
 
   /// Page affichée d'un parcours en plusieurs pages. Quand elle change, le
@@ -102,27 +102,41 @@ class AuthPhotoLayout extends StatelessWidget {
                 children: [
                   SizedBox(
                     height: 52,
-                    child: showBackButton
-                        ? Padding(
-                            padding: const EdgeInsets.only(left: 16),
-                            child: Align(
-                              alignment: Alignment.centerLeft,
-                              child: IconButton(
-                                onPressed:
-                                    onBack ?? () => Navigator.of(context).pop(),
-                                style: IconButton.styleFrom(
-                                  backgroundColor: Colors.white.withValues(
-                                    alpha: 0.75,
-                                  ),
-                                  foregroundColor: AppColors.slate900,
-                                  fixedSize: const Size(44, 44),
-                                ),
-                                icon: const Icon(Icons.arrow_back, size: 22),
-                                tooltip: 'Retour',
-                              ),
-                            ),
-                          )
-                        : null,
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 16),
+                      child: Row(
+                        children: [
+                          // Place du bouton gardée sur la première page : la
+                          // progression ne se décale pas quand il apparaît.
+                          SizedBox(
+                            width: 44,
+                            child: showBackButton
+                                ? IconButton(
+                                    onPressed:
+                                        onBack ??
+                                        () => Navigator.of(context).pop(),
+                                    style: IconButton.styleFrom(
+                                      backgroundColor: Colors.white.withValues(
+                                        alpha: 0.75,
+                                      ),
+                                      foregroundColor: AppColors.slate900,
+                                      fixedSize: const Size(44, 44),
+                                    ),
+                                    icon: const Icon(
+                                      Icons.arrow_back,
+                                      size: 22,
+                                    ),
+                                    tooltip: 'Retour',
+                                  )
+                                : null,
+                          ),
+                          if (header != null) ...[
+                            const SizedBox(width: 12),
+                            Expanded(child: header!),
+                          ],
+                        ],
+                      ),
+                    ),
                   ),
                   Expanded(
                     child: LayoutBuilder(
@@ -184,10 +198,6 @@ class AuthPhotoLayout extends StatelessWidget {
                                             crossAxisAlignment:
                                                 CrossAxisAlignment.stretch,
                                             children: [
-                                              if (header != null) ...[
-                                                header!,
-                                                const SizedBox(height: 14),
-                                              ],
                                               if (page case final page?)
                                                 _PageSwitcher(
                                                   page: page,
