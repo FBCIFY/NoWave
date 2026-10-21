@@ -191,6 +191,7 @@ void main() {
     expect(find.byTooltip('Orienter la carte vers le nord'), findsNothing);
     await press(tester, 'Recentrer sur ma position');
     expect(viewport(tester).zoom, 12);
+    expect(viewport(tester).padding!.top, 0);
     expect(viewport(tester).pitch, 0);
     expect(bearing(tester), 0);
     expect(find.text('N'), findsOneWidget);
@@ -198,6 +199,16 @@ void main() {
     expect(find.byIcon(Icons.gps_fixed), findsOneWidget);
     final button = find.byTooltip('Suivre la direction du téléphone');
     expect(tester.getSize(button).shortestSide, greaterThanOrEqualTo(48));
+    final screen = tester.view.physicalSize / tester.view.devicePixelRatio;
+    final buttonBounds = tester.getRect(button);
+    expect(buttonBounds.right, closeTo(screen.width - 16, 0.1));
+    expect(buttonBounds.bottom, closeTo(screen.height - 20, 0.1));
+    expect(
+      buttonBounds.overlaps(
+        tester.getRect(find.byTooltip('Créer un signalement')),
+      ),
+      isFalse,
+    );
 
     headings.values.add(123);
     await tester.pumpAndSettle();
@@ -207,6 +218,9 @@ void main() {
     await press(tester, 'Suivre la direction du téléphone');
     expect(viewport(tester).zoom, 12);
     expect(viewport(tester).pitch, 60);
+    final lookAhead = viewport(tester).padding!.top;
+    expect(lookAhead, closeTo(screen.height * 0.24, 0.1));
+    expect(viewport(tester).padding!.bottom, 0);
     expect(bearing(tester), 123);
     expect(find.byIcon(Icons.navigation), findsOneWidget);
     expect(find.byIcon(Icons.gps_fixed), findsNothing);
@@ -215,9 +229,14 @@ void main() {
     await tester.pumpAndSettle();
     expect(bearing(tester), 210);
     expect(viewport(tester).pitch, 60);
+    expect(viewport(tester).padding!.top, lookAhead);
+    gps.positions.add(focusPosition(latitude: 43.31));
+    await tester.pumpAndSettle();
+    expect(viewport(tester).padding!.top, lookAhead);
     await press(tester, 'Revenir au nord vrai à plat');
     expect(bearing(tester), 0);
     expect(viewport(tester).pitch, 0);
+    expect(viewport(tester).padding!.top, 0);
     headings.values.add(270);
     await tester.pumpAndSettle();
     expect(bearing(tester), 0);
@@ -533,6 +552,7 @@ void main() {
     await press(tester, 'Suivre la direction du téléphone');
     map.cameraPitch = 60;
     map.cameraBearing = 60;
+    final lookAhead = viewport(tester).padding!.top;
     await press(tester, 'Créer un signalement');
     expect(find.byTooltip('Revenir au nord vrai à plat'), findsNothing);
     headings.values.add(120);
@@ -541,6 +561,7 @@ void main() {
     await press(tester, 'Fermer');
     expect(viewport(tester).pitch, 60);
     expect(bearing(tester), 120);
+    expect(viewport(tester).padding!.top, lookAhead);
     headings.values.add(180);
     await tester.pumpAndSettle();
     expect(bearing(tester), 180);

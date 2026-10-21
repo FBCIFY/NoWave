@@ -378,7 +378,7 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
         _viewport = FollowPuckViewportState(
           zoom: viewport.zoom,
           pitch: viewport.pitch,
-          padding: viewport.padding,
+          padding: _navigationPadding(heading: true),
           bearing: FollowPuckViewportStateBearingConstant(heading % 360),
         );
       }
@@ -515,6 +515,14 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
       !_reportComposerOpen &&
       request == _navigationRevision;
 
+  MbxEdgeInsets _navigationPadding({bool heading = false}) => MbxEdgeInsets(
+    // Lower the puck by 12% of the screen to reveal more map ahead of it.
+    top: heading ? MediaQuery.sizeOf(context).height * 0.24 : 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+  );
+
   String get _navigationAction =>
       _isFollowing && _orientationMode == _MapOrientationMode.north
       ? 'Suivre la direction du téléphone'
@@ -576,7 +584,7 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
           _orientationMode = _MapOrientationMode.heading;
           _viewport = FollowPuckViewportState(
             zoom: viewport.zoom,
-            padding: viewport.padding,
+            padding: _navigationPadding(heading: true),
             pitch: maxPitch * 0.75,
             bearing: FollowPuckViewportStateBearingConstant(heading % 360),
           );
@@ -1530,6 +1538,7 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
         if (animated) _orientationMode = _MapOrientationMode.north;
         _viewport = FollowPuckViewportState(
           zoom: animated ? _navigationZoom : _userZoom,
+          padding: animated ? _navigationPadding() : null,
           bearing: const FollowPuckViewportStateBearingConstant(0),
           pitch: animated
               ? 0
@@ -1854,7 +1863,11 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
         _viewport = FollowPuckViewportState(
           zoom: camera?.zoom ?? _userZoom,
           pitch: camera?.pitch ?? 60,
-          padding: camera?.padding,
+          padding: switch (_orientationMode) {
+            _MapOrientationMode.heading => _navigationPadding(heading: true),
+            _MapOrientationMode.north => _navigationPadding(),
+            _MapOrientationMode.free => camera?.padding,
+          },
           bearing: FollowPuckViewportStateBearingConstant(
             switch (_orientationMode) {
               _MapOrientationMode.north => 0,
@@ -2431,37 +2444,34 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
             ),
           if (!_reportComposerOpen)
             Positioned(
-              left: 0,
-              right: 0,
-              bottom: 70,
+              right: 16,
+              bottom: 20,
               child: SafeArea(
                 top: false,
-                child: Center(
-                  child: Semantics(
-                    label: _navigationLabel,
-                    value: _isLocating || _navigationBusy
-                        ? 'Localisation…'
-                        : null,
-                    child: _PoppingMapButton(
-                      tooltip: _navigationAction,
-                      onPressed:
-                          _isLocating ||
-                              _navigationBusy ||
-                              _mapboxMap == null ||
-                              _mapError != null
-                          ? null
-                          : () => unawaited(_navigateUser()),
-                      icon: ValueListenableBuilder<double>(
-                        valueListenable: _cameraTurns,
-                        builder: (context, cameraTurns, _) => _NavigationGlyph(
-                          mode: _isFollowing
-                              ? _orientationMode
-                              : _MapOrientationMode.free,
-                          headingTurns: _compassTurns - cameraTurns,
-                          northTurns: -cameraTurns,
-                          reduceMotion: _reduceMotion,
-                          busy: _isLocating || _navigationBusy,
-                        ),
+                child: Semantics(
+                  label: _navigationLabel,
+                  value: _isLocating || _navigationBusy
+                      ? 'Localisation…'
+                      : null,
+                  child: _PoppingMapButton(
+                    tooltip: _navigationAction,
+                    onPressed:
+                        _isLocating ||
+                            _navigationBusy ||
+                            _mapboxMap == null ||
+                            _mapError != null
+                        ? null
+                        : () => unawaited(_navigateUser()),
+                    icon: ValueListenableBuilder<double>(
+                      valueListenable: _cameraTurns,
+                      builder: (context, cameraTurns, _) => _NavigationGlyph(
+                        mode: _isFollowing
+                            ? _orientationMode
+                            : _MapOrientationMode.free,
+                        headingTurns: _compassTurns - cameraTurns,
+                        northTurns: -cameraTurns,
+                        reduceMotion: _reduceMotion,
+                        busy: _isLocating || _navigationBusy,
                       ),
                     ),
                   ),
