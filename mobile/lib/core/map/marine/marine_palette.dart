@@ -3,9 +3,14 @@
 class MarinePalette {
   static const water = '#E6F7FD';
 
+  /// Raleway, comme le reste de l'app. Mapbox sert ses glyphes : le fond
+  /// Standard la propose dans son option `font`.
+  static const labelFont = ['Raleway Medium'];
+
   static const basemapConfig = <String, Object>{
     'lightPreset': 'day',
     'theme': 'faded',
+    'font': 'Raleway',
     'colorLand': '#E8E0CC',
     'colorGreenspace': '#C1D0AF',
     'colorCommercial': '#E6E1D6',

@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:mapbox_maps_flutter/mapbox_maps_flutter.dart';
 
 import '../../../core/api/api_config.dart';
+import '../../../core/map/marine/marine_palette.dart';
 import 'marine_tiles.dart';
 
 /// Contrat NoWave : courbes, échantillons ponctuels et dangers restent distincts.
@@ -328,9 +329,10 @@ class HydrographyLayer {
       textPitchAlignment: TextPitchAlignment.MAP,
       textKeepUpright: true,
       textMaxAngle: 70,
+      textFont: MarinePalette.labelFont,
       textColor: 0xFF354D5B,
       textHaloColor: 0xFFEDF8FC,
-      textHaloWidth: .6,
+      textHaloWidth: .3,
       textPadding: 1,
       textAllowOverlap: false,
       textIgnorePlacement: false,
@@ -351,9 +353,10 @@ class HydrographyLayer {
       ],
       textFieldExpression: ['get', 'depth_label'],
       textSizeExpression: depthTextSize,
+      textFont: MarinePalette.labelFont,
       textColor: 0xFF354D5B,
       textHaloColor: 0xFFEDF8FC,
-      textHaloWidth: .5,
+      textHaloWidth: .3,
       textAllowOverlap: false,
       textIgnorePlacement: false,
       textPadding: 2,

@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:mapbox_maps_flutter/mapbox_maps_flutter.dart';
 
 import '../../../core/api/api_config.dart';
+import '../../../core/map/marine/marine_palette.dart';
 import '../../reports/domain/manual_report.dart';
 import '../presentation/report_marker.dart';
 
@@ -351,10 +352,11 @@ class ReportTiles {
         sourceLayer: _sourceLayer,
         maxZoom: _badgesMinZoom,
         textFieldExpression: ['to-string', _count],
+        textFont: MarinePalette.labelFont,
         textSize: 14,
         textColor: _countColor,
         textHaloColor: _white,
-        textHaloWidth: 1.5,
+        textHaloWidth: .75,
         textOpacityExpression: _zoomRamp(_fadeStartZoom, 1, _badgesMinZoom, 0),
         // Deux nombres qui se chevauchent seraient illisibles : le second
         // s'efface, la zone colorée montre quand même ses signalements. Le
