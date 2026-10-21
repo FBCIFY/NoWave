@@ -37,6 +37,7 @@ import '../data/harbour_layer.dart';
 import '../data/report_layer_controller.dart';
 import '../data/report_tiles.dart';
 import 'widgets/globe_moon.dart';
+import 'widgets/map_edge_zoom.dart';
 import 'widgets/globe_stars.dart';
 import 'widgets/cloud_passage.dart';
 import 'map_alert_camera.dart';
@@ -326,6 +327,12 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
 
   /// Dernier zoom connu de la caméra.
   double? _cameraZoom;
+
+  /// Zoom visé par le doigt sur un bord, et dernier envoyé à Mapbox : un
+  /// seul appel natif à la fois, le suivant part avec le zoom le plus récent.
+  double? _edgeZoomTarget;
+  double? _edgeZoomSent;
+  bool _edgeZoomSending = false;
   final _displayedZoom = ValueNotifier<double>(GlobeStyle.initialZoom);
   final _scaleCamera = ValueNotifier<MapScaleCamera>((
     zoom: GlobeStyle.initialZoom,
@@ -499,7 +506,7 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
     });
   }
 
-  void _handleMapGesture(MapContentGestureContext _) {
+  void _handleMapGesture(MapContentGestureContext? _) {
     _beginMapGesture();
     _scheduleRotationAfterGesture();
     if (_reportComposerOpen) return;
@@ -508,6 +515,52 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
       _isFollowing = false;
       _viewport = const IdleViewportState();
     });
+  }
+
+  /// Un doigt posé sur la carte, ou sur ses bords de zoom.
+  void _touchMap() {
+    _introFlightPending = false;
+    if (_selectedReport != null) {
+      _cameraFocusRevision++;
+      _selectionTouched = true;
+      _latePositionFocus = false;
+      _focusCameraPending = false;
+      widget.focusController?.complete(_focusRevision);
+    }
+    _touchStartBearing = _cameraBearing;
+  }
+
+  void _startEdgeZoom() {
+    _touchMap();
+    _edgeZoomTarget = _cameraZoom;
+    _handleMapGesture(null);
+  }
+
+  void _edgeZoomBy(double delta) {
+    final zoom = _edgeZoomTarget;
+    if (zoom == null) return;
+    _edgeZoomTarget = (zoom + delta).clamp(0.0, 22.0);
+    _beginMapGesture();
+    unawaited(_sendEdgeZoom());
+  }
+
+  Future<void> _sendEdgeZoom() async {
+    if (_edgeZoomSending) return;
+    _edgeZoomSending = true;
+    try {
+      while (mounted && !_hidden) {
+        final map = _mapboxMap;
+        final zoom = _edgeZoomTarget;
+        if (map == null || zoom == null || zoom == _edgeZoomSent) break;
+        _edgeZoomSent = zoom;
+        await map.setCamera(CameraOptions(zoom: zoom));
+      }
+    } catch (_) {
+      // Zoom refusé par la carte : le prochain mouvement du doigt réessaie.
+      _edgeZoomSent = null;
+    } finally {
+      _edgeZoomSending = false;
+    }
   }
 
   /// Hauteur réservée au « i » de Mapbox sous le logo.
@@ -2267,17 +2320,7 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
             child: Listener(
               key: _mapAreaKey,
               behavior: HitTestBehavior.opaque,
-              onPointerDown: (event) {
-                _introFlightPending = false;
-                if (_selectedReport != null) {
-                  _cameraFocusRevision++;
-                  _selectionTouched = true;
-                  _latePositionFocus = false;
-                  _focusCameraPending = false;
-                  widget.focusController?.complete(_focusRevision);
-                }
-                _touchStartBearing = _cameraBearing;
-              },
+              onPointerDown: (_) => _touchMap(),
               child: MapWidget(
                 // The fixed Flutter stars show through the native space only;
                 // globe surfaces and atmospheric fog remain native Mapbox.
@@ -2292,6 +2335,7 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
                 onMapCreated: (map) {
                   setState(() => _mapboxMap = map);
                   unawaited(MapConfig.hideDefaultOrnaments(map));
+                  unawaited(MapConfig.disableQuickZoom(map));
                   unawaited(
                     _positionMapOrnaments(map, editing: _reportComposerOpen),
                   );
@@ -2345,6 +2389,9 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
             ),
           ),
           Positioned.fill(child: CloudPassage(camera: _cloudPassage)),
+          Positioned.fill(
+            child: MapEdgeZoom(onStart: _startEdgeZoom, onZoom: _edgeZoomBy),
+          ),
           if (_mapError != null)
             Positioned.fill(
               child: ColoredBox(
