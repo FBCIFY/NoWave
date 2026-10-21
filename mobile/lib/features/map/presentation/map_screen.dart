@@ -43,6 +43,7 @@ import 'map_intro_controller.dart';
 import 'report_marker.dart' as badges;
 export 'map_focus_controller.dart';
 import 'widgets/map_notice_banner.dart';
+import 'widgets/map_scale_bar.dart';
 import 'widgets/map_zoom_badge.dart';
 import '../data/hydrography_layer.dart';
 import 'widgets/report_marker.dart';
@@ -293,6 +294,10 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
   /// retour au premier plan.
   double? _cameraZoom;
   final _displayedZoom = ValueNotifier<double>(GlobeStyle.initialZoom);
+  final _scaleCamera = ValueNotifier<MapScaleCamera>((
+    zoom: GlobeStyle.initialZoom,
+    latitude: 0,
+  ));
 
   /// Coupe le battement de la heatmap, le renouvellement du token des
   /// tuiles et le réseau de Mapbox quand l'app n'est plus visible.
@@ -410,6 +415,10 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
     _syncGlobeRotation();
     _cameraZoom = event.cameraState.zoom;
     _displayedZoom.value = event.cameraState.zoom;
+    _scaleCamera.value = (
+      zoom: event.cameraState.zoom,
+      latitude: event.cameraState.center.coordinates.lat.toDouble(),
+    );
     // Longitude-only rotation leaves zoom-dependent presentation unchanged.
     // Native geographic layers still move; GPS/heading streams update the puck.
     // Avoid rebuilding its image and querying the viewport on each frame.
@@ -2106,6 +2115,7 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
     _noticeTimer?.cancel();
     _selectedExpiryTimer?.cancel();
     _displayedZoom.dispose();
+    _scaleCamera.dispose();
     _cloudPassage.dispose();
     _reportPoint.dispose();
     _reportMarkerLifted.dispose();
@@ -2417,6 +2427,13 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
                   ),
                 ),
               ),
+            ),
+          if (!_reportComposerOpen)
+            Positioned(
+              left: 16,
+              // Juste au-dessus du logo Mapbox, placé à viewPadding + 4.
+              bottom: mediaQuery.viewPadding.bottom + 30,
+              child: MapScaleBar(camera: _scaleCamera),
             ),
           if (!_reportComposerOpen)
             Positioned(
