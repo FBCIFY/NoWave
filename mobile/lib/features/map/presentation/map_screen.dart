@@ -2077,8 +2077,9 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
           LineLayer(
             id: _reportReachLayer,
             sourceId: _reportReachSource,
-            lineColor: 0xFFFFFFFF,
-            lineOpacity: 0.7,
+            // Gris foncé : le blanc disparaissait sur la mer claire.
+            lineColor: 0xFF4B5563,
+            lineOpacity: 0.9,
             lineWidth: 1.5,
             lineDasharray: [2, 2],
             lineEmissiveStrength: 1,
