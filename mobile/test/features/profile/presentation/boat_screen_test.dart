@@ -63,7 +63,7 @@ void main() {
   ) async {
     await open(tester);
     expect(find.text('Aucun bateau enregistré'), findsOneWidget);
-    await tester.enterText(find.byType(TextFormField).first, 'Aurore');
+    await tester.enterText(find.byType(TextFormField).first, 'aurore');
     await tester.enterText(find.byType(TextFormField).last, 'fr');
     await tester.tap(find.text('Créer le bateau'));
     await tester.pumpAndSettle();

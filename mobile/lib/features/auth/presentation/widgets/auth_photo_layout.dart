@@ -33,6 +33,15 @@ class AuthPhotoLayout extends StatelessWidget {
   final bool showBackButton;
   final VoidCallback? onBack;
 
+  /// Affiché au-dessus du titre (progression d'un parcours). Il ne glisse
+  /// pas avec les pages.
+  final Widget? header;
+
+  /// Page affichée d'un parcours en plusieurs pages. Quand elle change, le
+  /// titre et le formulaire glissent depuis la droite, ou depuis la gauche en
+  /// revenant en arrière ; la photo et le logo ne bougent pas.
+  final int? page;
+
   const AuthPhotoLayout({
     super.key,
     required this.title,
@@ -40,6 +49,8 @@ class AuthPhotoLayout extends StatelessWidget {
     this.subtitle,
     this.showBackButton = false,
     this.onBack,
+    this.header,
+    this.page,
   });
 
   /// Hauteur du fondu en haut de la zone qui défile.
@@ -173,31 +184,17 @@ class AuthPhotoLayout extends StatelessWidget {
                                             crossAxisAlignment:
                                                 CrossAxisAlignment.stretch,
                                             children: [
-                                              Text(
-                                                title,
-                                                style: const TextStyle(
-                                                  color: Colors.white,
-                                                  fontSize: 28,
-                                                  fontWeight: FontWeight.w700,
-                                                  height: 1.15,
-                                                ),
-                                              ),
-                                              if (subtitle != null) ...[
-                                                const SizedBox(height: 6),
-                                                Text(
-                                                  subtitle!,
-                                                  style: TextStyle(
-                                                    color: Colors.white
-                                                        .withValues(
-                                                          alpha: 0.75,
-                                                        ),
-                                                    fontSize: 15,
-                                                    height: 1.35,
-                                                  ),
-                                                ),
+                                              if (header != null) ...[
+                                                header!,
+                                                const SizedBox(height: 20),
                                               ],
-                                              const SizedBox(height: 24),
-                                              child,
+                                              if (page case final page?)
+                                                _PageSwitcher(
+                                                  page: page,
+                                                  child: _buildContent(),
+                                                )
+                                              else
+                                                _buildContent(),
                                             ],
                                           ),
                                         ),
@@ -229,6 +226,101 @@ class AuthPhotoLayout extends StatelessWidget {
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildContent() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Text(
+          title,
+          style: const TextStyle(
+            color: Colors.white,
+            fontSize: 28,
+            fontWeight: FontWeight.w700,
+            height: 1.15,
+          ),
+        ),
+        if (subtitle != null) ...[
+          const SizedBox(height: 6),
+          Text(
+            subtitle!,
+            style: TextStyle(
+              color: Colors.white.withValues(alpha: 0.75),
+              fontSize: 15,
+              height: 1.35,
+            ),
+          ),
+        ],
+        const SizedBox(height: 24),
+        child,
+      ],
+    );
+  }
+}
+
+/// Fait glisser le contenu d'une page à l'autre, comme [FlowTransition] mais
+/// dans le formulaire : la hauteur s'adapte en douceur à la nouvelle page.
+class _PageSwitcher extends StatefulWidget {
+  final int page;
+  final Widget child;
+
+  const _PageSwitcher({required this.page, required this.child});
+
+  @override
+  State<_PageSwitcher> createState() => _PageSwitcherState();
+}
+
+class _PageSwitcherState extends State<_PageSwitcher> {
+  static const _duration = Duration(milliseconds: 300);
+
+  bool _forward = true;
+
+  @override
+  void didUpdateWidget(_PageSwitcher oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.page != oldWidget.page) {
+      _forward = widget.page > oldWidget.page;
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedSize(
+      duration: _duration,
+      curve: Curves.easeInOut,
+      alignment: Alignment.bottomCenter,
+      // Le contenu qui glisse sort du formulaire jusqu'au bord de l'écran.
+      clipBehavior: Clip.none,
+      child: AnimatedSwitcher(
+        duration: _duration,
+        switchInCurve: Curves.easeInOut,
+        switchOutCurve: Curves.easeInOut,
+        layoutBuilder: (currentChild, previousChildren) => Stack(
+          alignment: Alignment.bottomCenter,
+          children: [...previousChildren, ?currentChild],
+        ),
+        transitionBuilder: (child, animation) => AnimatedBuilder(
+          animation: animation,
+          child: child,
+          builder: (context, child) {
+            final offset = 1 - animation.value;
+            final entering = animation.status != AnimationStatus.reverse;
+            final direction = _forward ? 1.0 : -1.0;
+            // Un peu plus que la largeur du formulaire : il sort entièrement
+            // de l'écran malgré les marges.
+            return FractionalTranslation(
+              translation: Offset(
+                (entering ? direction : -direction) * offset * 1.2,
+                0,
+              ),
+              child: child,
+            );
+          },
+        ),
+        child: KeyedSubtree(key: ValueKey(widget.page), child: widget.child),
       ),
     );
   }

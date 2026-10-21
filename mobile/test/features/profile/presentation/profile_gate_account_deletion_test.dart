@@ -4,7 +4,7 @@ import 'package:blueway/features/camera/data/position_estimate_service.dart';
 import 'package:blueway/features/map/data/report_tiles.dart';
 import 'package:blueway/features/profile/presentation/account_deletion_screen.dart';
 import 'package:blueway/features/profile/presentation/profile_gate.dart';
-import 'package:blueway/features/profile/presentation/profile_setup_screen.dart';
+import 'package:blueway/features/profile/presentation/profile_onboarding_screen.dart';
 import 'package:blueway/features/profile/presentation/suspended_account_screen.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:blueway/features/reports/data/manual_report_service.dart';
@@ -157,7 +157,7 @@ void main() {
       );
       await tester.pumpAndSettle();
       expect(find.byType(AccountDeletionScreen), findsOneWidget);
-      expect(find.byType(ProfileSetupScreen), findsNothing);
+      expect(find.byType(ProfileOnboardingScreen), findsNothing);
       expect(find.text('Réessayer'), findsOneWidget);
       expect(f.requests, hasLength(1));
       tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.paused);
