@@ -192,18 +192,20 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
     unawaited(_keepReportPointInReach());
   }
 
-  /// Zoom à partir duquel une rotation libre ne survit pas au lâcher. En
-  /// dessous, le globe entier tient à l'écran et reste libre.
-  static const _orientationLockZoom = 2.0;
+  /// Zoom du passage dans les nuages, à partir duquel la carte garde
+  /// l'orientation laissée par les doigts. En dessous, sur le globe, une
+  /// rotation libre ne survit pas au lâcher : le pôle Nord reste en haut.
+  static const _freeRotationZoom = 5.0;
 
-  /// Au lâcher, la carte revient à l'orientation choisie : le nord, ou le
-  /// cap figé par la boussole si c'est lui que les doigts ont quitté.
+  /// Au lâcher, sur le globe, la carte revient à l'orientation choisie : le
+  /// nord, ou le cap figé par la boussole si c'est lui que les doigts ont
+  /// quitté.
   Future<void> _restoreOrientation() async {
     final map = _mapboxMap;
     final zoom = _cameraZoom;
     if (map == null ||
         zoom == null ||
-        zoom < _orientationLockZoom ||
+        zoom >= _freeRotationZoom ||
         _orientationMode != _MapOrientationMode.manual) {
       return;
     }

@@ -44,8 +44,8 @@ Future<FocusMap> _rotateAndRelease(WidgetTester tester, double zoom) async {
 }
 
 void main() {
-  for (final zoom in [10.0, 5.0, 2.0]) {
-    testWidgets('zoom $zoom : la carte revient au nord au lâcher des doigts', (
+  for (final zoom in [1.5, 3.0, 4.9]) {
+    testWidgets('globe, zoom $zoom : la carte revient au nord au lâcher', (
       tester,
     ) async {
       final map = await _rotateAndRelease(tester, zoom);
@@ -58,12 +58,14 @@ void main() {
     });
   }
 
-  testWidgets('globe entier : la rotation libre reste après le lâcher', (
-    tester,
-  ) async {
-    final map = await _rotateAndRelease(tester, 1.5);
-    expect(map.easedCameras, isEmpty);
-    expect(find.byTooltip('Orienter la carte vers le nord'), findsOneWidget);
-    await tester.pumpWidget(const SizedBox.shrink());
-  });
+  for (final zoom in [5.0, 10.0]) {
+    testWidgets('dès les nuages, zoom $zoom : la rotation libre reste', (
+      tester,
+    ) async {
+      final map = await _rotateAndRelease(tester, zoom);
+      expect(map.easedCameras, isEmpty);
+      expect(find.byTooltip('Orienter la carte vers le nord'), findsOneWidget);
+      await tester.pumpWidget(const SizedBox.shrink());
+    });
+  }
 }
