@@ -97,8 +97,8 @@ Future<MapIntroController> _pumpCoveredMap(
   return intro;
 }
 
-/// Les autres tests gardent un setCamera absent : le vol d'arrivée s'y
-/// termine tout de suite.
+/// Les autres tests gardent un setCamera absent : Mapbox refuse le vol
+/// d'arrivée, qui passe aussitôt la main au suivi GPS (FollowPuck).
 class _HeadingMap extends _Map {
   final cameras = <CameraOptions>[];
 

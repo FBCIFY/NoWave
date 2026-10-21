@@ -116,6 +116,19 @@ class GlobeFlightPath {
   static double _tanh(double x) => _sinh(x) / _cosh(x);
 }
 
+/// How a [GlobeFlight] ended.
+enum GlobeFlightEnd {
+  /// The camera reached the end of the path.
+  arrived,
+
+  /// The platform refused a frame. The camera stays where it is; the caller
+  /// hands it over to native follow, which still brings it to the target.
+  refused,
+
+  /// [GlobeFlight.fly]'s `interrupted` stopped it, or a new flight replaced it.
+  interrupted,
+}
+
 /// Plays a [GlobeFlightPath] frame by frame. At most one platform call is in
 /// flight and no frame is queued: a slow platform skips frames, never lags.
 class GlobeFlight {
@@ -129,16 +142,13 @@ class GlobeFlight {
   late double Function(double zoom) _pitchAt;
   late Future<void> Function(CameraOptions) _moveCamera;
   late bool Function() _interrupted;
-  Completer<bool>? _done;
+  Completer<GlobeFlightEnd>? _done;
   Future<void>? _pending;
   bool _disposed = false;
 
   bool get isFlying => _done != null;
 
-  /// Completes with false when [interrupted] stopped the flight, true once
-  /// the camera reached the end (or the platform refused a frame: the caller
-  /// then hands the camera over as on arrival).
-  Future<bool> fly({
+  Future<GlobeFlightEnd> fly({
     required GlobeFlightPath path,
     required Duration duration,
     required double Function(double zoom) pitchAt,
@@ -146,23 +156,23 @@ class GlobeFlight {
     required bool Function() interrupted,
   }) {
     cancel();
-    if (_disposed) return Future.value(false);
+    if (_disposed) return Future.value(GlobeFlightEnd.interrupted);
     _path = path;
     _duration = duration;
     _pitchAt = pitchAt;
     _moveCamera = moveCamera;
     _interrupted = interrupted;
-    final done = _done = Completer<bool>();
+    final done = _done = Completer<GlobeFlightEnd>();
     _ticker.start();
     return done.future;
   }
 
-  void cancel() => _finish(false);
+  void cancel() => _finish(GlobeFlightEnd.interrupted);
 
   void _tick(Duration elapsed) {
     final path = _path;
     if (path == null) return;
-    if (_interrupted()) return _finish(false);
+    if (_interrupted()) return _finish(GlobeFlightEnd.interrupted);
     if (_pending != null) return;
     final t = _duration == Duration.zero
         ? 1.0
@@ -182,25 +192,25 @@ class GlobeFlight {
   Future<void> _send(CameraOptions camera, {required bool last}) async {
     try {
       await _moveCamera(camera);
-      if (last) _finish(true);
+      if (last) _finish(GlobeFlightEnd.arrived);
     } catch (error) {
-      debugPrint('Vol de la caméra interrompu : $error');
-      _finish(true);
+      debugPrint('Vol de la caméra refusé : $error');
+      _finish(GlobeFlightEnd.refused);
     } finally {
       _pending = null;
     }
   }
 
-  void _finish(bool arrived) {
+  void _finish(GlobeFlightEnd end) {
     if (_ticker.isActive) _ticker.stop();
     _path = null;
     final done = _done;
     _done = null;
-    if (done != null && !done.isCompleted) done.complete(arrived);
+    if (done != null && !done.isCompleted) done.complete(end);
   }
 
   void dispose() {
-    _finish(false);
+    _finish(GlobeFlightEnd.interrupted);
     _disposed = true;
     _ticker.dispose();
   }

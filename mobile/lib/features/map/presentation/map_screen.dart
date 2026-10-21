@@ -1882,7 +1882,7 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
 
     final gestureRevision = _mapGestureRevision;
     setState(() => _viewport = const IdleViewportState());
-    final arrived = await _globeFlight.fly(
+    final end = await _globeFlight.fly(
       path: GlobeFlightPath(
         from: (
           longitude: start.center.coordinates.lng.toDouble(),
@@ -1906,7 +1906,13 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
       interrupted: () =>
           !mounted || _hidden || gestureRevision != _mapGestureRevision,
     );
-    if (!mounted || !arrived || gestureRevision != _mapGestureRevision) return;
+    if (!mounted ||
+        end == GlobeFlightEnd.interrupted ||
+        gestureRevision != _mapGestureRevision) {
+      return;
+    }
+    // Vol refusé par Mapbox : même relais qu'à l'arrivée, le suivi GPS
+    // natif amène la caméra jusqu'à l'utilisateur depuis là où elle est.
     setState(arrive);
   }
 

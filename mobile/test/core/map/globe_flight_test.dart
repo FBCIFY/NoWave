@@ -104,7 +104,7 @@ void main() {
     });
     tearDown(() => flight.dispose());
 
-    Future<bool> fly() => flight.fly(
+    Future<GlobeFlightEnd> fly() => flight.fly(
       path: _globeToMarseille,
       duration: const Duration(milliseconds: 1000),
       pitchAt: (zoom) => GlobePitchController.pitchAt(zoom, 60),
@@ -117,7 +117,7 @@ void main() {
       for (var ms = 0; ms <= 1000; ms += 100) {
         await clock.at(ms);
       }
-      expect(await done, isTrue);
+      expect(await done, GlobeFlightEnd.arrived);
       expect(cameras, hasLength(11));
       for (final camera in cameras) {
         expect(
@@ -137,9 +137,30 @@ void main() {
       await clock.at(100);
       interrupted = true;
       await clock.at(200);
-      expect(await done, isFalse);
+      expect(await done, GlobeFlightEnd.interrupted);
       expect(cameras, hasLength(2));
       expect(clock.active, isFalse);
+    });
+
+    test('image refusée : vol arrêté et signalé comme refusé', () async {
+      final done = flight.fly(
+        path: _globeToMarseille,
+        duration: const Duration(milliseconds: 1000),
+        pitchAt: (_) => 0,
+        moveCamera: (camera) async {
+          cameras.add(camera);
+          if (cameras.length == 2) throw StateError('carte native fermée');
+        },
+        interrupted: () => false,
+      );
+      await clock.at(0);
+      await clock.at(100);
+      expect(await done, GlobeFlightEnd.refused);
+      expect(cameras, hasLength(2));
+      expect(clock.active, isFalse);
+      // Plus aucune image après le refus.
+      await clock.at(200);
+      expect(cameras, hasLength(2));
     });
 
     test(
@@ -163,7 +184,7 @@ void main() {
         slow.complete();
         await Future<void>.delayed(Duration.zero);
         await clock.at(1000);
-        expect(await done, isTrue);
+        expect(await done, GlobeFlightEnd.arrived);
         expect(cameras, hasLength(2));
       },
     );
