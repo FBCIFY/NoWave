@@ -33,8 +33,9 @@ class AuthPhotoLayout extends StatelessWidget {
   final bool showBackButton;
   final VoidCallback? onBack;
 
-  /// Affiché en haut, à droite du bouton retour (progression d'un parcours).
-  /// Sa place est fixe : il ne suit ni la hauteur des pages ni le clavier.
+  /// Progression d'un parcours, posée vers le milieu de l'écran
+  /// ([_headerAnchor]). Le titre et le formulaire sont accrochés dessous et
+  /// s'allongent vers le bas : la barre ne bouge pas d'une page à l'autre.
   final Widget? header;
 
   /// Page affichée d'un parcours en plusieurs pages. Quand elle change, le
@@ -56,13 +57,39 @@ class AuthPhotoLayout extends StatelessWidget {
   /// Hauteur du fondu en haut de la zone qui défile.
   static const _edgeFade = 24.0;
 
+  /// Haut de la progression, en part de la hauteur de l'écran.
+  static const _headerAnchor = 0.5;
+
+  /// Place gardée sous la progression : la page la plus haute des parcours
+  /// (type de bateau, environ 400 px) tient sans défiler. Sur les petits
+  /// écrans, la progression remonte d'autant.
+  static const _formReach = 410.0;
+
+  /// Hauteur de la ligne du bouton retour.
+  static const _topBarHeight = 52.0;
+
   @override
   Widget build(BuildContext context) {
     // Petits écrans (iPhone SE) : logo réduit pour que le formulaire tienne
     // sans défiler. Calculé sur la taille de l'écran, et non sur la place
     // restante, pour que le logo ne change pas de taille quand le clavier
     // s'ouvre.
-    final isCompact = MediaQuery.sizeOf(context).height < 700;
+    final screenHeight = MediaQuery.sizeOf(context).height;
+    final isCompact = screenHeight < 700;
+    // Calculée sur l'écran, et non sur la place restante : le clavier ne
+    // déplace pas la progression, la page défile. viewPadding garde la marge
+    // du bas même clavier ouvert.
+    final safeArea = MediaQuery.viewPaddingOf(context);
+    final headerTop = math.max(
+      isCompact ? 120.0 : 160.0,
+      math.min(
+            screenHeight * _headerAnchor,
+            screenHeight - math.max(16.0, safeArea.bottom) - _formReach,
+          ) -
+          safeArea.top -
+          _topBarHeight -
+          _edgeFade,
+    );
 
     // Le haut des photos est un ciel clair : icônes de la barre d'état
     // sombres.
@@ -101,13 +128,11 @@ class AuthPhotoLayout extends StatelessWidget {
               child: Column(
                 children: [
                   SizedBox(
-                    height: 52,
+                    height: _topBarHeight,
                     child: Padding(
                       padding: const EdgeInsets.symmetric(horizontal: 16),
                       child: Row(
                         children: [
-                          // Place du bouton gardée sur la première page : la
-                          // progression ne se décale pas quand il apparaît.
                           SizedBox(
                             width: 44,
                             child: showBackButton
@@ -130,10 +155,6 @@ class AuthPhotoLayout extends StatelessWidget {
                                   )
                                 : null,
                           ),
-                          if (header != null) ...[
-                            const SizedBox(width: 12),
-                            Expanded(child: header!),
-                          ],
                         ],
                       ),
                     ),
@@ -175,55 +196,19 @@ class AuthPhotoLayout extends StatelessWidget {
                                   24,
                                   bottomPadding,
                                 ),
-                                // Logo en haut, formulaire en bas : l'espace
-                                // restant va entre les deux. La colonne est
-                                // remplie de bas en haut : le formulaire est
-                                // peint en premier, son voile passe donc sous
-                                // le logo.
-                                child: Column(
-                                  verticalDirection: VerticalDirection.up,
-                                  mainAxisAlignment:
-                                      MainAxisAlignment.spaceBetween,
-                                  crossAxisAlignment:
-                                      CrossAxisAlignment.stretch,
-                                  children: [
-                                    CustomPaint(
-                                      painter: const _FormScrimPainter(),
-                                      child: Center(
-                                        child: ConstrainedBox(
-                                          constraints: const BoxConstraints(
-                                            maxWidth: 480,
-                                          ),
-                                          child: Column(
-                                            crossAxisAlignment:
-                                                CrossAxisAlignment.stretch,
-                                            children: [
-                                              if (page case final page?)
-                                                _PageSwitcher(
-                                                  page: page,
-                                                  child: _buildContent(),
-                                                )
-                                              else
-                                                _buildContent(),
-                                            ],
-                                          ),
+                                child: header == null
+                                    ? _bottomForm(isCompact)
+                                    : _anchoredForm(
+                                        isCompact: isCompact,
+                                        headerTop: headerTop,
+                                        formMinHeight: math.max(
+                                          0,
+                                          constraints.maxHeight -
+                                              _edgeFade -
+                                              bottomPadding -
+                                              headerTop,
                                         ),
                                       ),
-                                    ),
-                                    Padding(
-                                      padding: EdgeInsets.only(
-                                        bottom: isCompact ? 16 : 24,
-                                      ),
-                                      child: Center(
-                                        child: Image.asset(
-                                          'assets/images/brand/nowave_logo.png',
-                                          width: isCompact ? 150 : 200,
-                                          semanticLabel: 'NoWave',
-                                        ),
-                                      ),
-                                    ),
-                                  ],
-                                ),
                               ),
                             ),
                           ),
@@ -239,6 +224,84 @@ class AuthPhotoLayout extends StatelessWidget {
       ),
     );
   }
+
+  /// Logo en haut, formulaire en bas : l'espace restant va entre les deux.
+  /// La colonne est remplie de bas en haut : le formulaire est peint en
+  /// premier, son voile passe donc sous le logo.
+  Widget _bottomForm(bool isCompact) => Column(
+    verticalDirection: VerticalDirection.up,
+    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+    crossAxisAlignment: CrossAxisAlignment.stretch,
+    children: [
+      CustomPaint(
+        painter: const _FormScrimPainter(),
+        child: _formWidth(_pageContent(Alignment.bottomCenter)),
+      ),
+      _logo(isCompact),
+    ],
+  );
+
+  /// Logo centré au-dessus de la progression, posée à [headerTop] ; le
+  /// formulaire pend dessous et son voile descend jusqu'au bas de l'écran.
+  Widget _anchoredForm({
+    required bool isCompact,
+    required double headerTop,
+    required double formMinHeight,
+  }) => Column(
+    verticalDirection: VerticalDirection.up,
+    crossAxisAlignment: CrossAxisAlignment.stretch,
+    children: [
+      CustomPaint(
+        painter: const _FormScrimPainter(),
+        child: ConstrainedBox(
+          constraints: BoxConstraints(minHeight: formMinHeight),
+          child: Align(
+            alignment: Alignment.topCenter,
+            child: _formWidth(
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  header!,
+                  const SizedBox(height: 20),
+                  _pageContent(Alignment.topCenter),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+      SizedBox(
+        height: headerTop,
+        child: Center(child: _logo(isCompact)),
+      ),
+    ],
+  );
+
+  Widget _formWidth(Widget child) => Center(
+    child: ConstrainedBox(
+      constraints: const BoxConstraints(maxWidth: 480),
+      child: child,
+    ),
+  );
+
+  Widget _pageContent(Alignment alignment) => page == null
+      ? _buildContent()
+      : _PageSwitcher(
+          page: page!,
+          alignment: alignment,
+          child: _buildContent(),
+        );
+
+  Widget _logo(bool isCompact) => Padding(
+    padding: EdgeInsets.only(bottom: isCompact ? 16 : 24),
+    child: Center(
+      child: Image.asset(
+        'assets/images/brand/nowave_logo.png',
+        width: isCompact ? 150 : 200,
+        semanticLabel: 'NoWave',
+      ),
+    ),
+  );
 
   Widget _buildContent() {
     return Column(
@@ -275,9 +338,17 @@ class AuthPhotoLayout extends StatelessWidget {
 /// dans le formulaire : la hauteur s'adapte en douceur à la nouvelle page.
 class _PageSwitcher extends StatefulWidget {
   final int page;
+
+  /// Bord fixe du formulaire : le bas quand il est posé en bas de l'écran,
+  /// le haut quand il pend sous la progression.
+  final Alignment alignment;
   final Widget child;
 
-  const _PageSwitcher({required this.page, required this.child});
+  const _PageSwitcher({
+    required this.page,
+    required this.alignment,
+    required this.child,
+  });
 
   @override
   State<_PageSwitcher> createState() => _PageSwitcherState();
@@ -301,7 +372,7 @@ class _PageSwitcherState extends State<_PageSwitcher> {
     return AnimatedSize(
       duration: _duration,
       curve: Curves.easeInOut,
-      alignment: Alignment.bottomCenter,
+      alignment: widget.alignment,
       // Le contenu qui glisse sort du formulaire jusqu'au bord de l'écran.
       clipBehavior: Clip.none,
       child: AnimatedSwitcher(
@@ -309,7 +380,7 @@ class _PageSwitcherState extends State<_PageSwitcher> {
         switchInCurve: Curves.easeInOut,
         switchOutCurve: Curves.easeInOut,
         layoutBuilder: (currentChild, previousChildren) => Stack(
-          alignment: Alignment.bottomCenter,
+          alignment: widget.alignment,
           children: [...previousChildren, ?currentChild],
         ),
         transitionBuilder: (child, animation) => AnimatedBuilder(
