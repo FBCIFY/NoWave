@@ -5,7 +5,7 @@ publish_to: 'none'
 
 # Nom de version + numéro de build, modifiables à la compilation avec
 # --build-name et --build-number.
-version: 1.0.0+1
+version: 1.0.0+2026102004
 
 environment:
   sdk: ^3.13.3
@@ -29,6 +29,7 @@ dependencies:
   image: ^4.10.1
   sensors_plus: ^7.1.0
   shared_preferences: ^2.5.5
+  package_info_plus: ^10.2.1
 
 dev_dependencies:
   flutter_test:

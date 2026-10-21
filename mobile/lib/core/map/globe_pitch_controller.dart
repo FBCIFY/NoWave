@@ -13,6 +13,7 @@ class GlobePitchController {
   double get detailedPitch => _detailedPitch;
   CameraState? _camera;
   bool _editing = false;
+  double? _followingPitch;
   bool? _flatApplied;
   bool? _gesturesApplied;
   bool _writingPitch = false;
@@ -31,11 +32,18 @@ class GlobePitchController {
     MapboxMap map,
     CameraState camera, {
     required bool editing,
+    double? followingPitch,
   }) {
     if (_disposed || !camera.zoom.isFinite || !camera.pitch.isFinite) {
       return Future<void>.value();
     }
-    if (!editing && camera.zoom >= detailedZoom) {
+    final following =
+        !editing && followingPitch != null && followingPitch.isFinite;
+    if (following) {
+      _detailedPitch = followingPitch.clamp(0.0, maxPitch);
+      _restoringDetailedPitch = false;
+    }
+    if (!editing && !following && camera.zoom >= detailedZoom) {
       if ((_lastZoom != null && _lastZoom! < detailedZoom) || _editing) {
         _restoringDetailedPitch = true;
       }
@@ -44,6 +52,7 @@ class GlobePitchController {
       }
     }
     if (!editing &&
+        !following &&
         !_editing &&
         !_restoringDetailedPitch &&
         !_writingPitch &&
@@ -54,6 +63,7 @@ class GlobePitchController {
     _lastZoom = camera.zoom;
     _camera = camera;
     _editing = editing;
+    _followingPitch = following ? _detailedPitch : null;
     _revision++;
     return _pending ??= Future<void>.microtask(() => _apply(map));
   }
@@ -89,6 +99,9 @@ class GlobePitchController {
         }
         if (_disposed) return;
         if (appliedRevision != _revision) continue;
+        // FollowPuck owns the animated pitch. Do not restore the old globe
+        // pitch while a recenter or direction transition is still in flight.
+        if (_followingPitch != null && !_editing) continue;
         final pitch = _editing ? 0.0 : pitchAt(camera.zoom, _detailedPitch);
         if ((camera.pitch - pitch).abs() > .01) {
           _writingPitch = true;

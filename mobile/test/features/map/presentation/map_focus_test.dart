@@ -46,10 +46,11 @@ PhotoReportDraft photoDraft() => PhotoReportDraft(
 
 class _Reports extends Fake implements ReportDetailService {
   final calls = <String>[];
+  Completer<ReportDetail>? response;
   @override
   Future<ReportDetail> fetchReport(String id) async {
     calls.add(id);
-    return focusReport(id: id);
+    return response?.future ?? focusReport(id: id);
   }
 }
 
@@ -402,6 +403,62 @@ void main() {
     },
   );
 
+  focusTestWidgets(
+    'historique : cadre les deux points avec une seule animation',
+    (tester) async {
+      gps.initial.complete(focusPosition());
+      await mount(tester);
+      focus.focus(focusReport(longitude: 6));
+      await pumpFrames(tester);
+      expect(focus.origin, MapFocusOrigin.history);
+      expect(map.fittedCoordinates.single, hasLength(2));
+      expect(map.easedCameras, hasLength(1));
+      expect(map.animationDurations.single, inInclusiveRange(240, 500));
+      expect(
+        tester.widget<mb.MapWidget>(find.byType(mb.MapWidget)).viewport,
+        isA<mb.IdleViewportState>(),
+      );
+    },
+  );
+
+  focusTestWidgets('ouvrir un report conserve le cap et l’inclinaison', (
+    tester,
+  ) async {
+    gps.initial.complete(focusPosition());
+    map.cameraBearing = 130;
+    map.cameraPitch = 45;
+    await mount(tester);
+    final done = focus.focusAlert(focusReport());
+    await pumpFrames(tester);
+    await done;
+    expect(map.fitCameraOptions.single.bearing, 130);
+    expect(map.fitCameraOptions.single.pitch, 45);
+    expect(map.easedCameras.single.bearing, 130);
+    expect(map.easedCameras.single.pitch, 45);
+  });
+
+  focusTestWidgets('sélection masquée : attend le retour de la carte', (
+    tester,
+  ) async {
+    gps.initial.complete(focusPosition());
+    await mount(tester);
+    final navigator = Navigator.of(tester.element(find.byType(MapScreen)));
+    unawaited(
+      navigator.push(
+        MaterialPageRoute<void>(
+          builder: (_) => const Scaffold(body: Text('Écran opaque')),
+        ),
+      ),
+    );
+    await pumpFrames(tester);
+    focus.focus(focusReport());
+    await pumpFrames(tester);
+    expect(map.cameras, isEmpty);
+    navigator.pop();
+    await pumpFrames(tester);
+    expect(map.easedCameras, hasLength(1));
+  });
+
   for (final photo in [false, true]) {
     focusTestWidgets(
       'NW-210 ${photo ? 'photo' : 'manuel'} : même cadrage GPS et geste libre',
@@ -689,6 +746,14 @@ void main() {
       await pending;
       expect(reports.calls, isEmpty);
       expect(find.byType(ReportDetailSheet), findsNothing);
+      final mapListener = tester.widget<Listener>(
+        find
+            .ancestor(
+              of: find.byType(mb.MapWidget),
+              matching: find.byType(Listener),
+            )
+            .first,
+      );
       final interaction = map.interactions.single;
       interaction.action(
         mb.TypedFeaturesetFeature(
@@ -706,9 +771,55 @@ void main() {
           gestureState: mb.GestureState.ended,
         ),
       );
+      // iOS can deliver the native feature callback before Flutter's pointer
+      // event for the selecting touch. This touch is not a cancellation.
+      mapListener.onPointerDown!(
+        const PointerDownEvent(position: Offset(200, 300)),
+      );
       await pumpFrames(tester);
       expect(reports.calls, ['report-a']);
       expect(find.byType(ReportDetailSheet), findsOneWidget);
+      expect(focus.origin, MapFocusOrigin.mapTap);
+      expect(map.easedCameras, hasLength(2));
+      expect(map.easedCameras.last.padding!.bottom, greaterThan(150));
+    },
+  );
+
+  focusTestWidgets(
+    'tap chargé lentement : cadrage au-dessus de la fiche, GPS tardif sans suivi',
+    (tester) async {
+      await mount(tester);
+      reports.response = Completer<ReportDetail>();
+      map.interactions.first.action(
+        mb.TypedFeaturesetFeature(
+          mb.FeaturesetDescriptor(layerId: 'alert-selected-point'),
+          {
+            'type': 'Point',
+            'coordinates': [5.373, 43.29],
+          },
+          {'report_id': 'report-a'},
+          {},
+        ),
+        mb.MapContentGestureContext(
+          touchPosition: mb.ScreenCoordinate(x: 200, y: 300),
+          point: mb.Point(coordinates: mb.Position(5.373, 43.29)),
+          gestureState: mb.GestureState.ended,
+        ),
+      );
+      await pumpFrames(tester);
+      expect(map.cameras, isEmpty);
+      reports.response!.complete(focusReport());
+      await pumpFrames(tester);
+      expect(focus.origin, MapFocusOrigin.mapTap);
+      expect(map.easedCameras, hasLength(1));
+      expect(map.easedCameras.single.padding!.bottom, greaterThan(150));
+      gps.initial.complete(focusPosition());
+      await pumpFrames(tester);
+      expect(map.easedCameras, hasLength(1));
+      expect(
+        tester.widget<mb.MapWidget>(find.byType(mb.MapWidget)).viewport,
+        isA<mb.IdleViewportState>(),
+      );
     },
   );
 

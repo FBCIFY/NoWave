@@ -86,16 +86,31 @@ de base répond 503. Le journal JSON du serveur web expose `status`,
 `upstream_status`, `limit_req_status` et `limit_conn_status` pour distinguer
 ces cas lors d'une recette de zooms répétés. Comparer aussi la révision de
 `/version` avec la révision livrée avant d'attribuer un incident à ce réglage.
-Les sept familles XYZ marines ont un budget distinct de **20 requêtes/s/IP**,
-avec une rafale bornée à 40 et mise en attente au-delà de 8. La limite générale
+Les sept familles XYZ marines ont un budget distinct de **40 requêtes/s/IP**,
+avec une rafale bornée à 128 et mise en attente au-delà de 16. La limite générale
 reste à 10/s pour profil, publication et métadonnées ; les MVT de signalements
-restent à 30/s. Le plafond commun de 30 connexions/IP est conservé. Le cache
+restent à 30/s. Les flux marins ont un plafond séparé de **64 requêtes
+simultanées/IP** : un écran de neuf tuiles sur sept sources ne doit pas saturer
+le plafond de 30 connexions/IP des autres routes. Le cache
 marin persistant réduit les appels fournisseurs mais ne réduit pas le nombre
 de requêtes reçues par Nginx : ces protections sont complémentaires.
+
+La bathymétrie visuelle conserve également ses PNG terminés (couleurs et masque
+côtier inclus) dans `MARINE_CACHE_DIR/bathymetry.sqlite3`, pendant 24 heures,
+avec un plafond de 128 Mio sur disque et 32 Mio en mémoire. Le cache est
+versionné avec le rendu côtier ; toute modification de couleurs ou de masque
+doit changer cette version et celle de l'URL mobile. Les demandes simultanées
+de la même tuile partagent un seul rendu. Au maximum huit rendus occupent les
+workers, les autres attendent de façon asynchrone (file bornée à 128 tuiles).
+Un échec n'est jamais enregistré comme un océan vide et aucun masque côtier
+n'est contourné. Le cache disque natif mobile réutilise ces PNG publics selon
+leur durée HTTP, sans modifier le cache des sondes numériques.
 
 Pour reproduire sans charge publique, utiliser `backend/tools/probe_marine_rate_limits.py`
 avec un binaire Nginx local. Ce scénario ne contacte que le loopback et un
 fournisseur synthétique, après préchauffage du vrai cache `MarineHTTP`.
+Le probe inclut deux écrans de 63 tuiles simultanées avec des réponses lentes
+et vérifie l'accès au profil pendant leur chargement.
 Les résultats locaux ne prouvent pas l'origine d'un 429 distant : vérifier
 `limit_req_status` et `upstream_status` dans les logs de production. Les 429/503
 amont conservent le backoff `Retry-After` du transport marin ; aucune boucle de

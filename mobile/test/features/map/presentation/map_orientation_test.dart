@@ -1,5 +1,6 @@
 import 'package:blueway/features/map/presentation/map_screen.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mapbox_maps_flutter/mapbox_maps_flutter.dart';
 
@@ -54,10 +55,6 @@ void main() {
     ) async {
       final map = await _rotateAndRelease(tester, zoom);
       expect(map.easedCameras.map((camera) => camera.bearing), [0]);
-      expect(
-        find.byTooltip('Aligner la carte sur le cap actuel'),
-        findsOneWidget,
-      );
       await tester.pumpWidget(const SizedBox.shrink());
     });
   }
@@ -68,7 +65,6 @@ void main() {
     ) async {
       final map = await _rotateAndRelease(tester, zoom);
       expect(map.easedCameras, isEmpty);
-      expect(find.byTooltip('Orienter la carte vers le nord'), findsOneWidget);
       await tester.pumpWidget(const SizedBox.shrink());
     });
   }
@@ -76,7 +72,8 @@ void main() {
   /// Caps posés directement pendant le geste, sans animation.
   List<double?> limits(FocusMap map) => [
     for (final camera in map.cameras)
-      if (camera.bearing != null) camera.bearing?.toDouble(),
+      if (camera.bearing != null && !map.easedCameras.contains(camera))
+        camera.bearing?.toDouble(),
   ];
 
   testWidgets('globe : la rotation bute à 30° du nord pendant le geste', (
@@ -114,6 +111,8 @@ void main() {
     final widget = tester.widget<MapWidget>(find.byType(MapWidget));
     widget.onMapCreated!(map);
     await tester.pump();
+    // Réglages complets des mouvements à la création : hors sujet ici.
+    map.gestures.settings.clear();
     for (final zoom in [3.0, 4.0, 6.0, 12.0, 2.0]) {
       widget.onCameraChangeListener!(_camera(zoom: zoom, bearing: 0));
       await tester.pump();
@@ -121,6 +120,35 @@ void main() {
     // Envoyé seulement au passage des nuages, pas à chaque image.
     expect(gestures(map, (settings) => settings.pinchPanEnabled), [
       false,
+      true,
+      false,
+    ]);
+    await tester.pumpWidget(const SizedBox.shrink());
+  });
+
+  testWidgets('globe : les réglages des mouvements gardent le verrou', (
+    tester,
+  ) async {
+    // Pont natif de l'inertie : absent des tests, il répondrait ainsi.
+    const motion = MethodChannel('fr.blueway.app/map_motion');
+    final messenger = tester.binding.defaultBinaryMessenger;
+    messenger.setMockMethodCallHandler(motion, (_) async => true);
+    addTearDown(() => messenger.setMockMethodCallHandler(motion, null));
+    await tester.pumpWidget(const MaterialApp(home: MapScreen()));
+    final map = FocusMap();
+    final widget = tester.widget<MapWidget>(find.byType(MapWidget));
+    widget.onMapCreated!(map);
+    await tester.pump();
+    widget.onCameraChangeListener!(_camera(zoom: 3, bearing: 0));
+    await tester.pump();
+    map.gestures.settings.clear();
+
+    // Réduire les animations renvoie tous les gestes à Mapbox.
+    tester.platformDispatcher.accessibilityFeaturesTestValue =
+        const FakeAccessibilityFeatures(reduceMotion: true);
+    addTearDown(tester.platformDispatcher.clearAccessibilityFeaturesTestValue);
+    await tester.pump();
+    expect(gestures(map, (settings) => settings.pinchPanEnabled), [
       true,
       false,
     ]);
@@ -137,6 +165,7 @@ void main() {
     await tester.pump();
     widget.onCameraChangeListener!(_camera(zoom: 3, bearing: 0));
     await tester.pump();
+    map.gestures.settings.clear();
     bool? rotate(GesturesSettings settings) => settings.rotateEnabled;
 
     final first = await tester.startGesture(const Offset(150, 400));

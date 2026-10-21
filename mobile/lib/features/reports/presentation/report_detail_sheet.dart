@@ -45,17 +45,49 @@ class ReportDetailSheet extends StatefulWidget {
     required Future<ReportDetail> Function(String reportId) loadReport,
     required Future<Uint8List> Function(String url) loadPhoto,
     ({double latitude, double longitude})? userPosition,
-  }) => showModalBottomSheet<void>(
-    context: context,
-    showDragHandle: true,
-    isScrollControlled: true,
-    builder: (_) => ReportDetailSheet(
-      reportId: reportId,
-      loadReport: loadReport,
-      loadPhoto: loadPhoto,
-      userPosition: userPosition,
-    ),
-  );
+    ValueChanged<double>? onLayout,
+  }) {
+    final sheetKey = GlobalKey();
+    void measure() {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        final box = sheetKey.currentContext?.findRenderObject();
+        if (box is RenderBox && box.hasSize) onLayout?.call(box.size.height);
+      });
+    }
+
+    return showModalBottomSheet<void>(
+      context: context,
+      showDragHandle: true,
+      isScrollControlled: true,
+      builder: (_) {
+        measure();
+        return NotificationListener<SizeChangedLayoutNotification>(
+          onNotification: (_) {
+            measure();
+            return false;
+          },
+          child: SizeChangedLayoutNotifier(
+            child: SizedBox(
+              key: sheetKey,
+              child: ReportDetailSheet(
+                reportId: reportId,
+                loadReport: (id) async {
+                  final report = await loadReport(id);
+                  // A cached response can replace the spinner without changing
+                  // the sheet height. Measure after successful content as well
+                  // as size changes so the map always receives a focus target.
+                  measure();
+                  return report;
+                },
+                loadPhoto: loadPhoto,
+                userPosition: userPosition,
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
 
   @override
   State<ReportDetailSheet> createState() => _ReportDetailSheetState();

@@ -41,6 +41,22 @@ class _Map extends Fake implements MapboxMap {
   final scaleBar = _Scale();
 
   @override
+  Future<void> cancelCameraAnimation() async {}
+
+  @override
+  Future<CameraBounds> getBounds() async => CameraBounds(
+    bounds: CoordinateBounds(
+      southwest: Point(coordinates: Position(-180, -85)),
+      northeast: Point(coordinates: Position(180, 85)),
+      infiniteBounds: true,
+    ),
+    minZoom: 0,
+    maxZoom: 22,
+    minPitch: 0,
+    maxPitch: 85,
+  );
+
+  @override
   Future<CameraState> getCameraState() async => CameraState(
     center: Point(coordinates: Position(-4.49, 48.38)),
     zoom: 2,
@@ -167,31 +183,31 @@ void main() {
   );
 
   testWidgets(
-    'cap mesuré sous l’onboarding : la boussole l’affiche dès l’arrivée',
+    'cap mesuré sous l’onboarding : disponible dès le premier suivi de direction',
     (tester) async {
       gps.onCurrent = () async => focusPosition();
       final headings = _Headings();
       addTearDown(headings.values.close);
       final intro = await _pumpCoveredMap(tester, gps, headings: headings);
-      double compassTurns() => tester
-          .widget<AnimatedRotation>(
-            find.ancestor(
-              of: find.byIcon(Icons.navigation),
-              matching: find.byType(AnimatedRotation),
-            ),
-          )
-          .turns;
-
       // iOS n'envoie qu'une mesure tant que le téléphone ne tourne pas.
       headings.values.add(90);
       await tester.pump();
-      expect(compassTurns(), 0);
+      expect(find.byIcon(Icons.navigation), findsNothing);
 
       intro.start();
       await tester.pump();
-      expect(compassTurns(), closeTo(0.25, 1e-9));
       await tester.pump(MapIntroController.fadeDuration);
-      await tester.pump();
+      await tester.pumpAndSettle();
+      await tester.tap(find.byTooltip('Recentrer sur ma position'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byTooltip('Suivre la direction du téléphone'));
+      await tester.pumpAndSettle();
+      final viewport = _mapWidget(tester).viewport as FollowPuckViewportState;
+      expect(
+        (viewport.bearing as FollowPuckViewportStateBearingConstant).bearing,
+        90,
+      );
+      expect(find.byIcon(Icons.navigation), findsOneWidget);
 
       await tester.pumpWidget(const SizedBox.shrink());
     },

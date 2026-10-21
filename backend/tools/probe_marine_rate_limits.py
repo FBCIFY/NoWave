@@ -46,6 +46,8 @@ def probe(nginx, config):
         async def get(path):
             return await cache.get("https://fixture.invalid" + path, ttl=300)
 
+        viewport_paths = tile_paths(40, 9)
+
         class Backend(BaseHTTPRequestHandler):
             def log_message(self, *args):
                 pass
@@ -54,13 +56,20 @@ def probe(nginx, config):
                 data = (asyncio.run_coroutine_threadsafe(get(self.path), loop).result(10)
                         if self.path.startswith("/api/v1/map/") and self.path.endswith((".png", ".pbf"))
                         else b"{}")
+                # One real viewport can request 9 tiles across 7 sources at
+                # once. Keep those streams open to expose connection limits.
+                if self.path in viewport_paths:
+                    time.sleep(2)
                 self.send_response(200)
                 self.send_header("Content-Type", "application/octet-stream")
                 self.send_header("Content-Length", str(len(data)))
                 self.end_headers()
                 self.wfile.write(data)
 
-        backend = ThreadingHTTPServer(("127.0.0.1", 0), Backend)
+        class FixtureServer(ThreadingHTTPServer):
+            request_queue_size = 128
+
+        backend = FixtureServer(("127.0.0.1", 0), Backend)
         backend_thread = threading.Thread(target=backend.serve_forever, daemon=True)
         backend_thread.start()
         with socket.socket() as sock:
@@ -99,6 +108,8 @@ def probe(nginx, config):
             ("zoom_out", tile_paths(0, 4, 11)),
             ("other_zone", tile_paths(20, 4)),
             ("revisit", tile_paths(0, 4)),
+            ("full_viewport", viewport_paths),
+            ("repeat_viewport", viewport_paths),
         ]
         # Warm the real durable cache before any proxy measurement, including
         # every navigation path. Nginx must not consume the profile budget even
@@ -128,9 +139,13 @@ def probe(nginx, config):
             cases = []
             for name, paths in scenarios:
                 started = time.monotonic()
-                with ThreadPoolExecutor(max_workers=8) as pool:
-                    codes = Counter(pool.map(request, paths))
-                profile = request("/api/v1/users/me")
+                with ThreadPoolExecutor(max_workers=64) as pool:
+                    pending = [pool.submit(request, path) for path in paths]
+                    # Profile requests must succeed while marine requests are
+                    # still open, rather than only after the tiles complete.
+                    time.sleep(.1)
+                    profile = request("/api/v1/users/me")
+                    codes = Counter(future.result() for future in pending)
                 cases.append({"scenario": name, "requests": len(paths),
                               "statuses": dict(codes), "profile_status": profile,
                               "seconds": round(time.monotonic() - started, 3)})
@@ -158,6 +173,10 @@ def probe(nginx, config):
                     "refresh": {"statuses": dict(refresh), "provider_requests": refresh_network},
                     "general_api_abuse_statuses": dict(protected),
                     "proxy_rate_rejections": sum(r["limit_req_status"] == "REJECTED" for r in logs),
+                    "marine_connection_rejections": sum(
+                        r["limit_conn_status"] == "REJECTED" and
+                        any(f"/map/{family}/" in r["path"] for family in FAMILIES)
+                        for r in logs),
                     "upstream_429": sum(r["upstream_status"] == "429" for r in logs),
                     "scope": "loopback nginx + real MarineHTTP cache + synthetic provider; no public traffic"}
         finally:

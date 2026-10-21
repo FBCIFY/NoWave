@@ -8,6 +8,7 @@ from app.infrastructure.marine.ign import IgnPortProvider
 from app.infrastructure.marine.harbours import HarbourProvider
 from app.infrastructure.marine.http import MarineHTTP
 from app.infrastructure.marine.coastline import CoastlineMask
+from app.infrastructure.marine.bathymetry_cache import BathymetryTileCache
 from app.infrastructure.marine.hydro_providers import (
     ShomHazardProvider,
     EmodnetContourProvider,
@@ -26,6 +27,14 @@ _service = None
 _depths = None
 _sounding_http = None
 _coastline = None
+_bathymetry = None
+
+
+def get_bathymetry_cache(render):
+    global _bathymetry
+    if _bathymetry is None:
+        _bathymetry = BathymetryTileCache(render)
+    return _bathymetry
 
 
 def get_marine_service():
@@ -59,7 +68,9 @@ def get_coastline_mask():
 
 
 async def close_marine_service():
-    global _http, _service, _depths, _sounding_http, _coastline
+    global _http, _service, _depths, _sounding_http, _coastline, _bathymetry
+    if _bathymetry is not None:
+        await _bathymetry.close()
     if _http is not None:
         await _http.close()
     if _depths is not None:
@@ -68,3 +79,4 @@ async def close_marine_service():
         await _sounding_http.close()
     _http = _service = _depths = _sounding_http = None
     _coastline = None
+    _bathymetry = None
