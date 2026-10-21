@@ -97,6 +97,41 @@ void main() {
   );
 
   test(
+    'atmosphère cyan native : interpolation continue et espace conservé',
+    () {
+      final document = jsonDecode(
+        jsonEncode(GlobeStyle.document(Uri.parse('file:///globe/'))),
+      ) as Map;
+      final fog = document['fog'] as Map;
+      expect(fog['color'], '#84D6F2');
+      expect(fog['high-color'], 'rgba(40, 145, 210, 0.70)');
+      expect(fog['space-color'], 'rgba(1, 3, 11, 0)');
+      expect(fog['range'], [.8, 8]);
+      expect(fog['horizon-blend'], [
+        'interpolate',
+        ['linear'],
+        ['zoom'],
+        0,
+        .010,
+        4,
+        .006,
+        7,
+        .003,
+      ]);
+      expect(fog['star-intensity'], 0);
+      final stops = fog['horizon-blend'] as List;
+      for (var index = 3; index < stops.length; index += 2) {
+        expect(stops[index + 1], inInclusiveRange(0, 1));
+        if (index > 3) expect(stops[index], greaterThan(stops[index - 2]));
+      }
+      expect(
+        (document['layers'] as List).any((layer) => layer['type'] == 'sky'),
+        false,
+      );
+    },
+  );
+
+  test(
     'bundle exports a valid local style with all four actual raster files',
     () async {
       final uri = await GlobeStyle.prepare();
