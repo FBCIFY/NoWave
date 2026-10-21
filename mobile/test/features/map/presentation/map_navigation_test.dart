@@ -198,6 +198,40 @@ void main() {
   });
 
   navigationTest(
+    'le GPS pendant l’appui sur le bouton ne réinitialise pas le cycle',
+    (tester) async {
+      await mount(tester);
+      headings.values.add(90);
+      await press(tester, 'Recentrer sur ma position');
+      final touch = await tester.startGesture(
+        tester.getCenter(find.byTooltip('Suivre la direction du téléphone')),
+      );
+      widget(tester).onCameraChangeListener!(
+        mb.CameraChangedEventData.fromJson({
+          'timestamp': 0,
+          'cameraState': {
+            'center': {
+              'type': 'Point',
+              'coordinates': [5.37, 43.29],
+            },
+            'zoom': 14.0,
+            'pitch': 0.0,
+            'bearing': 0.0,
+            'padding': {'top': 0.0, 'left': 0.0, 'bottom': 0.0, 'right': 0.0},
+          },
+        }),
+      );
+      await tester.pump();
+      expect(widget(tester).viewport, isA<mb.FollowPuckViewportState>());
+      await touch.up();
+      await tester.pumpAndSettle();
+      expect(viewport(tester).pitch, 36);
+      expect(bearing(tester), 90);
+      expect(find.byTooltip('Revenir au nord vrai à plat'), findsOneWidget);
+    },
+  );
+
+  navigationTest(
     'le repère nord et la flèche passent le nord sans tour complet',
     (tester) async {
       await mount(tester);

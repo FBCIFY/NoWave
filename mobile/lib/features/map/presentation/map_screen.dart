@@ -110,6 +110,10 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
   double _compassTurns = 0;
   bool _isFollowing = false;
   final Set<int> _mapPointers = {};
+  final Set<int> _cameraGesturePointers = {};
+  bool _cameraPanZoomActive = false;
+  bool get _cameraGestureActive =>
+      _cameraGesturePointers.isNotEmpty || _cameraPanZoomActive;
   bool _mapPanZoomActive = false;
   bool get _mapTouchActive => _mapPointers.isNotEmpty || _mapPanZoomActive;
   bool _userCameraMotion = false;
@@ -444,10 +448,10 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
     _syncLocationPuck().ignore();
     final bearing = event.cameraState.bearing;
     final bearingDelta = ((bearing - _cameraBearing + 540) % 360 - 180);
-    final userMovedMap = _mapTouchActive && _isFollowing;
+    final userMovedMap = _cameraGestureActive && _isFollowing;
     final touchBearingDelta =
         ((bearing - _touchStartBearing + 540) % 360 - 180);
-    final userRotatedMap = _mapTouchActive && touchBearingDelta.abs() > 2;
+    final userRotatedMap = _cameraGestureActive && touchBearingDelta.abs() > 2;
     if (bearingDelta.abs() >= 1) {
       _cameraBearing = bearing;
       _cameraTurns.value += bearingDelta / 360;
@@ -2164,6 +2168,7 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
               behavior: HitTestBehavior.opaque,
               onPointerDown: (event) {
                 _introFlightPending = false;
+                _cameraGesturePointers.add(event.pointer);
                 if (!_detailOpen) _interruptCameraMotion();
                 // The native report tap can precede this pointer event on iOS.
                 if (_selectedReport != null && !_detailOpen) {
@@ -2175,6 +2180,12 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
                 }
                 _touchStartBearing = _cameraBearing;
               },
+              onPointerUp: (event) =>
+                  _cameraGesturePointers.remove(event.pointer),
+              onPointerCancel: (event) =>
+                  _cameraGesturePointers.remove(event.pointer),
+              onPointerPanZoomStart: (_) => _cameraPanZoomActive = true,
+              onPointerPanZoomEnd: (_) => _cameraPanZoomActive = false,
               child: MapWidget(
                 // The fixed Flutter stars show through the native space only;
                 // globe surfaces and atmospheric fog remain native Mapbox.
