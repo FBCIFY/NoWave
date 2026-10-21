@@ -30,7 +30,7 @@ class AuthPrimaryButton extends StatelessWidget {
           gradient: const LinearGradient(
             colors: [AppColors.cyan500, AppColors.blue600],
           ),
-          borderRadius: BorderRadius.circular(14),
+          borderRadius: BorderRadius.circular(12),
           boxShadow: [
             BoxShadow(
               color: AppColors.blue950.withValues(alpha: 0.40),
@@ -41,14 +41,14 @@ class AuthPrimaryButton extends StatelessWidget {
         ),
         child: SizedBox(
           width: double.infinity,
-          height: 56,
+          height: 52,
           child: TextButton(
             onPressed: enabled ? onPressed : null,
             style: TextButton.styleFrom(
               foregroundColor: Colors.white,
               disabledForegroundColor: Colors.white,
               shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(14),
+                borderRadius: BorderRadius.circular(12),
               ),
             ),
             child: isLoading
@@ -66,13 +66,13 @@ class AuthPrimaryButton extends StatelessWidget {
                       Text(
                         label,
                         style: const TextStyle(
-                          fontSize: 17,
+                          fontSize: 16,
                           fontWeight: FontWeight.w600,
                         ),
                       ),
                       if (showArrow) ...[
                         const SizedBox(width: 8),
-                        const Icon(Icons.chevron_right, size: 22),
+                        const Icon(Icons.chevron_right, size: 18),
                       ],
                     ],
                   ),

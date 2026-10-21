@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 import '../../../core/api/api_exception.dart';
 import '../data/profile_service.dart';
 import '../domain/user_profile.dart';
-import '../../auth/presentation/widgets/auth_photo_layout.dart';
+import '../../auth/presentation/widgets/auth_layout.dart';
 import '../../auth/presentation/widgets/auth_primary_button.dart';
 import '../../auth/presentation/widgets/auth_text_field.dart';
 
@@ -131,16 +131,66 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return AuthPhotoLayout(
+    final mediaQuery = MediaQuery.of(context);
+
+    final availableHeight =
+        mediaQuery.size.height -
+        mediaQuery.padding.vertical -
+        mediaQuery.viewInsets.bottom;
+
+    final useCompactLayout = availableHeight < 600;
+
+    return AuthLayout(
       title: 'Votre profil',
-      subtitle:
-          'Choisissez votre nom d’utilisateur. '
-          'Il sera associé à votre profil NoWave.',
+      centerContent: !useCompactLayout,
       child: Form(
         key: _formKey,
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
+            if (!useCompactLayout) ...[
+              Center(
+                child: Container(
+                  width: 80,
+                  height: 80,
+                  decoration: const BoxDecoration(
+                    shape: BoxShape.circle,
+                    gradient: LinearGradient(
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                      colors: [Color(0xFF3B82F6), Color(0xFF2563EB)],
+                    ),
+                  ),
+                  child: const Icon(
+                    Icons.person_outline,
+                    color: Colors.white,
+                    size: 36,
+                  ),
+                ),
+              ),
+              const SizedBox(height: 24),
+            ],
+            Text(
+              'Choisissez votre nom d’utilisateur',
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                color: Colors.white,
+                fontSize: useCompactLayout ? 18 : 22,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+            if (!useCompactLayout) ...[
+              const SizedBox(height: 8),
+              Text(
+                'Ce nom sera associé à votre profil NoWave.',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  color: Colors.white.withValues(alpha: 0.45),
+                  fontSize: 13,
+                ),
+              ),
+            ],
+            SizedBox(height: useCompactLayout ? 16 : 28),
             AuthTextField(
               controller: _usernameController,
               label: 'Nom d’utilisateur',
@@ -213,17 +263,13 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
               onPressed: _isLoading ? null : _createProfile,
               isLoading: _isLoading,
             ),
-            const SizedBox(height: 8),
+            const SizedBox(height: 12),
             TextButton(
               onPressed: _isLoading ? null : widget.onSignOut,
               style: TextButton.styleFrom(
-                foregroundColor: Colors.white.withValues(alpha: 0.70),
-                minimumSize: const Size(0, 48),
+                foregroundColor: Colors.white.withValues(alpha: 0.45),
               ),
-              child: const Text(
-                'Se déconnecter',
-                style: TextStyle(fontSize: 15),
-              ),
+              child: const Text('Se déconnecter'),
             ),
           ],
         ),

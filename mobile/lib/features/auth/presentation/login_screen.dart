@@ -4,7 +4,7 @@ import 'package:flutter/material.dart';
 import '../data/auth_service.dart';
 import 'register_screen.dart';
 import 'reset_password_screen.dart';
-import 'widgets/auth_photo_layout.dart';
+import 'widgets/auth_layout.dart';
 import 'widgets/auth_primary_button.dart';
 import 'widgets/auth_text_field.dart';
 
@@ -92,9 +92,8 @@ class _LoginScreenState extends State<LoginScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return AuthPhotoLayout(
-      title: 'Bienvenue',
-      subtitle: 'Connectez-vous à votre compte NoWave.',
+    return AuthLayout(
+      title: 'nowave',
       child: AutofillGroup(
         child: Form(
           key: _formKey,
@@ -121,7 +120,7 @@ class _LoginScreenState extends State<LoginScreen> {
                   return null;
                 },
               ),
-              const SizedBox(height: 16),
+              const SizedBox(height: 20),
               AuthTextField(
                 controller: _passwordController,
                 label: 'Mot de passe',
@@ -158,14 +157,7 @@ class _LoginScreenState extends State<LoginScreen> {
                             ),
                           );
                         },
-                  style: TextButton.styleFrom(
-                    foregroundColor: Colors.white.withValues(alpha: 0.85),
-                    minimumSize: const Size(0, 44),
-                  ),
-                  child: const Text(
-                    'Mot de passe oublié ?',
-                    style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
-                  ),
+                  child: const Text('Mot de passe oublié ?'),
                 ),
               ),
               if (_errorMessage != null) ...[
@@ -201,13 +193,13 @@ class _LoginScreenState extends State<LoginScreen> {
                   ),
                 ),
               ],
-              const SizedBox(height: 12),
+              const SizedBox(height: 28),
               AuthPrimaryButton(
                 label: 'Connexion',
                 onPressed: _isLoading ? null : _signIn,
                 isLoading: _isLoading,
               ),
-              const SizedBox(height: 8),
+              const SizedBox(height: 16),
               Wrap(
                 alignment: WrapAlignment.center,
                 crossAxisAlignment: WrapCrossAlignment.center,
@@ -215,8 +207,8 @@ class _LoginScreenState extends State<LoginScreen> {
                   Text(
                     'Pas encore de compte ? ',
                     style: TextStyle(
-                      color: Colors.white.withValues(alpha: 0.70),
-                      fontSize: 15,
+                      color: Colors.white.withValues(alpha: 0.30),
+                      fontSize: 12,
                     ),
                   ),
                   TextButton(
@@ -236,16 +228,17 @@ class _LoginScreenState extends State<LoginScreen> {
                             }
                           },
                     style: TextButton.styleFrom(
-                      foregroundColor: const Color(0xFF22D3EE),
+                      foregroundColor: const Color(0xFF22D3EE)
+                          .withValues(alpha: 0.70),
                       padding: const EdgeInsets.symmetric(horizontal: 4),
-                      minimumSize: const Size(0, 44),
+                      minimumSize: const Size(0, 36),
                       tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                     ),
                     child: const Text(
                       'S’inscrire',
                       style: TextStyle(
-                        fontSize: 15,
-                        fontWeight: FontWeight.w600,
+                        fontSize: 12,
+                        fontWeight: FontWeight.w500,
                       ),
                     ),
                   ),

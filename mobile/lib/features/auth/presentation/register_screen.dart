@@ -2,7 +2,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 
 import '../data/auth_service.dart';
-import 'widgets/auth_photo_layout.dart';
+import 'widgets/auth_layout.dart';
 import 'widgets/auth_primary_button.dart';
 import 'widgets/auth_text_field.dart';
 
@@ -112,11 +112,12 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return AuthPhotoLayout(
+    return AuthLayout(
       title: 'Créer un compte',
-      subtitle: 'Rejoignez la communauté NoWave.',
+      subtitle: 'Rejoindre la communauté nowave',
       showBackButton: true,
       onBack: widget.onBack,
+      centerContent: false,
       child: AutofillGroup(
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -130,6 +131,8 @@ class _RegisterScreenState extends State<RegisterScreen> {
               textInputAction: TextInputAction.next,
               autofillHints: const [AutofillHints.newUsername],
             ),
+            const SizedBox(height: 16),
+            Divider(color: Colors.white.withValues(alpha: 0.08), height: 1),
             const SizedBox(height: 16),
             AuthTextField(
               controller: _passwordController,
@@ -190,13 +193,13 @@ class _RegisterScreenState extends State<RegisterScreen> {
                 ),
               ),
             ],
-            const SizedBox(height: 28),
+            const SizedBox(height: 24),
             AuthPrimaryButton(
               label: 'Créer mon compte',
               onPressed: _isLoading ? null : _register,
               isLoading: _isLoading,
             ),
-            const SizedBox(height: 8),
+            const SizedBox(height: 16),
             Wrap(
               alignment: WrapAlignment.center,
               crossAxisAlignment: WrapCrossAlignment.center,
@@ -204,8 +207,8 @@ class _RegisterScreenState extends State<RegisterScreen> {
                 Text(
                   'Déjà un compte ? ',
                   style: TextStyle(
-                    color: Colors.white.withValues(alpha: 0.70),
-                    fontSize: 15,
+                    color: Colors.white.withValues(alpha: 0.30),
+                    fontSize: 12,
                   ),
                 ),
                 TextButton(
@@ -219,14 +222,15 @@ class _RegisterScreenState extends State<RegisterScreen> {
                           }
                         },
                   style: TextButton.styleFrom(
-                    foregroundColor: const Color(0xFF22D3EE),
+                    foregroundColor: const Color(0xFF22D3EE)
+                        .withValues(alpha: 0.70),
                     padding: const EdgeInsets.symmetric(horizontal: 4),
-                    minimumSize: const Size(0, 44),
+                    minimumSize: const Size(0, 36),
                     tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                   ),
                   child: const Text(
                     'Se connecter',
-                    style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600),
+                    style: TextStyle(fontSize: 12, fontWeight: FontWeight.w500),
                   ),
                 ),
               ],

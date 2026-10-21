@@ -72,13 +72,13 @@ class _AuthTextFieldState extends State<AuthTextField> {
   @override
   Widget build(BuildContext context) {
     final normalBorder = OutlineInputBorder(
-      borderRadius: BorderRadius.circular(14),
-      borderSide: BorderSide(color: Colors.white.withValues(alpha: 0.22)),
+      borderRadius: BorderRadius.circular(12),
+      borderSide: BorderSide(color: Colors.white.withValues(alpha: 0.15)),
     );
 
     final focusedBorder = OutlineInputBorder(
-      borderRadius: BorderRadius.circular(14),
-      borderSide: const BorderSide(color: AppColors.cyan500, width: 1.5),
+      borderRadius: BorderRadius.circular(12),
+      borderSide: BorderSide(color: AppColors.cyan500.withValues(alpha: 0.50)),
     );
 
     return Column(
@@ -87,13 +87,13 @@ class _AuthTextFieldState extends State<AuthTextField> {
         Text(
           widget.label.toUpperCase(),
           style: TextStyle(
-            color: Colors.white.withValues(alpha: 0.70),
-            fontSize: 12,
+            color: Colors.white.withValues(alpha: 0.45),
+            fontSize: 10,
             fontWeight: FontWeight.w600,
             letterSpacing: 1,
           ),
         ),
-        const SizedBox(height: 8),
+        const SizedBox(height: 6),
         TextFormField(
           controller: widget.controller,
           maxLength: widget.maxLength,
@@ -111,28 +111,28 @@ class _AuthTextFieldState extends State<AuthTextField> {
           autocorrect: false,
           enableSuggestions: !widget.obscureText,
           cursorColor: AppColors.cyan500,
-          style: const TextStyle(color: Colors.white, fontSize: 16),
+          style: const TextStyle(color: Colors.white, fontSize: 14),
           decoration: InputDecoration(
             hintText: widget.hintText,
-            hintStyle: TextStyle(color: Colors.white.withValues(alpha: 0.35)),
+            hintStyle: TextStyle(color: Colors.white.withValues(alpha: 0.25)),
             counterStyle: TextStyle(
               color: Colors.white.withValues(alpha: 0.30),
               fontSize: 10,
             ),
             filled: true,
-            fillColor: Colors.white.withValues(alpha: _hasFocus ? 0.16 : 0.10),
+            fillColor: Colors.white.withValues(alpha: _hasFocus ? 0.12 : 0.08),
             contentPadding: const EdgeInsets.symmetric(
-              horizontal: 16,
-              vertical: 18,
+              horizontal: 14,
+              vertical: 12,
             ),
             prefixIcon: widget.icon == null
                 ? null
                 : Icon(
                     widget.icon,
-                    size: 22,
-                    color: AppColors.cyan500.withValues(alpha: 0.80),
+                    size: 18,
+                    color: AppColors.cyan500.withValues(alpha: 0.50),
                   ),
-            prefixIconConstraints: const BoxConstraints(minWidth: 50),
+            prefixIconConstraints: const BoxConstraints(minWidth: 42),
             suffixIcon: widget.obscureText || _hasFocus
                 ? Row(
                     mainAxisSize: MainAxisSize.min,
@@ -151,8 +151,8 @@ class _AuthTextFieldState extends State<AuthTextField> {
                             _isObscured
                                 ? Icons.visibility_outlined
                                 : Icons.visibility_off_outlined,
-                            size: 22,
-                            color: Colors.white.withValues(alpha: 0.55),
+                            size: 18,
+                            color: Colors.white.withValues(alpha: 0.35),
                           ),
                         ),
                       if (_hasFocus)
@@ -161,8 +161,8 @@ class _AuthTextFieldState extends State<AuthTextField> {
                           tooltip: 'Masquer le clavier',
                           icon: Icon(
                             Icons.keyboard_hide_outlined,
-                            size: 22,
-                            color: Colors.white.withValues(alpha: 0.60),
+                            size: 18,
+                            color: Colors.white.withValues(alpha: 0.45),
                           ),
                         ),
                     ],
@@ -177,7 +177,7 @@ class _AuthTextFieldState extends State<AuthTextField> {
             focusedErrorBorder: focusedBorder.copyWith(
               borderSide: const BorderSide(color: Colors.redAccent),
             ),
-            errorStyle: const TextStyle(color: Color(0xFFFFCDD2), fontSize: 13),
+            errorStyle: const TextStyle(color: Color(0xFFFFCDD2), fontSize: 11),
           ),
         ),
       ],
