@@ -37,6 +37,7 @@ import '../../reports/domain/report_detail.dart';
 import '../../reports/domain/report_reach.dart';
 import '../../reports/presentation/report_composer_sheet.dart';
 import '../../reports/presentation/report_detail_sheet.dart';
+import '../data/alert_halo_pulse.dart';
 import '../data/buoy_layer.dart';
 import '../data/fixed_aid_layer.dart';
 import '../data/port_layer.dart';
@@ -380,6 +381,39 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
   Timer? _selectedExpiryTimer;
   bool _selectedExpired = false;
   ReportDetail? _selectedReport;
+  String? _notificationHighlightId;
+  bool _haloReady = false;
+  late final _alertHaloPulse = AlertHaloPulse(
+    paint: (radius, opacity) async {
+      final map = _mapboxMap;
+      if (map == null || !mounted || _hidden || !_haloReady) return;
+      await map.style.setStyleLayerProperty(
+        'alert-selected-halo',
+        'circle-radius',
+        radius,
+      );
+      if (mounted && !_hidden && _haloReady) {
+        await map.style.setStyleLayerProperty(
+          'alert-selected-halo',
+          'circle-opacity',
+          opacity,
+        );
+      }
+    },
+  );
+
+  void _syncNotificationHalo() {
+    if (_haloReady &&
+        !_hidden &&
+        !_reduceMotion &&
+        !_selectedExpired &&
+        _selectedReport != null &&
+        _selectedReport!.id == _notificationHighlightId) {
+      _alertHaloPulse.start();
+    } else {
+      unawaited(_alertHaloPulse.stop());
+    }
+  }
 
   /// Fiche ouverte en bas de la carte, et la vue à retrouver en la fermant.
   String? _detailReportId;
@@ -928,6 +962,7 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
 
   void _suspendVisualUpdates() {
     _marineViewport.pause();
+    unawaited(_alertHaloPulse.stop());
     _interruptCameraMotion();
     _syncGlobeRotation();
     _reportTilesTokenTimer?.cancel();
@@ -945,6 +980,7 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
 
   void _restoreVisualUpdates() {
     _marineViewport.resume(_mapboxMap);
+    _syncNotificationHalo();
     _syncGlobeRotation();
     _reportLayer.resume();
     _startReportTilesTokenRenewal();
@@ -969,6 +1005,7 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
+    _syncNotificationHalo();
     _syncGlobeRotation();
     final hidden = !TickerMode.valuesOf(context).enabled;
     if (hidden == _routeHidden) return;
@@ -1104,7 +1141,7 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
 
   /// Mise en valeur du signalement sélectionné.
   static const _selectedMarkerScale = 1.35;
-  static const _selectedHaloRadius = 30.0;
+  static const _selectedHaloRadius = AlertHaloPulse.radius;
 
   /// Niveaux de zoom gagnés en touchant une zone.
   static const _clusterZoomStep = 2.0;
@@ -1264,6 +1301,8 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
     if (controller == null) return;
     if (controller.takeAlerts()) _openAlerts();
     if (_focusRevision == controller.revision) return;
+    _haloReady = false;
+    unawaited(_alertHaloPulse.stop());
     _focusRevision = controller.revision;
     final report = controller.report;
     if (report == null && _selectedReport == null && controller.revision == 0) {
@@ -1286,6 +1325,11 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
     _selectedExpiryTimer?.cancel();
     setState(() {
       _selectedReport = report;
+      if (controller.origin == MapFocusOrigin.notification && report != null) {
+        _notificationHighlightId = report.id;
+      } else if (report?.id != _notificationHighlightId) {
+        _notificationHighlightId = null;
+      }
       _selectedExpired =
           report != null && !report.expiresAt.isAfter(DateTime.now());
       _focusWithUser = controller.includeUserPosition;
@@ -1554,6 +1598,9 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
     final report = _selectedReport;
     final map = _mapboxMap;
     if (report == null || map == null || _selectedExpired) return;
+    _haloReady = false;
+    await _alertHaloPulse.stop();
+    final notification = report.id == _notificationHighlightId;
 
     final data = jsonEncode({
       'type': 'Feature',
@@ -1599,12 +1646,31 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
           sourceId: 'alert-selected',
           minZoom: ReportTiles.badgesMinZoom,
           circleRadius: _selectedHaloRadius,
-          circleColor: Colors.white.toARGB32(),
-          circleOpacity: .45,
-          circleStrokeColor: Colors.white.toARGB32(),
-          circleStrokeWidth: 3,
+          circleColor: (notification ? const Color(0xFFDC3545) : Colors.white)
+              .toARGB32(),
+          circleOpacity: notification ? AlertHaloPulse.opacity : .45,
+          circleStrokeColor:
+              (notification ? const Color(0xFFDC3545) : Colors.white)
+                  .toARGB32(),
+          circleStrokeWidth: notification ? 2 : 3,
+          circleStrokeOpacity: notification ? .65 : 1,
           circleEmissiveStrength: 1,
         ),
+      );
+    }
+    // Une sélection remplace aussi l'apparence d'une couche déjà installée.
+    for (final property in {
+      'circle-color': notification ? '#DC3545' : '#FFFFFF',
+      'circle-stroke-color': notification ? '#DC3545' : '#FFFFFF',
+      'circle-radius': _selectedHaloRadius,
+      'circle-opacity': notification ? AlertHaloPulse.opacity : .45,
+      'circle-stroke-width': notification ? 2.0 : 3.0,
+      'circle-stroke-opacity': notification ? .65 : 1.0,
+    }.entries) {
+      await map.style.setStyleLayerProperty(
+        'alert-selected-halo',
+        property.key,
+        property.value,
       );
     }
     if (!await map.style.styleLayerExists('alert-selected-point') &&
@@ -1630,9 +1696,13 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
     // Halo puis badge, au-dessus de tous les autres signalements.
     await map.style.moveStyleLayer('alert-selected-halo', LayerPosition());
     await map.style.moveStyleLayer('alert-selected-point', LayerPosition());
+    _haloReady = true;
+    _syncNotificationHalo();
   }
 
   Future<void> _hideSelectedReport(MapboxMap map) async {
+    _haloReady = false;
+    await _alertHaloPulse.stop();
     for (final layer in ['alert-selected-point', 'alert-selected-halo']) {
       if (await map.style.styleLayerExists(layer)) {
         await map.style.removeStyleLayer(layer);
@@ -1973,6 +2043,7 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
   /// Réglage d'accessibilité changé pendant que la carte est ouverte.
   @override
   void didChangeAccessibilityFeatures() {
+    _syncNotificationHalo();
     final map = _mapboxMap;
     if (map != null) unawaited(_configureMotion(map));
     _syncGlobeRotation();
@@ -2956,6 +3027,7 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
   @override
   void dispose() {
     _marineViewport.dispose();
+    unawaited(_alertHaloPulse.stop());
     widget.intro?.removeListener(_handleIntro);
     widget.intro?.detach();
     _rotationGestureTimer?.cancel();
@@ -3133,6 +3205,8 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
                   pixelRatio: mediaQuery.devicePixelRatio,
                 ),
                 onMapCreated: (map) {
+                  _haloReady = false;
+                  unawaited(_alertHaloPulse.stop());
                   setState(() => _mapboxMap = map);
                   _pinchPanEnabled = null;
                   _globeRotationLocked = false;
@@ -3150,6 +3224,8 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
                 onMapLoadedListener: _handleMapLoaded,
                 onStyleLoadedListener: (_) {
                   _marineViewport.styleLoaded();
+                  _haloReady = false;
+                  unawaited(_alertHaloPulse.stop());
                   _styleReady = true;
                   unawaited(_prepareGlobeRotation());
                   _globePresentation.styleLoaded();

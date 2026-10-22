@@ -941,6 +941,73 @@ void main() {
       .singleWhere((interaction) => interaction.featuresetDescriptor == null)
       .action(null, touch());
 
+  focusTestWidgets(
+    'notification : halo rouge discret sans mouvement ni reconstruction de la carte',
+    (tester) async {
+      await mount(tester);
+      focus.focus(focusReport(), origin: MapFocusOrigin.notification);
+      await pumpFrames(tester);
+      final halo = map.style.layers['alert-selected-halo']!;
+      expect(halo['circle-color'], '#DC3545');
+      expect(halo['circle-stroke-color'], '#DC3545');
+      final mapWidget = tester.widget<mb.MapWidget>(find.byType(mb.MapWidget));
+      final cameraCount = map.cameras.length;
+      await tester.pump(const Duration(milliseconds: 1100));
+      expect(halo['circle-radius'], inInclusiveRange(30, 31.5));
+      expect(halo['circle-radius'], greaterThan(30));
+      expect(halo['circle-opacity'], inInclusiveRange(.22, .28));
+      expect(map.cameras, hasLength(cameraCount));
+      expect(
+        tester.widget<mb.MapWidget>(find.byType(mb.MapWidget)),
+        same(mapWidget),
+      );
+      // Le rouge reste cohérent quand on ouvre ensuite le détail de cette alerte.
+      tapBadge('report-a');
+      await pumpFrames(tester);
+      expect(
+        map.style.layers['alert-selected-halo']!['circle-color'],
+        '#DC3545',
+      );
+      focus.focus(focusReport(id: 'another'));
+      await pumpFrames(tester);
+      expect(
+        map.style.layers['alert-selected-halo']!['circle-color'],
+        '#FFFFFF',
+      );
+      await tester.pump(const Duration(seconds: 1));
+      expect(map.style.layers['alert-selected-halo']!['circle-radius'], 30);
+    },
+  );
+
+  focusTestWidgets('animations réduites : halo rouge fixe', (tester) async {
+    await mount(tester, reduceMotion: true);
+    focus.focus(focusReport(), origin: MapFocusOrigin.notification);
+    await pumpFrames(tester);
+    await tester.pump(const Duration(milliseconds: 1100));
+    final halo = map.style.layers['alert-selected-halo']!;
+    expect(halo['circle-color'], '#DC3545');
+    expect(halo['circle-radius'], 30);
+    expect(halo['circle-opacity'], .22);
+  });
+
+  focusTestWidgets('halo : arrêt en arrière-plan et reprise au retour', (
+    tester,
+  ) async {
+    await mount(tester);
+    focus.focus(focusReport(), origin: MapFocusOrigin.notification);
+    await pumpFrames(tester);
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.inactive);
+    final radius = map.style.layers['alert-selected-halo']!['circle-radius'];
+    await tester.pump(const Duration(seconds: 1));
+    expect(map.style.layers['alert-selected-halo']!['circle-radius'], radius);
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+    await tester.pump(const Duration(milliseconds: 1100));
+    expect(
+      map.style.layers['alert-selected-halo']!['circle-radius'],
+      greaterThan(31.4),
+    );
+  });
+
   focusTestWidgets('toucher la carte ferme la fiche sans restaurer la caméra', (
     tester,
   ) async {
