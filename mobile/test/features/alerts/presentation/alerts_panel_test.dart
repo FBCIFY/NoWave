@@ -43,7 +43,7 @@ void main() {
           body: Stack(
             children: [
               Positioned(
-                top: 0,
+                bottom: 0,
                 left: 0,
                 right: 0,
                 child: AlertsPanel(
@@ -160,17 +160,19 @@ void main() {
     expect(find.text('Pollution'), findsOneWidget);
   });
 
-  testWidgets('croix ou poignée glissée vers le haut : fermeture', (
+  testWidgets('croix ou poignée glissée vers le bas : fermeture', (
     tester,
   ) async {
     respond = (_) async => http.Response(jsonEncode(pageJson()), 200);
     await open(tester);
     await tester.tap(find.byTooltip('Fermer'));
+    await tester.pumpAndSettle();
     expect(closed, 1);
-    final panel = tester.getRect(find.byType(AlertsPanel));
-    await tester.flingFrom(
-      Offset(panel.center.dx, panel.bottom - 12),
-      const Offset(0, -120),
+    await tester.pumpWidget(const SizedBox.shrink());
+    await open(tester);
+    await tester.fling(
+      find.byKey(const ValueKey('map-panel-drag-handle')),
+      const Offset(0, 120),
       1000,
     );
     await tester.pumpAndSettle();

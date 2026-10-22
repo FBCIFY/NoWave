@@ -53,7 +53,7 @@ import 'map_intro_controller.dart';
 import 'report_marker.dart' as badges;
 export 'map_focus_controller.dart';
 import 'widgets/map_notice_banner.dart';
-import 'widgets/map_panel.dart';
+import 'widgets/map_action_rail.dart';
 import 'widgets/map_scale_bar.dart';
 import 'widgets/map_zoom_badge.dart';
 import '../data/hydrography_layer.dart';
@@ -72,7 +72,7 @@ enum _MapOrientationMode { free, north, heading }
 class MapScreen extends StatefulWidget {
   final VoidCallback? onOpenProfile;
 
-  /// Historique des alertes : le bouton « Mes alertes » l'ouvre en haut de
+  /// Historique des alertes : le bouton « Mes alertes » l'ouvre en bas de
   /// la carte. Absent, le bouton n'est pas affiché.
   final AlertService? alertService;
   final MapFocusController? focusController;
@@ -138,6 +138,8 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
   bool get _mapTouchActive => _mapPointers.isNotEmpty || _mapPanZoomActive;
   bool _userCameraMotion = false;
   int _mapGestureRevision = 0;
+  bool _clearingForMapGesture = false;
+  bool _detailPaddingPending = false;
   Timer? _rotationGestureTimer;
   double _touchStartBearing = 0;
   _MapOrientationMode _orientationMode = _MapOrientationMode.free;
@@ -215,6 +217,10 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
     if (!mounted || _hidden || _mapTouchActive || !_userCameraMotion) return;
     _rotationGestureTimer?.cancel();
     _userCameraMotion = false;
+    if (_detailPaddingPending) {
+      _detailPaddingPending = false;
+      unawaited(_clearDetailPadding(interruptMotion: false));
+    }
     _syncGlobeRotation();
     _globeRotation.resumeWhenIdle();
     unawaited(_restoreOrientation());
@@ -379,12 +385,12 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
   Timer? _selectedExpiryTimer;
   bool _selectedExpired = false;
   ReportDetail? _selectedReport;
-  MapFocusOrigin _selectedOrigin = MapFocusOrigin.history;
 
   /// Fiche ouverte en bas de la carte, et la vue à retrouver en la fermant.
   String? _detailReportId;
   MapFocusOrigin _detailOrigin = MapFocusOrigin.mapTap;
   int _detailRequest = 0;
+  bool _panelsClosingForMapGesture = false;
   bool _detailFocused = false;
   CameraState? _cameraBeforeDetail;
   bool get _detailOpen => _detailReportId != null;
@@ -635,14 +641,7 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
     _beginMapGesture();
     _scheduleRotationAfterGesture();
     if (_reportComposerOpen) return;
-    if (_alertsOpen) _alertsMoved = true;
-    if (_detailOpen && _selectedReport != null) {
-      // La carte reste libre sous la fiche : on ne la recadre plus, ni à
-      // l'arrivée du détail ni à sa fermeture.
-      _cameraFocusRevision++;
-      _selectionTouched = true;
-      _focusCameraPending = false;
-    }
+    _dismissPanelsForMapGesture();
     if (!_isFollowing && _viewport is IdleViewportState) return;
     setState(_stopFollowing);
   }
@@ -1119,6 +1118,13 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
   /// la carte. Les interactions restent valables après un changement de
   /// style, qui ne fait que recréer les couches.
   void _addReportInteractions(MapboxMap map) {
+    // Les badges consomment leur toucher : seul un toucher du fond ferme
+    // les panneaux. Aucun lien avec l'ordre des PointerDown natifs iOS.
+    if (widget.reportDetailService != null || widget.alertService != null) {
+      map.addInteraction(
+        TapInteraction.onMap((_) => _dismissPanelsForMapGesture()),
+      );
+    }
     // Selection exists independently from the optional MVT source.
     if (widget.reportDetailService != null) {
       map.addInteraction(
@@ -1275,15 +1281,16 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
       // Une notification ou un effacement remplace la fiche ouverte.
       _dismissReportDetail();
     }
-    _interruptCameraMotion();
+    if (!_clearingForMapGesture) _interruptCameraMotion();
     _cameraFocusRevision++;
     final revision = _focusRevision;
-    await _stopGlobeRotation();
+    // Une fermeture par la carte conserve le geste et sa fin d'inertie.
+    // Réinitialiser ce suivi ici empêchait le retrait différé de la marge.
+    if (!_clearingForMapGesture) await _stopGlobeRotation();
     if (!mounted || revision != _focusRevision) return;
     _selectedExpiryTimer?.cancel();
     setState(() {
       _selectedReport = report;
-      _selectedOrigin = controller.origin;
       _selectedExpired =
           report != null && !report.expiresAt.isAfter(DateTime.now());
       _focusWithUser = controller.includeUserPosition;
@@ -1388,7 +1395,7 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
                   bearing: currentCamera.bearing,
                   pitch: _globePitch.detailedPitch,
                 )
-              // Changer de fiche garde le rapprochement de la première.
+              // Toutes les fiches partagent la même échelle de consultation.
               : await MapAlertCamera.detail(
                   map,
                   report,
@@ -1397,10 +1404,6 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
                   pitch: _globePitch.detailedPitch,
                   viewport: _mapViewport,
                   panelHeight: _detailPanelHeight,
-                  panelOnTop: _alertsOpen,
-                  minZoom: _selectedOrigin == MapFocusOrigin.history
-                      ? MapAlertCamera.historyMinZoom
-                      : 0,
                 );
           if (!_isCurrentFocus(request) ||
               cameraRequest != _cameraFocusRevision ||
@@ -1426,7 +1429,6 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
             camera.padding = MapAlertCamera.detailPadding(
               _mapViewport,
               _detailPanelHeight,
-              top: _alertsOpen,
             );
             _detailCamera = camera;
           }
@@ -1494,13 +1496,16 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
   Future<void> _followDetailPanelHeight() async {
     final map = _mapboxMap;
     final target = _detailCamera;
-    if (!mounted || map == null || target == null || _selectionTouched) {
+    if (!mounted ||
+        map == null ||
+        target == null ||
+        _selectionTouched ||
+        _panelsClosingForMapGesture) {
       return;
     }
     final padding = MapAlertCamera.detailPadding(
       _mapViewport,
       _detailPanelHeight,
-      top: _alertsOpen,
     );
     if ((padding.top - (target.padding?.top ?? 0)).abs() < 1 &&
         (padding.bottom - (target.padding?.bottom ?? 0)).abs() < 1) {
@@ -1656,8 +1661,10 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
     }
     if (origin == MapFocusOrigin.mapTap) AppHaptics.selection();
     final opening = !_detailOpen;
+    _detailPaddingPending = false;
     _detailCamera = null;
     setState(() {
+      _panelsClosingForMapGesture = false;
       _detailReportId = reportId;
       _detailOrigin = origin;
       _detailRequest++;
@@ -1699,6 +1706,10 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
   /// Fermée par l'utilisateur : la sélection s'efface et la carte revient à
   /// la vue d'avant la fiche, sauf s'il l'a déplacée entre-temps.
   void _closeReportDetail() {
+    if (_panelsClosingForMapGesture) {
+      _finishMapDismissal();
+      return;
+    }
     if (!_detailOpen) return;
     final before = _cameraBeforeDetail;
     final restore = _detailFocused && !_selectionTouched && before != null;
@@ -1715,8 +1726,44 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
 
   /// Retire la fiche et Mes alertes sans toucher à la carte.
   void _dismissReportDetail() {
+    _panelsClosingForMapGesture = false;
     _leaveDetail();
     _closeAlertsList();
+  }
+
+  /// Revenir à la carte ne restaure jamais la vue d'avant la consultation.
+  void _dismissPanelsForMapGesture() {
+    if (_reportComposerOpen ||
+        (!_detailOpen && !_alertsOpen) ||
+        _panelsClosingForMapGesture) {
+      return;
+    }
+    _cameraFocusRevision++;
+    _selectionTouched = true;
+    _focusCameraPending = false;
+    _latePositionFocus = false;
+    _detailCamera = null;
+    // Invalider le chargement immédiatement, retirer le contenu seulement
+    // quand le panneau a fini de glisser hors de l'écran.
+    setState(() {
+      _detailRequest++;
+      _panelsClosingForMapGesture = true;
+    });
+  }
+
+  void _finishMapDismissal() {
+    final hadDetail = _detailOpen;
+    _dismissReportDetail();
+    if (hadDetail) {
+      _clearingForMapGesture = true;
+      widget.focusController?.clear();
+      _clearingForMapGesture = false;
+      if (_cameraGestureActive || _mapTouchActive) {
+        _detailPaddingPending = true;
+      } else {
+        unawaited(_clearDetailPadding(interruptMotion: false));
+      }
+    }
   }
 
   void _leaveDetail() {
@@ -1766,8 +1813,8 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
     }
   }
 
-  /// Une alerte touchée : sa fiche prend la place de la liste, la carte se
-  /// cadre dessous.
+  /// Une alerte touchée : la même fiche que depuis la carte remplace la liste,
+  /// et le signalement se cadre au-dessus.
   void _openAlert(Alert alert) {
     if (widget.focusController?.isBlocked ?? false) {
       ScaffoldMessenger.of(context)
@@ -1803,6 +1850,10 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
   /// Croix de Mes alertes : la vue d'avant revient, sauf si l'utilisateur a
   /// déplacé la carte entre-temps.
   void _closeAlerts() {
+    if (_panelsClosingForMapGesture) {
+      _finishMapDismissal();
+      return;
+    }
     if (!_alertsOpen) return;
     final before = _cameraBeforeAlerts;
     final focused = _detailFocused;
@@ -1854,24 +1905,28 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
 
   /// Closing the sheet does not trigger another flight. Re-express the
   /// current visible camera without padding so the map stays in place.
-  Future<void> _clearDetailPadding() async {
+  Future<void> _clearDetailPadding({bool interruptMotion = true}) async {
     final map = _mapboxMap;
     if (map == null) return;
-    _interruptCameraMotion();
+    if (interruptMotion) _interruptCameraMotion();
     final request = _cameraMotionRevision;
+    final detailRequest = _detailRequest;
     try {
-      final camera = await map.getCameraState();
       final size = _mapViewport;
       final center = await map.coordinateForPixel(
         ScreenCoordinate(x: size.width / 2, y: size.height / 2),
       );
-      if (!mounted || _hidden || request != _cameraMotionRevision) return;
+      if (!mounted ||
+          _hidden ||
+          request != _cameraMotionRevision ||
+          detailRequest != _detailRequest) {
+        return;
+      }
       await map.setCamera(
         CameraOptions(
           center: center,
-          zoom: camera.zoom,
-          bearing: camera.bearing,
-          pitch: camera.pitch,
+          // Un geste peut encore produire de l'inertie : ne jamais rejouer
+          // un zoom lu avant la fin du geste en retirant la marge du panneau.
           padding: MbxEdgeInsets(top: 0, left: 0, right: 0, bottom: 0),
         ),
       );
@@ -2970,6 +3025,73 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
     // ReportComposerSheet : il passe par la même confirmation que la croix.
     final screen = Scaffold(
       resizeToAvoidBottomInset: false,
+      floatingActionButtonLocation: FloatingActionButtonLocation.centerFloat,
+      floatingActionButtonAnimator: FloatingActionButtonAnimator.noAnimation,
+      floatingActionButton: !_reportComposerOpen && !panelOpen
+          ? MapActionRail(
+              actions: [
+                MapRailAction(
+                  id: 'create-report',
+                  label: 'Créer un signalement',
+                  onPressed: _mapError == null ? _openReportComposer : null,
+                  icon: const Icon(Icons.add, size: 30),
+                ),
+                MapRailAction(
+                  id: 'navigation',
+                  label: _navigationAction,
+                  onPressed:
+                      _isLocating ||
+                          _navigationBusy ||
+                          _mapboxMap == null ||
+                          _mapError != null
+                      ? null
+                      : () => unawaited(_navigateUser()),
+                  icon: Semantics(
+                    label: _navigationLabel,
+                    value: _isLocating || _navigationBusy
+                        ? 'Localisation…'
+                        : null,
+                    child: ValueListenableBuilder<double>(
+                      valueListenable: _cameraTurns,
+                      builder: (context, cameraTurns, _) => _NavigationGlyph(
+                        mode: _isFollowing
+                            ? _orientationMode
+                            : _MapOrientationMode.free,
+                        headingTurns: _compassTurns - cameraTurns,
+                        northTurns: -cameraTurns,
+                        reduceMotion: _reduceMotion,
+                        busy: _isLocating || _navigationBusy,
+                      ),
+                    ),
+                  ),
+                ),
+                if (widget.onOpenCamera != null)
+                  MapRailAction(
+                    id: 'camera',
+                    label: 'Signaler avec une photo',
+                    onPressed: _mapError == null
+                        ? () => unawaited(_openCamera())
+                        : null,
+                    icon: const Icon(Icons.photo_camera_outlined),
+                  ),
+                if (widget.alertService != null &&
+                    widget.reportDetailService != null)
+                  MapRailAction(
+                    id: 'alerts',
+                    label: 'Mes alertes',
+                    onPressed: _openAlerts,
+                    icon: const Icon(Icons.notifications_outlined),
+                  ),
+                if (widget.onOpenProfile != null)
+                  MapRailAction(
+                    id: 'profile',
+                    label: 'Mon profil',
+                    onPressed: widget.onOpenProfile,
+                    icon: const Icon(Icons.person_outline),
+                  ),
+              ],
+            )
+          : null,
       body: Stack(
         children: [
           // Fixed stars behind the transparent native globe and atmosphere.
@@ -3095,66 +3217,36 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
-                      Row(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Expanded(
-                            child: Align(
-                              alignment: Alignment.centerLeft,
-                              child: Column(
-                                mainAxisSize: MainAxisSize.min,
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Container(
-                                    padding: const EdgeInsets.symmetric(
-                                      horizontal: 12,
-                                      vertical: 9,
-                                    ),
-                                    decoration: BoxDecoration(
-                                      color: const Color(0xFFF6F8FA)
-                                          .withValues(alpha: 0.90),
-                                      borderRadius: BorderRadius.circular(14),
-                                    ),
-                                    child: Text(
-                                      gpsLabel,
-                                      maxLines: 2,
-                                      overflow: TextOverflow.ellipsis,
-                                      style: const TextStyle(
-                                        color: Color(0xFF243243),
-                                        fontSize: 12,
-                                      ),
-                                    ),
-                                  ),
-                                  const SizedBox(height: 4),
-                                  MapZoomBadge(zoom: _displayedZoom),
-                                ],
+                      Align(
+                        alignment: Alignment.centerLeft,
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 12,
+                                vertical: 9,
+                              ),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFFF6F8FA)
+                                    .withValues(alpha: 0.72),
+                                borderRadius: BorderRadius.circular(14),
+                              ),
+                              child: Text(
+                                gpsLabel,
+                                maxLines: 2,
+                                overflow: TextOverflow.ellipsis,
+                                style: const TextStyle(
+                                  color: Color(0xFF243243),
+                                  fontSize: 12,
+                                ),
                               ),
                             ),
-                          ),
-                          if (widget.alertService != null &&
-                              widget.reportDetailService != null) ...[
-                            const SizedBox(width: 12),
-                            _PoppingMapButton(
-                              tooltip: 'Mes alertes',
-                              onPressed: _openAlerts,
-                              icon: const Icon(
-                                Icons.notifications_outlined,
-                                color: Color(0xFF243243),
-                              ),
-                            ),
+                            const SizedBox(height: 4),
+                            MapZoomBadge(zoom: _displayedZoom),
                           ],
-                          if (widget.onOpenProfile != null) ...[
-                            const SizedBox(width: 12),
-                            _PoppingMapButton(
-                              tooltip: 'Mon profil',
-                              onPressed: widget.onOpenProfile,
-                              icon: const Icon(
-                                Icons.person_outline,
-                                color: Color(0xFF243243),
-                              ),
-                            ),
-                          ],
-                        ],
+                        ),
                       ),
                       AnimatedSwitcher(
                         duration: const Duration(milliseconds: 220),
@@ -3192,93 +3284,18 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
                 ),
               ),
             ),
-          // Un panneau ouvert prend la place des boutons du bas.
-          if (!_reportComposerOpen && !panelOpen)
-            Positioned(
-              bottom: 16,
-              left: 0,
-              right: 0,
-              child: SafeArea(
-                top: false,
-                child: Center(
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      _PoppingMapButton(
-                        tooltip: 'Créer un signalement',
-                        onPressed: _mapError == null
-                            ? _openReportComposer
-                            : null,
-                        icon: const Icon(Icons.add, size: 30),
-                      ),
-                      if (widget.onOpenCamera != null) ...[
-                        const SizedBox(width: 16),
-                        _PoppingMapButton(
-                          tooltip: 'Signaler avec une photo',
-                          onPressed: _mapError == null
-                              ? () => unawaited(_openCamera())
-                              : null,
-                          icon: const Icon(
-                            Icons.photo_camera_outlined,
-                            color: Color(0xFF243243),
-                          ),
-                        ),
-                      ],
-                    ],
-                  ),
-                ),
-              ),
-            ),
           if (!_reportComposerOpen && !panelOpen)
             Positioned(
               right: 16,
-              // Sous les boutons de droite, à la hauteur du logo Mapbox.
-              bottom: mediaQuery.viewPadding.bottom + 4,
+              bottom: mediaQuery.viewPadding.bottom + 76,
               child: MapScaleBar(camera: _scaleCamera),
-            ),
-          if (!_reportComposerOpen && !panelOpen)
-            Positioned(
-              right: 16,
-              bottom: 260,
-              child: SafeArea(
-                top: false,
-                child: Semantics(
-                  label: _navigationLabel,
-                  value: _isLocating || _navigationBusy
-                      ? 'Localisation…'
-                      : null,
-                  child: _PoppingMapButton(
-                    tooltip: _navigationAction,
-                    onPressed:
-                        _isLocating ||
-                            _navigationBusy ||
-                            _mapboxMap == null ||
-                            _mapError != null
-                        ? null
-                        : () => unawaited(_navigateUser()),
-                    icon: ValueListenableBuilder<double>(
-                      valueListenable: _cameraTurns,
-                      builder: (context, cameraTurns, _) => _NavigationGlyph(
-                        mode: _isFollowing
-                            ? _orientationMode
-                            : _MapOrientationMode.free,
-                        headingTurns: _compassTurns - cameraTurns,
-                        northTurns: -cameraTurns,
-                        reduceMotion: _reduceMotion,
-                        busy: _isLocating || _navigationBusy,
-                      ),
-                    ),
-                  ),
-                ),
-              ),
             ),
           if (panelOpen && !_reportComposerOpen)
             Positioned(
               key: ValueKey(_alertsOpen ? 'alerts-panel' : 'report-detail'),
               left: 0,
               right: 0,
-              top: _alertsOpen ? 0 : null,
-              bottom: _alertsOpen ? null : 0,
+              bottom: 0,
               child: NotificationListener<SizeChangedLayoutNotification>(
                 onNotification: (_) {
                   // Après la mise en page : la nouvelle hauteur est connue.
@@ -3294,22 +3311,19 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
                           history: _alerts!,
                           onOpen: _openAlert,
                           onClose: _closeAlerts,
+                          dismissRequested: _panelsClosingForMapGesture,
                           userPosition: userPosition,
                         )
                       : ReportDetailPanel(
                           // Un autre badge touché repart d'un chargement neuf.
                           key: ValueKey(_detailReportId),
                           reportId: _detailReportId!,
+                          dismissRequested: _panelsClosingForMapGesture,
                           loadReport: _loadReportDetail,
                           loadPhoto: widget.reportDetailService!.fetchPhoto,
                           userPosition: userPosition,
-                          side: _alertsOpen
-                              ? MapPanelSide.top
-                              : MapPanelSide.bottom,
                           onBack: _alertsOpen ? _backToAlerts : null,
-                          onClose: _alertsOpen
-                              ? _closeAlerts
-                              : _closeReportDetail,
+                          onClose: _closeReportDetail,
                         ),
                 ),
               ),
@@ -3444,7 +3458,7 @@ class _NavigationGlyph extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     const blue = Color(0xFF329CFF);
-    const ink = Color(0xFF243243);
+    const ink = Colors.white;
     final duration = reduceMotion
         ? Duration.zero
         : const Duration(milliseconds: 180);
@@ -3538,7 +3552,7 @@ class _CompassRingPainter extends CustomPainter {
     final center = Offset(size.width / 2, size.height / 2);
     final radius = size.width * 0.37;
     final ring = Paint()
-      ..color = const Color(0x708094A8)
+      ..color = const Color(0xB0DDE7F1)
       ..style = PaintingStyle.stroke
       ..strokeWidth = 1.2;
     canvas.drawArc(
@@ -3561,71 +3575,4 @@ class _CompassRingPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(covariant _CompassRingPainter oldDelegate) => false;
-}
-
-/// Bouton rond de la carte avec une petite animation au toucher.
-class _PoppingMapButton extends StatefulWidget {
-  const _PoppingMapButton({
-    required this.tooltip,
-    required this.icon,
-    required this.onPressed,
-  });
-
-  final String tooltip;
-  final Widget icon;
-  final VoidCallback? onPressed;
-
-  @override
-  State<_PoppingMapButton> createState() => _PoppingMapButtonState();
-}
-
-class _PoppingMapButtonState extends State<_PoppingMapButton>
-    with SingleTickerProviderStateMixin {
-  late final AnimationController _controller = AnimationController(
-    vsync: this,
-    duration: const Duration(milliseconds: 210),
-  );
-  late final Animation<double> _scale = TweenSequence<double>([
-    TweenSequenceItem(tween: Tween(begin: 1.0, end: 1.12), weight: 45),
-    TweenSequenceItem(tween: Tween(begin: 1.12, end: 1.0), weight: 55),
-  ]).animate(CurvedAnimation(parent: _controller, curve: Curves.easeOut));
-
-  @override
-  void dispose() {
-    _controller.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return ScaleTransition(
-      scale: _scale,
-      child: Container(
-        decoration: const BoxDecoration(
-          color: Color(0xE6F6F8FA),
-          shape: BoxShape.circle,
-        ),
-        child: IconButton(
-          tooltip: widget.tooltip,
-          constraints: const BoxConstraints(minWidth: 48, minHeight: 48),
-          onPressed: widget.onPressed == null
-              ? null
-              : () {
-                  final reduceMotion =
-                      MediaQuery.disableAnimationsOf(context) ||
-                      View.of(context)
-                          .platformDispatcher
-                          .accessibilityFeatures
-                          .reduceMotion;
-                  if (!reduceMotion) _controller.forward(from: 0);
-                  widget.onPressed!();
-                },
-          icon: IconTheme(
-            data: const IconThemeData(color: Color(0xFF243243)),
-            child: widget.icon,
-          ),
-        ),
-      ),
-    );
-  }
 }

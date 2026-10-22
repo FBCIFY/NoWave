@@ -228,6 +228,7 @@ class FocusMap extends Fake implements mb.MapboxMap {
   int cancellations = 0;
   double nativeZoom = 17;
   double cameraBearing = 0, cameraPitch = 0;
+  double cameraZoom = 14;
   double width = 390, height = 844;
   Future<mb.CameraOptions> Function()? onFit;
   Future<mb.Point> Function(mb.ScreenCoordinate)? onCoordinate;
@@ -292,7 +293,7 @@ class FocusMap extends Fake implements mb.MapboxMap {
   @override
   Future<mb.CameraState> getCameraState() async => mb.CameraState(
     center: mb.Point(coordinates: mb.Position(5.37, 43.29)),
-    zoom: 14,
+    zoom: cameraZoom,
     pitch: cameraPitch,
     bearing: cameraBearing,
     padding: mb.MbxEdgeInsets(top: 0, left: 0, bottom: 0, right: 0),

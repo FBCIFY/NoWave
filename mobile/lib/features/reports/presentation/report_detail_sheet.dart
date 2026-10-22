@@ -44,8 +44,8 @@ class ReportDetailSheet extends StatefulWidget {
   State<ReportDetailSheet> createState() => _ReportDetailSheetState();
 }
 
-/// Fiche posée sur la carte : en bas après un badge touché, en haut depuis
-/// Mes alertes, avec un retour vers la liste.
+/// Même fiche en bas de la carte depuis un badge ou Mes alertes ; dans ce
+/// dernier cas, une flèche permet de retrouver la liste.
 class ReportDetailPanel extends StatelessWidget {
   const ReportDetailPanel({
     super.key,
@@ -56,6 +56,7 @@ class ReportDetailPanel extends StatelessWidget {
     this.side = MapPanelSide.bottom,
     this.onBack,
     this.userPosition,
+    this.dismissRequested = false,
   });
 
   final String reportId;
@@ -65,19 +66,20 @@ class ReportDetailPanel extends StatelessWidget {
   final VoidCallback onClose;
   final MapPanelSide side;
   final VoidCallback? onBack;
+  final bool dismissRequested;
 
   @override
   Widget build(BuildContext context) => MapPanel(
     side: side,
     onClose: onClose,
     onBack: onBack,
-    child: SingleChildScrollView(
-      child: ReportDetailSheet(
-        reportId: reportId,
-        loadReport: loadReport,
-        loadPhoto: loadPhoto,
-        userPosition: userPosition,
-      ),
+    showCloseButton: false,
+    dismissRequested: dismissRequested,
+    child: ReportDetailSheet(
+      reportId: reportId,
+      loadReport: loadReport,
+      loadPhoto: loadPhoto,
+      userPosition: userPosition,
     ),
   );
 }

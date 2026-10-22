@@ -1,4 +1,7 @@
 import 'dart:async';
+
+import '../features/map/support/map_action_tester.dart';
+
 import 'dart:convert';
 
 import 'package:blueway/core/api/api_service.dart';
@@ -203,7 +206,7 @@ class _Session {
   }
 
   Future<void> openProfile(WidgetTester tester) async {
-    await tester.tap(find.byTooltip('Mon profil'));
+    await tapMapAction(tester, 'Mon profil');
     await tester.pumpAndSettle();
   }
 
@@ -236,7 +239,7 @@ void main() {
       await tester.pumpAndSettle();
       await tester.tap(find.byTooltip('Retour'));
       await tester.pumpAndSettle();
-      await tester.tap(find.byTooltip('Mes alertes'));
+      await tapMapAction(tester, 'Mes alertes');
       await tester.pumpAndSettle();
       expect(find.byKey(const ValueKey('alert-a')), findsOneWidget);
       await tester.tap(find.byTooltip('Fermer'));
@@ -330,7 +333,7 @@ void main() {
       final f = _Session();
       await f.mount(tester);
       f.pendingHistory = Completer<http.Response>();
-      await tester.tap(find.byTooltip('Mes alertes'));
+      await tapMapAction(tester, 'Mes alertes');
       await tester.pump();
       f.auth.login('b');
       await tester.pump();
@@ -343,7 +346,7 @@ void main() {
       f.pendingHistory = null;
       await tester.pumpAndSettle();
       expect(find.byType(AlertsPanel), findsNothing);
-      await tester.tap(find.byTooltip('Mes alertes'));
+      await tapMapAction(tester, 'Mes alertes');
       await tester.pumpAndSettle();
       expect(find.byKey(const ValueKey('private-a')), findsNothing);
       expect(find.byKey(const ValueKey('alert-b')), findsOneWidget);
@@ -373,7 +376,7 @@ void main() {
       );
       f.auth.login('b');
       await tester.pumpAndSettle();
-      await tester.tap(find.byTooltip('Mes alertes'));
+      await tapMapAction(tester, 'Mes alertes');
       await tester.pumpAndSettle();
       expect(find.byKey(const ValueKey('alert-b')), findsOneWidget);
       expect(f.requests.last.headers['authorization'], 'Bearer test-b');

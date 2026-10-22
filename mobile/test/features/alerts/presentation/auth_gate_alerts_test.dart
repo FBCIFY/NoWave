@@ -1,4 +1,7 @@
 import 'dart:async';
+
+import '../../map/support/map_action_tester.dart';
+
 import 'dart:convert';
 
 import 'package:blueway/core/api/api_service.dart';
@@ -366,7 +369,7 @@ void main() {
     final f = await mount(tester, reportAvailable: true);
     f.auth.changes.add(_User('user-a'));
     await tester.pumpAndSettle();
-    await tester.tap(find.byTooltip('Mes alertes'));
+    await tapMapAction(tester, 'Mes alertes');
     await tester.pumpAndSettle();
     expect(find.byType(AlertsPanel), findsOneWidget);
     await tester.tap(find.byKey(const ValueKey('alert-a')));
@@ -430,7 +433,7 @@ void main() {
 
       focusController.setBlocked(true);
 
-      await tester.tap(find.byTooltip('Mes alertes'));
+      await tapMapAction(tester, 'Mes alertes');
       await tester.pumpAndSettle();
 
       await tester.tap(find.byKey(const ValueKey('alert-a')));
@@ -462,7 +465,7 @@ void main() {
 
       expect(find.byType(MapScreen), findsOneWidget);
 
-      await tester.tap(find.byTooltip('Mes alertes'));
+      await tapMapAction(tester, 'Mes alertes');
       await tester.pumpAndSettle();
 
       expect(find.byType(AlertsPanel), findsOneWidget);

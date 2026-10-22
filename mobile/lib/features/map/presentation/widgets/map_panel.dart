@@ -1,13 +1,14 @@
 import 'dart:math' as math;
 
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 
 /// Bord de l'écran où le panneau est posé.
 enum MapPanelSide { top, bottom }
 
-/// Panneau posé sur la carte, sans voile : l'autre moitié reste à la carte,
-/// qui garde ses gestes. Jamais plus de la moitié de l'écran, marge comprise.
-class MapPanel extends StatelessWidget {
+/// Consultation au-dessus de la carte, limitée à la moitié de l'écran.
+/// La poignée déplace le panneau ; le contenu conserve son défilement.
+class MapPanel extends StatefulWidget {
   const MapPanel({
     super.key,
     required this.side,
@@ -16,18 +17,20 @@ class MapPanel extends StatelessWidget {
     this.onBack,
     this.title,
     this.actions = const [],
+    this.showCloseButton = true,
+    this.dismissRequested = false,
   });
 
   final MapPanelSide side;
   final VoidCallback onClose;
-
-  /// Flèche de retour en haut à gauche ; le retour système la suit aussi.
   final VoidCallback? onBack;
   final String? title;
   final List<Widget> actions;
-
-  /// Contenu défilant ; il ne reçoit plus la marge du bord de l'écran.
   final Widget child;
+  final bool showCloseButton;
+
+  /// Conserve le contenu jusqu'à la fin de l'animation de sortie.
+  final bool dismissRequested;
 
   static double maxHeightFor(
     MediaQueryData mediaQuery, {
@@ -41,160 +44,267 @@ class MapPanel extends StatelessWidget {
       };
 
   @override
+  State<MapPanel> createState() => _MapPanelState();
+}
+
+class _MapPanelState extends State<MapPanel>
+    with SingleTickerProviderStateMixin {
+  final _surfaceKey = GlobalKey();
+  late final _offset = AnimationController.unbounded(vsync: this);
+  bool _closing = false;
+  double _motionHeight = 160;
+
+  @override
+  void initState() {
+    super.initState();
+    if (widget.dismissRequested) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _close();
+      });
+    }
+  }
+
+  @override
+  void didUpdateWidget(covariant MapPanel oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.dismissRequested && !oldWidget.dismissRequested) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted && widget.dismissRequested) _close();
+      });
+    }
+  }
+
+  bool get _top => widget.side == MapPanelSide.top;
+  double get _direction => _top ? -1 : 1;
+  bool get _ios => Theme.of(context).platform == TargetPlatform.iOS;
+  bool get _reduceMotion =>
+      MediaQuery.disableAnimationsOf(context) ||
+      View.of(context).platformDispatcher.accessibilityFeatures.reduceMotion;
+  double get _height => _surfaceKey.currentContext?.size?.height ?? 160;
+
+  @override
+  void dispose() {
+    _offset.dispose();
+    super.dispose();
+  }
+
+  void _dragStart(DragStartDetails _) {
+    if (!_closing) {
+      _motionHeight = _height;
+      _offset.stop();
+    }
+  }
+
+  void _dragUpdate(DragUpdateDetails details) {
+    if (_closing) return;
+    final distance = (_offset.value + details.delta.dy) * _direction;
+    _offset.value = _direction * distance.clamp(0, _height);
+  }
+
+  void _dragEnd(DragEndDetails details) {
+    if (_closing) return;
+    final velocity = (details.primaryVelocity ?? 0) * _direction;
+    if (_offset.value.abs() >= _height * 0.25 || velocity > 500) {
+      _close();
+    } else {
+      _settle();
+    }
+  }
+
+  Future<void> _settle() async {
+    if (_closing) return;
+    if (_reduceMotion) {
+      _offset.value = 0;
+      return;
+    }
+    await _offset.animateTo(
+      0,
+      duration: Duration(milliseconds: _ios ? 260 : 200),
+      curve: _ios ? Curves.easeOutCubic : Curves.easeOut,
+    );
+  }
+
+  Future<void> _close() async {
+    if (_closing) return;
+    _closing = true;
+    _motionHeight = _height;
+    if (!_reduceMotion) {
+      await _offset.animateTo(
+        _direction * (_height + 48),
+        duration: Duration(milliseconds: _ios ? 240 : 200),
+        curve: Curves.easeOutCubic,
+      );
+    }
+    if (mounted) widget.onClose();
+  }
+
+  Widget _dragHandle({required Widget child, required Key key}) =>
+      GestureDetector(
+        key: key,
+        behavior: HitTestBehavior.opaque,
+        onVerticalDragStart: _dragStart,
+        onVerticalDragUpdate: _dragUpdate,
+        onVerticalDragEnd: _dragEnd,
+        onVerticalDragCancel: _settle,
+        child: child,
+      );
+
+  Widget _button(String label, IconData icon, VoidCallback onPressed) {
+    if (!_ios) {
+      return IconButton(tooltip: label, onPressed: onPressed, icon: Icon(icon));
+    }
+    return Tooltip(
+      message: label,
+      child: CupertinoButton(
+        padding: const EdgeInsets.all(12),
+        minimumSize: const Size.square(48),
+        onPressed: onPressed,
+        child: Icon(icon, size: 22, color: const Color(0xFF243243)),
+      ),
+    );
+  }
+
+  @override
   Widget build(BuildContext context) {
     final mediaQuery = MediaQuery.of(context);
-    final top = side == MapPanelSide.top;
-    final margin = _margin(mediaQuery, side);
-    final header = _PanelHeader(
-      onClose: onClose,
-      onBack: onBack,
-      title: title,
-      actions: actions,
-      // En bas, la poignée est dans l'en-tête ; en haut, sous le contenu.
-      handle: !top,
+    final margin = MapPanel._margin(mediaQuery, widget.side);
+    final radius = _ios
+        ? BorderRadius.circular(24)
+        : const BorderRadius.vertical(top: Radius.circular(24));
+    final header = SizedBox(
+      height:
+          widget.showCloseButton ||
+              widget.onBack != null ||
+              widget.title != null
+          ? 48
+          : 32,
+      width: double.infinity,
+      child: Stack(
+        alignment: Alignment.center,
+        children: [
+          if (!_top && widget.title == null) const _Grip(),
+          Row(
+            children: [
+              if (widget.onBack != null)
+                _button(
+                  'Retour',
+                  _ios ? CupertinoIcons.chevron_back : Icons.arrow_back,
+                  widget.onBack!,
+                )
+              else
+                const SizedBox(width: 16),
+              Expanded(
+                child: widget.title == null
+                    ? const SizedBox.shrink()
+                    : Text(
+                        widget.title!,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: Theme.of(context).textTheme.titleMedium,
+                      ),
+              ),
+              ...widget.actions,
+              if (widget.showCloseButton)
+                _button(
+                  'Fermer',
+                  _ios ? CupertinoIcons.xmark : Icons.close,
+                  _close,
+                ),
+              const SizedBox(width: 4),
+            ],
+          ),
+        ],
+      ),
     );
+
     return PopScope(
       canPop: false,
       onPopInvokedWithResult: (didPop, _) {
-        if (!didPop) (onBack ?? onClose)();
+        if (!didPop && !_closing) (widget.onBack ?? _close)();
       },
-      child: Padding(
-        padding: EdgeInsets.fromLTRB(
-          12,
-          top ? margin : 0,
-          12,
-          top ? 0 : margin,
-        ),
-        child: ConstrainedBox(
-          constraints: BoxConstraints(
-            maxHeight: maxHeightFor(mediaQuery, side: side),
+      child: Semantics(
+        onDismiss: _close,
+        child: Padding(
+          padding: EdgeInsets.fromLTRB(
+            12,
+            _top ? margin : 0,
+            12,
+            _top ? 0 : margin,
           ),
-          child: DecoratedBox(
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(24),
-              boxShadow: const [
-                BoxShadow(
-                  color: Color(0x290D2238),
-                  blurRadius: 28,
-                  offset: Offset(0, 10),
+          child: AnimatedBuilder(
+            animation: _offset,
+            builder: (context, child) {
+              final progress = (_offset.value.abs() / (_motionHeight + 48))
+                  .clamp(0.0, 1.0);
+              return Transform.translate(
+                offset: Offset(0, _offset.value),
+                child: Opacity(
+                  opacity: 1 - progress * 0.35,
+                  child: IgnorePointer(ignoring: _closing, child: child),
                 ),
-              ],
-            ),
-            child: Material(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(24),
-              clipBehavior: Clip.antiAlias,
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  header,
-                  Flexible(
-                    // La marge du bord est déjà hors du panneau.
-                    child: MediaQuery.removePadding(
-                      context: context,
-                      removeTop: true,
-                      removeBottom: true,
-                      child: child,
+              );
+            },
+            child: ConstrainedBox(
+              constraints: BoxConstraints(
+                maxHeight: MapPanel.maxHeightFor(mediaQuery, side: widget.side),
+              ),
+              child: DecoratedBox(
+                key: _surfaceKey,
+                decoration: BoxDecoration(
+                  borderRadius: radius,
+                  border: Border.all(color: const Color(0x60FFFFFF)),
+                  boxShadow: const [
+                    BoxShadow(
+                      color: Color(0x180D2238),
+                      blurRadius: 20,
+                      offset: Offset(0, 6),
+                    ),
+                  ],
+                ),
+                child: Material(
+                  key: const ValueKey('map-panel-surface'),
+                  color: Colors.white.withValues(alpha: _ios ? 0.86 : 0.90),
+                  borderRadius: radius,
+                  clipBehavior: Clip.antiAlias,
+                  child: ScrollConfiguration(
+                    behavior: _ios
+                        ? const CupertinoScrollBehavior()
+                        : const MaterialScrollBehavior(),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        if (_top)
+                          header
+                        else
+                          _dragHandle(
+                            key: const ValueKey('map-panel-drag-handle'),
+                            child: header,
+                          ),
+                        Flexible(
+                          child: MediaQuery.removePadding(
+                            context: context,
+                            removeTop: true,
+                            removeBottom: true,
+                            child: widget.child,
+                          ),
+                        ),
+                        if (_top)
+                          _dragHandle(
+                            key: const ValueKey('map-panel-drag-handle'),
+                            child: const SizedBox(
+                              height: 32,
+                              width: double.infinity,
+                              child: Center(child: _Grip()),
+                            ),
+                          ),
+                      ],
                     ),
                   ),
-                  if (top) _BottomHandle(onClose: onClose),
-                ],
+                ),
               ),
             ),
           ),
         ),
-      ),
-    );
-  }
-}
-
-/// Retour, titre, actions et croix ; en bas, glisser la poignée vers le bas
-/// ferme aussi le panneau.
-class _PanelHeader extends StatelessWidget {
-  const _PanelHeader({
-    required this.onClose,
-    required this.onBack,
-    required this.title,
-    required this.actions,
-    required this.handle,
-  });
-
-  final VoidCallback onClose;
-  final VoidCallback? onBack;
-  final String? title;
-  final List<Widget> actions;
-  final bool handle;
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      behavior: HitTestBehavior.opaque,
-      onVerticalDragEnd: handle
-          ? (details) {
-              if ((details.primaryVelocity ?? 0) > 250) onClose();
-            }
-          : null,
-      child: SizedBox(
-        height: 48,
-        width: double.infinity,
-        child: Stack(
-          alignment: Alignment.center,
-          children: [
-            if (handle) const _Grip(),
-            Row(
-              children: [
-                if (onBack != null)
-                  IconButton(
-                    tooltip: 'Retour',
-                    onPressed: onBack,
-                    icon: const Icon(Icons.arrow_back),
-                  )
-                else
-                  const SizedBox(width: 16),
-                Expanded(
-                  child: title == null
-                      ? const SizedBox.shrink()
-                      : Text(
-                          title!,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: Theme.of(context).textTheme.titleMedium,
-                        ),
-                ),
-                ...actions,
-                IconButton(
-                  tooltip: 'Fermer',
-                  onPressed: onClose,
-                  icon: const Icon(Icons.close),
-                ),
-                const SizedBox(width: 4),
-              ],
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-/// Panneau du haut : la poignée est sous le contenu, glissée vers le haut
-/// elle ferme le panneau.
-class _BottomHandle extends StatelessWidget {
-  const _BottomHandle({required this.onClose});
-
-  final VoidCallback onClose;
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      behavior: HitTestBehavior.opaque,
-      onVerticalDragEnd: (details) {
-        if ((details.primaryVelocity ?? 0) < -250) onClose();
-      },
-      child: const SizedBox(
-        height: 24,
-        width: double.infinity,
-        child: Center(child: _Grip()),
       ),
     );
   }
@@ -208,7 +318,7 @@ class _Grip extends StatelessWidget {
     width: 36,
     height: 4,
     decoration: BoxDecoration(
-      color: const Color(0xFFD5DCE6),
+      color: const Color(0xFF9AA8B8),
       borderRadius: BorderRadius.circular(2),
     ),
   );

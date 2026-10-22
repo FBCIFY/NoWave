@@ -9,7 +9,7 @@ import '../../reports/presentation/report_detail_format.dart';
 import '../data/alert_history_controller.dart';
 import '../domain/alert.dart';
 
-/// Mes alertes, posé en haut de la carte : les plus récentes d'abord. Une
+/// Mes alertes, posé en bas de la carte : les plus récentes d'abord. Une
 /// alerte touchée ouvre sa fiche à la même place.
 class AlertsPanel extends StatelessWidget {
   const AlertsPanel({
@@ -19,6 +19,7 @@ class AlertsPanel extends StatelessWidget {
     required this.onClose,
     this.userPosition,
     this.now = DateTime.now,
+    this.dismissRequested = false,
   });
 
   /// Gardé par la carte : revenir de la fiche ne recharge pas la liste.
@@ -29,6 +30,7 @@ class AlertsPanel extends StatelessWidget {
   /// Position actuelle pour la distance ; sinon celle au moment de l'alerte.
   final ({double latitude, double longitude})? userPosition;
   final DateTime Function() now;
+  final bool dismissRequested;
 
   String _error(Object error) => switch (error) {
     ApiException(statusCode: 401) =>
@@ -56,9 +58,10 @@ class AlertsPanel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => MapPanel(
-    side: MapPanelSide.top,
+    side: MapPanelSide.bottom,
     title: 'Mes alertes',
     onClose: onClose,
+    dismissRequested: dismissRequested,
     actions: [
       ListenableBuilder(
         listenable: history,

@@ -210,22 +210,28 @@ void main() {
               Navigator.of(tester.element(find.byType(MapScreen))).canPop(),
               false,
             );
-            map.interactions.single.action(
-              mb.TypedFeaturesetFeature(
-                mb.FeaturesetDescriptor(layerId: 'alert-selected-point'),
-                {
-                  'type': 'Point',
-                  'coordinates': [6.0, 44.0],
-                },
-                {'report_id': 'report-b'},
-                {},
-              ),
-              mb.MapContentGestureContext(
-                touchPosition: mb.ScreenCoordinate(x: 200, y: 300),
-                point: mb.Point(coordinates: mb.Position(6, 44)),
-                gestureState: mb.GestureState.ended,
-              ),
-            );
+            map.interactions
+                .singleWhere(
+                  (interaction) =>
+                      interaction.featuresetDescriptor?.layerId ==
+                      'alert-selected-point',
+                )
+                .action(
+                  mb.TypedFeaturesetFeature(
+                    mb.FeaturesetDescriptor(layerId: 'alert-selected-point'),
+                    {
+                      'type': 'Point',
+                      'coordinates': [6.0, 44.0],
+                    },
+                    {'report_id': 'report-b'},
+                    {},
+                  ),
+                  mb.MapContentGestureContext(
+                    touchPosition: mb.ScreenCoordinate(x: 200, y: 300),
+                    point: mb.Point(coordinates: mb.Position(6, 44)),
+                    gestureState: mb.GestureState.ended,
+                  ),
+                );
             await settle();
             expect(
               tester
