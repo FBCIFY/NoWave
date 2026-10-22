@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../domain/manual_report.dart';
+import 'report_category_icon.dart';
 import 'report_category_style.dart';
 
 /// Même badge que le repère cartographique : bord blanc, fond de catégorie
@@ -25,7 +26,11 @@ class ReportCategoryBadge extends StatelessWidget {
         borderRadius: BorderRadius.circular(size * 0.3),
         border: Border.all(color: Colors.white, width: size / 16),
       ),
-      child: Icon(category.icon, color: Colors.white, size: size * 0.6),
+      child: ReportCategoryIcon(
+        category,
+        color: Colors.white,
+        size: size * 0.6,
+      ),
     ),
   );
 }

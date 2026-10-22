@@ -91,22 +91,25 @@ void main() {
     expect(map.fittedCoordinates, isEmpty);
   });
 
-  test('la consultation conserve le zoom proche et l’inclinaison choisie', () async {
-    final map = FocusMap();
-    for (final zoom in [2.0, 12.0, 13.0, 16.5, 18.0]) {
-      final camera = await MapAlertCamera.detail(
-        map,
-        focusReport(),
-        from: startCamera(zoom: zoom),
-        bearing: 0,
-        viewport: viewport,
-        panelHeight: viewport.height / 2,
-        pitch: 30,
-      );
-      expect(camera.zoom, zoom < 13 ? 13 : zoom);
-      expect(camera.pitch, 30);
-    }
-  });
+  test(
+    'la consultation conserve le zoom proche et l’inclinaison choisie',
+    () async {
+      final map = FocusMap();
+      for (final zoom in [2.0, 4.0, 12.0, 13.0, 16.5, 18.0]) {
+        final camera = await MapAlertCamera.detail(
+          map,
+          focusReport(),
+          from: startCamera(zoom: zoom),
+          bearing: 0,
+          viewport: viewport,
+          panelHeight: viewport.height / 2,
+          pitch: 30,
+        );
+        expect(camera.zoom, zoom < 13 ? 13 : zoom);
+        expect(camera.pitch, 30);
+      }
+    },
+  );
 
   test('fiche plus haute que la carte : marge bornée à la carte', () {
     expect(MapAlertCamera.detailPadding(viewport, 2000).bottom, 844);

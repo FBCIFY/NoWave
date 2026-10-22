@@ -1220,7 +1220,7 @@ void main() {
     expect(find.byType(BottomSheet), findsNothing);
     expect(find.byTooltip('Créer un signalement'), findsNothing);
     final detail = map.easedCameras.single;
-    expect(detail.zoom, 14);
+    expect(detail.zoom, 13);
     expect(detail.pitch, 10);
     expect(detail.padding!.bottom, panelHeight(tester));
 
@@ -1359,6 +1359,8 @@ void main() {
       await mount(tester);
       tapBadge('report-a');
       await pumpFrames(tester);
+      // La vue courante peut être plus proche que celle précédant la fiche.
+      map.cameraZoom = 17;
       tapBadge('report-b', longitude: 6);
       await pumpFrames(tester);
       expect(reports.calls, ['report-a', 'report-b']);
@@ -1369,6 +1371,7 @@ void main() {
         'report-b',
       );
       expect(map.easedCameras.last.pitch, 30);
+      expect(map.easedCameras.map((camera) => camera.zoom), [14, 17]);
 
       await tester.binding.handlePopRoute();
       await pumpFrames(tester);
