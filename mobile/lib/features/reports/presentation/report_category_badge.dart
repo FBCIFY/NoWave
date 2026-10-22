@@ -6,28 +6,26 @@ import 'report_category_style.dart';
 /// Même badge que le repère cartographique : bord blanc, fond de catégorie
 /// et pictogramme blanc. Le libellé est porté par le texte voisin.
 class ReportCategoryBadge extends StatelessWidget {
-  const ReportCategoryBadge({super.key, required this.category});
+  const ReportCategoryBadge({
+    super.key,
+    required this.category,
+    this.size = 48,
+  });
 
   final ReportCategory category;
+  final double size;
 
   @override
   Widget build(BuildContext context) => ExcludeSemantics(
     child: Container(
-      width: 48,
-      height: 48,
+      width: size,
+      height: size,
       decoration: BoxDecoration(
         color: category.color,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: Colors.white, width: 3),
-        boxShadow: const [
-          BoxShadow(
-            color: Color(0x260F172A),
-            blurRadius: 6,
-            offset: Offset(0, 2),
-          ),
-        ],
+        borderRadius: BorderRadius.circular(size * 0.3),
+        border: Border.all(color: Colors.white, width: size / 16),
       ),
-      child: Icon(category.icon, color: Colors.white, size: 27),
+      child: Icon(category.icon, color: Colors.white, size: size * 0.6),
     ),
   );
 }
