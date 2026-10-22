@@ -297,6 +297,7 @@ class _HomeScreenState extends State<HomeScreen> {
               id: push.alert.reportId,
               latitude: push.alert.latitude,
               longitude: push.alert.longitude,
+              category: push.alert.category,
               expiresAt: push.expiresAt,
             )),
             onOpen: (push) => _openReportFromPush(push.alert.reportId),

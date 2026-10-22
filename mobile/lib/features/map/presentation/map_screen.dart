@@ -424,14 +424,14 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
     },
   );
 
-  bool get _canAnimateNotificationSonar =>
-      _sonarReady &&
-      !_hidden &&
-      !_reduceMotion &&
+  bool get _notificationUnread =>
       !_notificationPulseAcknowledged &&
       !(_selectedExpired &&
           _selectedReport?.id == _notificationSonarReport?.id) &&
       (_notificationSonarReport?.expiresAt.isAfter(DateTime.now()) ?? false);
+
+  bool get _canAnimateNotificationSonar =>
+      _sonarReady && !_hidden && !_reduceMotion && _notificationUnread;
 
   void _syncNotificationHalo() {
     if (_canAnimateNotificationSonar) {
@@ -466,6 +466,13 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
         'data',
         jsonEncode(AlertHaloPulse.empty),
       );
+      if (!_notificationUnread) {
+        await map.style.setStyleSourceProperty(
+          'alert-notification',
+          'data',
+          jsonEncode(AlertHaloPulse.empty),
+        );
+      }
     } catch (_) {
       // Un changement de style peut déjà avoir retiré la source.
     }
@@ -473,11 +480,45 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
 
   Future<void> _prepareNotificationSonar(MapboxMap map) async {
     if (_sonarReady) {
+      await _raiseNotificationLayers(map);
       _syncNotificationHalo();
       return;
     }
     await _alertHaloPulse.stop();
-    if (_notificationSonarReport == null) return;
+    final report = _notificationSonarReport;
+    if (report == null) return;
+    // Charger le badge avant de démarrer les ondes : aucun sonar sans icône,
+    // même lorsque les tuiles de signalements ne sont pas encore disponibles.
+    await _registerReportMarker(map, report.category);
+    if (!mounted || map != _mapboxMap || report != _notificationSonarReport) {
+      return;
+    }
+    final markerData = jsonEncode(
+      _notificationUnread
+          ? {
+              'type': 'Feature',
+              'properties': {
+                'report_id': report.id,
+                'category': report.category.apiValue,
+              },
+              'geometry': {
+                'type': 'Point',
+                'coordinates': [report.longitude, report.latitude],
+              },
+            }
+          : AlertHaloPulse.empty,
+    );
+    if (!await map.style.styleSourceExists('alert-notification')) {
+      await map.style.addSource(
+        GeoJsonSource(id: 'alert-notification', data: markerData),
+      );
+    } else {
+      await map.style.setStyleSourceProperty(
+        'alert-notification',
+        'data',
+        markerData,
+      );
+    }
     if (!await map.style.styleSourceExists('alert-notification-sonar')) {
       await map.style.addSource(
         GeoJsonSource(
@@ -492,22 +533,62 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
         jsonEncode(AlertHaloPulse.empty),
       );
     }
+    if (!await map.style.styleLayerExists('alert-notification-sonar-glow')) {
+      await map.style.addLayer(
+        LineLayer(
+          id: 'alert-notification-sonar-glow',
+          sourceId: 'alert-notification-sonar',
+          lineColor: const Color(0xFFFF2028).toARGB32(),
+          lineWidth: 7,
+          lineBlur: 2.5,
+          lineOpacityExpression: [
+            '*',
+            ['get', 'opacity'],
+            .22,
+          ],
+          lineEmissiveStrength: 1,
+        ),
+      );
+    }
     if (!await map.style.styleLayerExists('alert-notification-sonar')) {
       await map.style.addLayer(
         LineLayer(
           id: 'alert-notification-sonar',
           sourceId: 'alert-notification-sonar',
           lineColor: const Color(0xFFFF2028).toARGB32(),
-          lineWidth: 2,
-          lineBlur: .4,
+          lineWidth: 3,
+          lineBlur: .3,
           lineOpacityExpression: ['get', 'opacity'],
           lineEmissiveStrength: 1,
         ),
       );
     }
-    await map.style.moveStyleLayer('alert-notification-sonar', LayerPosition());
+    if (!await map.style.styleLayerExists('alert-notification-point')) {
+      await map.style.addLayer(
+        SymbolLayer(
+          id: 'alert-notification-point',
+          sourceId: 'alert-notification',
+          iconImageExpression: ReportTiles.markerImageExpression(),
+          iconSize: 1,
+          iconAllowOverlap: true,
+          iconIgnorePlacement: true,
+          iconEmissiveStrength: 1,
+        ),
+      );
+    }
+    await _raiseNotificationLayers(map);
     _sonarReady = true;
     _syncNotificationHalo();
+  }
+
+  Future<void> _raiseNotificationLayers(MapboxMap map) async {
+    for (final layer in [
+      'alert-notification-sonar-glow',
+      'alert-notification-sonar',
+      'alert-notification-point',
+    ]) {
+      await map.style.moveStyleLayer(layer, LayerPosition());
+    }
   }
 
   /// Fiche ouverte en bas de la carte, et la vue à retrouver en la fermant.
@@ -1224,7 +1305,9 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
     await reportTiles.addTo(map);
     debugPrint('Couche des signalements installée.');
     // MVT may arrive after the selection; keep its badge above ordinary points.
-    if (_selectedReport != null) unawaited(_applySelection());
+    if (_selectedReport != null || _notificationUnread) {
+      unawaited(_applySelection());
+    }
   }
 
   /// Marge autour du doigt pour toucher un badge, en pixels.
@@ -1236,7 +1319,6 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
 
   /// Mise en valeur du signalement sélectionné.
   static const _selectedMarkerScale = 1.35;
-  static const _selectedHaloRadius = 30.0;
 
   /// Niveaux de zoom gagnés en touchant une zone.
   static const _clusterZoomStep = 2.0;
@@ -1257,6 +1339,13 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
       map.addInteraction(
         TapInteraction(
           FeaturesetDescriptor(layerId: 'alert-selected-point'),
+          (feature, _) => _openReportDetail(feature),
+          radius: _badgeTapRadius,
+        ),
+      );
+      map.addInteraction(
+        TapInteraction(
+          FeaturesetDescriptor(layerId: 'alert-notification-point'),
           (feature, _) => _openReportDetail(feature),
           radius: _badgeTapRadius,
         ),
@@ -1447,6 +1536,7 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
           id: report.id,
           latitude: report.latitude,
           longitude: report.longitude,
+          category: report.category,
           expiresAt: report.expiresAt,
         );
         _sonarReady = false;
@@ -1722,29 +1812,12 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
     unawaited(_applySelection());
   }
 
-  /// Repère explicite de la sélection, indépendant du chargement des MVT :
-  /// une alerte ouverte depuis une notification ou l'historique reste
-  /// visible même si sa tuile n'est pas encore à jour.
-  Future<void> _showSelectedReport() async {
-    final report = _selectedReport;
-    final map = _mapboxMap;
-    if (report == null || map == null || _selectedExpired) return;
-    await _prepareNotificationSonar(map);
-
-    final data = jsonEncode({
-      'type': 'Feature',
-      'properties': {
-        'report_id': report.id,
-        'category': report.category.apiValue,
-      },
-      'geometry': {
-        'type': 'Point',
-        'coordinates': [report.longitude, report.latitude],
-      },
-    });
-
-    final imageId = badges.ReportMarker.imageId(report.category);
-    final png = await badges.ReportMarker.paintCategory(report.category);
+  Future<void> _registerReportMarker(
+    MapboxMap map,
+    ReportCategory category,
+  ) async {
+    final imageId = badges.ReportMarker.imageId(category);
+    final png = await badges.ReportMarker.paintCategory(category);
     // Independent of MVT authorization/installation. addStyleImage replaces
     // an existing image, so replaying this after a style reload is safe.
     final side = (badges.ReportMarker.size * badges.ReportMarker.pixelRatio)
@@ -1758,6 +1831,32 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
       [],
       null,
     );
+  }
+
+  /// Repère explicite de la sélection, indépendant du chargement des MVT :
+  /// une alerte ouverte depuis une notification ou l'historique reste
+  /// visible même si sa tuile n'est pas encore à jour.
+  Future<void> _showSelectedReport() async {
+    final report = _selectedReport;
+    final map = _mapboxMap;
+    if (report == null || map == null || _selectedExpired) return;
+    await _prepareNotificationSonar(map);
+    if (!mounted || map != _mapboxMap || report != _selectedReport) return;
+
+    final data = jsonEncode({
+      'type': 'Feature',
+      'properties': {
+        'report_id': report.id,
+        'category': report.category.apiValue,
+      },
+      'geometry': {
+        'type': 'Point',
+        'coordinates': [report.longitude, report.latitude],
+      },
+    });
+
+    await _registerReportMarker(map, report.category);
+    if (!mounted || map != _mapboxMap || report != _selectedReport) return;
 
     if (!await map.style.styleSourceExists('alert-selected')) {
       await map.style.addSource(
@@ -1767,37 +1866,9 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
       await map.style.setStyleSourceProperty('alert-selected', 'data', data);
     }
 
-    if (!await map.style.styleLayerExists('alert-selected-halo') &&
-        !_selectedExpired) {
-      await map.style.addLayer(
-        CircleLayer(
-          id: 'alert-selected-halo',
-          sourceId: 'alert-selected',
-          minZoom: ReportTiles.badgesMinZoom,
-          circleRadius: _selectedHaloRadius,
-          circleColor: Colors.white.toARGB32(),
-          circleOpacity: .45,
-          circleStrokeColor: Colors.white.toARGB32(),
-          circleStrokeWidth: 3,
-          circleStrokeOpacity: 1,
-          circleEmissiveStrength: 1,
-        ),
-      );
-    }
-    // Une sélection remplace aussi l'apparence d'une couche déjà installée.
-    for (final property in {
-      'circle-color': '#FFFFFF',
-      'circle-stroke-color': '#FFFFFF',
-      'circle-radius': _selectedHaloRadius,
-      'circle-opacity': .45,
-      'circle-stroke-width': 3.0,
-      'circle-stroke-opacity': 1.0,
-    }.entries) {
-      await map.style.setStyleLayerProperty(
-        'alert-selected-halo',
-        property.key,
-        property.value,
-      );
+    // Retirer aussi une ancienne couche si le style a été conservé.
+    if (await map.style.styleLayerExists('alert-selected-halo')) {
+      await map.style.removeStyleLayer('alert-selected-halo');
     }
     if (!await map.style.styleLayerExists('alert-selected-point') &&
         !_selectedExpired) {
@@ -1819,8 +1890,7 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
         ),
       );
     }
-    // Halo puis badge, au-dessus de tous les autres signalements.
-    await map.style.moveStyleLayer('alert-selected-halo', LayerPosition());
+    // L'icône seule grossit, au-dessus des autres signalements.
     await map.style.moveStyleLayer('alert-selected-point', LayerPosition());
   }
 

@@ -562,18 +562,12 @@ void main() {
       expect(layer['type'], 'symbol');
       // Caché au dézoom, comme les badges, au profit de la zone colorée.
       expect(layer['minzoom'], ReportTiles.badgesMinZoom);
-      // Un peu plus gros que les badges des tuiles, sur un halo blanc.
+      // Seule l’icône grossit par rapport aux badges des tuiles.
       expect(
         layer['layout']['icon-size'],
         ReportTiles.markerSizeExpression(scale: 1.35),
       );
-      final halo = map.style.layers['alert-selected-halo']!;
-      expect(halo['type'], 'circle');
-      expect(halo['minzoom'], ReportTiles.badgesMinZoom);
-      expect(
-        map.style.layerOrder.indexOf('alert-selected-halo'),
-        map.style.layerOrder.indexOf('alert-selected-point') - 1,
-      );
+      expect(map.style.layers, isNot(contains('alert-selected-halo')));
       expect(
         layer['layout']['icon-image'],
         contains(badges.ReportMarker.imageId(category)),
@@ -607,11 +601,13 @@ void main() {
     styleReady(tester);
     await pumpFrames(tester);
     expect(map.style.layers.keys.where((id) => id.startsWith('alert-')), [
+      'alert-notification-sonar-glow',
       'alert-notification-sonar',
-      'alert-selected-halo',
+      'alert-notification-point',
       'alert-selected-point',
     ]);
     expect(map.style.sources.keys.where((id) => id.startsWith('alert-')), [
+      'alert-notification',
       'alert-notification-sonar',
       'alert-selected',
     ]);
@@ -650,8 +646,9 @@ void main() {
       expect(data['properties'], {'report_id': 'b', 'category': 'obstruction'});
       expect(data['geometry']['coordinates'], [7, 43.29]);
       expect(map.style.layers.keys.where((id) => id.startsWith('alert-')), [
+        'alert-notification-sonar-glow',
         'alert-notification-sonar',
-        'alert-selected-halo',
+        'alert-notification-point',
         'alert-selected-point',
       ]);
       expect(map.cameras, hasLength(1));
@@ -904,7 +901,7 @@ void main() {
       expect(focus.origin, MapFocusOrigin.mapTap);
       // Le badge touché est mis en valeur au-dessus de celui des tuiles.
       expect(map.style.layers, contains('alert-selected-point'));
-      expect(map.style.layers, contains('alert-selected-halo'));
+      expect(map.style.layers, isNot(contains('alert-selected-halo')));
       expect(map.easedCameras, hasLength(1));
       expect(map.easedCameras.single.padding!.bottom, panelHeight(tester));
       gps.initial.complete(focusPosition());
@@ -970,9 +967,7 @@ void main() {
       await mount(tester);
       focus.focus(focusReport(), origin: MapFocusOrigin.notification);
       await pumpFrames(tester);
-      final halo = map.style.layers['alert-selected-halo']!;
-      expect(halo['circle-color'], '#FFFFFF');
-      expect(halo['circle-radius'], 30);
+      expect(map.style.layers, isNot(contains('alert-selected-halo')));
       final expectedDistance = ReportReach.distance(43.29, 5.373, 43.29, 5.37);
       expect(sonarRange(), closeTo(expectedDistance, .01));
       final previousOpacity =
@@ -998,11 +993,7 @@ void main() {
       tapBadge('report-a');
       await pumpFrames(tester);
       expect(sonarFeatures(), isEmpty);
-      expect(
-        map.style.layers['alert-selected-halo']!['circle-color'],
-        '#FFFFFF',
-      );
-      expect(map.style.layers['alert-selected-halo']!['circle-radius'], 30);
+      expect(map.style.layers, isNot(contains('alert-selected-halo')));
       await tester.pump(const Duration(seconds: 5));
       expect(sonarFeatures(), isEmpty);
     },
@@ -1038,8 +1029,7 @@ void main() {
     await pumpFrames(tester);
     await tester.pump(const Duration(milliseconds: 1100));
     expect(sonarFeatures(), isEmpty);
-    expect(map.style.layers['alert-selected-halo']!['circle-color'], '#FFFFFF');
-    expect(map.style.layers['alert-selected-halo']!['circle-radius'], 30);
+    expect(map.style.layers, isNot(contains('alert-selected-halo')));
   });
 
   focusTestWidgets('sonar : pause hors écran et reprise au retour', (
@@ -1068,7 +1058,7 @@ void main() {
     tapBadge('report-a');
     await tester.pump();
     expect(sonarFeatures(), isEmpty);
-    expect(map.style.layers['alert-selected-halo']!['circle-color'], '#FFFFFF');
+    expect(map.style.layers, isNot(contains('alert-selected-halo')));
     await tester.pump(const Duration(seconds: 5));
     expect(sonarFeatures(), isEmpty);
     response.complete(focusReport());
@@ -1077,7 +1067,7 @@ void main() {
     tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
     await tester.pump(const Duration(seconds: 5));
     expect(sonarFeatures(), isEmpty);
-    expect(map.style.layers['alert-selected-halo']!['circle-color'], '#FFFFFF');
+    expect(map.style.layers, isNot(contains('alert-selected-halo')));
     focus.focus(
       focusReport(id: 'report-b'),
       origin: MapFocusOrigin.notification,

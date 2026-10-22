@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 
 import '../../reports/domain/report_detail.dart';
+import '../../reports/domain/manual_report.dart';
 
 enum MapFocusOrigin { mapTap, notification, history }
 
@@ -10,6 +11,7 @@ typedef MapSonarTarget = ({
   String id,
   double latitude,
   double longitude,
+  ReportCategory category,
   DateTime expiresAt,
 });
 

@@ -109,16 +109,14 @@ void main() {
           ) as Map<String, dynamic>)['features']
           as List;
 
-  void tapReport(String reportId) {
+  void tapReport(String reportId, {String layerId = 'alert-selected-point'}) {
     map.interactions
         .singleWhere(
-          (interaction) =>
-              interaction.featuresetDescriptor?.layerId ==
-              'alert-selected-point',
+          (interaction) => interaction.featuresetDescriptor?.layerId == layerId,
         )
         .action(
           mb.TypedFeaturesetFeature(
-            mb.FeaturesetDescriptor(layerId: 'alert-selected-point'),
+            mb.FeaturesetDescriptor(layerId: layerId),
             {
               'type': 'Point',
               'coordinates': [5.37, 43.29],
@@ -133,6 +131,53 @@ void main() {
           ),
         );
   }
+
+  focusTestWidgets(
+    'sonar et icône arrivent ensemble même si le badge tarde à charger',
+    (tester) async {
+      await mount(tester);
+      final iconReady = Completer<void>();
+      map.style.imageGate = iconReady.future;
+      source.messages.add(
+        pushMessage(expiry: DateTime.now().add(const Duration(hours: 1))),
+      );
+      await tester.pumpAndSettle();
+      expect(map.style.layers, isNot(contains('alert-notification-point')));
+      expect(map.style.sources, isNot(contains('alert-notification-sonar')));
+      map.style.imageGate = null;
+      iconReady.complete();
+      await tester.pumpAndSettle();
+      expect(map.style.layers['alert-notification-point']!['type'], 'symbol');
+      expect(
+        map.style.images,
+        contains(badges.ReportMarker.imageId(ReportCategory.pollution)),
+      );
+      final marker = jsonDecode(
+        map.style.sources['alert-notification']!['data'] as String,
+      );
+      expect(marker['properties']['report_id'], 'report-a');
+      expect(marker['properties']['category'], 'pollution');
+      expect(marker['geometry']['coordinates'], [5.37, 43.29]);
+      expect(sonarFeatures(), isNotEmpty);
+      expect(
+        map.style.layerOrder.indexOf('alert-notification-point'),
+        greaterThan(map.style.layerOrder.indexOf('alert-notification-sonar')),
+      );
+      expect(map.cameras, isEmpty);
+      expect(reports.calls, isEmpty);
+      tapReport('report-a', layerId: 'alert-notification-point');
+      await tester.pumpAndSettle();
+      expect(find.byType(ReportDetailSheet), findsOneWidget);
+      expect(sonarFeatures(), isEmpty);
+      expect(
+        jsonDecode(
+          map.style.sources['alert-notification']!['data'] as String,
+        )['features'],
+        isEmpty,
+      );
+      expect(map.style.layers, isNot(contains('alert-selected-halo')));
+    },
+  );
 
   focusTestWidgets(
     'réception sans clic : sonar immédiat, persistant et sans cadrage',
@@ -184,7 +229,7 @@ void main() {
       await tester.pumpAndSettle();
       expect(sonarFeatures(), isNotEmpty);
       expect(map.cameras, isEmpty);
-      tapReport('report-a');
+      tapReport('report-a', layerId: 'alert-notification-point');
       await tester.pumpAndSettle();
       expect(sonarFeatures(), isEmpty);
       expect(reports.calls, ['report-a']);
