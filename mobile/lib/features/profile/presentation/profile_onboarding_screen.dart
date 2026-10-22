@@ -395,23 +395,13 @@ class _ProfileOnboardingScreenState extends State<ProfileOnboardingScreen> {
   @override
   Widget build(BuildContext context) {
     final (title, subtitle, child) = switch (_page) {
-      _Page.username => (
-        'Votre profil',
-        'Choisissez votre nom d’utilisateur. '
-            'Il sera associé à votre profil NoWave.',
-        _buildUsername(),
-      ),
+      _Page.username => ('Votre profil', null, _buildUsername()),
       _Page.boatType => (
         'Votre bateau',
-        'Sur quel bateau naviguez-vous ? '
-            'Vous pourrez le modifier depuis votre profil.',
+        'Vous pourrez le modifier depuis votre profil.',
         _buildBoatType(),
       ),
-      _Page.boatDetails => (
-        'Nom et pavillon',
-        'Facultatif : le nom de votre bateau et le pays de son pavillon.',
-        _buildBoatDetails(),
-      ),
+      _Page.boatDetails => ('Nom et pavillon', null, _buildBoatDetails()),
       _Page.visibility => (
         'Sur vos signalements',
         'Choisissez ce que les autres marins voient quand vous signalez un '

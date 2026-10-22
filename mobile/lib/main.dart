@@ -1,5 +1,6 @@
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:http/http.dart' as http;
 import 'package:mapbox_maps_flutter/mapbox_maps_flutter.dart';
 
@@ -29,6 +30,8 @@ import 'firebase_options.dart';
 /// puis lance l'app sur [AuthGate], qui choisit le premier écran à afficher.
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  // Toute l'app est pensée en portrait, caméra comprise.
+  await SystemChrome.setPreferredOrientations([DeviceOrientation.portraitUp]);
 
   await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
 

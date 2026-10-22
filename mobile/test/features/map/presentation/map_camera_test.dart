@@ -84,9 +84,13 @@ void main() {
     final viewport =
         tester.widget<MapWidget>(find.byType(MapWidget)).viewport
             as FollowPuckViewportState;
-    expect(viewport.zoom, 14);
-    expect(viewport.pitch, 60);
+    expect(viewport.zoom, 12);
+    expect(viewport.pitch, 0);
     expect(viewport.bearing, isA<FollowPuckViewportStateBearingConstant>());
+    expect(
+      (viewport.bearing as FollowPuckViewportStateBearingConstant).bearing,
+      0,
+    );
 
     gps.positions.add(focusPosition(latitude: 43.30));
     await tester.pumpAndSettle();

@@ -7,8 +7,6 @@ import '../../../core/notifications/alert_push_controller.dart';
 import '../../../core/notifications/notification_permission.dart';
 import '../../../core/notifications/push_notification_listener.dart';
 import '../../alerts/data/alert_service.dart';
-import '../../alerts/presentation/alert_report_screen.dart';
-import '../../alerts/presentation/alerts_screen.dart';
 import '../../camera/data/position_estimate_service.dart';
 import '../../camera/domain/photo_report_draft.dart';
 import '../../camera/presentation/camera_screen.dart';
@@ -69,21 +67,6 @@ class _HomeScreenState extends State<HomeScreen> {
     _pushRequest++;
     _mapFocusController.dispose();
     super.dispose();
-  }
-
-  Future<void> _openReport(String reportId) async {
-    final service = widget.reportDetailService;
-    if (service == null || !mounted) return;
-
-    await Navigator.of(context).push(
-      MaterialPageRoute<void>(
-        builder: (_) => AlertReportScreen(
-          reportId: reportId,
-          service: service,
-          onShowOnMap: _showReportOnMainMap,
-        ),
-      ),
-    );
   }
 
   /// A push selects the main map; only the API supplies its actual position.
@@ -176,41 +159,28 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
+  /// Action « Historique » d'une notification : Mes alertes s'ouvre sur la
+  /// carte principale.
   void _openAlerts() {
     if (!mounted ||
         widget.alertService == null ||
         widget.reportDetailService == null) {
       return;
     }
-    Navigator.of(context).push(
-      MaterialPageRoute<void>(
-        builder: (_) => AlertsScreen(
-          service: widget.alertService!,
-          onOpen: (alert) => _openReport(alert.reportId),
-        ),
-      ),
-    );
-  }
-
-  /// Le détail vient d'être relu auprès du backend par AlertReportScreen.
-  /// On revient à la route principale puis on pilote la MapScreen existante.
-  Future<void> _showReportOnMainMap(ReportDetail report) async {
-    if (!mounted) return;
-
-    if (!_mapFocusController.focus(report)) {
+    if (_mapFocusController.isBlocked) {
       ScaffoldMessenger.of(context)
         ..hideCurrentSnackBar()
         ..showSnackBar(
           const SnackBar(
             content: Text(
-              'Terminez ou annulez votre signalement avant de centrer la carte.',
+              'Terminez ou annulez votre signalement avant d’ouvrir vos alertes.',
             ),
           ),
         );
       return;
     }
-
     Navigator.of(context).popUntil((route) => route.isFirst);
+    _mapFocusController.openAlerts();
   }
 
   @override
@@ -220,10 +190,9 @@ class _HomeScreenState extends State<HomeScreen> {
     final map = MapScreen(
       focusController: _mapFocusController,
       intro: widget.intro,
-      onOpenAlerts:
-          widget.alertService == null || widget.reportDetailService == null
+      alertService: widget.reportDetailService == null
           ? null
-          : _openAlerts,
+          : widget.alertService,
       reportService: widget.reportService,
       reportTiles: widget.reportTiles,
       reportDetailService: widget.reportDetailService,

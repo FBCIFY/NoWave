@@ -13,7 +13,9 @@ from app.domain.report import ReportCategory
 from app.domain.marine import MarineFamily
 from app.domain.marine_tile import Tile
 from app.domain.marine import ProviderUnavailable
-from app.infrastructure.marine.runtime import get_marine_service, get_coastline_mask
+from app.infrastructure.marine.runtime import (
+    get_marine_service, get_coastline_mask, get_bathymetry_cache,
+)
 from app.infrastructure.marine.coastline import apply_ocean_mask, has_raster_data
 from app.infrastructure.adapters.emodnet_bathymetry import (
     BathymetryUnavailable,
@@ -204,12 +206,7 @@ async def get_bathymetry_tile(
         )
 
     try:
-        raw = await run_in_threadpool(fetch_bathymetry_tile, z, x, y)
-        if await run_in_threadpool(has_raster_data, raw):
-            mask = await get_coastline_mask().get_mask(Tile(z, x, y))
-            tile = await run_in_threadpool(apply_ocean_mask, raw, mask)
-        else:
-            tile = raw  # No marine colour: no coastline download or decoding.
+        tile = await get_bathymetry_cache(_render_bathymetry_tile).get(Tile(z, x, y))
     except (BathymetryUnavailable, ProviderUnavailable, OSError, ValueError) as error:
         raise HTTPException(
             status_code=503,
@@ -224,3 +221,11 @@ async def get_bathymetry_tile(
             "Link": '</api/v1/map/marine-sources>; rel="describedby"',
         },
     )
+
+
+async def _render_bathymetry_tile(tile: Tile) -> bytes:
+    raw = await run_in_threadpool(fetch_bathymetry_tile, tile.z, tile.x, tile.y)
+    if not await run_in_threadpool(has_raster_data, raw):
+        return raw  # No marine colour: no coastline download or decoding.
+    mask = await get_coastline_mask().get_mask(tile)
+    return await run_in_threadpool(apply_ocean_mask, raw, mask)

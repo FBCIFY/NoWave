@@ -7,6 +7,7 @@ import 'package:blueway/core/location/location_service.dart';
 import 'package:blueway/features/reports/domain/report_detail.dart';
 import 'package:blueway/features/map/presentation/report_marker.dart';
 import 'package:blueway/features/reports/domain/manual_report.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:geolocator/geolocator.dart' as geo;
 import 'package:mapbox_maps_flutter/mapbox_maps_flutter.dart' as mb;
@@ -194,6 +195,13 @@ class _Compass extends Fake implements mb.CompassSettingsInterface {
   Future<void> updateSettings(mb.CompassSettings settings) async {}
 }
 
+class FocusGestures extends Fake implements mb.GesturesSettingsInterface {
+  final settings = <mb.GesturesSettings>[];
+  @override
+  Future<void> updateSettings(mb.GesturesSettings settings) async =>
+      this.settings.add(settings);
+}
+
 class _Scale extends Fake implements mb.ScaleBarSettingsInterface {
   @override
   Future<void> updateSettings(mb.ScaleBarSettings settings) async {}
@@ -208,12 +216,18 @@ class FocusMap extends Fake implements mb.MapboxMap {
   final compass = _Compass();
   @override
   final scaleBar = _Scale();
+  @override
+  final FocusGestures gestures = FocusGestures();
   final interactions = <mb.TypedInteraction>[];
   final fittedCoordinates = <List<mb.Point>>[];
   final fitPadding = <mb.MbxEdgeInsets?>[];
+  final fitCameraOptions = <mb.CameraOptions>[];
   final cameras = <mb.CameraOptions>[];
   final easedCameras = <mb.CameraOptions>[];
+  final animationDurations = <int?>[];
+  int cancellations = 0;
   double nativeZoom = 17;
+  double cameraBearing = 0, cameraPitch = 0;
   double width = 390, height = 844;
   Future<mb.CameraOptions> Function()? onFit;
   Future<mb.Point> Function(mb.ScreenCoordinate)? onCoordinate;
@@ -224,8 +238,10 @@ class FocusMap extends Fake implements mb.MapboxMap {
     interactions.add(interaction);
   }
 
+  /// Comme le plugin iOS : la taille vient de la mise en page Flutter.
   @override
-  Future<mb.Size> getSize() async => mb.Size(width: width, height: height);
+  Future<mb.Size> getSize() async =>
+      throw PlatformException(code: '0', message: 'Not available.');
   @override
   Future<mb.CameraOptions> cameraForCoordinatesPadding(
     List<mb.Point> coordinates,
@@ -236,16 +252,15 @@ class FocusMap extends Fake implements mb.MapboxMap {
   ) async {
     fittedCoordinates.add(coordinates);
     fitPadding.add(padding);
-    expectSync(camera.pitch, 0);
-    expectSync(camera.bearing, 0);
-    expectSync(maxZoom, 20);
+    fitCameraOptions.add(camera);
+    expectSync(maxZoom, 17);
     return onFit != null
         ? onFit!()
         : mb.CameraOptions(
             center: coordinates.first,
             zoom: nativeZoom,
-            pitch: 0,
-            bearing: 0,
+            pitch: camera.pitch,
+            bearing: camera.bearing,
           );
   }
 
@@ -258,7 +273,17 @@ class FocusMap extends Fake implements mb.MapboxMap {
   Future<void> easeTo(
     mb.CameraOptions camera,
     mb.MapAnimationOptions? options,
-  ) async => easedCameras.add(camera);
+  ) async {
+    easedCameras.add(camera);
+    cameras.add(camera);
+    animationDurations.add(options?.duration);
+  }
+
+  @override
+  Future<void> cancelCameraAnimation() async {
+    cancellations++;
+  }
+
   @override
   Future<mb.Point> coordinateForPixel(mb.ScreenCoordinate pixel) async =>
       onCoordinate != null
@@ -268,8 +293,8 @@ class FocusMap extends Fake implements mb.MapboxMap {
   Future<mb.CameraState> getCameraState() async => mb.CameraState(
     center: mb.Point(coordinates: mb.Position(5.37, 43.29)),
     zoom: 14,
-    pitch: 0,
-    bearing: 0,
+    pitch: cameraPitch,
+    bearing: cameraBearing,
     padding: mb.MbxEdgeInsets(top: 0, left: 0, bottom: 0, right: 0),
   );
 }

@@ -28,7 +28,10 @@ class TestAuth extends Fake implements AuthService {
   @override
   User? currentUser = TestUser('account-a');
   bool failSignOut = false;
+  bool identityDeleted = false;
   int signOutCalls = 0;
+  @override
+  Future<bool> isIdentityDeleted() async => identityDeleted;
   @override
   Future<String> getIdToken() async => 'test-token';
   @override

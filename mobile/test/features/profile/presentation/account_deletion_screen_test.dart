@@ -85,4 +85,22 @@ void main() {
       expect(done, isTrue);
     },
   );
+
+  testWidgets(
+    'échec en attente : « Se déconnecter » ferme la session sans requête',
+    (tester) async {
+      f = AccountFixture();
+      f.respond = (_) async => http.Response('{}', 503);
+      await open(tester);
+      await tester.tap(find.text('Supprimer définitivement mon compte'));
+      await tester.pumpAndSettle();
+      expect(find.text('Réessayer'), findsOneWidget);
+
+      await tester.tap(find.text('Se déconnecter'));
+      await tester.pumpAndSettle();
+      expect(done, isTrue);
+      expect(f.auth.currentUser, isNull);
+      expect(f.requests, hasLength(1));
+    },
+  );
 }

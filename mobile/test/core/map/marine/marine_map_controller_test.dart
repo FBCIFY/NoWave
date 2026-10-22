@@ -90,7 +90,7 @@ void main() {
       expect(map.style.config['showPointOfInterestLabels'], false);
       expect(source['tiles'], ['$local?v=coast-feather-2']);
       expect(source['maxzoom'], 14);
-      expect(source['volatile'], true);
+      expect(source['volatile'], false);
       expect(source['prefetch-zoom-delta'], 0);
       expect(layer['slot'], 'bottom');
       expect(layer['minzoom'], 4); // No marine tile requests in globe view.

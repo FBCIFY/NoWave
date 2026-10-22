@@ -283,7 +283,7 @@ void main() {
     expect(map.cameras.length, count);
     expect(
       tester.widget<MapWidget>(find.byType(MapWidget)).viewport,
-      isA<CameraViewportState>(),
+      isA<IdleViewportState>(),
     );
     await tester.pumpWidget(const SizedBox.shrink());
     focus.dispose();

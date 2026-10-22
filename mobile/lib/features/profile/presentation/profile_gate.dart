@@ -11,6 +11,7 @@ import '../../../core/notifications/alert_push_controller.dart';
 import '../../../core/notifications/notification_permission.dart';
 import '../../alerts/data/alert_service.dart';
 import '../../auth/data/auth_service.dart';
+import '../../auth/presentation/widgets/auth_photo_layout.dart';
 import '../../auth/presentation/widgets/flow_transition.dart';
 import '../../camera/data/position_estimate_service.dart';
 import '../../home/presentation/home_screen.dart';
@@ -320,9 +321,7 @@ class _ProfileGateState extends State<ProfileGate> with WidgetsBindingObserver {
             // suivi GPS arrêterait le nouveau en disparaissant.
             !snapshot.hasData) {
           step = 0;
-          screen = const Scaffold(
-            body: Center(child: CircularProgressIndicator()),
-          );
+          screen = const AuthPhotoLoading();
         } else if (snapshot.hasError) {
           step = 0;
           screen = Scaffold(

@@ -19,6 +19,34 @@ abstract final class AuthBackgrounds {
   static final current = all[math.Random().nextInt(all.length)];
 }
 
+/// Chargement entre deux écrans à photo (vérification de l'e-mail, puis
+/// profil) : la même photo qu'avant et après, au lieu d'un écran blanc qui
+/// glisse entre les deux.
+class AuthPhotoLoading extends StatelessWidget {
+  const AuthPhotoLoading({super.key});
+
+  @override
+  Widget build(BuildContext context) => AnnotatedRegion<SystemUiOverlayStyle>(
+    value: SystemUiOverlayStyle.dark,
+    child: Scaffold(
+      backgroundColor: AppColors.slate900,
+      body: Stack(
+        fit: StackFit.expand,
+        children: [
+          Image.asset(
+            AuthBackgrounds.current,
+            fit: BoxFit.cover,
+            gaplessPlayback: true,
+            errorBuilder: (context, error, stackTrace) =>
+                const ColoredBox(color: AppColors.slate900),
+          ),
+          const Center(child: CircularProgressIndicator(color: Colors.white)),
+        ],
+      ),
+    ),
+  );
+}
+
 /// Mise en page des écrans d'authentification et de création de profil :
 /// photo plein écran ([AuthBackgrounds.current]), logo en haut, titre et
 /// formulaire en bas sur un voile sombre.
@@ -33,14 +61,24 @@ class AuthPhotoLayout extends StatelessWidget {
   final bool showBackButton;
   final VoidCallback? onBack;
 
-  /// Affiché au-dessus du titre (progression d'un parcours). Il ne glisse
-  /// pas avec les pages.
+  /// Progression d'un parcours, posée vers le milieu de l'écran
+  /// ([_headerAnchor]). Le titre et le formulaire sont accrochés dessous et
+  /// s'allongent vers le bas : la barre ne bouge pas d'une page à l'autre.
   final Widget? header;
 
   /// Page affichée d'un parcours en plusieurs pages. Quand elle change, le
   /// titre et le formulaire glissent depuis la droite, ou depuis la gauche en
   /// revenant en arrière ; la photo et le logo ne bougent pas.
   final int? page;
+
+  /// Hauteur minimale du titre et du formulaire posés en bas : un formulaire
+  /// plus court garde son titre à la même hauteur qu'un plus long, la place
+  /// en trop va sous le formulaire.
+  final double? formMinHeight;
+
+  /// Hauteur du titre et du formulaire de connexion, sans message d'erreur :
+  /// les écrans qui en partent alignent leur titre sur « Bienvenue ».
+  static const signInFormHeight = 380.0;
 
   const AuthPhotoLayout({
     super.key,
@@ -51,10 +89,22 @@ class AuthPhotoLayout extends StatelessWidget {
     this.onBack,
     this.header,
     this.page,
+    this.formMinHeight,
   });
 
   /// Hauteur du fondu en haut de la zone qui défile.
   static const _edgeFade = 24.0;
+
+  /// Haut de la progression, en part de la hauteur de l'écran.
+  static const _headerAnchor = 0.5;
+
+  /// Place gardée sous la progression : la page la plus haute des parcours
+  /// (type de bateau, environ 400 px) tient sans défiler. Sur les petits
+  /// écrans, la progression remonte d'autant.
+  static const _formReach = 410.0;
+
+  /// Hauteur de la ligne du bouton retour.
+  static const _topBarHeight = 52.0;
 
   @override
   Widget build(BuildContext context) {
@@ -62,7 +112,22 @@ class AuthPhotoLayout extends StatelessWidget {
     // sans défiler. Calculé sur la taille de l'écran, et non sur la place
     // restante, pour que le logo ne change pas de taille quand le clavier
     // s'ouvre.
-    final isCompact = MediaQuery.sizeOf(context).height < 700;
+    final screenHeight = MediaQuery.sizeOf(context).height;
+    final isCompact = screenHeight < 700;
+    // Calculée sur l'écran, et non sur la place restante : le clavier ne
+    // déplace pas la progression, la page défile. viewPadding garde la marge
+    // du bas même clavier ouvert.
+    final safeArea = MediaQuery.viewPaddingOf(context);
+    final headerTop = math.max(
+      isCompact ? 120.0 : 160.0,
+      math.min(
+            screenHeight * _headerAnchor,
+            screenHeight - math.max(16.0, safeArea.bottom) - _formReach,
+          ) -
+          safeArea.top -
+          _topBarHeight -
+          _edgeFade,
+    );
 
     // Le haut des photos est un ciel clair : icônes de la barre d'état
     // sombres.
@@ -101,28 +166,36 @@ class AuthPhotoLayout extends StatelessWidget {
               child: Column(
                 children: [
                   SizedBox(
-                    height: 52,
-                    child: showBackButton
-                        ? Padding(
-                            padding: const EdgeInsets.only(left: 16),
-                            child: Align(
-                              alignment: Alignment.centerLeft,
-                              child: IconButton(
-                                onPressed:
-                                    onBack ?? () => Navigator.of(context).pop(),
-                                style: IconButton.styleFrom(
-                                  backgroundColor: Colors.white.withValues(
-                                    alpha: 0.75,
-                                  ),
-                                  foregroundColor: AppColors.slate900,
-                                  fixedSize: const Size(44, 44),
-                                ),
-                                icon: const Icon(Icons.arrow_back, size: 22),
-                                tooltip: 'Retour',
-                              ),
-                            ),
-                          )
-                        : null,
+                    height: _topBarHeight,
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 16),
+                      child: Row(
+                        children: [
+                          SizedBox(
+                            width: 44,
+                            child: showBackButton
+                                ? IconButton(
+                                    onPressed:
+                                        onBack ??
+                                        () => Navigator.of(context).pop(),
+                                    style: IconButton.styleFrom(
+                                      backgroundColor: Colors.white.withValues(
+                                        alpha: 0.75,
+                                      ),
+                                      foregroundColor: AppColors.slate900,
+                                      fixedSize: const Size(44, 44),
+                                    ),
+                                    icon: const Icon(
+                                      Icons.arrow_back,
+                                      size: 22,
+                                    ),
+                                    tooltip: 'Retour',
+                                  )
+                                : null,
+                          ),
+                        ],
+                      ),
+                    ),
                   ),
                   Expanded(
                     child: LayoutBuilder(
@@ -161,59 +234,19 @@ class AuthPhotoLayout extends StatelessWidget {
                                   24,
                                   bottomPadding,
                                 ),
-                                // Logo en haut, formulaire en bas : l'espace
-                                // restant va entre les deux. La colonne est
-                                // remplie de bas en haut : le formulaire est
-                                // peint en premier, son voile passe donc sous
-                                // le logo.
-                                child: Column(
-                                  verticalDirection: VerticalDirection.up,
-                                  mainAxisAlignment:
-                                      MainAxisAlignment.spaceBetween,
-                                  crossAxisAlignment:
-                                      CrossAxisAlignment.stretch,
-                                  children: [
-                                    CustomPaint(
-                                      painter: const _FormScrimPainter(),
-                                      child: Center(
-                                        child: ConstrainedBox(
-                                          constraints: const BoxConstraints(
-                                            maxWidth: 480,
-                                          ),
-                                          child: Column(
-                                            crossAxisAlignment:
-                                                CrossAxisAlignment.stretch,
-                                            children: [
-                                              if (header != null) ...[
-                                                header!,
-                                                const SizedBox(height: 14),
-                                              ],
-                                              if (page case final page?)
-                                                _PageSwitcher(
-                                                  page: page,
-                                                  child: _buildContent(),
-                                                )
-                                              else
-                                                _buildContent(),
-                                            ],
-                                          ),
+                                child: header == null
+                                    ? _bottomForm(isCompact)
+                                    : _anchoredForm(
+                                        isCompact: isCompact,
+                                        headerTop: headerTop,
+                                        formMinHeight: math.max(
+                                          0,
+                                          constraints.maxHeight -
+                                              _edgeFade -
+                                              bottomPadding -
+                                              headerTop,
                                         ),
                                       ),
-                                    ),
-                                    Padding(
-                                      padding: EdgeInsets.only(
-                                        bottom: isCompact ? 16 : 24,
-                                      ),
-                                      child: Center(
-                                        child: Image.asset(
-                                          'assets/images/brand/nowave_logo.png',
-                                          width: isCompact ? 150 : 200,
-                                          semanticLabel: 'NoWave',
-                                        ),
-                                      ),
-                                    ),
-                                  ],
-                                ),
                               ),
                             ),
                           ),
@@ -229,6 +262,90 @@ class AuthPhotoLayout extends StatelessWidget {
       ),
     );
   }
+
+  /// Logo en haut, formulaire en bas : l'espace restant va entre les deux.
+  /// La colonne est remplie de bas en haut : le formulaire est peint en
+  /// premier, son voile passe donc sous le logo.
+  Widget _bottomForm(bool isCompact) => Column(
+    verticalDirection: VerticalDirection.up,
+    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+    crossAxisAlignment: CrossAxisAlignment.stretch,
+    children: [
+      CustomPaint(
+        painter: const _FormScrimPainter(),
+        child: ConstrainedBox(
+          constraints: BoxConstraints(minHeight: formMinHeight ?? 0),
+          child: Align(
+            alignment: Alignment.topCenter,
+            child: _formWidth(_pageContent(Alignment.bottomCenter)),
+          ),
+        ),
+      ),
+      _logo(isCompact),
+    ],
+  );
+
+  /// Logo centré au-dessus de la progression, posée à [headerTop] ; le
+  /// formulaire pend dessous et son voile descend jusqu'au bas de l'écran.
+  Widget _anchoredForm({
+    required bool isCompact,
+    required double headerTop,
+    required double formMinHeight,
+  }) => Column(
+    verticalDirection: VerticalDirection.up,
+    crossAxisAlignment: CrossAxisAlignment.stretch,
+    children: [
+      CustomPaint(
+        painter: const _FormScrimPainter(),
+        child: ConstrainedBox(
+          constraints: BoxConstraints(minHeight: formMinHeight),
+          child: Align(
+            alignment: Alignment.topCenter,
+            child: _formWidth(
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  header!,
+                  const SizedBox(height: 20),
+                  _pageContent(Alignment.topCenter),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+      SizedBox(
+        height: headerTop,
+        child: Center(child: _logo(isCompact)),
+      ),
+    ],
+  );
+
+  Widget _formWidth(Widget child) => Center(
+    child: ConstrainedBox(
+      constraints: const BoxConstraints(maxWidth: 480),
+      child: child,
+    ),
+  );
+
+  Widget _pageContent(Alignment alignment) => page == null
+      ? _buildContent()
+      : _PageSwitcher(
+          page: page!,
+          alignment: alignment,
+          child: _buildContent(),
+        );
+
+  Widget _logo(bool isCompact) => Padding(
+    padding: EdgeInsets.only(bottom: isCompact ? 16 : 24),
+    child: Center(
+      child: Image.asset(
+        'assets/images/brand/nowave_logo.png',
+        width: isCompact ? 150 : 200,
+        semanticLabel: 'NoWave',
+      ),
+    ),
+  );
 
   Widget _buildContent() {
     return Column(
@@ -265,9 +382,17 @@ class AuthPhotoLayout extends StatelessWidget {
 /// dans le formulaire : la hauteur s'adapte en douceur à la nouvelle page.
 class _PageSwitcher extends StatefulWidget {
   final int page;
+
+  /// Bord fixe du formulaire : le bas quand il est posé en bas de l'écran,
+  /// le haut quand il pend sous la progression.
+  final Alignment alignment;
   final Widget child;
 
-  const _PageSwitcher({required this.page, required this.child});
+  const _PageSwitcher({
+    required this.page,
+    required this.alignment,
+    required this.child,
+  });
 
   @override
   State<_PageSwitcher> createState() => _PageSwitcherState();
@@ -291,7 +416,7 @@ class _PageSwitcherState extends State<_PageSwitcher> {
     return AnimatedSize(
       duration: _duration,
       curve: Curves.easeInOut,
-      alignment: Alignment.bottomCenter,
+      alignment: widget.alignment,
       // Le contenu qui glisse sort du formulaire jusqu'au bord de l'écran.
       clipBehavior: Clip.none,
       child: AnimatedSwitcher(
@@ -299,7 +424,7 @@ class _PageSwitcherState extends State<_PageSwitcher> {
         switchInCurve: Curves.easeInOut,
         switchOutCurve: Curves.easeInOut,
         layoutBuilder: (currentChild, previousChildren) => Stack(
-          alignment: Alignment.bottomCenter,
+          alignment: widget.alignment,
           children: [...previousChildren, ?currentChild],
         ),
         transitionBuilder: (child, animation) => AnimatedBuilder(

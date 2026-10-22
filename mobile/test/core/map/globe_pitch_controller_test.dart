@@ -103,6 +103,55 @@ void main() {
   });
 
   test(
+    'recentrage puis direction : le globe ne rétablit pas son ancien pitch',
+    () async {
+      await sync(14, 60);
+      await sync(.7, 0);
+      map.moves.clear();
+      for (final zoom in [4.5, 5.25, 6.0, 10.0, 14.0]) {
+        await controller.synchronize(
+          map,
+          camera(zoom, 0),
+          editing: false,
+          followingPitch: 0,
+        );
+      }
+      expect(map.moves, isEmpty);
+      expect(map.bounds.last.maxPitch, 85);
+      for (final pitch in [0.0, 10.0, 25.0, 38.25]) {
+        await controller.synchronize(
+          map,
+          camera(14, pitch),
+          editing: false,
+          followingPitch: 38.25,
+        );
+      }
+      expect(map.moves, isEmpty);
+      expect(controller.detailedPitch, 38.25);
+      await sync(5.25, 38.25);
+      expect(map.moves.last.pitch, 19.125);
+    },
+  );
+
+  test('retour au nord à plat pendant un appel natif en attente', () async {
+    await sync(14, 60);
+    final gate = Completer<void>();
+    map.boundGate = gate;
+    final pending = sync(.7, 0);
+    final follow = controller.synchronize(
+      map,
+      camera(14, 35),
+      editing: false,
+      followingPitch: 0,
+    );
+    gate.complete();
+    await Future.wait([pending, follow]);
+    expect(map.moves, isEmpty);
+    expect(controller.detailedPitch, 0);
+    expect(map.bounds.last.maxPitch, 85);
+  });
+
+  test(
     'événements natifs de correction ne remplacent pas le pitch mémorisé',
     () async {
       await sync(8, 60);
