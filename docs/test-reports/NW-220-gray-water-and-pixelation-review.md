@@ -1,5 +1,7 @@
 # NW-220 — Zones grises et pixellisation : audits et validations
 
+> **Sélection des preuves pour la PR #125 :** ce rapport décrit la recette historique. Les captures intermédiaires et journaux volumineux ont ensuite été retirés du diff par un commit normal ; les résultats et incidents décrits ci-dessous restent historiques. Les liens vers les preuves retirées pointent vers le commit initial immuable. Voir [l’inventaire et les décisions](NW-220-PR125-evidence-inventory.csv) et le README des preuves pour la sélection actuelle et les commandes de reproduction. Les nouveaux résultats complets sont publiés comme artefacts GitHub Actions.
+
 ## 1. Branche et SHA initial
 
 Branche : `fix/NW-220-coastal-raster-artifacts`. Départ : `433c7bad`.
@@ -176,7 +178,7 @@ Environnement existant : Python 3.14.4 / Flutter 3.47.6 / Dart 3.13.5. Aucune in
 | `flutter test --no-pub --reporter expanded` final | **881 réussites, 0 échec**, environ41s |
 | Suite backend complète finale avec PostGIS isolé | **1324 passed, 2 skipped, 0 failed/error**, 49.27s |
 | `ruff check backend` | **All checks passed** |
-| Rejeu hors réseau des dix entrées conservées | **10/10** : pixels et couverture identiques, alpha borné par l'eau |
+| Rejeu historique hors réseau des dix entrées (paire représentative conservée depuis le nettoyage) | **10/10** : pixels et couverture identiques, alpha borné par l'eau |
 | `git diff --check` final | Réussi |
 
 La première passe du formatage avait détecté un fichier de test Flutter à reformater ; il a été formaté, puis les contrôles complets ont été rejoués. Les suites finales n'ont pas d'échec intermittent caché. Les deux skips backend : archives locales SHOM XYZ absentes (hors sondes MVP) et sonde Nginx non activée faute de `NOWAVE_TEST_NGINX`. Avertissement existant Starlette/TestClient/httpx ; aucune dépendance modifiée pour le faire disparaître.
@@ -190,7 +192,7 @@ NOWAVE_TEST_ADMIN_URL=postgresql://nowave_ci:ci-test-only@127.0.0.1:55434/nowave
 NOWAVE_TEST_PORT=55434 docker compose -p nowave-gray-review -f compose.test.yaml down
 ```
 
-Le conteneur PostGIS dédié était sain ; les fixtures créent une base à nom aléatoire. Conteneur et réseau retirés après la suite, aucun volume de développement touché. Les journaux finaux et rouges intermédiaires sont joints dans le dossier `validation/`.
+Le conteneur PostGIS dédié était sain ; les fixtures créent une base à nom aléatoire. Conteneur et réseau retirés après la suite, aucun volume de développement touché. Les journaux finaux et rouges intermédiaires ont été joints dans `validation/` au SHA initial `f5e4527b` ; ils ont ensuite été retirés du diff, sans effacer l’historique.
 
 ## 17. Résultats de la recette Android
 
@@ -229,10 +231,10 @@ La carte corrigée est laissée sur le téléphone avec le backend local8004 act
 
 Comparaisons réellement ouvertes :
 
-- [Gris avant](artifacts/NW-220-gray-pixelation/before-gray.png), [A intermédiaire](artifacts/NW-220-gray-pixelation/intermediate-A-gray.png), [après final7](artifacts/NW-220-gray-pixelation/after-gray.png).
+- [Gris avant](artifacts/NW-220-gray-pixelation/before-gray.png), [A intermédiaire — archive initiale](https://github.com/FBCIFY/NoWave/blob/f5e4527bd730dbda8ce6f716d941a32841f5f6f6/docs/test-reports/artifacts/NW-220-gray-pixelation/intermediate-A-gray.png), [après final7](artifacts/NW-220-gray-pixelation/after-gray.png).
 - [Mosaïque avant](artifacts/NW-220-gray-pixelation/before-pixels.png), [après final7](artifacts/NW-220-gray-pixelation/after-pixels.png).
-- [Essai B5 refusé pour frange sombre](artifacts/NW-220-gray-pixelation/rejected-B5-dark-fringe.png).
-- [Non-régression côtière](artifacts/NW-220-gray-pixelation/after-historic-coast.png), [second port](artifacts/NW-220-gray-pixelation/after-marseille.png), [côte naturelle](artifacts/NW-220-gray-pixelation/after-natural-coast.png).
+- [Essai B5 refusé pour frange sombre — archive initiale](https://github.com/FBCIFY/NoWave/blob/f5e4527bd730dbda8ce6f716d941a32841f5f6f6/docs/test-reports/artifacts/NW-220-gray-pixelation/rejected-B5-dark-fringe.png).
+- [Non-régression côtière — archive initiale](https://github.com/FBCIFY/NoWave/blob/f5e4527bd730dbda8ce6f716d941a32841f5f6f6/docs/test-reports/artifacts/NW-220-gray-pixelation/after-historic-coast.png), [second port — archive initiale](https://github.com/FBCIFY/NoWave/blob/f5e4527bd730dbda8ce6f716d941a32841f5f6f6/docs/test-reports/artifacts/NW-220-gray-pixelation/after-marseille.png), [côte naturelle — archive initiale](https://github.com/FBCIFY/NoWave/blob/f5e4527bd730dbda8ce6f716d941a32841f5f6f6/docs/test-reports/artifacts/NW-220-gray-pixelation/after-natural-coast.png).
 - [Planche des zooms](artifacts/NW-220-gray-pixelation/android-zooms.png), [validation combinée](artifacts/NW-220-gray-pixelation/android-combined.png), [explication native](artifacts/NW-220-gray-pixelation/attribution.png).
 
 Indicateur sRGB, région fixe(320,720)-(610,1060) de la digue : **15571 pixels classés gris avant, 546 après A, 542 après final7**. Le seuil inclut des ouvrages légitimes ; les valeurs restantes ne sont pas toutes des anomalies. L'inspection des grandes images distingue le corps clair de la digue, conservé, de la plage grise sur l'eau, supprimée. Pas d'assertion d'identité pixel par pixel des anticrénelages des ouvrages : leur fond a volontairement changé.

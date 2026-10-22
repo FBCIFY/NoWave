@@ -1,5 +1,7 @@
 # NW-220 — Audit des artefacts bathymétriques côtiers
 
+> **Sélection des preuves pour la PR #125 :** ce rapport décrit la recette historique. Les captures intermédiaires et journaux volumineux ont ensuite été retirés du diff par un commit normal ; les résultats et incidents décrits ci-dessous restent historiques. Les liens vers les preuves retirées pointent vers le commit initial immuable. Voir [l’inventaire et les décisions](NW-220-PR125-evidence-inventory.csv) et le README des preuves pour la sélection actuelle et les commandes de reproduction. Les nouveaux résultats complets sont publiés comme artefacts GitHub Actions.
+
 ## État initial et périmètre
 
 - Date locale : 22 octobre 2026, Europe/Paris.
@@ -96,7 +98,7 @@ Alternatives écartées : dilater le masque OSM ou remplir les trous (invente un
 
 ### Mesures complémentaires : dix tuiles et raccords
 
-Les ouvrages de la photo ont ensuite été retrouvés vers **5.927° E / 43.109° N**. Le cadrage natif contrôlé emploie Z15.3 / cap 0° / inclinaison 63.75°. Les trois tuiles 8461/6012, 8462/6012, 8461/6013 complètent les sept premières ; les dix entrées brutes sont jointes.
+Les ouvrages de la photo ont ensuite été retrouvés vers **5.927° E / 43.109° N**. Le cadrage natif contrôlé emploie Z15.3 / cap 0° / inclinaison 63.75°. Les trois tuiles 8461/6012, 8462/6012, 8461/6013 complètent les sept premières ; les dix entrées brutes ont été jointes au commit initial ; la sélection actuelle et leur récupération sont décrites dans le README des preuves.
 
 | Tuile Z14 | Pixels source alpha=0 | Pixels source alpha partiel | Sans couverture sur centre eau OSM | Centres eau exclus par masque |
 | --- | ---: | ---: | ---: | ---: |
@@ -222,6 +224,6 @@ Effets de bord recherchés :
 - [Comparaison avant, zone photo](artifacts/NW-220-coastal/before-photo-area.png)
 - [Comparaison après, zone photo](artifacts/NW-220-coastal/after-photo-area.png)
 - [Pipeline de pixels et masque](artifacts/NW-220-coastal/pipeline-photo-area.png)
-- [Planche des 16 captures Android](artifacts/NW-220-coastal/android-contact-sheet.png)
-- [Message explicatif natif](artifacts/NW-220-coastal/after-attribution.png)
+- [Planche des 16 captures Android — archive initiale](https://github.com/FBCIFY/NoWave/blob/f5e4527bd730dbda8ce6f716d941a32841f5f6f6/docs/test-reports/artifacts/NW-220-coastal/android-contact-sheet.png)
+- [Message explicatif natif — archive initiale](https://github.com/FBCIFY/NoWave/blob/f5e4527bd730dbda8ce6f716d941a32841f5f6f6/docs/test-reports/artifacts/NW-220-coastal/after-attribution.png)
 - [Inventaire et reproduction des preuves](artifacts/NW-220-coastal/README.md)
