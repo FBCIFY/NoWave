@@ -5,6 +5,8 @@ import 'package:blueway/core/map/globe_presentation.dart';
 import 'package:blueway/core/map/globe_style.dart';
 import 'package:blueway/core/map/land_colors.dart';
 import 'package:blueway/core/map/marine/marine_map_controller.dart';
+import 'package:blueway/core/map/marine/marine_palette.dart';
+import 'package:blueway/core/map/marine/marine_zoom.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mapbox_maps_flutter/mapbox_maps_flutter.dart';
@@ -103,6 +105,34 @@ void main() {
       final ocean = layers.singleWhere((l) => l['id'] == 'nowave-earth-ocean');
       expect(ocean['source-layer'], 'water');
       expect(ocean['source'], GlobeStyle.waterSource);
+    },
+  );
+
+  test(
+    'raster gaps use neutral water from Z5 without changing globe or land',
+    () {
+      final document = GlobeStyle.document(Uri.parse('file:///globe/'));
+      final ocean = (document['layers'] as List).singleWhere(
+        (layer) => layer['id'] == 'nowave-earth-ocean',
+      );
+      // The raster is composed above this existing vector water surface.
+      // No additional source, mask dilation or interpolated depth is needed.
+      expect(ocean['slot'], 'bottom');
+      expect(ocean['source-layer'], 'water');
+      expect(ocean['paint']['fill-color'], [
+        'step',
+        ['zoom'],
+        MarinePalette.water,
+        MarineZoom.raster,
+        MarinePalette.unmappedWater,
+      ]);
+      expect(ocean['paint']['fill-opacity'], 1);
+      expect(MarinePalette.water, '#002D51');
+      expect(MarinePalette.unmappedWater, '#93ACB0');
+      final base = (document['imports'] as List).single;
+      expect(base['config']['colorWater'], MarinePalette.water);
+      expect(base['config']['colorLand'], LandColors.color('#C4AD80'));
+      expect((document['sources'] as Map).length, 2);
     },
   );
 

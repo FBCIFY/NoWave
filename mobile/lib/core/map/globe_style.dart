@@ -3,6 +3,7 @@ import 'dart:io';
 
 import 'land_colors.dart';
 import 'marine/marine_palette.dart';
+import 'marine/marine_zoom.dart';
 
 /// One cartographic native style, from the globe to the harbour.
 class GlobeStyle {
@@ -155,7 +156,9 @@ class GlobeStyle {
           'fill-emissive-strength': 1,
         },
       },
-      // Same fallback at every zoom; known bathymetry draws above it at Z5.
+      // From Z5, raster no-data reveals neutral water, not the deep-water
+      // colour. Only the existing water geometry is painted; raster alpha,
+      // coastlines and measured soundings remain untouched.
       {
         'id': 'nowave-earth-ocean',
         'type': 'fill',
@@ -163,7 +166,13 @@ class GlobeStyle {
         'source-layer': 'water',
         'slot': 'bottom',
         'paint': {
-          'fill-color': MarinePalette.water,
+          'fill-color': [
+            'step',
+            ['zoom'],
+            MarinePalette.water,
+            MarineZoom.raster,
+            MarinePalette.unmappedWater,
+          ],
           'fill-opacity': 1,
           'fill-emissive-strength': 1,
         },

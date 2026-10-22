@@ -4,6 +4,9 @@ import '../land_colors.dart';
 /// Partagée entre le style initial et sa réinstallation après un reload.
 class MarinePalette {
   static const water = '#002D51';
+  // Neutral backdrop for gaps in the coloured raster, never a depth class.
+  // Keep it outside the blue/teal bathymetric ramp.
+  static const unmappedWater = '#93ACB0';
   static const forest = '#395B32';
   static const scrub = '#627545';
   static const vegetation = '#7C8950';
