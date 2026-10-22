@@ -41,7 +41,7 @@ class AlertNotificationBanner extends StatelessWidget {
         child: InkWell(
           onTap: onAction,
           child: Padding(
-            padding: const EdgeInsets.fromLTRB(12, 8, 4, 8),
+            padding: const EdgeInsets.fromLTRB(12, 6, 4, 6),
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -53,7 +53,7 @@ class AlertNotificationBanner extends StatelessWidget {
                           color: AppColors.blue600,
                           size: 32,
                         )
-                      : ReportCategoryBadge(category: alert.category, size: 36),
+                      : ReportCategoryBadge(category: alert.category, size: 32),
                 ),
                 const SizedBox(width: 10),
                 Expanded(
@@ -61,15 +61,34 @@ class AlertNotificationBanner extends StatelessWidget {
                     mainAxisSize: MainAxisSize.min,
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      const SizedBox(height: 4),
-                      Text(
-                        notice == null ? 'Nouvelle alerte' : 'Alertes NoWave',
-                        style: text.labelMedium?.copyWith(
-                          color: AppColors.blue950,
-                          fontWeight: FontWeight.w700,
-                        ),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: Text(
+                              notice == null
+                                  ? 'Nouvelle alerte'
+                                  : 'Alertes NoWave',
+                              style: text.labelMedium?.copyWith(
+                                color: AppColors.blue950,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                          ),
+                          if (onAction != null)
+                            TextButton(
+                              onPressed: onAction,
+                              style: TextButton.styleFrom(
+                                foregroundColor: AppColors.blue600,
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 8,
+                                ),
+                                minimumSize: const Size(48, 40),
+                                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                              ),
+                              child: Text(actionLabel!),
+                            ),
+                        ],
                       ),
-                      const SizedBox(height: 3),
                       Text(
                         notice ??
                             '${alert!.category.label} · ${formatNauticalMiles(alert.distanceM)}',
@@ -79,7 +98,7 @@ class AlertNotificationBanner extends StatelessWidget {
                         ),
                       ),
                       if (alert != null) ...[
-                        const SizedBox(height: 3),
+                        const SizedBox(height: 2),
                         Text(
                           alert.positionDms,
                           style: text.bodySmall?.copyWith(
@@ -87,17 +106,6 @@ class AlertNotificationBanner extends StatelessWidget {
                           ),
                         ),
                       ],
-                      if (onAction != null)
-                        TextButton(
-                          onPressed: onAction,
-                          style: TextButton.styleFrom(
-                            foregroundColor: AppColors.blue600,
-                            padding: const EdgeInsets.symmetric(horizontal: 8),
-                            minimumSize: const Size(48, 40),
-                            alignment: Alignment.centerLeft,
-                          ),
-                          child: Text(actionLabel!),
-                        ),
                     ],
                   ),
                 ),
