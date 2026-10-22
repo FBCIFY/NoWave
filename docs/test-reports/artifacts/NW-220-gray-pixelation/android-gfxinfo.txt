@@ -1,0 +1,123 @@
+Applications Graphics Acceleration Info:
+Uptime: 2687623802 Realtime: 4716731563
+
+** Graphics info for pid 30272 [fr.blueway.app] **
+
+Stats since: 2687594707686325ns
+Total frames rendered: 1342
+Janky frames: 144 (10.73%)
+Janky frames (legacy): 102 (7.60%)
+50th percentile: 5ms
+90th percentile: 18ms
+95th percentile: 46ms
+99th percentile: 105ms
+Number Missed Vsync: 90
+Number High input latency: 8
+Number Slow UI thread: 89
+Number Slow bitmap uploads: 0
+Number Slow issue draw commands: 43
+Number Frame deadline missed: 144
+Number Frame deadline missed (legacy): 101
+HISTOGRAM: 5ms=1019 6ms=56 7ms=38 8ms=26 9ms=18 10ms=16 11ms=7 12ms=8 13ms=6 14ms=4 15ms=1 16ms=0 17ms=5 18ms=6 19ms=3 20ms=3 21ms=2 22ms=3 23ms=7 24ms=5 25ms=3 26ms=1 27ms=2 28ms=3 29ms=3 30ms=3 31ms=1 32ms=7 34ms=3 36ms=4 38ms=3 40ms=2 42ms=1 44ms=3 46ms=4 48ms=6 53ms=4 57ms=6 61ms=5 65ms=6 69ms=4 73ms=3 77ms=2 81ms=1 85ms=2 89ms=7 93ms=1 97ms=2 101ms=3 105ms=1 109ms=0 113ms=1 117ms=1 121ms=0 125ms=0 129ms=2 133ms=3 150ms=4 200ms=1 250ms=0 300ms=1 350ms=0 400ms=0 450ms=0 500ms=0 550ms=0 600ms=0 650ms=0 700ms=0 750ms=0 800ms=0 850ms=0 900ms=0 950ms=0 1000ms=0 1050ms=0 1100ms=0 1150ms=0 1200ms=0 1250ms=0 1300ms=0 1350ms=0 1400ms=0 1450ms=0 1500ms=0 1550ms=0 1600ms=0 1650ms=0 1700ms=0 1750ms=0 1800ms=0 1850ms=0 1900ms=0 1950ms=0 2000ms=0 2050ms=0 2100ms=0 2150ms=0 2200ms=0 2250ms=0 2300ms=0 2350ms=0 2400ms=0 2450ms=0 2500ms=0 2550ms=0 2600ms=0 2650ms=0 2700ms=0 2750ms=0 2800ms=0 2850ms=0 2900ms=0 2950ms=0 3000ms=0 3050ms=0 3100ms=0 3150ms=0 3200ms=0 3250ms=0 3300ms=0 3350ms=0 3400ms=0 3450ms=0 3500ms=0 3550ms=0 3600ms=0 3650ms=0 3700ms=0 3750ms=0 3800ms=0 3850ms=0 3900ms=0 3950ms=0 4000ms=0 4050ms=0 4100ms=0 4150ms=0 4200ms=0 4250ms=0 4300ms=0 4350ms=0 4400ms=0 4450ms=0 4500ms=0 4550ms=0 4600ms=0 4650ms=0 4700ms=0 4750ms=0 4800ms=0 4850ms=0 4900ms=0 4950ms=0
+50th gpu percentile: 3ms
+90th gpu percentile: 8ms
+95th gpu percentile: 15ms
+99th gpu percentile: 4950ms
+GPU HISTOGRAM: 1ms=0 2ms=100 3ms=336 4ms=78 5ms=44 6ms=27 7ms=18 8ms=7 9ms=11 10ms=5 11ms=1 12ms=5 13ms=3 14ms=3 15ms=4 16ms=3 17ms=5 18ms=3 19ms=3 20ms=2 21ms=3 22ms=0 23ms=2 24ms=0 25ms=1 4950ms=11
+
+Pipeline=Skia (OpenGL)
+Memory policy:
+  Max surface area: 1315440
+  Max resource usage: 460.34MB (x144)
+  Background retention: 50% (altUiHidden = true)
+  GPU Context timeout: 10
+Contexts: 2 (stopped = 0)
+CPU Caches:
+  Glyph Cache: 28.75 KB (1 entry)
+  Glyph Count: 8
+Total CPU memory usage:
+  29442 bytes, 28.75 KB (0.00 bytes is purgeable)
+GPU Caches:
+  Other:
+    Other: 0.00 bytes (1 entry)
+  Image:
+    Texture: 41.67 KB (3 entries)
+  Scratch:
+    Texture: 2.00 MB (5 entries)
+    Buffer Object: 48.00 KB (1 entry)
+Layer Info:
+    GlLayer size 720x1610
+  Layers Total         4528.12 KB (numLayers = 1)
+Total GPU memory usage:
+  2189104 bytes, 2.09 MB (41.67 KB is purgeable)
+TextureView: 720x1610
+
+GraphicBufferAllocator buffers:
+        Handle |        Size |     W (Stride) x H | Layers |   Format |      Usage | Requestor
+0xb400007c92e539a0 | 4830.00 KiB |  720 ( 768) x 1610 |      1 |        1 | 0x10000900 | SurfaceView[fr.blueway.app/fr.blueway.app.MainActivity]#1(BLAST Consumer)1
+0xb400007c92e57ae0 | 4830.00 KiB |  720 ( 768) x 1610 |      1 |        1 | 0x10000900 | SurfaceView[fr.blueway.app/fr.blueway.app.MainActivity]#1(BLAST Consumer)1
+0xb400007c92e57e40 | 4830.00 KiB |  720 ( 768) x 1610 |      1 |        1 | 0x10000900 | VRI[MainActivity]#0(BLAST Consumer)0
+0xb400007c92e58fb0 | 4830.00 KiB |  720 ( 768) x 1610 |      1 |        1 | 0x10000900 | SurfaceView[fr.blueway.app/fr.blueway.app.MainActivity]#1(BLAST Consumer)1
+0xb400007c92e594c0 | 4830.00 KiB |  720 ( 768) x 1610 |      1 |        1 | 0x10000900 | SurfaceView[fr.blueway.app/fr.blueway.app.MainActivity]#1(BLAST Consumer)1
+0xb400007c92e67d10 | 4830.00 KiB |  720 ( 768) x 1610 |      1 |        1 | 0x10000900 | VRI[MainActivity]#0(BLAST Consumer)0
+0xb400007c92e68a00 | 4830.00 KiB |  720 ( 768) x 1610 |      1 |        1 | 0x10000100 | ImageReader-720x1610f22m7-30272-1
+0xb400007c92e69c90 | 4830.00 KiB |  720 ( 768) x 1610 |      1 |        1 | 0x10000100 | ImageReader-720x1610f22m7-30272-1
+0xb400007c92e6a590 | 4830.00 KiB |  720 ( 768) x 1610 |      1 |        1 | 0x10000900 | VRI[MainActivity]#0(BLAST Consumer)0
+0xb400007c92e6cab0 | 4830.00 KiB |  720 ( 768) x 1610 |      1 |        1 | 0x10000100 | SurfaceTexture-0-30272-0
+0xb400007c92e9df50 | 4830.00 KiB |  720 ( 768) x 1610 |      1 |        1 | 0x10000100 | ImageReader-720x1610f22m7-30272-1
+0xb400007c92e9f810 | 4830.00 KiB |  720 ( 768) x 1610 |      1 |        1 | 0x10000100 | SurfaceTexture-0-30272-0
+0xb400007c92eacf80 | 4830.00 KiB |  720 ( 768) x 1610 |      1 |        1 | 0x10000100 | ImageReader-720x1610f22m7-30272-1
+0xb400007c92eaf140 | 4830.00 KiB |  720 ( 768) x 1610 |      1 |        1 | 0x10000100 | ImageReader-720x1610f22m7-30272-1
+0xb400007c92eb0970 | 4830.00 KiB |  720 ( 768) x 1610 |      1 |        1 | 0x10000900 | VRI[MainActivity]#0(BLAST Consumer)0
+0xb400007c92eb3670 | 4830.00 KiB |  720 ( 768) x 1610 |      1 |        1 | 0x10000100 | SurfaceTexture-0-30272-0
+0xb400007c92ef6450 | 4830.00 KiB |  720 ( 768) x 1610 |      1 |        1 | 0x10000100 | ImageReader-720x1610f22m7-30272-1
+Total allocated by GraphicBufferAllocator (estimate): 82110.00 KB
+Imported gralloc buffers:
++ name:ImageReader-720x1610f22m7-30272-1, id:573644, size:4876.00KiB, w/h:720x1610, usage: 0x10000100, req fmt:1, fourcc/mod:875708993/0, dataspace: 0x0, compressed: true
+	planes: R/G/B/A:	 w/h:720x1610, stride:3072 bytes, size:4993024
++ name:VRI[MainActivity]#0(BLAST Consumer)0, id:573643, size:4876.00KiB, w/h:720x1610, usage: 0x10000900, req fmt:1, fourcc/mod:875708993/0, dataspace: 0x8810000, compressed: true
+	planes: R/G/B/A:	 w/h:720x1610, stride:3072 bytes, size:4993024
++ name:ImageReader-720x1610f22m7-30272-1, id:573641, size:4876.00KiB, w/h:720x1610, usage: 0x10000100, req fmt:1, fourcc/mod:875708993/0, dataspace: 0x0, compressed: true
+	planes: R/G/B/A:	 w/h:720x1610, stride:3072 bytes, size:4993024
++ name:ImageReader-720x1610f22m7-30272-1, id:573640, size:4876.00KiB, w/h:720x1610, usage: 0x10000100, req fmt:1, fourcc/mod:875708993/0, dataspace: 0x0, compressed: true
+	planes: R/G/B/A:	 w/h:720x1610, stride:3072 bytes, size:4993024
++ name:ImageReader-720x1610f22m7-30272-1, id:573633, size:4876.00KiB, w/h:720x1610, usage: 0x10000100, req fmt:1, fourcc/mod:875708993/0, dataspace: 0x0, compressed: true
+	planes: R/G/B/A:	 w/h:720x1610, stride:3072 bytes, size:4993024
++ name:ImageReader-720x1610f22m7-30272-1, id:573637, size:4876.00KiB, w/h:720x1610, usage: 0x10000100, req fmt:1, fourcc/mod:875708993/0, dataspace: 0x0, compressed: true
+	planes: R/G/B/A:	 w/h:720x1610, stride:3072 bytes, size:4993024
++ name:VRI[MainActivity]#0(BLAST Consumer)0, id:573638, size:4876.00KiB, w/h:720x1610, usage: 0x10000900, req fmt:1, fourcc/mod:875708993/0, dataspace: 0x8810000, compressed: true
+	planes: R/G/B/A:	 w/h:720x1610, stride:3072 bytes, size:4993024
++ name:SurfaceTexture-0-30272-0, id:573636, size:4876.00KiB, w/h:720x1610, usage: 0x10000100, req fmt:1, fourcc/mod:875708993/0, dataspace: 0x0, compressed: true
+	planes: R/G/B/A:	 w/h:720x1610, stride:3072 bytes, size:4993024
++ name:SurfaceView[fr.blueway.app/fr.blueway.app.MainActivity]#1(BLAST Consumer)1, id:573631, size:4876.00KiB, w/h:720x1610, usage: 0x10000900, req fmt:1, fourcc/mod:875708993/0, dataspace: 0x8810000, compressed: true
+	planes: R/G/B/A:	 w/h:720x1610, stride:3072 bytes, size:4993024
++ name:SurfaceTexture-0-30272-0, id:573635, size:4876.00KiB, w/h:720x1610, usage: 0x10000100, req fmt:1, fourcc/mod:875708993/0, dataspace: 0x0, compressed: true
+	planes: R/G/B/A:	 w/h:720x1610, stride:3072 bytes, size:4993024
++ name:ImageReader-720x1610f22m7-30272-1, id:573642, size:4876.00KiB, w/h:720x1610, usage: 0x10000100, req fmt:1, fourcc/mod:875708993/0, dataspace: 0x0, compressed: true
+	planes: R/G/B/A:	 w/h:720x1610, stride:3072 bytes, size:4993024
++ name:VRI[MainActivity]#0(BLAST Consumer)0, id:573634, size:4876.00KiB, w/h:720x1610, usage: 0x10000900, req fmt:1, fourcc/mod:875708993/0, dataspace: 0x8810000, compressed: true
+	planes: R/G/B/A:	 w/h:720x1610, stride:3072 bytes, size:4993024
++ name:SurfaceView[fr.blueway.app/fr.blueway.app.MainActivity]#1(BLAST Consumer)1, id:573626, size:4876.00KiB, w/h:720x1610, usage: 0x10000900, req fmt:1, fourcc/mod:875708993/0, dataspace: 0x8810000, compressed: true
+	planes: R/G/B/A:	 w/h:720x1610, stride:3072 bytes, size:4993024
++ name:SurfaceView[fr.blueway.app/fr.blueway.app.MainActivity]#1(BLAST Consumer)1, id:573630, size:4876.00KiB, w/h:720x1610, usage: 0x10000900, req fmt:1, fourcc/mod:875708993/0, dataspace: 0x8810000, compressed: true
+	planes: R/G/B/A:	 w/h:720x1610, stride:3072 bytes, size:4993024
++ name:SurfaceTexture-0-30272-0, id:573639, size:4876.00KiB, w/h:720x1610, usage: 0x10000100, req fmt:1, fourcc/mod:875708993/0, dataspace: 0x0, compressed: true
+	planes: R/G/B/A:	 w/h:720x1610, stride:3072 bytes, size:4993024
++ name:SurfaceView[fr.blueway.app/fr.blueway.app.MainActivity]#1(BLAST Consumer)1, id:573628, size:4876.00KiB, w/h:720x1610, usage: 0x10000900, req fmt:1, fourcc/mod:875708993/0, dataspace: 0x8810000, compressed: true
+	planes: R/G/B/A:	 w/h:720x1610, stride:3072 bytes, size:4993024
++ name:VRI[MainActivity]#0(BLAST Consumer)0, id:573627, size:4876.00KiB, w/h:720x1610, usage: 0x10000900, req fmt:1, fourcc/mod:875708993/0, dataspace: 0x8810000, compressed: true
+	planes: R/G/B/A:	 w/h:720x1610, stride:3072 bytes, size:4993024
+Total imported by gralloc: 82892.00KiB
+
+Profile data in ms:
+
+	fr.blueway.app/fr.blueway.app.MainActivity/android.view.ViewRootImpl@f1cbb2 (visibility=0)
+View hierarchy:
+
+  fr.blueway.app/fr.blueway.app.MainActivity/android.view.ViewRootImpl@f1cbb2
+  14 views, 28,80 kB of render nodes
+
+
+Total ViewRootImpl   : 1
+Total attached Views : 14
+Total RenderNode     : 28,80 kB (used) / 75,91 kB (capacity)

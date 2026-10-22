@@ -15,8 +15,9 @@ Linear ; le ticket n'est pas modifié dans cette mission. Les données sont
 préchargées à Z10, mais les sources de placement des marques restent vides à
 Z10 exactement et en dessous, pour ne pas réserver de collisions invisibles.
 
-Le raster utilise désormais la palette marine sombre `marine-palette-3`, avec
-masques et crédits conservés. Son opacité nominale vaut 1 dès Z5. Le slot MIDDLE
+Le raster conserve la palette marine NoWave avec le rendu `marine-visual-7`
+(bilinéaire WMS et continuité locale des couleurs, sans mesure ajoutée),
+masques et crédits conservés. Voir le [contrat du rendu raster](marine-sources.md#masque-littoral-raster--correction-du-18-octobre-2026). Son opacité nominale vaut 1 dès Z5. Le slot MIDDLE
 le place au-dessus du fond marin du globe. Les infrastructures et symboles
 installés ensuite restent au-dessus ; la terre du raster est transparente.
 

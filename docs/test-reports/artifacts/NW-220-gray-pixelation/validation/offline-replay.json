@@ -1,0 +1,52 @@
+[
+  {
+    "tile": "12-2115-1503",
+    "pixels_identical": true,
+    "coverage_identical": true
+  },
+  {
+    "tile": "13-4231-3007",
+    "pixels_identical": true,
+    "coverage_identical": true
+  },
+  {
+    "tile": "14-8461-6012",
+    "pixels_identical": true,
+    "coverage_identical": true
+  },
+  {
+    "tile": "14-8461-6013",
+    "pixels_identical": true,
+    "coverage_identical": true
+  },
+  {
+    "tile": "14-8461-6014",
+    "pixels_identical": true,
+    "coverage_identical": true
+  },
+  {
+    "tile": "14-8461-6015",
+    "pixels_identical": true,
+    "coverage_identical": true
+  },
+  {
+    "tile": "14-8462-6012",
+    "pixels_identical": true,
+    "coverage_identical": true
+  },
+  {
+    "tile": "14-8462-6013",
+    "pixels_identical": true,
+    "coverage_identical": true
+  },
+  {
+    "tile": "14-8462-6014",
+    "pixels_identical": true,
+    "coverage_identical": true
+  },
+  {
+    "tile": "14-8462-6015",
+    "pixels_identical": true,
+    "coverage_identical": true
+  }
+]

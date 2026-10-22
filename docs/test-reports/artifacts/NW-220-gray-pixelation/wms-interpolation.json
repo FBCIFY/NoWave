@@ -1,0 +1,23 @@
+[
+  {
+    "method": "nearest neighbor",
+    "bytes": 13244,
+    "time_s": 0.8,
+    "sha256": "c008cc836a35a0fda77a06a24ee7552f4080abf15a95245701907bfa8ea0b447",
+    "partial_alpha": 0
+  },
+  {
+    "method": "bilinear",
+    "bytes": 70037,
+    "time_s": 0.533,
+    "sha256": "9e63fb880c2c302a722a05cd7ecb5f223f60ca7b4242567a11bafae230c3b758",
+    "partial_alpha": 284
+  },
+  {
+    "method": "bicubic",
+    "bytes": 66961,
+    "time_s": 0.759,
+    "sha256": "db7ad51556be85cbe6e9fa8d4a9ddb72fe85b7a86c690c4c6cf7738da309ef52",
+    "partial_alpha": 11210
+  }
+]

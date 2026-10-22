@@ -158,9 +158,10 @@ def test_palette_version_bypasses_old_disk_tile_without_purging_it(tmp_path):
             db.execute(
                 "CREATE TABLE tiles (key TEXT PRIMARY KEY, expires REAL NOT NULL, content BLOB NOT NULL)"
             )
-            db.execute(
+            db.executemany(
                 "INSERT INTO tiles VALUES (?, ?, ?)",
-                (f"coast-feather-2:{TILE.z}/{TILE.x}/{TILE.y}", time.time() + 3600, b"old light png"),
+                [(f"{version}:{TILE.z}/{TILE.x}/{TILE.y}", time.time() + 3600, b"old light png")
+                 for version in ['coast-feather-2', 'marine-palette-3', 'marine-visual-4', 'marine-visual-5', 'marine-visual-6']],
             )
         calls = 0
 
@@ -170,7 +171,7 @@ def test_palette_version_bypasses_old_disk_tile_without_purging_it(tmp_path):
             return b"new dark png"
 
         cache = BathymetryTileCache(render, path)
-        assert cache.VERSION == "marine-palette-3"
+        assert cache.VERSION == "marine-visual-7"
         assert await cache.get(TILE) == b"new dark png"
         assert await cache.get(TILE) == b"new dark png"
         assert calls == 1
@@ -178,8 +179,9 @@ def test_palette_version_bypasses_old_disk_tile_without_purging_it(tmp_path):
         assert cache.MAX_MEMORY == 32 * 1024 * 1024
         with sqlite3.connect(path) as db:
             rows = dict(db.execute("SELECT key, content FROM tiles"))
-        assert rows[f"coast-feather-2:{TILE.z}/{TILE.x}/{TILE.y}"] == b"old light png"
-        assert rows[f"marine-palette-3:{TILE.z}/{TILE.x}/{TILE.y}"] == b"new dark png"
+        for version in ['coast-feather-2', 'marine-palette-3', 'marine-visual-4', 'marine-visual-5', 'marine-visual-6']:
+            assert rows[f"{version}:{TILE.z}/{TILE.x}/{TILE.y}"] == b"old light png"
+        assert rows[f"marine-visual-7:{TILE.z}/{TILE.x}/{TILE.y}"] == b"new dark png"
         await cache.close()
 
     asyncio.run(scenario())

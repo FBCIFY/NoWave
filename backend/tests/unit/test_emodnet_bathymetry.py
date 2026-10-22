@@ -160,7 +160,8 @@ def test_recolor_rejects_non_png_images():
 
 
 def test_fetch_caches_the_final_recolored_png(monkeypatch):
-    source = png_bytes(Image.new("RGBA", (262, 262), (0, 0, 62, 127)))
+    # The bilinear WMS sends associated RGB: blue 31 at alpha127 means ~62.
+    source = png_bytes(Image.new("RGBA", (280, 280), (0, 0, 31, 127)))
     requests = []
     recolor_calls = []
 
@@ -168,9 +169,10 @@ def test_fetch_caches_the_final_recolored_png(monkeypatch):
         requests.append(params)
         return httpx.Response(200, headers={"content-type": "image/png"}, content=source)
 
-    def recolor(content):
+    def recolor(content, **options):
         recolor_calls.append(content)
-        return recolor_bathymetry_png(content)
+        assert options == {"associated_alpha": True}
+        return recolor_bathymetry_png(content, **options)
 
     monkeypatch.setattr(bathymetry, "_request_tile", request_tile)
     monkeypatch.setattr(bathymetry, "recolor_bathymetry_png", recolor)
@@ -188,10 +190,11 @@ def test_fetch_caches_the_final_recolored_png(monkeypatch):
     assert requests[0]["layers"] == "emodnet:mean_multicolour"
     assert requests[0]["srs"] == "EPSG:3857"
     assert requests[0]["transparent"] == "true"
-    assert requests[0]["width"] == requests[0]["height"] == "262"
+    assert requests[0]["interpolations"] == "bilinear"
+    assert requests[0]["width"] == requests[0]["height"] == "280"
     native = web_mercator_tile_bbox(8, 131, 94)
     padded = list(map(float, requests[0]["bbox"].split(",")))
-    assert (padded[2] - padded[0]) / 262 == pytest.approx((native[2] - native[0]) / 256)
+    assert (padded[2] - padded[0]) / 280 == pytest.approx((native[2] - native[0]) / 256)
     assert Image.open(BytesIO(first)).size == (256, 256)
     result = Image.open(BytesIO(first))
     assert result.getpixel((0, 0))[3] == 127
@@ -252,3 +255,20 @@ def test_feather_adjacent_tiles_share_the_same_global_pixel_lattice():
     left = np.array(feather_coverage(big.crop((0, 0, 262, 262))).crop((3, 3, 259, 259)))
     right = np.array(feather_coverage(big.crop((256, 0, 518, 262))).crop((3, 3, 259, 259)))
     assert np.array_equal(full, np.concatenate((left, right), axis=1))
+
+
+@pytest.mark.parametrize('alpha', [64, 128, 192])
+def test_bilinear_associated_rgb_is_not_mistaken_for_a_dark_depth(alpha):
+    # Constant real shallow colour, different coverage. There must be no
+    # apparent deep fringe simply because the provider pixel is translucent.
+    straight = Image.new('RGBA', (16, 16), (255, 96, 101, alpha))
+    associated = straight.convert('RGBa')
+    upstream = Image.frombytes('RGBA', straight.size, associated.tobytes())
+    fixed = Image.open(BytesIO(recolor_bathymetry_png(png_bytes(upstream), associated_alpha=True)))
+    reference = Image.open(BytesIO(recolor_bathymetry_png(png_bytes(straight))))
+    assert fixed.getchannel('A').tobytes() == straight.getchannel('A').tobytes()
+    # The upstream association and the existing RGBa smoothing each quantize
+    # at 8 bits. Undoing them magnifies rounding by 255/alpha (4 levels at64),
+    # so the tolerance follows that numeric bound, not an exact colour match.
+    rounding_bound = 2 * ((255 + alpha - 1) // alpha)
+    assert all(abs(a-b) <= rounding_bound for a,b in zip(fixed.getpixel((8,8))[:3], reference.getpixel((8,8))[:3]))

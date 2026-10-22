@@ -1,7 +1,8 @@
-"""No-data remains unknown around coastlines, even when display tiles overzoom.
+"""Guard the provider-coverage path before any display-only reconstruction.
 
-The frontend fixes only the backdrop. These offline production-pipeline tests
-protect against 'fixing' the visual gap by manufacturing raster coverage.
+No-data in this path stays unknown on overzoom. The separate visual continuity
+is tested in test_visual_water.py and retains this coverage as PNG metadata;
+it must never manufacture a measured depth or alter these source invariants.
 """
 
 from io import BytesIO

@@ -87,18 +87,18 @@ def test_bathymetry_tile_is_public_png(monkeypatch):
 
     monkeypatch.setattr(
         "app.api.routes.map_tiles.fetch_bathymetry_tile",
-        lambda z, x, y: expected_tile,
+        lambda z, x, y, padded: expected_tile,
     )
 
     class Coast:
-        async def get_mask(self, tile):
+        async def get_context(self, tile, raw):
             assert (tile.z, tile.x, tile.y) == (8, 131, 94)
             return b"coastal mask"
 
     monkeypatch.setattr("app.api.routes.map_tiles.get_coastline_mask", lambda: Coast())
     monkeypatch.setattr("app.api.routes.map_tiles.has_raster_data", lambda raw: True)
     monkeypatch.setattr(
-        "app.api.routes.map_tiles.apply_ocean_mask",
+        "app.api.routes.map_tiles.render_visual_water",
         lambda raw, mask: raw if mask == b"coastal mask" else b"invalid",
     )
 
@@ -127,7 +127,7 @@ def test_bathymetry_tile_returns_503_when_provider_is_unavailable(
         BathymetryUnavailable,
     )
 
-    def fail(z, x, y):
+    def fail(z, x, y, padded):
         raise BathymetryUnavailable("test")
 
     monkeypatch.setattr(
@@ -146,7 +146,7 @@ def test_coastline_failure_returns_503_instead_of_unmasked_png(monkeypatch):
     from app.domain.marine import ProviderUnavailable
 
     class Coast:
-        async def get_mask(self, tile):
+        async def get_context(self, tile, raw):
             raise ProviderUnavailable('coast offline')
 
     monkeypatch.setattr('app.api.routes.map_tiles.fetch_bathymetry_tile', lambda *args: b'raw')
@@ -162,7 +162,7 @@ def test_transparent_bathymetry_does_not_download_a_coastline(monkeypatch):
     from PIL import Image
 
     output = BytesIO()
-    Image.new('RGBA', (256, 256), (0, 0, 0, 0)).save(output, format='PNG')
+    Image.new('RGBA', (280, 280), (0, 0, 0, 0)).save(output, format='PNG')
     content = output.getvalue()
     monkeypatch.setattr('app.api.routes.map_tiles.fetch_bathymetry_tile', lambda *args: content)
 
@@ -171,4 +171,42 @@ def test_transparent_bathymetry_does_not_download_a_coastline(monkeypatch):
 
     monkeypatch.setattr('app.api.routes.map_tiles.get_coastline_mask', forbidden)
     response = TestClient(app).get('/api/v1/map/bathymetry/6/33/23.png')
-    assert response.status_code == 200 and response.content == content
+    assert response.status_code == 200
+    with Image.open(BytesIO(response.content)) as image:
+        assert image.size == (256, 256)
+        assert image.getchannel('A').getbbox() is None
+
+
+def test_visual_continuity_keeps_original_coverage_and_shares_warm_requests(monkeypatch):
+    import base64
+    from io import BytesIO
+    from PIL import Image
+
+    raw = Image.new('RGBA', (280, 280), (40, 140, 160, 255))
+    raw.paste((255, 255, 255, 0), (124, 124, 129, 129))
+    output = BytesIO()
+    raw.save(output, format='PNG')
+    calls = []
+
+    def fetch(z, x, y, padded):
+        calls.append((z, x, y, padded))
+        return output.getvalue()
+
+    class Coast:
+        async def get_context(self, tile, raw):
+            return Image.new('L', (280, 280), 255)
+
+    monkeypatch.setattr('app.api.routes.map_tiles.fetch_bathymetry_tile', fetch)
+    monkeypatch.setattr('app.api.routes.map_tiles.get_coastline_mask', lambda: Coast())
+    client = TestClient(app)
+    first = client.get('/api/v1/map/bathymetry/14/8462/6014.png?v=marine-visual-7')
+    second = client.get('/api/v1/map/bathymetry/14/8462/6014.png?v=marine-visual-7')
+    assert first.status_code == second.status_code == 200
+    assert first.content == second.content
+    assert calls == [(14, 8462, 6014, True)]
+    assert first.headers['x-nowave-raster-render'] == 'marine-visual-7'
+    assert first.headers['x-nowave-raster-usage'] == 'visual-only; local-rgb-continuity'
+    image = Image.open(BytesIO(first.content))
+    assert image.getpixel((114, 114)) == (40, 140, 160, 255)
+    coverage = base64.b64decode(image.info['NoWave.SourceCoverage'])
+    assert coverage[114 * 256 + 114] == 0
