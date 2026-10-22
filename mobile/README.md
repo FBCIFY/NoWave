@@ -596,6 +596,16 @@ pour conserver le suivi et le recentrage. Il ne dessine ni point bleu ni
 cercle de précision. Le modèle 3D historique et son générateur restent dans
 le dépôt, mais ne sont plus utilisés pour ce repère.
 
+Essai en cours : avec `MapConfig.nativeArrowPuck` à `true`, le chevron et le
+mât ne sont plus dessinés. Le repère est une flèche 3D orange
+(`assets/models/location_puck.glb`, générée par
+`python3 tool/make_location_puck.py`), affichée par le composant natif de
+Mapbox (`LocationPuck3D`). Mapbox la place et l'oriente selon le cap de
+l'appareil à chaque image, sans passer par Dart. Elle mesure 27,44 points dès
+le zoom 6 et diminue au dézoom jusqu'à 13,72 points au zoom 2 et en deçà, pour
+ne pas couvrir un pays entier. Remettre `false` revient au
+chevron et au mât.
+
 ### Limites connues
 
 - l’envoi de la photo suit le contrat de la doc technique mais n’a pas encore

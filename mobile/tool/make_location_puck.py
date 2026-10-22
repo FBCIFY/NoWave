@@ -1,11 +1,15 @@
-"""Génère assets/models/location_puck.glb : flèche de navigation « sticker ».
+"""Génère assets/models/location_puck.glb : flèche de navigation façon Waze.
 
 Usage, depuis mobile/ : python3 tool/make_location_puck.py assets/models/location_puck.glb
 
-Une flèche bleue arrondie et bombée, posée sur un liseré blanc épais.
+Une flèche à encoche orange « sunset », au dessus plat cerclé d'un liseré
+sombre et au flanc épais blanc, visible quand la carte est inclinée.
 Repère glTF : X vers la droite, Y vers le haut, la pointe vers -Z.
 Ombrage figé dans les couleurs des sommets (COLOR_0) : Mapbox affiche le
 puck sans éclairage (model-emissive-strength = 1), sur iOS comme sur Android.
+Les couleurs sont écrites en sRGB, sans conversion linéaire : Mapbox les
+affiche telles quelles, et une conversion les assombrissait (orange brun,
+flancs caramel).
 """
 import json
 import math
@@ -14,30 +18,27 @@ import sys
 
 # Contour vu de dessus (x, n) avec n vers la pointe, et rayon de chaque coin.
 CORNERS = [
-    ((0.0, 1.0), 0.13),  # pointe
-    ((-0.82, -0.82), 0.13),  # aile gauche
-    ((0.0, -0.34), 0.40),  # encoche, creusée en arc
-    ((0.82, -0.82), 0.13),  # aile droite
+    ((0.0, 1.0), 0.16),  # pointe
+    ((-0.86, -0.80), 0.16),  # aile gauche
+    ((0.0, -0.36), 0.40),  # encoche, creusée en arc
+    ((0.86, -0.80), 0.16),  # aile droite
 ]
-CENTER = (0.0, 0.0)  # tout le contour est visible depuis ce point
+CENTER = (0.0, 0.05)  # tout le contour est visible depuis ce point
 
-PLATE_HEIGHT = 0.09  # épaisseur du liseré blanc
-RIM = 0.19  # largeur du liseré
-BODY_HEIGHT = 0.15  # bombé de la flèche au-dessus du liseré
-BODY_FALLOFF = 0.24  # distance au bord où la flèche atteint sa hauteur
-RIDGE_HEIGHT = 0.07  # arête douce de la pointe à l'encoche
-RIDGE_WIDTH = 0.28
+HEIGHT = 0.27  # épaisseur totale
+BEVEL = 0.06  # arrondi du bord supérieur
+BEVEL_STEPS = 4
+RIM_WIDTH = 0.035  # liseré sombre au bord du dessus, à arête franche
+RINGS = 10  # anneaux du dessus, du bord vers le centre
 
-RINGS = 14  # anneaux du corps, du bord vers le centre
-RIM_STEPS = 6  # pas de l'arrondi du liseré
+# Lumière en haut à gauche, vue de dessus (x, n).
+LIGHT = (-0.45, -0.30, 0.85)
 
-# Lumière en haut à gauche, un peu vers la pointe ; on regarde d'en haut.
-LIGHT = (-0.45, 0.85, -0.30)
-VIEW = (0.0, 1.0, 0.0)
-
-# Dégradé du bleu de AppColors, de l'ombre à la lumière (sRGB).
-BODY_STOPS = [(0.0, '1E3A8A'), (0.45, '1D4ED8'), (0.75, '2563EB'), (1.0, '60A5FA')]
-RIM_STOPS = [(0.0, 'B6C2D1'), (0.6, 'E2E8F0'), (1.0, 'FFFFFF')]
+# Dessus : du rouge-orangé de la base à l'ambre de la pointe (sRGB).
+TOP_STOPS = [(0.0, 'B8320A'), (0.45, 'E2470E'), (0.8, 'F97316'), (1.0, 'FDBA4D')]
+TOP_RIM = '8A2405'  # liseré sombre au bord du dessus
+SIDE_STOPS = [(0.0, 'E6E9EE'), (1.0, 'FFFFFF')]  # flanc, de l'ombre à la lumière
+SIDE_FOOT = 'B9C1CC'  # pied du flanc, au ras de la carte
 
 
 def normalize(v):
@@ -62,7 +63,6 @@ def cross(a, b):
 
 
 LIGHT = normalize(LIGHT)
-HALF = normalize(tuple(p + q for p, q in zip(LIGHT, VIEW)))
 
 
 def rounded_outline():
@@ -84,7 +84,7 @@ def rounded_outline():
         a0 = math.atan2(start[1] - center[1], start[0] - center[0])
         a1 = math.atan2(end[1] - center[1], end[0] - center[0])
         sweep = (a1 - a0 + math.pi) % (2 * math.pi) - math.pi
-        steps = max(4, int(abs(sweep) * radius / 0.03)) | 1  # impair : milieu exact
+        steps = max(6, int(abs(sweep) * radius / 0.02)) | 1  # impair : milieu exact
         arcs.append([
             (center[0] + radius * math.cos(a0 + sweep * k / steps),
              center[1] + radius * math.sin(a0 + sweep * k / steps))
@@ -104,62 +104,32 @@ def rounded_outline():
 
 
 OUTLINE = rounded_outline()
-SEGMENTS = list(zip(OUTLINE, OUTLINE[1:] + OUTLINE[:1]))
 
 
-def distance_to_outline(p):
-    best = math.inf
-    for a, b in SEGMENTS:
-        ab = sub(b, a)
-        t = max(0.0, min(1.0, dot(sub(p, a), ab) / dot(ab, ab)))
-        best = min(best, math.dist(p, (a[0] + ab[0] * t, a[1] + ab[1] * t)))
-    return best
+def mix(a, b, t):
+    return [p + (q - p) * t for p, q in zip(a, b)]
 
 
-def body_height(p):
-    s = min(distance_to_outline(p) / BODY_FALLOFF, 1.0)
-    pillow = math.sqrt(1 - (1 - s) ** 2)
-    ridge = math.exp(-(p[0] / RIDGE_WIDTH) ** 2) * s
-    return PLATE_HEIGHT + BODY_HEIGHT * pillow + RIDGE_HEIGHT * ridge
-
-
-def body_normal(p, eps=0.004):
-    dx = (body_height((p[0] + eps, p[1])) - body_height((p[0] - eps, p[1]))) / (2 * eps)
-    dn = (body_height((p[0], p[1] + eps)) - body_height((p[0], p[1] - eps))) / (2 * eps)
-    # n est l'opposé de z : la pente en z vaut -dn.
-    return normalize((-dx, 1.0, dn))
-
-
-def srgb_to_linear(c):
-    return c / 12.92 if c <= 0.04045 else ((c + 0.055) / 1.055) ** 2.4
+def hex_rgb(code):
+    return [int(code[i:i + 2], 16) / 255 for i in (0, 2, 4)]
 
 
 def gradient(stops, t):
     t = max(0.0, min(1.0, t))
     for (t0, c0), (t1, c1) in zip(stops, stops[1:]):
         if t <= t1:
-            k = (t - t0) / (t1 - t0)
-            break
-    rgb0 = [int(c0[i:i + 2], 16) / 255 for i in (0, 2, 4)]
-    rgb1 = [int(c1[i:i + 2], 16) / 255 for i in (0, 2, 4)]
-    return [a + (b - a) * k for a, b in zip(rgb0, rgb1)]
-
-
-def shade(stops, normal, shine):
-    light = max(0.0, dot(normal, LIGHT))
-    rgb = gradient(stops, light)
-    highlight = shine * max(0.0, dot(normal, HALF)) ** 24
-    rgb = [c + (1 - c) * highlight for c in rgb]
-    return [srgb_to_linear(c) for c in rgb] + [1.0]
+            return mix(hex_rgb(c0), hex_rgb(c1), (t - t0) / (t1 - t0))
+    return hex_rgb(stops[-1][1])
 
 
 positions, normals, colors, indices = [], [], [], []
 
 
-def vertex(x, n, height, normal, rgba):
+def vertex(x, n, height, normal, rgb):
+    """Sommet en (x, n, hauteur), normale en (x, n, hauteur), couleur sRGB."""
     positions.append((x, height, -n))
-    normals.append(normal)
-    colors.append(rgba)
+    normals.append((normal[0], normal[2], -normal[1]))
+    colors.append(list(rgb) + [1.0])
     return len(positions) - 1
 
 
@@ -182,44 +152,74 @@ def add_triangle(a, b, c):
     indices.extend((a, b, c))
 
 
-# Corps : anneaux resserrés vers le centre, plus denses près du bord.
-rings = []
-for k in range(RINGS):
-    t = 1 - (k / RINGS) ** 1.6
-    ring = []
-    for x, n in OUTLINE:
-        p = (CENTER[0] + (x - CENTER[0]) * t, CENTER[1] + (n - CENTER[1]) * t)
-        normal = body_normal(p)
-        ring.append(vertex(*p, body_height(p), normal, shade(BODY_STOPS, normal, 0.55)))
-    rings.append(ring)
-for outer, inner in zip(rings, rings[1:]):
-    strip(outer, inner)
-apex = vertex(*CENTER, body_height(CENTER), body_normal(CENTER),
-              shade(BODY_STOPS, body_normal(CENTER), 0.55))
-for i in range(len(OUTLINE)):
-    add_triangle(rings[-1][i], rings[-1][(i + 1) % len(OUTLINE)], apex)
-
-# Liseré : dessus plat sous le bord de la flèche, puis arrondi jusqu'au sol.
 outward = []
 for i, (x, n) in enumerate(OUTLINE):
     px, pn = OUTLINE[i - 1]
     nx, nn = OUTLINE[(i + 1) % len(OUTLINE)]
     outward.append(normalize((nn - pn, -(nx - px))))
-flat = RIM - PLATE_HEIGHT
-rim_rings = []
-profile = [(0.0, PLATE_HEIGHT, 0.0)] + [
-    (flat + PLATE_HEIGHT * math.sin(phi), PLATE_HEIGHT * math.cos(phi), phi)
-    for phi in (math.pi / 2 * k / RIM_STEPS for k in range(RIM_STEPS + 1))
+
+
+def side_color(o, t):
+    """Flanc plus clair face à la lumière, assombri au ras de la carte."""
+    lit = 0.5 + 0.5 * dot((o[0], o[1], 0.0), LIGHT) / 0.55
+    rgb = gradient(SIDE_STOPS, lit)
+    return mix(hex_rgb(SIDE_FOOT), rgb, t / 0.18) if t < 0.18 else rgb
+
+
+def top_color(n):
+    return gradient(TOP_STOPS, 0.35 + 0.45 * (n + 0.8) / 1.8)
+
+
+# Flanc : anneaux du sol au début de l'arrondi.
+side_rings = []
+for t in (0.0, 0.12, 0.25, 1.0):
+    side_rings.append([
+        vertex(x, n, (HEIGHT - BEVEL) * t, (o[0], o[1], 0.0), side_color(o, t))
+        for (x, n), o in zip(OUTLINE, outward)
+    ])
+for lower, upper in zip(side_rings, side_rings[1:]):
+    strip(lower, upper)
+
+# Arrondi du bord supérieur, blanc jusqu'au liseré du dessus.
+bevel_rings = [side_rings[-1]]
+for k in range(1, BEVEL_STEPS + 1):
+    phi = math.pi / 2 * k / BEVEL_STEPS
+    inset = BEVEL * (1 - math.cos(phi))
+    height = HEIGHT - BEVEL + BEVEL * math.sin(phi)
+    bevel_rings.append([
+        vertex(x - o[0] * inset, n - o[1] * inset, height,
+               normalize((o[0] * math.cos(phi), o[1] * math.cos(phi), math.sin(phi))),
+               mix(side_color(o, 1.0), hex_rgb('FFFFFF'), k / BEVEL_STEPS))
+        for (x, n), o in zip(OUTLINE, outward)
+    ])
+for outer, inner in zip(bevel_rings, bevel_rings[1:]):
+    strip(outer, inner)
+
+# Dessus plat : un liseré sombre, puis des anneaux resserrés vers le centre.
+# Chaque bord de couleur a ses propres sommets : l'arête reste nette au lieu
+# d'un dégradé étiré sur tout un triangle.
+inner_outline = [(x - o[0] * BEVEL, n - o[1] * BEVEL) for (x, n), o in zip(OUTLINE, outward)]
+rim_outline = [(x - o[0] * RIM_WIDTH, n - o[1] * RIM_WIDTH)
+               for (x, n), o in zip(inner_outline, outward)]
+up = (0.0, 0.0, 1.0)
+rim_rings = [
+    [vertex(*p, HEIGHT, up, hex_rgb(TOP_RIM)) for p in outline]
+    for outline in (inner_outline, rim_outline)
 ]
-for spread, height, phi in profile:
-    ring = []
-    for (x, n), (ox, on) in zip(OUTLINE, outward):
-        normal = normalize((ox * math.sin(phi), math.cos(phi), -on * math.sin(phi)))
-        ring.append(vertex(x + ox * spread, n + on * spread, height, normal,
-                           shade(RIM_STOPS, normal, 0.0)))
-    rim_rings.append(ring)
-for inner, outer in zip(rim_rings, rim_rings[1:]):
-    strip(inner, outer)
+top_rings = []
+for k in range(RINGS):
+    t = 1 - k / RINGS
+    top_rings.append([
+        vertex(*p, HEIGHT, up, top_color(p[1]))
+        for p in ((CENTER[0] + (x - CENTER[0]) * t, CENTER[1] + (n - CENTER[1]) * t)
+                  for x, n in rim_outline)
+    ])
+strip(rim_rings[0], rim_rings[1])
+for outer, inner in zip(top_rings, top_rings[1:]):
+    strip(outer, inner)
+apex = vertex(*CENTER, HEIGHT, up, top_color(CENTER[1]))
+for i in range(len(OUTLINE)):
+    add_triangle(top_rings[-1][i], top_rings[-1][(i + 1) % len(OUTLINE)], apex)
 
 # Une unité de long, centrée sur la position de l'utilisateur.
 min_z = min(v[2] for v in positions)

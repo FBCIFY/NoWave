@@ -1,4 +1,5 @@
 import 'package:blueway/core/map/globe_pitch_controller.dart';
+import 'package:blueway/core/map/map_config.dart';
 
 import 'dart:async';
 import 'dart:math' as math;
@@ -681,11 +682,17 @@ void main() {
         5.37,
       ]);
       expect(map.style.layers, contains('alert-selected-point'));
+      // Le repère reste celui du réglage courant : flèche native ou point
+      // caché sous le chevron.
+      final puck = MapConfig.locationPuckSettings();
       expect(map.location.settings.last.enabled, true);
-      expect(map.location.settings.last.puckBearingEnabled, false);
       expect(
-        map.location.settings.last.locationPuck!.locationPuck2D,
-        isNotNull,
+        map.location.settings.last.puckBearingEnabled,
+        puck.puckBearingEnabled,
+      );
+      expect(
+        map.location.settings.last.locationPuck!.locationPuck3D?.modelUri,
+        puck.locationPuck!.locationPuck3D?.modelUri,
       );
       expect(
         tester.widget<mb.MapWidget>(find.byType(mb.MapWidget)).viewport,

@@ -1874,6 +1874,8 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
         rethrow;
       }
     }
+    // Flèche native : Mapbox dessine et oriente le repère lui-même.
+    if (MapConfig.nativeArrowPuck) return;
     if (!mounted || _hidden || _mapboxMap != map || !_styleReady) return;
     // Un style en cours de chargement ne doit pas bloquer le recentrage.
     // La prochaine mesure de cap ou de position retente le dessin.
