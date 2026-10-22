@@ -1,3 +1,5 @@
+import '../land_colors.dart';
+
 /// Palette cartographique : terres naturelles et océan bleu profond.
 /// Partagée entre le style initial et sa réinstallation après un reload.
 class MarinePalette {
@@ -8,9 +10,22 @@ class MarinePalette {
   static const crop = '#A39F6B';
   static const snow = '#ECEDE5';
 
-  static const basemapConfig = <String, Object>{
+  static final basemapConfig = <String, Object>{
     'lightPreset': 'day',
     'theme': 'faded',
+    for (final entry in land.entries) entry.key: LandColors.color(entry.value),
+    'colorPlaceLabels': '#3A4843',
+    'colorAdminBoundaries': '#CED1C8',
+    'colorWater': water,
+    'showRoadLabels': false,
+    'showPointOfInterestLabels': false,
+    'showTransitLabels': false,
+    'showAdminBoundaries': false,
+    'show3dObjects': false,
+  };
+
+  /// Only surface colours: water, labels, boundaries and symbols are excluded.
+  static const land = <String, String>{
     'colorLand': '#C4AD80',
     'colorGreenspace': '#627545',
     'colorCommercial': '#B5B1A2',
@@ -21,13 +36,5 @@ class MarinePalette {
     'colorMotorways': '#BEC7C7',
     'colorTrunks': '#C6CDCC',
     'colorRoads': '#D1D5D0',
-    'colorPlaceLabels': '#3A4843',
-    'colorAdminBoundaries': '#CED1C8',
-    'colorWater': water,
-    'showRoadLabels': false,
-    'showPointOfInterestLabels': false,
-    'showTransitLabels': false,
-    'showAdminBoundaries': false,
-    'show3dObjects': false,
   };
 }

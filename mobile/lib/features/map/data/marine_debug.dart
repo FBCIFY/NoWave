@@ -48,6 +48,50 @@ abstract final class MarineDebug {
           await map.loadStyleURI(MapConfig.styleUrl);
         } else if (args['action'] == 'sync') {
           await viewport.synchronize(map);
+        } else if (args['action'] == 'style') {
+          final images = <String, Object?>{};
+          final imageIds = args['images'] == null
+              ? <String>[
+                  'nowave-buoy-green',
+                  'nowave-buoy-red',
+                  'nowave-buoy-north',
+                  'nowave-beacon-green',
+                  'nowave-lighthouse-white',
+                ]
+              : (jsonDecode(args['images']!) as List).cast<String>();
+          for (final id in imageIds) {
+            final image = await map.style.getStyleImage(id);
+            images[id] = image == null
+                ? null
+                : {'width': image.width, 'height': image.height};
+          }
+          // getStyleJSON may retain the originally loaded document. Read the
+          // runtime objects too, including dynamically installed marine layers.
+          final layers = <String, Object?>{};
+          for (final info in await map.style.getStyleLayers()) {
+            if (info == null || !info.id.startsWith('nowave-')) continue;
+            layers[info.id] = jsonDecode(
+              await map.style.getStyleLayerProperties(info.id),
+            );
+          }
+          final sources = <String, Object?>{};
+          for (final id in [
+            'nowave-bathymetry',
+            ...MarineViewport.sources.values,
+          ]) {
+            sources[id] = await map.style.styleSourceExists(id)
+                ? jsonDecode(await map.style.getStyleSourceProperties(id))
+                : null;
+          }
+          return developer.ServiceExtensionResponse.result(
+            jsonEncode({
+              'style': jsonDecode(await map.style.getStyleJSON()),
+              'runtimeLayers': layers,
+              'runtimeSources': sources,
+              'images': images,
+              'marineBaseUrl': viewport.apiBaseUrl,
+            }),
+          );
         }
         final camera = await map.getCameraState();
         final size = await map.getSize();

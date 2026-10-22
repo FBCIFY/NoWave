@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'dart:io';
 
+import 'land_colors.dart';
 import 'marine/marine_palette.dart';
 
 /// One cartographic native style, from the globe to the harbour.
@@ -78,21 +79,38 @@ class GlobeStyle {
         'source-layer': 'landcover',
         'slot': 'bottom',
         'paint': {
-          'fill-color': [
-            'match',
-            ['get', 'class'],
-            'wood',
-            MarinePalette.forest,
-            'scrub',
-            MarinePalette.scrub,
-            'grass',
-            MarinePalette.vegetation,
-            'crop',
-            MarinePalette.crop,
-            'snow',
-            MarinePalette.snow,
-            'rgba(0,0,0,0)',
-          ],
+          'fill-color': LandColors.between(
+            [
+              'match',
+              ['get', 'class'],
+              'wood',
+              MarinePalette.forest,
+              'scrub',
+              MarinePalette.scrub,
+              'grass',
+              MarinePalette.vegetation,
+              'crop',
+              MarinePalette.crop,
+              'snow',
+              MarinePalette.snow,
+              'rgba(0,0,0,0)',
+            ],
+            [
+              'match',
+              ['get', 'class'],
+              'wood',
+              LandColors.reduced(MarinePalette.forest),
+              'scrub',
+              LandColors.reduced(MarinePalette.scrub),
+              'grass',
+              LandColors.reduced(MarinePalette.vegetation),
+              'crop',
+              LandColors.reduced(MarinePalette.crop),
+              'snow',
+              LandColors.reduced(MarinePalette.snow),
+              'rgba(0,0,0,0)',
+            ],
+          ),
           'fill-emissive-strength': 1,
         },
       },
@@ -103,15 +121,26 @@ class GlobeStyle {
         'source-layer': 'hillshade',
         'slot': 'bottom',
         'paint': {
-          'fill-color': [
-            'match',
-            ['get', 'class'],
-            'shadow',
-            '#766344',
-            'highlight',
-            '#E2CCA0',
-            'rgba(0,0,0,0)',
-          ],
+          'fill-color': LandColors.between(
+            [
+              'match',
+              ['get', 'class'],
+              'shadow',
+              '#766344',
+              'highlight',
+              '#E2CCA0',
+              'rgba(0,0,0,0)',
+            ],
+            [
+              'match',
+              ['get', 'class'],
+              'shadow',
+              LandColors.reduced('#766344'),
+              'highlight',
+              LandColors.reduced('#E2CCA0'),
+              'rgba(0,0,0,0)',
+            ],
+          ),
           'fill-opacity': [
             'interpolate',
             ['linear'],

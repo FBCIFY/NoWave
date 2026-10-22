@@ -1,5 +1,7 @@
 import 'dart:convert';
 
+import 'package:blueway/core/map/land_colors.dart';
+
 import 'package:blueway/core/map/marine/marine_map_controller.dart';
 import 'package:blueway/features/map/data/hydrography_layer.dart';
 import 'package:flutter/services.dart';
@@ -92,8 +94,8 @@ void main() {
       expect(map.style.layers.length, 1);
       final source = map.style.sources.values.single;
       final layer = map.style.layers.values.single;
-      expect(map.style.config['colorLand'], '#C4AD80');
-      expect(map.style.config['colorGreenspace'], '#627545');
+      expect(map.style.config['colorLand'], LandColors.color('#C4AD80'));
+      expect(map.style.config['colorGreenspace'], LandColors.color('#627545'));
       expect(map.style.config['colorWater'], '#002D51');
       expect(map.style.config['showRoadLabels'], false);
       expect(map.style.config['showPointOfInterestLabels'], false);

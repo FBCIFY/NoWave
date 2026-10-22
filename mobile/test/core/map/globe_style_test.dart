@@ -3,6 +3,7 @@ import 'dart:io';
 
 import 'package:blueway/core/map/globe_presentation.dart';
 import 'package:blueway/core/map/globe_style.dart';
+import 'package:blueway/core/map/land_colors.dart';
 import 'package:blueway/core/map/marine/marine_map_controller.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -59,8 +60,8 @@ void main() {
       final basemap = (document['imports'] as List).single as Map;
       expect(basemap['id'], 'basemap');
       expect(basemap['url'], 'mapbox://styles/mapbox/standard');
-      expect(basemap['config']['colorLand'], '#C4AD80');
-      expect(basemap['config']['colorGreenspace'], '#627545');
+      expect(basemap['config']['colorLand'], LandColors.color('#C4AD80'));
+      expect(basemap['config']['colorGreenspace'], LandColors.color('#627545'));
       expect(basemap['config']['showRoadLabels'], false);
       expect(basemap['config']['showAdminBoundaries'], false);
       final sources = document['sources'] as Map;
@@ -213,8 +214,11 @@ void main() {
           );
           expect(map.style.config['lightPreset'], 'day');
           expect(map.style.config['theme'], 'faded');
-          expect(map.style.config['colorLand'], '#C4AD80');
-          expect(map.style.config['colorGreenspace'], '#627545');
+          expect(map.style.config['colorLand'], LandColors.color('#C4AD80'));
+          expect(
+            map.style.config['colorGreenspace'],
+            LandColors.color('#627545'),
+          );
           expect(map.style.config['showRoadLabels'], false);
           expect(map.style.config['showPointOfInterestLabels'], false);
           expect(map.style.config['showPlaceLabels'], zoom >= 4);
