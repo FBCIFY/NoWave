@@ -336,6 +336,158 @@ void main() {
     viewport.dispose();
   });
 
+  for (final marineStatus in ['empty', 'outside-coverage']) {
+    test(
+      'soundings $marineStatus replaces Z12 coverage and keeps a 300s TTL',
+      () async {
+        var clock = DateTime.utc(2026, 10, 22);
+        final map = ViewMap()..zoom = 12;
+        final seen = <Uri>[];
+        final oldCell = {
+          'type': 'Feature',
+          'id': 'modeled-z12',
+          'geometry': {
+            'type': 'Polygon',
+            'coordinates': [
+              [
+                [5.92, 43.07],
+                [5.94, 43.07],
+                [5.94, 43.09],
+                [5.92, 43.07],
+              ],
+            ],
+          },
+          'properties': {'display_minzoom': 12},
+        };
+        final viewport = MarineViewport(
+          apiBaseUrl: 'https://marine.example',
+          now: () => clock,
+          clientFactory: () => MockClient((request) async {
+            seen.add(request.url);
+            final soundings = request.url.path.contains('/soundings/');
+            final z12 = request.url.path.contains('/soundings/12/');
+            return http.Response(
+              jsonEncode({
+                'type': 'FeatureCollection',
+                'features': z12 ? [oldCell] : [],
+              }),
+              200,
+              headers: {
+                'x-nowave-marine-status': soundings && !z12
+                    ? marineStatus
+                    : 'ok',
+              },
+            );
+          }),
+        );
+        addTearDown(viewport.dispose);
+        await viewport.synchronize(map);
+        expect(viewport.features('soundings').single['id'], 'modeled-z12');
+        map.zoom = 13;
+        await viewport.synchronize(map);
+        expect(
+          seen.where((uri) => uri.path.contains('/soundings/13/')).length,
+          9,
+        );
+        expect(viewport.features('soundings'), isEmpty);
+        expect(
+          jsonDecode(map.style.data['nowave-soundings']!)['features'],
+          isEmpty,
+        );
+        expect(viewport.metrics['last_errors'], isEmpty);
+        final requests = viewport.requests;
+        clock = clock.add(const Duration(seconds: 16));
+        await viewport.synchronize(map);
+        expect(viewport.requests, requests);
+        expect(viewport.metrics['last_errors'], isEmpty);
+        clock = clock.add(const Duration(seconds: 283));
+        await viewport.synchronize(map);
+        expect(viewport.requests, requests);
+        clock = clock.add(const Duration(seconds: 2));
+        await viewport.synchronize(map);
+        expect(viewport.requests, greaterThan(requests));
+      },
+    );
+  }
+
+  for (final marineStatus in ['degraded', 'partial']) {
+    test(
+      'soundings $marineStatus cannot replace displayed Z12 coverage',
+      () async {
+        var clock = DateTime.utc(2026, 10, 22);
+        final map = ViewMap()..zoom = 12;
+        final seen = <Uri>[];
+        final viewport = MarineViewport(
+          apiBaseUrl: 'https://marine.example',
+          now: () => clock,
+          clientFactory: () => MockClient((request) async {
+            seen.add(request.url);
+            final z12 = request.url.path.contains('/soundings/12/');
+            return http.Response(
+              jsonEncode({
+                'type': 'FeatureCollection',
+                'features': z12
+                    ? [
+                        {
+                          'type': 'Feature',
+                          'id': 'old-sounding',
+                          'geometry': {
+                            'type': 'Polygon',
+                            'coordinates': [
+                              [
+                                [5.92, 43.07],
+                                [5.94, 43.07],
+                                [5.94, 43.09],
+                                [5.92, 43.07],
+                              ],
+                            ],
+                          },
+                          'properties': {'display_minzoom': 12},
+                        },
+                      ]
+                    : [],
+              }),
+              200,
+              headers: {
+                'x-nowave-marine-status':
+                    request.url.path.contains('/soundings/13/')
+                    ? marineStatus
+                    : 'ok',
+              },
+            );
+          }),
+        );
+        addTearDown(viewport.dispose);
+        await viewport.synchronize(map);
+        map.zoom = 13;
+        await viewport.synchronize(map);
+        expect(viewport.features('soundings').single['id'], 'old-sounding');
+        expect(
+          jsonDecode(
+            map.style.data['nowave-soundings']!,
+          )['features'].single['id'],
+          'old-sounding',
+        );
+        expect((viewport.metrics['last_errors'] as Map).length, 9);
+        expect(
+          (viewport.metrics['last_errors'] as Map).values,
+          everyElement('degraded'),
+        );
+        final requests = seen
+            .where((uri) => uri.path.contains('/soundings/13/'))
+            .length;
+        expect(requests, 9);
+        clock = clock.add(const Duration(seconds: 16));
+        await viewport.synchronize(map);
+        expect(
+          seen.where((uri) => uri.path.contains('/soundings/13/')).length,
+          18,
+        );
+        expect(viewport.features('soundings').single['id'], 'old-sounding');
+      },
+    );
+  }
+
   test(
     'non-point coverage survives pending, 503, degraded, Z14 and style reload',
     () async {

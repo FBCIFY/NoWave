@@ -520,10 +520,14 @@ class MarineViewport {
       }
       final previous = _cache[key];
       final marineStatus = response.headers['x-nowave-marine-status'];
+      const completeStatuses = {
+        'ok',
+        'below-minzoom',
+        'empty',
+        'outside-coverage',
+      };
       final complete =
-          marineStatus == null ||
-          marineStatus == 'ok' ||
-          marineStatus == 'below-minzoom';
+          marineStatus == null || completeStatuses.contains(marineStatus);
       if (previous != null && (family == 'depth-contours' || !complete)) {
         final kept = {for (final f in previous.features) f['id'].toString(): f};
         for (final f in features) {
