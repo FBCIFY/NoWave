@@ -139,7 +139,6 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
   bool _userCameraMotion = false;
   int _mapGestureRevision = 0;
   bool _clearingForMapGesture = false;
-  bool _detailPaddingPending = false;
   Timer? _rotationGestureTimer;
   double _touchStartBearing = 0;
   _MapOrientationMode _orientationMode = _MapOrientationMode.free;
@@ -217,10 +216,6 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
     if (!mounted || _hidden || _mapTouchActive || !_userCameraMotion) return;
     _rotationGestureTimer?.cancel();
     _userCameraMotion = false;
-    if (_detailPaddingPending) {
-      _detailPaddingPending = false;
-      unawaited(_clearDetailPadding(interruptMotion: false));
-    }
     _syncGlobeRotation();
     _globeRotation.resumeWhenIdle();
     unawaited(_restoreOrientation());
@@ -1667,7 +1662,6 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
     }
     if (origin == MapFocusOrigin.mapTap) AppHaptics.selection();
     final opening = !_detailOpen;
-    _detailPaddingPending = false;
     _detailCamera = null;
     setState(() {
       _panelsClosingForMapGesture = false;
@@ -1744,6 +1738,7 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
         _panelsClosingForMapGesture) {
       return;
     }
+    _interruptCameraMotion();
     _cameraFocusRevision++;
     _selectionTouched = true;
     _focusCameraPending = false;
@@ -1764,11 +1759,9 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
       _clearingForMapGesture = true;
       widget.focusController?.clear();
       _clearingForMapGesture = false;
-      if (_cameraGestureActive || _mapTouchActive) {
-        _detailPaddingPending = true;
-      } else {
-        unawaited(_clearDetailPadding(interruptMotion: false));
-      }
+      // Conserver la projection native, y compris sa marge : la retirer
+      // recalcule la caméra et fait bouger la vue au retrait du panneau.
+      // Le prochain cadrage explicite définira sa propre marge.
     }
   }
 
@@ -1965,7 +1958,11 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
       await WidgetsBinding.instance.endOfFrame;
       await _moveCamera(
         map,
-        CameraOptions(center: center, zoom: zoom + _clusterZoomStep),
+        CameraOptions(
+          center: center,
+          zoom: zoom + _clusterZoomStep,
+          padding: MbxEdgeInsets(top: 0, left: 0, right: 0, bottom: 0),
+        ),
         MapMotion.clusterDurationMs,
       );
     } catch (_) {

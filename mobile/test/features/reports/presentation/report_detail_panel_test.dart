@@ -36,6 +36,7 @@ void main() {
       Future<ReportDetail>? loading,
       ReportDetail? report,
       bool reduceMotion = false,
+      bool settle = true,
     }) async {
       closed = 0;
       mapTaps = 0;
@@ -87,6 +88,7 @@ void main() {
           ),
         ),
       );
+      if (!settle) return;
       if (loading == null) {
         await tester.pumpAndSettle();
       } else {
@@ -97,6 +99,25 @@ void main() {
     final surface = find.byKey(const ValueKey('map-panel-surface'));
     Offset contentStart(WidgetTester tester) =>
         Offset(210, tester.getTopLeft(surface).dy + 180);
+
+    testWidgets('$platform : la hauteur provisoire n’est jamais affichée', (
+      tester,
+    ) async {
+      final loading = Completer<ReportDetail>();
+      await mount(tester, loading: loading.future, settle: false);
+      final opacity = find
+          .ancestor(of: surface, matching: find.byType(Opacity))
+          .first;
+      expect(tester.widget<Opacity>(opacity).opacity, 0);
+      expect(surface.hitTestable(), findsNothing);
+      await tester.pump();
+      expect(tester.widget<Opacity>(opacity).opacity, 1);
+      expect(tester.getSize(surface).height, lessThan(300));
+      loading.complete(_report);
+      await tester.pumpAndSettle();
+      expect(tester.widget<Opacity>(opacity).opacity, 1);
+      expect(closed, 0);
+    });
 
     for (final hasPhoto in [false, true]) {
       testWidgets(

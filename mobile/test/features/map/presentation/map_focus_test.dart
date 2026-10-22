@@ -61,6 +61,18 @@ class _Reports extends Fake implements ReportDetailService {
   }
 }
 
+class _DelayedCameraMap extends FocusMap {
+  Completer<void>? blockNextCancel;
+
+  @override
+  Future<void> cancelCameraAnimation() {
+    cancellations++;
+    final blocked = blockNextCancel;
+    blockNextCancel = null;
+    return blocked?.future ?? Future.value();
+  }
+}
+
 class _Alerts extends Fake implements AlertService {
   @override
   Future<AlertPage> fetchPage({int page = 1, int limit = 20}) async =>
@@ -936,10 +948,13 @@ void main() {
     tapBadge('report-a');
     await pumpFrames(tester);
     final cameras = map.easedCameras.length;
+    final allCameras = map.cameras.length;
+    final cancellations = map.cancellations;
     final surface = find.byKey(const ValueKey('map-panel-surface'));
     final initialY = tester.getTopLeft(surface).dy;
     tapMap();
     await tester.pump();
+    expect(map.cancellations, greaterThan(cancellations));
     // Le panneau reste monté pendant sa sortie : aucun retrait brutal.
     expect(find.byType(ReportDetailPanel), findsOneWidget);
     await tester.pump();
@@ -949,8 +964,49 @@ void main() {
     expect(find.byType(ReportDetailPanel), findsNothing);
     expect(focus.report, isNull);
     expect(map.easedCameras, hasLength(cameras));
+    // Un simple appui conserve aussi la projection, sans setCamera différé.
+    expect(map.cameras, hasLength(allCameras));
     expect(map.style.layers, isNot(contains('alert-selected-point')));
   });
+
+  focusTestWidgets(
+    'appui sur la carte : un cadrage déjà engagé ne repart pas après la fermeture',
+    (tester) async {
+      final delayedMap = _DelayedCameraMap();
+      map = delayedMap;
+      reports.response = Completer<ReportDetail>()
+        ..complete(
+          focusReport(
+            photo: const ReportPhoto(
+              status: ReportPhotoStatus.uploaded,
+              url: 'https://photo.test/report-a',
+            ),
+          ),
+        );
+      await mount(tester);
+      tapBadge('report-a');
+      await pumpFrames(tester);
+      final surface = find.byKey(const ValueKey('map-panel-surface'));
+      final gesture = await tester.startGesture(
+        tester.getTopLeft(surface) + const Offset(200, 120),
+      );
+      await gesture.moveBy(const Offset(0, -20));
+      await tester.pump();
+      final pending = Completer<void>();
+      delayedMap.blockNextCancel = pending;
+      await gesture.moveBy(const Offset(0, -80));
+      await tester.pump();
+      expect(delayedMap.blockNextCancel, isNull);
+      final cameraCount = map.cameras.length;
+      tapMap();
+      await gesture.up();
+      await pumpFrames(tester);
+      pending.complete();
+      await pumpFrames(tester);
+      expect(find.byType(ReportDetailPanel), findsNothing);
+      expect(map.cameras, hasLength(cameraCount));
+    },
+  );
 
   focusTestWidgets(
     'autre report pendant la sortie : sa nouvelle fiche reste ouverte',
@@ -1112,8 +1168,8 @@ void main() {
       await gesture.up();
       await pumpFrames(tester);
       expect(map.easedCameras, isEmpty);
-      expect(map.cameras.where((camera) => camera.zoom != null), isEmpty);
-      expect(map.cameras.last.padding!.bottom, 0);
+      expect(map.cameras, isEmpty);
+      expect(map.cameraZoom, 11.25);
     },
   );
 

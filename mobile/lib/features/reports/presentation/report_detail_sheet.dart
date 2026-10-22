@@ -602,18 +602,14 @@ class _ReportDetailError extends StatelessWidget {
         ),
         const SizedBox(height: 12),
         Text(message, textAlign: TextAlign.center),
-        const SizedBox(height: 16),
-        if (gone)
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(),
-            child: const Text('Fermer'),
-          )
-        else
+        if (!gone) ...[
+          const SizedBox(height: 16),
           FilledButton.icon(
             onPressed: onRetry,
             icon: const Icon(Icons.refresh),
             label: const Text('Réessayer'),
           ),
+        ],
       ],
     );
   }

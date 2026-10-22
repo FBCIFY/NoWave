@@ -357,6 +357,7 @@ class _MapPanelState extends State<MapPanel>
 
     final Widget panel;
     final scrollableBuilder = widget.scrollableBuilder;
+    final measured = scrollableBuilder == null || _contentHeight != null;
     if (scrollableBuilder == null) {
       panel = ConstrainedBox(
         constraints: BoxConstraints(
@@ -457,8 +458,13 @@ class _MapPanelState extends State<MapPanel>
               return Transform.translate(
                 offset: Offset(0, _offset.value),
                 child: Opacity(
-                  opacity: 1 - progress * 0.35,
-                  child: IgnorePointer(ignoring: _closing, child: child),
+                  // La première mise en page mesure le contenu sans montrer
+                  // la hauteur provisoire du panneau.
+                  opacity: measured ? 1 - progress * 0.35 : 0,
+                  child: IgnorePointer(
+                    ignoring: _closing || !measured,
+                    child: child,
+                  ),
                 ),
               );
             },

@@ -104,6 +104,7 @@ void main() {
 
     expect(find.textContaining('n’est plus disponible'), findsOneWidget);
     expect(find.text('Réessayer'), findsNothing);
+    expect(find.text('Fermer'), findsNothing);
   });
 
   testWidgets('réessaie après une erreur réseau', (tester) async {
