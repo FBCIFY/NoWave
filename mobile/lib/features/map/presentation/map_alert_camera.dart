@@ -12,12 +12,8 @@ import '../../reports/domain/report_detail.dart';
 /// [viewport] vient de la mise en page Flutter : `MapboxMap.getSize()` lève
 /// « Not available. » sur iOS.
 class MapAlertCamera {
-  /// Fiche ouverte : la carte se rapproche un peu de la vue de départ.
-  static const detailZoomStep = 1.5;
-  static const detailMaxZoom = 17.0;
-
-  /// Depuis Mes alertes, la vue de départ peut être très large.
-  static const historyMinZoom = 14.0;
+  /// Zoom minimal de consultation, sans reculer une carte déjà plus proche.
+  static const detailZoom = 13.0;
 
   static bool usable(geo.Position? position) =>
       position != null &&
@@ -103,11 +99,12 @@ class MapAlertCamera {
   }
 
   /// Fiche ouverte : le signalement au centre de la carte visible à côté
-  /// de la fiche, un peu plus près que la vue [from], incliné de [pitch].
+  /// de la fiche, au zoom de consultation, incliné de [pitch].
   static Future<CameraOptions> detail(
     MapboxMap map,
     ReportDetail report, {
     required CameraState from,
+    double? currentZoom,
     required double bearing,
     required widgets.Size viewport,
     required double panelHeight,
@@ -118,10 +115,7 @@ class MapAlertCamera {
     if (viewport.width <= 0 || viewport.height <= 0) {
       throw StateError('Map viewport is not ready');
     }
-    // Une carte déjà plus proche n'est pas reculée.
-    final zoom = from.zoom >= detailMaxZoom
-        ? from.zoom
-        : math.min(from.zoom + detailZoomStep, detailMaxZoom);
+    final zoom = math.max(detailZoom, currentZoom ?? from.zoom);
     return CameraOptions(
       center: Point(coordinates: Position(report.longitude, report.latitude)),
       zoom: math.max(zoom, minZoom),

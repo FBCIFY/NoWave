@@ -2,6 +2,10 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:typed_data';
 
+import 'package:blueway/features/alerts/data/alert_service.dart';
+import 'package:blueway/features/alerts/domain/alert.dart';
+import 'package:blueway/features/profile/domain/user_profile.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:blueway/features/map/presentation/report_marker.dart' as badges;
 import 'package:blueway/features/reports/domain/manual_report.dart';
 import 'package:image/image.dart' as img;
@@ -47,6 +51,19 @@ class _UnavailableGps extends geo.GeolocatorPlatform {
   Future<bool> isLocationServiceEnabled() async => false;
 }
 
+class _History extends Fake implements AlertService {
+  List<Alert> items = [];
+  @override
+  Future<AlertPage> fetchPage({int page = 1, int limit = 20}) async =>
+      AlertPage(
+        items: items,
+        page: page,
+        limit: limit,
+        total: items.length,
+        pages: items.isEmpty ? 0 : 1,
+      );
+}
+
 void focusTestWidgets(
   String description,
   Future<void> Function(WidgetTester) body,
@@ -81,14 +98,33 @@ void main() {
   MapFocusController selection(WidgetTester tester) =>
       tester.widget<MapScreen>(find.byType(MapScreen)).focusController!;
 
-  Future<void> mount(WidgetTester tester) async {
+  Future<void> mount(WidgetTester tester, {_History? history}) async {
     await prepareFocusMarkers(tester);
     push.setSession('user-a');
     push.setReady(true);
     await push.start();
     await tester.pumpWidget(
       MaterialApp(
-        home: HomeScreen(pushController: push, reportDetailService: reports),
+        home: HomeScreen(
+          pushController: push,
+          reportDetailService: reports,
+          alertService: history,
+          profile: history == null
+              ? null
+              : UserProfile(
+                  id: 'account-a',
+                  username: 'Brice',
+                  dateOfBirth: null,
+                  nationality: null,
+                  role: 'user',
+                  status: 'active',
+                  showUserName: true,
+                  showBoatInfo: true,
+                  notificationsEnabled: true,
+                  createdAt: testNow,
+                  updatedAt: testNow,
+                ),
+        ),
       ),
     );
     tester.widget<mb.MapWidget>(find.byType(mb.MapWidget)).onMapCreated!(map);
@@ -102,6 +138,209 @@ void main() {
     await tester.pumpAndSettle();
     addTearDown(() async => tester.pumpWidget(const SizedBox.shrink()));
   }
+
+  List<dynamic> sonarFeatures() =>
+      (jsonDecode(
+            map.style.sources['alert-notification-sonar']!['data'] as String,
+          ) as Map<String, dynamic>)['features']
+          as List;
+
+  void background(WidgetTester tester) {
+    for (final state in [
+      AppLifecycleState.inactive,
+      AppLifecycleState.hidden,
+      AppLifecycleState.paused,
+    ]) {
+      tester.binding.handleAppLifecycleStateChanged(state);
+    }
+  }
+
+  void resume(WidgetTester tester) {
+    for (final state in [
+      AppLifecycleState.hidden,
+      AppLifecycleState.inactive,
+      AppLifecycleState.resumed,
+    ]) {
+      tester.binding.handleAppLifecycleStateChanged(state);
+    }
+  }
+
+  void tapReport(String reportId, {String layerId = 'alert-selected-point'}) {
+    map.interactions
+        .singleWhere(
+          (interaction) => interaction.featuresetDescriptor?.layerId == layerId,
+        )
+        .action(
+          mb.TypedFeaturesetFeature(
+            mb.FeaturesetDescriptor(layerId: layerId),
+            {
+              'type': 'Point',
+              'coordinates': [5.37, 43.29],
+            },
+            {'report_id': reportId},
+            {},
+          ),
+          mb.MapContentGestureContext(
+            point: mb.Point(coordinates: mb.Position(5.37, 43.29)),
+            touchPosition: mb.ScreenCoordinate(x: 100, y: 100),
+            gestureState: mb.GestureState.ended,
+          ),
+        );
+  }
+
+  focusTestWidgets(
+    'retour sans clic sur la notification : sonar et badge puis arrêt au détail',
+    (tester) async {
+      SharedPreferences.setMockInitialValues({});
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+      final history = _History();
+      await mount(tester, history: history);
+      background(tester);
+      history.items = [alert()];
+      await tester.pumpAndSettle();
+      expect(map.style.sources, isNot(contains('alert-notification-sonar')));
+      resume(tester);
+      await tester.pumpAndSettle();
+      expect(sonarFeatures(), isNotEmpty);
+      expect(map.style.layers, contains('alert-notification-point'));
+      expect(map.cameras, isEmpty);
+      expect(selection(tester).report, isNull);
+      expect(find.byType(ReportDetailSheet), findsNothing);
+      tapReport('report-a', layerId: 'alert-notification-point');
+      await tester.pumpAndSettle();
+      expect(find.byType(ReportDetailSheet), findsOneWidget);
+      expect(sonarFeatures(), isEmpty);
+      background(tester);
+      resume(tester);
+      await tester.pumpAndSettle();
+      expect(sonarFeatures(), isEmpty);
+      await tester.pumpWidget(const SizedBox.shrink());
+    },
+  );
+
+  focusTestWidgets(
+    'réception avec récupération active : sonar immédiat sans clic',
+    (tester) async {
+      SharedPreferences.setMockInitialValues({});
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+      await mount(tester, history: _History());
+      source.messages.add(
+        pushMessage(expiry: DateTime.now().add(const Duration(hours: 1))),
+      );
+      await tester.pumpAndSettle();
+      expect(sonarFeatures(), isNotEmpty);
+      expect(map.cameras, isEmpty);
+      expect(reports.calls, isEmpty);
+      await tester.pumpWidget(const SizedBox.shrink());
+    },
+  );
+
+  focusTestWidgets(
+    'sonar et icône arrivent ensemble même si le badge tarde à charger',
+    (tester) async {
+      await mount(tester);
+      final iconReady = Completer<void>();
+      map.style.imageGate = iconReady.future;
+      source.messages.add(
+        pushMessage(expiry: DateTime.now().add(const Duration(hours: 1))),
+      );
+      await tester.pumpAndSettle();
+      expect(map.style.layers, isNot(contains('alert-notification-point')));
+      expect(map.style.sources, isNot(contains('alert-notification-sonar')));
+      map.style.imageGate = null;
+      iconReady.complete();
+      await tester.pumpAndSettle();
+      expect(map.style.layers['alert-notification-point']!['type'], 'symbol');
+      expect(
+        map.style.images,
+        contains(badges.ReportMarker.imageId(ReportCategory.pollution)),
+      );
+      final marker = jsonDecode(
+        map.style.sources['alert-notification']!['data'] as String,
+      );
+      expect(marker['properties']['report_id'], 'report-a');
+      expect(marker['properties']['category'], 'pollution');
+      expect(marker['geometry']['coordinates'], [5.37, 43.29]);
+      expect(sonarFeatures(), isNotEmpty);
+      expect(
+        map.style.layerOrder.indexOf('alert-notification-point'),
+        greaterThan(map.style.layerOrder.indexOf('alert-notification-sonar')),
+      );
+      expect(map.cameras, isEmpty);
+      expect(reports.calls, isEmpty);
+      tapReport('report-a', layerId: 'alert-notification-point');
+      await tester.pumpAndSettle();
+      expect(find.byType(ReportDetailSheet), findsOneWidget);
+      expect(sonarFeatures(), isEmpty);
+      expect(
+        jsonDecode(
+          map.style.sources['alert-notification']!['data'] as String,
+        )['features'],
+        isEmpty,
+      );
+      expect(map.style.layers, isNot(contains('alert-selected-halo')));
+    },
+  );
+
+  focusTestWidgets(
+    'réception sans clic : sonar immédiat, persistant et sans cadrage',
+    (tester) async {
+      await mount(tester);
+      final message = pushMessage(
+        expiry: DateTime.now().add(const Duration(hours: 1)),
+      );
+      source.messages.add(message);
+      await tester.pumpAndSettle();
+      expect(sonarFeatures(), isNotEmpty);
+      expect(reports.calls, isEmpty);
+      expect(selection(tester).report, isNull);
+      expect(map.cameras, isEmpty);
+      // La disparition de la bannière ne vaut pas consultation de l'alerte.
+      await tester.pump(const Duration(seconds: 9));
+      await tester.pumpAndSettle();
+      expect(find.text('Ouvrir'), findsNothing);
+      expect(sonarFeatures(), isNotEmpty);
+      expect(map.cameras, isEmpty);
+      source.taps.add(message);
+      await tester.pumpAndSettle();
+      expect(sonarFeatures(), isNotEmpty);
+      expect(reports.calls, ['report-a']);
+      expect(selection(tester).report!.id, 'report-a');
+      expect(map.cameras, hasLength(1));
+      expect(find.byType(ReportDetailSheet), findsNothing);
+      // Ouvrir la notification ne remplace pas la consultation du détail.
+      tapReport('report-a');
+      await tester.pumpAndSettle();
+      expect(find.byType(ReportDetailSheet), findsOneWidget);
+      expect(sonarFeatures(), isEmpty);
+      // Une redélivrance SDK ne doit pas relancer le sonar déjà consulté.
+      source.messages.add(message);
+      await tester.pumpAndSettle();
+      expect(sonarFeatures(), isEmpty);
+    },
+  );
+
+  focusTestWidgets(
+    'bannière masquée : le sonar reste jusqu’au toucher du report',
+    (tester) async {
+      await mount(tester);
+      source.messages.add(
+        pushMessage(expiry: DateTime.now().add(const Duration(hours: 1))),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.byTooltip('Masquer la notification'));
+      await tester.pumpAndSettle();
+      expect(sonarFeatures(), isNotEmpty);
+      expect(map.cameras, isEmpty);
+      tapReport('report-a', layerId: 'alert-notification-point');
+      await tester.pumpAndSettle();
+      expect(sonarFeatures(), isEmpty);
+      expect(reports.calls, ['report-a']);
+      expect(selection(tester).report!.id, 'report-a');
+      await tester.pump(const Duration(seconds: 7));
+      expect(sonarFeatures(), isEmpty);
+    },
+  );
 
   for (final photo in [false, true]) {
     for (final category in ReportCategory.values) {
@@ -210,22 +449,28 @@ void main() {
               Navigator.of(tester.element(find.byType(MapScreen))).canPop(),
               false,
             );
-            map.interactions.single.action(
-              mb.TypedFeaturesetFeature(
-                mb.FeaturesetDescriptor(layerId: 'alert-selected-point'),
-                {
-                  'type': 'Point',
-                  'coordinates': [6.0, 44.0],
-                },
-                {'report_id': 'report-b'},
-                {},
-              ),
-              mb.MapContentGestureContext(
-                touchPosition: mb.ScreenCoordinate(x: 200, y: 300),
-                point: mb.Point(coordinates: mb.Position(6, 44)),
-                gestureState: mb.GestureState.ended,
-              ),
-            );
+            map.interactions
+                .singleWhere(
+                  (interaction) =>
+                      interaction.featuresetDescriptor?.layerId ==
+                      'alert-selected-point',
+                )
+                .action(
+                  mb.TypedFeaturesetFeature(
+                    mb.FeaturesetDescriptor(layerId: 'alert-selected-point'),
+                    {
+                      'type': 'Point',
+                      'coordinates': [6.0, 44.0],
+                    },
+                    {'report_id': 'report-b'},
+                    {},
+                  ),
+                  mb.MapContentGestureContext(
+                    touchPosition: mb.ScreenCoordinate(x: 200, y: 300),
+                    point: mb.Point(coordinates: mb.Position(6, 44)),
+                    gestureState: mb.GestureState.ended,
+                  ),
+                );
             await settle();
             expect(
               tester

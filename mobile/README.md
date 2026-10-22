@@ -319,6 +319,16 @@ Lorsqu’une alerte est ouverte depuis l’historique ou depuis une notification
 FCM, le mobile relit le signalement avec `GET /api/v1/reports/{report_id}`.
 Le contenu du push ne constitue donc pas la source de vérité du signalement.
 
+La réception au premier plan affiche le badge et le sonar sans déplacer la
+caméra. Au démarrage et au retour au premier plan, l’accueil relit les vingt
+dernières alertes du compte pour récupérer la plus récente encore active et
+non consultée, même sans appui sur la notification système. Un contrôle toutes
+les quinze secondes, uniquement au premier plan, couvre les messages manqués.
+Les coordonnées et l’expiration du signalement sont alors relues dans l’API.
+Seule l’ouverture du détail compte comme consultation ; elle est mémorisée
+localement par compte pour éviter de relancer le sonar au prochain démarrage.
+Une nouvelle alerte postérieure à cette consultation reste affichable.
+
 Un tap FCM (app ouverte via « Ouvrir », en arrière-plan ou arrêtée) revient
 directement à la `MapScreen` principale, sans ouvrir de fiche. Un repère violet
 identifie le signalement même si les tuiles MVT ne sont pas encore chargées.

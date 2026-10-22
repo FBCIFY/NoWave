@@ -7,8 +7,8 @@ import '../../../core/api/api_exception.dart';
 import '../../map/presentation/widgets/map_panel.dart';
 import '../data/report_detail_service.dart';
 import '../domain/report_detail.dart';
-import 'report_category_icon.dart';
 import 'report_category_style.dart';
+import 'report_category_badge.dart';
 import 'report_detail_format.dart';
 import 'report_photo_viewer.dart';
 
@@ -23,9 +23,13 @@ class ReportDetailSheet extends StatefulWidget {
     this.userPosition,
     this.now = DateTime.now,
     this.onShowOnMap,
+    this.scrollController,
+    this.onContentHeightChanged,
   });
 
   final String reportId;
+  final ScrollController? scrollController;
+  final ValueChanged<double>? onContentHeightChanged;
   final Future<void> Function(ReportDetail)? onShowOnMap;
 
   /// Charge la fiche, en général `ReportDetailService.fetchReport`.
@@ -44,8 +48,8 @@ class ReportDetailSheet extends StatefulWidget {
   State<ReportDetailSheet> createState() => _ReportDetailSheetState();
 }
 
-/// Fiche posée sur la carte : en bas après un badge touché, en haut depuis
-/// Mes alertes, avec un retour vers la liste.
+/// Même fiche en bas de la carte depuis un badge ou Mes alertes ; dans ce
+/// dernier cas, une flèche permet de retrouver la liste.
 class ReportDetailPanel extends StatelessWidget {
   const ReportDetailPanel({
     super.key,
@@ -56,6 +60,7 @@ class ReportDetailPanel extends StatelessWidget {
     this.side = MapPanelSide.bottom,
     this.onBack,
     this.userPosition,
+    this.dismissRequested = false,
   });
 
   final String reportId;
@@ -65,24 +70,48 @@ class ReportDetailPanel extends StatelessWidget {
   final VoidCallback onClose;
   final MapPanelSide side;
   final VoidCallback? onBack;
+  final bool dismissRequested;
 
   @override
   Widget build(BuildContext context) => MapPanel(
     side: side,
     onClose: onClose,
     onBack: onBack,
-    child: SingleChildScrollView(
-      child: ReportDetailSheet(
-        reportId: reportId,
-        loadReport: loadReport,
-        loadPhoto: loadPhoto,
-        userPosition: userPosition,
-      ),
-    ),
+    showCloseButton: false,
+    backgroundColor: Colors.white.withValues(alpha: 0.96),
+    extendToBottom: Theme.of(context).platform == TargetPlatform.android,
+    dismissRequested: dismissRequested,
+    scrollableBuilder: (context, scrollController, onContentHeightChanged) =>
+        ReportDetailSheet(
+          reportId: reportId,
+          scrollController: scrollController,
+          onContentHeightChanged: onContentHeightChanged,
+          loadReport: loadReport,
+          loadPhoto: loadPhoto,
+          userPosition: userPosition,
+        ),
   );
 }
 
 class _ReportDetailSheetState extends State<ReportDetailSheet> {
+  final _contentKey = GlobalKey();
+  double? _lastContentHeight;
+
+  void _measureContent() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      final size = _contentKey.currentContext?.size;
+      if (size == null) return;
+      final height = size.height + MediaQuery.paddingOf(context).bottom;
+      if (_lastContentHeight != null &&
+          (height - _lastContentHeight!).abs() < 0.5) {
+        return;
+      }
+      _lastContentHeight = height;
+      widget.onContentHeightChanged?.call(height);
+    });
+  }
+
   /// Chargement en cours ou terminé ; remplacé à chaque nouvel essai.
   late Future<ReportDetail> _report = widget.loadReport(widget.reportId);
 
@@ -100,34 +129,52 @@ class _ReportDetailSheetState extends State<ReportDetailSheet> {
 
   @override
   Widget build(BuildContext context) {
+    _measureContent();
     return SafeArea(
       top: false,
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(24, 0, 24, 24),
-        child: FutureBuilder<ReportDetail>(
-          future: _report,
-          builder: (context, snapshot) {
-            if (snapshot.hasData) {
-              return _ReportDetailContent(
-                report: snapshot.requireData,
-                onShowOnMap: widget.onShowOnMap,
-                userPosition: widget.userPosition,
-                now: widget.now(),
-                loadPhoto: widget.loadPhoto,
-                refreshPhotoUrl: _refreshPhotoUrl,
-              );
-            }
-            if (snapshot.hasError) {
-              return _ReportDetailError(
-                error: snapshot.error!,
-                onRetry: _retry,
-              );
-            }
-            return const SizedBox(
-              height: 160,
-              child: Center(child: CircularProgressIndicator()),
-            );
+      child: SingleChildScrollView(
+        controller: widget.scrollController,
+        physics: widget.scrollController == null
+            ? null
+            : const ClampingScrollPhysics(
+                parent: AlwaysScrollableScrollPhysics(),
+              ),
+        child: NotificationListener<SizeChangedLayoutNotification>(
+          onNotification: (_) {
+            _measureContent();
+            return true;
           },
+          child: SizeChangedLayoutNotifier(
+            child: Padding(
+              key: _contentKey,
+              padding: const EdgeInsets.fromLTRB(24, 0, 24, 12),
+              child: FutureBuilder<ReportDetail>(
+                future: _report,
+                builder: (context, snapshot) {
+                  if (snapshot.hasData) {
+                    return _ReportDetailContent(
+                      report: snapshot.requireData,
+                      onShowOnMap: widget.onShowOnMap,
+                      userPosition: widget.userPosition,
+                      now: widget.now(),
+                      loadPhoto: widget.loadPhoto,
+                      refreshPhotoUrl: _refreshPhotoUrl,
+                    );
+                  }
+                  if (snapshot.hasError) {
+                    return _ReportDetailError(
+                      error: snapshot.error!,
+                      onRetry: _retry,
+                    );
+                  }
+                  return const SizedBox(
+                    height: 160,
+                    child: Center(child: CircularProgressIndicator()),
+                  );
+                },
+              ),
+            ),
+          ),
         ),
       ),
     );
@@ -181,81 +228,70 @@ class _ReportDetailContent extends StatelessWidget {
     final photoUrl = photo?.url;
     final onShowOnMap = this.onShowOnMap;
 
-    return SingleChildScrollView(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Row(
-            children: [
-              Container(
-                width: 48,
-                height: 48,
-                decoration: BoxDecoration(
-                  color: category.color,
-                  borderRadius: BorderRadius.circular(14),
-                ),
-                child: Center(
-                  child: ReportCategoryIcon(category, color: Colors.white),
-                ),
-              ),
-              const SizedBox(width: 14),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      category.label,
-                      style: theme.textTheme.titleLarge?.copyWith(
-                        fontWeight: FontWeight.w700,
-                      ),
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Row(
+          children: [
+            ReportCategoryBadge(category: category),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    category.label,
+                    style: theme.textTheme.titleLarge?.copyWith(
+                      color: AppColors.text,
+                      fontWeight: FontWeight.w700,
                     ),
-                    Text(
-                      'Observé ${formatDayTime(report.observedAt, now: now)}',
-                      style: theme.textTheme.bodyMedium?.copyWith(
-                        color: theme.colorScheme.onSurfaceVariant,
-                      ),
+                  ),
+                  Text(
+                    'Observé ${formatDayTime(report.observedAt, now: now)}',
+                    style: theme.textTheme.bodyMedium?.copyWith(
+                      color: const Color(0xFF475569),
                     ),
-                  ],
-                ),
+                  ),
+                ],
               ),
-            ],
-          ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 16),
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: [
+            _InfoChip(icon: Icons.near_me_outlined, label: _distance),
+            _InfoChip(
+              icon: Icons.schedule,
+              label: 'Expire ${formatDayTime(report.expiresAt, now: now)}',
+            ),
+          ],
+        ),
+        if (photo != null) ...[
           const SizedBox(height: 16),
-          Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            children: [
-              _InfoChip(icon: Icons.near_me_outlined, label: _distance),
-              _InfoChip(
-                icon: Icons.schedule,
-                label: 'Expire ${formatDayTime(report.expiresAt, now: now)}',
-              ),
-            ],
-          ),
-          if (photo != null) ...[
-            const SizedBox(height: 16),
-            if (photoUrl != null)
-              _ReportPhoto(
-                url: photoUrl,
-                loadPhoto: loadPhoto,
-                refreshUrl: refreshPhotoUrl,
-              )
-            else
-              _PhotoStatus(photo.status),
-          ],
-          if (description != null && description.isNotEmpty) ...[
-            const SizedBox(height: 16),
-            Text(description, style: theme.textTheme.bodyLarge),
-          ],
-          const SizedBox(height: 16),
-          _AuthorRow(author: report.author, boat: report.boat),
-          if (onShowOnMap != null) ...[
-            const SizedBox(height: 20),
-            _ShowOnMapButton(onPressed: () => onShowOnMap(report)),
-          ],
+          if (photoUrl != null)
+            _ReportPhoto(
+              url: photoUrl,
+              loadPhoto: loadPhoto,
+              refreshUrl: refreshPhotoUrl,
+            )
+          else
+            _PhotoStatus(photo.status),
         ],
-      ),
+        if (description != null && description.isNotEmpty) ...[
+          const SizedBox(height: 16),
+          Text(description, style: theme.textTheme.bodyLarge),
+        ],
+        const SizedBox(height: 16),
+        _AuthorRow(author: report.author, boat: report.boat),
+        if (onShowOnMap != null) ...[
+          const SizedBox(height: 20),
+          _ShowOnMapButton(onPressed: () => onShowOnMap(report)),
+        ],
+      ],
     );
   }
 }
@@ -318,10 +354,7 @@ class _PhotoStatus extends StatelessWidget {
       ),
       child: Row(
         children: [
-          Icon(
-            Icons.photo_camera_outlined,
-            color: theme.colorScheme.onSurfaceVariant,
-          ),
+          Icon(Icons.photo_camera_outlined, color: const Color(0xFF475569)),
           const SizedBox(width: 12),
           Expanded(child: Text(label, style: theme.textTheme.bodyMedium)),
         ],
@@ -373,7 +406,7 @@ class _AuthorRow extends StatelessWidget {
                       ? boat.type.label
                       : '${boat.name} · ${boat.type.label}',
                   style: theme.textTheme.bodySmall?.copyWith(
-                    color: theme.colorScheme.onSurfaceVariant,
+                    color: const Color(0xFF475569),
                   ),
                 ),
             ],
@@ -569,18 +602,14 @@ class _ReportDetailError extends StatelessWidget {
         ),
         const SizedBox(height: 12),
         Text(message, textAlign: TextAlign.center),
-        const SizedBox(height: 16),
-        if (gone)
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(),
-            child: const Text('Fermer'),
-          )
-        else
+        if (!gone) ...[
+          const SizedBox(height: 16),
           FilledButton.icon(
             onPressed: onRetry,
             icon: const Icon(Icons.refresh),
             label: const Text('Réessayer'),
           ),
+        ],
       ],
     );
   }

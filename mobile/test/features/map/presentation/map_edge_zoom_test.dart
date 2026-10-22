@@ -33,8 +33,15 @@ Future<FocusMap> _openMap(WidgetTester tester) async {
 }
 
 /// Glisse verticalement de [dy] sur [finder], en petits pas.
-Future<void> _slide(WidgetTester tester, Finder finder, double dy) async {
-  final gesture = await tester.startGesture(tester.getCenter(finder));
+Future<void> _slide(
+  WidgetTester tester,
+  Finder finder,
+  double dy, {
+  bool fromTop = false,
+}) async {
+  final rect = tester.getRect(finder);
+  final start = fromTop ? Offset(rect.center.dx, rect.top + 64) : rect.center;
+  final gesture = await tester.startGesture(start);
   for (var i = 0; i < 10; i++) {
     await gesture.moveBy(Offset(0, dy / 10));
     await tester.pump();
@@ -51,7 +58,8 @@ void main() {
         final map = await _openMap(tester);
         final edge = find.byKey(ValueKey('edge-zoom-$side'));
 
-        await _slide(tester, edge, MapEdgeZoom.pixelsPerZoom);
+        // La portion occupée par le menu de droite sert à ses commandes.
+        await _slide(tester, edge, MapEdgeZoom.pixelsPerZoom, fromTop: true);
         // Le seuil de glissé de Flutter mange les premiers pixels.
         expect(map.cameras.last.zoom!.toDouble(), closeTo(11, .2));
         expect(
@@ -60,7 +68,12 @@ void main() {
         );
 
         map.cameras.clear();
-        await _slide(tester, edge, -2 * MapEdgeZoom.pixelsPerZoom);
+        await _slide(
+          tester,
+          edge,
+          -2 * MapEdgeZoom.pixelsPerZoom,
+          fromTop: true,
+        );
         expect(map.cameras.last.zoom!.toDouble(), closeTo(8, .2));
       },
     );

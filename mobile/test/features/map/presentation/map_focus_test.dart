@@ -61,6 +61,18 @@ class _Reports extends Fake implements ReportDetailService {
   }
 }
 
+class _DelayedCameraMap extends FocusMap {
+  Completer<void>? blockNextCancel;
+
+  @override
+  Future<void> cancelCameraAnimation() {
+    cancellations++;
+    final blocked = blockNextCancel;
+    blockNextCancel = null;
+    return blocked?.future ?? Future.value();
+  }
+}
+
 class _Alerts extends Fake implements AlertService {
   @override
   Future<AlertPage> fetchPage({int page = 1, int limit = 20}) async =>
@@ -442,8 +454,8 @@ void main() {
       expect(map.easedCameras, hasLength(1));
       final camera = map.easedCameras.single;
       expect(camera.center!.coordinates.lng, 6);
-      // Zoom 14 de départ + 1,5, inclinaison choisie gardée.
-      expect(camera.zoom, 15.5);
+      // Zoom proche et inclinaison choisie gardés.
+      expect(camera.zoom, 14);
       expect(camera.bearing, 130);
       expect(camera.pitch, 30);
       expect(camera.padding!.bottom, mapHeight(tester) / 2);
@@ -463,7 +475,7 @@ void main() {
     focus.focus(focusReport(), origin: MapFocusOrigin.mapTap);
     await pumpFrames(tester);
     expect(map.easedCameras.single.pitch, GlobePitchController.defaultPitch);
-    expect(map.easedCameras.single.zoom, 15.5);
+    expect(map.easedCameras.single.zoom, 14);
   });
 
   focusTestWidgets('ouvrir un report conserve le cap et l’inclinaison', (
@@ -550,18 +562,12 @@ void main() {
       expect(layer['type'], 'symbol');
       // Caché au dézoom, comme les badges, au profit de la zone colorée.
       expect(layer['minzoom'], ReportTiles.badgesMinZoom);
-      // Un peu plus gros que les badges des tuiles, sur un halo blanc.
+      // Seule l’icône grossit par rapport aux badges des tuiles.
       expect(
         layer['layout']['icon-size'],
         ReportTiles.markerSizeExpression(scale: 1.35),
       );
-      final halo = map.style.layers['alert-selected-halo']!;
-      expect(halo['type'], 'circle');
-      expect(halo['minzoom'], ReportTiles.badgesMinZoom);
-      expect(
-        map.style.layerOrder.indexOf('alert-selected-halo'),
-        map.style.layerOrder.indexOf('alert-selected-point') - 1,
-      );
+      expect(map.style.layers, isNot(contains('alert-selected-halo')));
       expect(
         layer['layout']['icon-image'],
         contains(badges.ReportMarker.imageId(category)),
@@ -595,10 +601,14 @@ void main() {
     styleReady(tester);
     await pumpFrames(tester);
     expect(map.style.layers.keys.where((id) => id.startsWith('alert-')), [
-      'alert-selected-halo',
+      'alert-notification-sonar-glow',
+      'alert-notification-sonar',
+      'alert-notification-point',
       'alert-selected-point',
     ]);
     expect(map.style.sources.keys.where((id) => id.startsWith('alert-')), [
+      'alert-notification',
+      'alert-notification-sonar',
       'alert-selected',
     ]);
     expect(
@@ -636,7 +646,9 @@ void main() {
       expect(data['properties'], {'report_id': 'b', 'category': 'obstruction'});
       expect(data['geometry']['coordinates'], [7, 43.29]);
       expect(map.style.layers.keys.where((id) => id.startsWith('alert-')), [
-        'alert-selected-halo',
+        'alert-notification-sonar-glow',
+        'alert-notification-sonar',
+        'alert-notification-point',
         'alert-selected-point',
       ]);
       expect(map.cameras, hasLength(1));
@@ -823,7 +835,10 @@ void main() {
             )
             .first,
       );
-      final interaction = map.interactions.single;
+      final interaction = map.interactions.singleWhere(
+        (interaction) =>
+            interaction.featuresetDescriptor?.layerId == 'alert-selected-point',
+      );
       interaction.action(
         mb.TypedFeaturesetFeature(
           mb.FeaturesetDescriptor(layerId: 'alert-selected-point'),
@@ -861,22 +876,24 @@ void main() {
     (tester) async {
       await mount(tester);
       reports.response = Completer<ReportDetail>();
-      map.interactions.first.action(
-        mb.TypedFeaturesetFeature(
-          mb.FeaturesetDescriptor(layerId: 'alert-selected-point'),
-          {
-            'type': 'Point',
-            'coordinates': [5.373, 43.29],
-          },
-          {'report_id': 'report-a'},
-          {},
-        ),
-        mb.MapContentGestureContext(
-          touchPosition: mb.ScreenCoordinate(x: 200, y: 300),
-          point: mb.Point(coordinates: mb.Position(5.373, 43.29)),
-          gestureState: mb.GestureState.ended,
-        ),
-      );
+      map.interactions
+          .firstWhere((interaction) => interaction.featuresetDescriptor != null)
+          .action(
+            mb.TypedFeaturesetFeature(
+              mb.FeaturesetDescriptor(layerId: 'alert-selected-point'),
+              {
+                'type': 'Point',
+                'coordinates': [5.373, 43.29],
+              },
+              {'report_id': 'report-a'},
+              {},
+            ),
+            mb.MapContentGestureContext(
+              touchPosition: mb.ScreenCoordinate(x: 200, y: 300),
+              point: mb.Point(coordinates: mb.Position(5.373, 43.29)),
+              gestureState: mb.GestureState.ended,
+            ),
+          );
       await pumpFrames(tester);
       expect(map.cameras, isEmpty);
       reports.response!.complete(focusReport());
@@ -884,7 +901,7 @@ void main() {
       expect(focus.origin, MapFocusOrigin.mapTap);
       // Le badge touché est mis en valeur au-dessus de celui des tuiles.
       expect(map.style.layers, contains('alert-selected-point'));
-      expect(map.style.layers, contains('alert-selected-halo'));
+      expect(map.style.layers, isNot(contains('alert-selected-halo')));
       expect(map.easedCameras, hasLength(1));
       expect(map.easedCameras.single.padding!.bottom, panelHeight(tester));
       gps.initial.complete(focusPosition());
@@ -904,24 +921,295 @@ void main() {
   );
 
   void tapBadge(String id, {double longitude = 5.373}) {
-    map.interactions.first.action(
-      mb.TypedFeaturesetFeature(
-        mb.FeaturesetDescriptor(layerId: ReportTiles.pointsLayerId),
-        {
-          'type': 'Point',
-          'coordinates': [longitude, 43.29],
-        },
-        {'report_id': id},
-        {},
-      ),
-      touch(),
-    );
+    map.interactions
+        .firstWhere((interaction) => interaction.featuresetDescriptor != null)
+        .action(
+          mb.TypedFeaturesetFeature(
+            mb.FeaturesetDescriptor(layerId: ReportTiles.pointsLayerId),
+            {
+              'type': 'Point',
+              'coordinates': [longitude, 43.29],
+            },
+            {'report_id': id},
+            {},
+          ),
+          touch(),
+        );
   }
+
+  void tapMap() => map.interactions
+      .singleWhere((interaction) => interaction.featuresetDescriptor == null)
+      .action(null, touch());
+
+  List<dynamic> sonarFeatures() =>
+      (jsonDecode(
+            map.style.sources['alert-notification-sonar']!['data'] as String,
+          ) as Map<String, dynamic>)['features']
+          as List;
+
+  double sonarRange() {
+    final feature = sonarFeatures().first;
+    final point = feature['geometry']['coordinates'][0] as List;
+    final progress = 1 - (feature['properties']['opacity'] as num).toDouble();
+    return ReportReach.distance(
+          43.29,
+          5.373,
+          point[1] as double,
+          point[0] as double,
+        ) /
+        progress;
+  }
+
+  focusTestWidgets(
+    'sonar : cercles vers le bateau sans mouvement ni reconstruction',
+    (tester) async {
+      gps.initial.complete(focusPosition());
+      await mount(tester);
+      focus.focus(focusReport(), origin: MapFocusOrigin.notification);
+      await pumpFrames(tester);
+      expect(map.style.layers, isNot(contains('alert-selected-halo')));
+      final expectedDistance = ReportReach.distance(43.29, 5.373, 43.29, 5.37);
+      expect(sonarRange(), closeTo(expectedDistance, .01));
+      final previousOpacity =
+          sonarFeatures().first['properties']['opacity'] as double;
+      final mapWidget = tester.widget<mb.MapWidget>(find.byType(mb.MapWidget));
+      final cameraCount = map.cameras.length;
+      await tester.pump(const Duration(milliseconds: 100));
+      expect(
+        sonarFeatures().first['properties']['opacity'],
+        lessThan(previousOpacity),
+      );
+      expect(map.cameras, hasLength(cameraCount));
+      expect(
+        tester.widget<mb.MapWidget>(find.byType(mb.MapWidget)),
+        same(mapWidget),
+      );
+      gps.positions.add(focusPosition(longitude: 5.36));
+      await pumpFrames(tester);
+      expect(
+        sonarRange(),
+        closeTo(ReportReach.distance(43.29, 5.373, 43.29, 5.36), .01),
+      );
+      tapBadge('report-a');
+      await pumpFrames(tester);
+      expect(sonarFeatures(), isEmpty);
+      expect(map.style.layers, isNot(contains('alert-selected-halo')));
+      await tester.pump(const Duration(seconds: 5));
+      expect(sonarFeatures(), isEmpty);
+    },
+  );
+
+  focusTestWidgets(
+    'sonar non consulté : reste actif après un toucher ailleurs',
+    (tester) async {
+      await mount(tester);
+      focus.focus(focusReport(), origin: MapFocusOrigin.notification);
+      await pumpFrames(tester);
+      expect(sonarRange(), closeTo(350, .01));
+      tapMap();
+      await pumpFrames(tester);
+      expect(sonarFeatures(), isNotEmpty);
+      focus.focus(focusReport(id: 'another', longitude: 6));
+      await pumpFrames(tester);
+      expect(sonarRange(), closeTo(350, .01));
+      focus.clear();
+      await pumpFrames(tester);
+      expect(sonarFeatures(), isNotEmpty);
+      tapBadge('report-a');
+      await pumpFrames(tester);
+      expect(sonarFeatures(), isEmpty);
+    },
+  );
+
+  focusTestWidgets('animations réduites : repère fixe sans ondes', (
+    tester,
+  ) async {
+    await mount(tester, reduceMotion: true);
+    focus.focus(focusReport(), origin: MapFocusOrigin.notification);
+    await pumpFrames(tester);
+    await tester.pump(const Duration(milliseconds: 1100));
+    expect(sonarFeatures(), isEmpty);
+    expect(map.style.layers, isNot(contains('alert-selected-halo')));
+  });
+
+  focusTestWidgets('sonar : pause hors écran et reprise au retour', (
+    tester,
+  ) async {
+    await mount(tester);
+    focus.focus(focusReport(), origin: MapFocusOrigin.notification);
+    await pumpFrames(tester);
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.inactive);
+    final data = map.style.sources['alert-notification-sonar']!['data'];
+    await tester.pump(const Duration(seconds: 1));
+    expect(map.style.sources['alert-notification-sonar']!['data'], data);
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+    await tester.pump(const Duration(milliseconds: 200));
+    expect(sonarFeatures(), isNotEmpty);
+    expect(map.style.sources['alert-notification-sonar']!['data'], isNot(data));
+  });
+
+  focusTestWidgets('toucher l’alerte retire le sonar avant le détail', (
+    tester,
+  ) async {
+    await mount(tester);
+    focus.focus(focusReport(), origin: MapFocusOrigin.notification);
+    await pumpFrames(tester);
+    final response = reports.response = Completer<ReportDetail>();
+    tapBadge('report-a');
+    await tester.pump();
+    expect(sonarFeatures(), isEmpty);
+    expect(map.style.layers, isNot(contains('alert-selected-halo')));
+    await tester.pump(const Duration(seconds: 5));
+    expect(sonarFeatures(), isEmpty);
+    response.complete(focusReport());
+    await pumpFrames(tester);
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.inactive);
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+    await tester.pump(const Duration(seconds: 5));
+    expect(sonarFeatures(), isEmpty);
+    expect(map.style.layers, isNot(contains('alert-selected-halo')));
+    focus.focus(
+      focusReport(id: 'report-b'),
+      origin: MapFocusOrigin.notification,
+    );
+    await pumpFrames(tester);
+    expect(sonarFeatures(), isNotEmpty);
+  });
+
+  focusTestWidgets('toucher la carte ferme la fiche sans restaurer la caméra', (
+    tester,
+  ) async {
+    await mount(tester);
+    tapBadge('report-a');
+    await pumpFrames(tester);
+    final cameras = map.easedCameras.length;
+    final allCameras = map.cameras.length;
+    final cancellations = map.cancellations;
+    final surface = find.byKey(const ValueKey('map-panel-surface'));
+    final initialY = tester.getTopLeft(surface).dy;
+    tapMap();
+    await tester.pump();
+    expect(map.cancellations, greaterThan(cancellations));
+    // Le panneau reste monté pendant sa sortie : aucun retrait brutal.
+    expect(find.byType(ReportDetailPanel), findsOneWidget);
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 80));
+    expect(tester.getTopLeft(surface).dy, greaterThan(initialY));
+    await pumpFrames(tester);
+    expect(find.byType(ReportDetailPanel), findsNothing);
+    expect(focus.report, isNull);
+    expect(map.easedCameras, hasLength(cameras));
+    // Un simple appui conserve aussi la projection, sans setCamera différé.
+    expect(map.cameras, hasLength(allCameras));
+    expect(map.style.layers, isNot(contains('alert-selected-point')));
+  });
+
+  focusTestWidgets(
+    'appui sur la carte : un cadrage déjà engagé ne repart pas après la fermeture',
+    (tester) async {
+      final delayedMap = _DelayedCameraMap();
+      map = delayedMap;
+      reports.response = Completer<ReportDetail>()
+        ..complete(
+          focusReport(
+            photo: const ReportPhoto(
+              status: ReportPhotoStatus.uploaded,
+              url: 'https://photo.test/report-a',
+            ),
+          ),
+        );
+      await mount(tester);
+      tapBadge('report-a');
+      await pumpFrames(tester);
+      final surface = find.byKey(const ValueKey('map-panel-surface'));
+      final gesture = await tester.startGesture(
+        tester.getTopLeft(surface) + const Offset(200, 120),
+      );
+      await gesture.moveBy(const Offset(0, -20));
+      await tester.pump();
+      final pending = Completer<void>();
+      delayedMap.blockNextCancel = pending;
+      await gesture.moveBy(const Offset(0, -80));
+      await tester.pump();
+      expect(delayedMap.blockNextCancel, isNull);
+      final cameraCount = map.cameras.length;
+      tapMap();
+      await gesture.up();
+      await pumpFrames(tester);
+      pending.complete();
+      await pumpFrames(tester);
+      expect(find.byType(ReportDetailPanel), findsNothing);
+      expect(map.cameras, hasLength(cameraCount));
+    },
+  );
+
+  focusTestWidgets(
+    'autre report pendant la sortie : sa nouvelle fiche reste ouverte',
+    (tester) async {
+      await mount(tester);
+      tapBadge('report-a');
+      await pumpFrames(tester);
+      tapMap();
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 60));
+      tapBadge('report-b');
+      await pumpFrames(tester);
+      expect(find.byType(ReportDetailPanel), findsOneWidget);
+      expect(
+        tester
+            .widget<ReportDetailSheet>(find.byType(ReportDetailSheet))
+            .reportId,
+        'report-b',
+      );
+      expect(focus.report?.id, 'report-b');
+    },
+  );
+
+  focusTestWidgets(
+    'fiche fermée pendant le chargement : aucun cadrage tardif',
+    (tester) async {
+      await mount(tester);
+      reports.response = Completer<ReportDetail>();
+      tapBadge('report-a');
+      await pumpFrames(tester);
+      tapMap();
+      reports.response!.complete(focusReport());
+      await pumpFrames(tester);
+      expect(find.byType(ReportDetailPanel), findsNothing);
+      expect(focus.report, isNull);
+      expect(map.easedCameras, isEmpty);
+    },
+  );
+
+  focusTestWidgets('Mes alertes : toucher le fond ferme aussi la liste seule', (
+    tester,
+  ) async {
+    await mount(tester, alertService: _Alerts());
+    await tester.tap(find.byTooltip('Mes alertes'));
+    await pumpFrames(tester);
+    expect(find.byType(AlertsPanel), findsOneWidget);
+    tapMap();
+    await pumpFrames(tester);
+    expect(find.byType(AlertsPanel), findsNothing);
+    expect(map.easedCameras, isEmpty);
+  });
+
+  focusTestWidgets('toucher les détails ne ferme pas le panneau', (
+    tester,
+  ) async {
+    await mount(tester);
+    tapBadge('report-a');
+    await pumpFrames(tester);
+    await tester.tap(find.byType(ReportDetailSheet));
+    await pumpFrames(tester);
+    expect(find.byType(ReportDetailPanel), findsOneWidget);
+  });
 
   focusTestWidgets('fiche fermée : la carte revient comme avant', (
     tester,
   ) async {
     map
+      ..cameraZoom = 9.25
       ..cameraPitch = 10
       ..cameraBearing = 20;
     await mount(tester);
@@ -932,32 +1220,35 @@ void main() {
     expect(find.byType(BottomSheet), findsNothing);
     expect(find.byTooltip('Créer un signalement'), findsNothing);
     final detail = map.easedCameras.single;
-    expect(detail.zoom, 15.5);
+    expect(detail.zoom, 13);
     expect(detail.pitch, 10);
     expect(detail.padding!.bottom, panelHeight(tester));
 
-    // La croix est à droite, pas sur la poignée centrale.
-    final panel = tester.getRect(find.byType(ReportDetailPanel));
-    expect(
-      tester.getCenter(find.byTooltip('Fermer')).dx,
-      greaterThan(panel.right - 60),
+    // La fiche se ferme au geste ou au retour système, sans croix.
+    expect(find.byTooltip('Fermer'), findsNothing);
+    await tester.fling(
+      find.byKey(const ValueKey('map-panel-drag-handle')),
+      const Offset(0, 400),
+      900,
     );
-    await tester.tap(find.byTooltip('Fermer'));
     await pumpFrames(tester);
     expect(find.byType(ReportDetailPanel), findsNothing);
     expect(find.byTooltip('Créer un signalement'), findsOneWidget);
     expect(map.style.layers, isNot(contains('alert-selected-point')));
     expect(map.style.layers, isNot(contains('alert-selected-halo')));
-    expect(map.easedCameras, hasLength(2));
+    expect(
+      map.easedCameras.where((camera) => camera.zoom == 9.25),
+      hasLength(1),
+    );
     final restored = map.easedCameras.last;
     expect(restored.center!.coordinates.lng, 5.37);
-    expect(restored.zoom, 14);
+    expect(restored.zoom, 9.25);
     expect(restored.pitch, 10);
     expect(restored.bearing, 20);
     expect(restored.padding!.bottom, 0);
   });
 
-  focusTestWidgets('carte déplacée sous la fiche : elle reste où on l’a mise', (
+  focusTestWidgets('déplacer la carte ferme la fiche sans restaurer la vue', (
     tester,
   ) async {
     await mount(tester);
@@ -967,7 +1258,6 @@ void main() {
     tester.widget<mb.MapWidget>(find.byType(mb.MapWidget)).onScrollListener!(
       touch(),
     );
-    await tester.tap(find.byTooltip('Fermer'));
     await pumpFrames(tester);
     expect(find.byType(ReportDetailPanel), findsNothing);
     expect(map.style.layers, isNot(contains('alert-selected-point')));
@@ -979,33 +1269,86 @@ void main() {
   });
 
   focusTestWidgets(
+    'fermeture par la carte : aucun zoom renvoyé au relâchement',
+    (tester) async {
+      await mount(tester);
+      tapBadge('report-a');
+      await pumpFrames(tester);
+      expect(map.easedCameras.single.zoom, 14);
+      map.cameras.clear();
+      map.easedCameras.clear();
+
+      final gesture = await tester.startGesture(const Offset(220, 200));
+      final mapWidget = tester.widget<mb.MapWidget>(find.byType(mb.MapWidget));
+      mapWidget.onZoomListener!(touch());
+      // Le zoom appartient aux doigts puis à l'inertie native.
+      map.cameraZoom = 11.25;
+      mapWidget.onCameraChangeListener!(
+        mb.CameraChangedEventData.fromJson({
+          'timestamp': 1,
+          'cameraState': {
+            'center': {
+              'type': 'Point',
+              'coordinates': [5.38, 43.30],
+            },
+            'zoom': 11.25,
+            'pitch': 35.0,
+            'bearing': 20.0,
+            'padding': {'top': 0.0, 'left': 0.0, 'bottom': 240.0, 'right': 0.0},
+          },
+        }),
+      );
+      await pumpFrames(tester);
+      expect(find.byType(ReportDetailPanel), findsNothing);
+      await gesture.up();
+      await pumpFrames(tester);
+      expect(map.easedCameras, isEmpty);
+      expect(map.cameras, isEmpty);
+      expect(map.cameraZoom, 11.25);
+    },
+  );
+
+  focusTestWidgets(
     'fiche qui grandit : le signalement reste au milieu de la carte visible',
     (tester) async {
+      reports.response = Completer<ReportDetail>()
+        ..complete(
+          focusReport(
+            photo: const ReportPhoto(
+              status: ReportPhotoStatus.uploaded,
+              url: 'https://photo.test/report-a',
+            ),
+          ),
+        );
       await mount(tester);
       tapBadge('report-a');
       await pumpFrames(tester);
       final first = map.easedCameras.single;
       expect(first.padding!.bottom, panelHeight(tester));
-      expect(panelHeight(tester), lessThan(mapHeight(tester) / 2));
+      expect(panelHeight(tester), lessThanOrEqualTo(mapHeight(tester) / 2));
 
-      // Texte agrandi : la fiche gagne en hauteur, pas la carte.
-      tester.platformDispatcher.textScaleFactorTestValue = 1.3;
-      addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
+      // Le contenu tiré vers le haut agrandit la fiche, pas le zoom.
+      final surface = find.byKey(const ValueKey('map-panel-surface'));
+      await tester.dragFrom(
+        tester.getTopLeft(surface) + const Offset(200, 120),
+        const Offset(0, -200),
+      );
       await pumpFrames(tester);
       final grown = map.easedCameras.last;
-      expect(map.easedCameras, hasLength(2));
+      expect(map.easedCameras.length, greaterThan(1));
       expect(grown.padding!.bottom, panelHeight(tester));
       expect(grown.padding!.bottom, greaterThan(first.padding!.bottom));
       expect(grown.center!.coordinates.lng, 5.373);
       expect(grown.zoom, first.zoom);
 
       // Carte déplacée à la main : plus de recalage.
+      final cameraCount = map.easedCameras.length;
       tester.widget<mb.MapWidget>(find.byType(mb.MapWidget)).onScrollListener!(
         touch(),
       );
-      tester.platformDispatcher.textScaleFactorTestValue = 1;
       await pumpFrames(tester);
-      expect(map.easedCameras, hasLength(2));
+      expect(map.easedCameras, hasLength(cameraCount));
+      expect(find.byType(ReportDetailPanel), findsNothing);
     },
   );
 
@@ -1016,6 +1359,8 @@ void main() {
       await mount(tester);
       tapBadge('report-a');
       await pumpFrames(tester);
+      // La vue courante peut être plus proche que celle précédant la fiche.
+      map.cameraZoom = 17;
       tapBadge('report-b', longitude: 6);
       await pumpFrames(tester);
       expect(reports.calls, ['report-a', 'report-b']);
@@ -1026,8 +1371,9 @@ void main() {
         'report-b',
       );
       expect(map.easedCameras.last.pitch, 30);
+      expect(map.easedCameras.map((camera) => camera.zoom), [14, 17]);
 
-      await tester.tap(find.byTooltip('Fermer'));
+      await tester.binding.handlePopRoute();
       await pumpFrames(tester);
       expect(map.easedCameras.last.pitch, 30);
       expect(map.easedCameras.last.zoom, 14);
@@ -1054,7 +1400,7 @@ void main() {
   });
 
   focusTestWidgets(
-    'Mes alertes : liste en haut, fiche cadrée dessous, retour puis croix',
+    'Mes alertes : liste et détail en bas, même zoom, retour puis fermeture',
     (tester) async {
       map
         ..cameraPitch = 10
@@ -1062,11 +1408,14 @@ void main() {
       await mount(tester, alertService: _Alerts());
       await tester.tap(find.byTooltip('Mes alertes'));
       await pumpFrames(tester);
-      // Liste posée en haut, sans voile ; la carte ne bouge pas.
+      // Liste posée en bas, sans voile ; la carte ne bouge pas.
       expect(find.byType(AlertsPanel), findsOneWidget);
       expect(find.byTooltip('Mes alertes'), findsNothing);
       expect(find.byTooltip('Créer un signalement'), findsNothing);
-      expect(tester.getRect(find.byType(AlertsPanel)).top, 0);
+      expect(
+        tester.getRect(find.byType(AlertsPanel)).bottom,
+        mapHeight(tester),
+      );
       expect(map.easedCameras, isEmpty);
 
       await tester.tap(find.byKey(const ValueKey('alert-a')));
@@ -1074,13 +1423,16 @@ void main() {
       expect(reports.calls, ['report-a']);
       expect(find.byType(AlertsPanel), findsNothing);
       expect(find.byType(ReportDetailPanel), findsOneWidget);
-      expect(tester.getRect(find.byType(ReportDetailPanel)).top, 0);
+      expect(
+        tester.getRect(find.byType(ReportDetailPanel)).bottom,
+        mapHeight(tester),
+      );
       expect(focus.origin, MapFocusOrigin.history);
-      // La fiche couvre le haut : le signalement au milieu de la carte
-      // visible dessous.
+      // Même fiche que depuis la carte : le signalement reste au-dessus.
       final detail = map.easedCameras.single;
-      expect(detail.padding!.top, panelHeight(tester));
-      expect(detail.padding!.bottom, 0);
+      expect(detail.padding!.top, 0);
+      expect(detail.padding!.bottom, panelHeight(tester));
+      expect(detail.zoom, 14);
       expect(detail.center!.coordinates.lng, 5.373);
 
       // Flèche de retour : la liste revient, la carte reste où elle est.
@@ -1107,29 +1459,27 @@ void main() {
     },
   );
 
-  focusTestWidgets(
-    'Mes alertes : carte déplacée, la croix la laisse en place',
-    (tester) async {
-      await mount(tester, alertService: _Alerts());
-      await tester.tap(find.byTooltip('Mes alertes'));
-      await pumpFrames(tester);
-      await tester.tap(find.byKey(const ValueKey('alert-a')));
-      await pumpFrames(tester);
-      expect(map.easedCameras, hasLength(1));
-      tester.widget<mb.MapWidget>(find.byType(mb.MapWidget)).onScrollListener!(
-        touch(),
-      );
-      await tester.tap(find.byTooltip('Fermer'));
-      await pumpFrames(tester);
-      expect(find.byType(AlertsPanel), findsNothing);
-      expect(find.byType(ReportDetailPanel), findsNothing);
-      expect(focus.report, isNull);
-      expect(
-        map.easedCameras.where((camera) => camera.zoom != null),
-        hasLength(1),
-      );
-    },
-  );
+  focusTestWidgets('Mes alertes : déplacer la carte ferme tous les panneaux', (
+    tester,
+  ) async {
+    await mount(tester, alertService: _Alerts());
+    await tester.tap(find.byTooltip('Mes alertes'));
+    await pumpFrames(tester);
+    await tester.tap(find.byKey(const ValueKey('alert-a')));
+    await pumpFrames(tester);
+    expect(map.easedCameras, hasLength(1));
+    tester.widget<mb.MapWidget>(find.byType(mb.MapWidget)).onScrollListener!(
+      touch(),
+    );
+    await pumpFrames(tester);
+    expect(find.byType(AlertsPanel), findsNothing);
+    expect(find.byType(ReportDetailPanel), findsNothing);
+    expect(focus.report, isNull);
+    expect(
+      map.easedCameras.where((camera) => camera.zoom != null),
+      hasLength(1),
+    );
+  });
 
   focusTestWidgets('notification pendant Mes alertes : la liste se ferme', (
     tester,

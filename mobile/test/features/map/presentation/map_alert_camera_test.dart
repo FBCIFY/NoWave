@@ -85,46 +85,29 @@ void main() {
     expect(camera.padding!.bottom, 300);
     expect(camera.padding!.top, 0);
     expect(camera.center!.coordinates.lng, focusReport().longitude);
-    expect(camera.zoom, 13.5);
+    expect(camera.zoom, 13);
     expect(camera.pitch, GlobePitchController.defaultPitch);
     expect(camera.bearing, 30);
     expect(map.fittedCoordinates, isEmpty);
   });
 
   test(
-    'fiche ouverte : un peu plus près, inclinaison unique, avec limites',
+    'la consultation conserve le zoom proche et l’inclinaison choisie',
     () async {
       final map = FocusMap();
-      Future<mb.CameraOptions> from(
-        mb.CameraState camera, {
-        double minZoom = 0,
-      }) => MapAlertCamera.detail(
-        map,
-        focusReport(),
-        from: camera,
-        bearing: 0,
-        viewport: viewport,
-        panelHeight: viewport.height / 2,
-        minZoom: minZoom,
-      );
-      expect((await from(startCamera(zoom: 16.5, pitch: 30))).zoom, 17);
-      // Une carte déjà plus proche n'est pas reculée.
-      expect((await from(startCamera(zoom: 18, pitch: 70))).zoom, 18);
-      // Inclinaison unique, quelle que soit la vue de départ.
-      for (final pitch in [0.0, 30.0, 70.0]) {
-        expect(
-          (await from(startCamera(pitch: pitch))).pitch,
-          GlobePitchController.defaultPitch,
+      for (final zoom in [2.0, 4.0, 12.0, 13.0, 16.5, 18.0]) {
+        final camera = await MapAlertCamera.detail(
+          map,
+          focusReport(),
+          from: startCamera(zoom: zoom),
+          bearing: 0,
+          viewport: viewport,
+          panelHeight: viewport.height / 2,
+          pitch: 30,
         );
+        expect(camera.zoom, zoom < 13 ? 13 : zoom);
+        expect(camera.pitch, 30);
       }
-      // Mes alertes depuis une vue large : assez près pour voir le badge.
-      expect(
-        (await from(
-          startCamera(zoom: 4),
-          minZoom: MapAlertCamera.historyMinZoom,
-        )).zoom,
-        MapAlertCamera.historyMinZoom,
-      );
     },
   );
 
