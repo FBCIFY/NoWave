@@ -1,3 +1,4 @@
+import 'package:blueway/core/map/globe_pitch_controller.dart';
 import 'package:blueway/features/map/presentation/map_alert_camera.dart';
 import 'package:flutter/widgets.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -85,13 +86,13 @@ void main() {
     expect(camera.padding!.top, 0);
     expect(camera.center!.coordinates.lng, focusReport().longitude);
     expect(camera.zoom, 13.5);
-    expect(camera.pitch, MapAlertCamera.detailMinPitch);
+    expect(camera.pitch, GlobePitchController.defaultPitch);
     expect(camera.bearing, 30);
     expect(map.fittedCoordinates, isEmpty);
   });
 
   test(
-    'fiche ouverte : un peu plus près et plus incliné, avec limites',
+    'fiche ouverte : un peu plus près, inclinaison unique, avec limites',
     () async {
       final map = FocusMap();
       Future<mb.CameraOptions> from(
@@ -107,11 +108,15 @@ void main() {
         minZoom: minZoom,
       );
       expect((await from(startCamera(zoom: 16.5, pitch: 30))).zoom, 17);
-      expect((await from(startCamera(zoom: 16.5, pitch: 30))).pitch, 45);
-      // Une carte déjà plus proche ou plus penchée n'est pas reculée.
+      // Une carte déjà plus proche n'est pas reculée.
       expect((await from(startCamera(zoom: 18, pitch: 70))).zoom, 18);
-      expect((await from(startCamera(zoom: 18, pitch: 70))).pitch, 70);
-      expect((await from(startCamera(pitch: 50))).pitch, 55);
+      // Inclinaison unique, quelle que soit la vue de départ.
+      for (final pitch in [0.0, 30.0, 70.0]) {
+        expect(
+          (await from(startCamera(pitch: pitch))).pitch,
+          GlobePitchController.defaultPitch,
+        );
+      }
       // Mes alertes depuis une vue large : assez près pour voir le badge.
       expect(
         (await from(

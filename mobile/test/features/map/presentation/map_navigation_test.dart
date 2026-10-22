@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:blueway/core/map/globe_pitch_controller.dart';
 import 'package:blueway/core/sensors/device_orientation_service.dart';
 import 'package:blueway/features/map/presentation/map_screen.dart';
 import 'package:flutter/material.dart';
@@ -15,29 +16,7 @@ class _Headings extends DeviceOrientationService {
   Stream<double> get mapHeadings => values.stream;
 }
 
-class _Map extends FocusMap {
-  double maxPitch = 80;
-  int boundsRequests = 0;
-  Future<mb.CameraBounds> Function()? onBounds;
-
-  mb.CameraBounds get bounds => mb.CameraBounds(
-    bounds: mb.CoordinateBounds(
-      southwest: mb.Point(coordinates: mb.Position(-180, -85)),
-      northeast: mb.Point(coordinates: mb.Position(180, 85)),
-      infiniteBounds: true,
-    ),
-    minZoom: 0,
-    maxZoom: 22,
-    minPitch: 0,
-    maxPitch: maxPitch,
-  );
-
-  @override
-  Future<mb.CameraBounds> getBounds() async {
-    boundsRequests++;
-    return onBounds == null ? bounds : await onBounds!();
-  }
-}
+class _Map extends FocusMap {}
 
 void main() {
   late FocusGps gps;
@@ -189,65 +168,70 @@ void main() {
     }
   });
 
-  navigationTest('un seul bouton : nord à plat, direction à 75 %, puis nord', (
-    tester,
-  ) async {
-    await mount(tester);
-    expect(viewport(tester).pitch, 60); // Cadrage initial préservé.
-    expect(find.byTooltip('Aligner la carte sur le cap actuel'), findsNothing);
-    expect(find.byTooltip('Orienter la carte vers le nord'), findsNothing);
-    await press(tester, 'Recentrer sur ma position');
-    expect(viewport(tester).zoom, 12);
-    expect(viewport(tester).padding!.top, 0);
-    expect(viewport(tester).pitch, 0);
-    expect(bearing(tester), 0);
-    expect(find.text('N'), findsOneWidget);
-    expect(find.textContaining('3D'), findsNothing);
-    expect(find.byIcon(Icons.gps_fixed), findsOneWidget);
-    final button = find.byTooltip('Suivre la direction du téléphone');
-    expect(tester.getSize(button).shortestSide, greaterThanOrEqualTo(48));
-    final screen = tester.view.physicalSize / tester.view.devicePixelRatio;
-    final buttonBounds = tester.getRect(button);
-    expect(buttonBounds.right, closeTo(screen.width - 16, 0.1));
-    expect(buttonBounds.bottom, closeTo(screen.height - 260, 0.1));
-    expect(
-      buttonBounds.overlaps(
-        tester.getRect(find.byTooltip('Créer un signalement')),
-      ),
-      isFalse,
-    );
+  navigationTest(
+    'un seul bouton : nord à plat, direction à 63,75°, puis nord',
+    (tester) async {
+      await mount(tester);
+      // Cadrage initial préservé.
+      expect(viewport(tester).pitch, GlobePitchController.defaultPitch);
+      expect(
+        find.byTooltip('Aligner la carte sur le cap actuel'),
+        findsNothing,
+      );
+      expect(find.byTooltip('Orienter la carte vers le nord'), findsNothing);
+      await press(tester, 'Recentrer sur ma position');
+      expect(viewport(tester).zoom, 12);
+      expect(viewport(tester).padding!.top, 0);
+      expect(viewport(tester).pitch, 0);
+      expect(bearing(tester), 0);
+      expect(find.text('N'), findsOneWidget);
+      expect(find.textContaining('3D'), findsNothing);
+      expect(find.byIcon(Icons.gps_fixed), findsOneWidget);
+      final button = find.byTooltip('Suivre la direction du téléphone');
+      expect(tester.getSize(button).shortestSide, greaterThanOrEqualTo(48));
+      final screen = tester.view.physicalSize / tester.view.devicePixelRatio;
+      final buttonBounds = tester.getRect(button);
+      expect(buttonBounds.right, closeTo(screen.width - 16, 0.1));
+      expect(buttonBounds.bottom, closeTo(screen.height - 260, 0.1));
+      expect(
+        buttonBounds.overlaps(
+          tester.getRect(find.byTooltip('Créer un signalement')),
+        ),
+        isFalse,
+      );
 
-    headings.values.add(123);
-    await tester.pumpAndSettle();
-    expect(bearing(tester), 0); // Le nord reste fixe avant le deuxième appui.
-    gps.positions.add(focusPosition(latitude: 43.30));
-    await tester.pumpAndSettle();
-    await press(tester, 'Suivre la direction du téléphone');
-    expect(viewport(tester).zoom, 12);
-    expect(viewport(tester).pitch, 60);
-    final lookAhead = viewport(tester).padding!.top;
-    expect(lookAhead, closeTo(screen.height * 0.24, 0.1));
-    expect(viewport(tester).padding!.bottom, 0);
-    expect(bearing(tester), 123);
-    expect(find.byIcon(Icons.navigation), findsOneWidget);
-    expect(find.byIcon(Icons.gps_fixed), findsNothing);
+      headings.values.add(123);
+      await tester.pumpAndSettle();
+      expect(bearing(tester), 0); // Le nord reste fixe avant le deuxième appui.
+      gps.positions.add(focusPosition(latitude: 43.30));
+      await tester.pumpAndSettle();
+      await press(tester, 'Suivre la direction du téléphone');
+      expect(viewport(tester).zoom, 12);
+      expect(viewport(tester).pitch, GlobePitchController.defaultPitch);
+      final lookAhead = viewport(tester).padding!.top;
+      expect(lookAhead, closeTo(screen.height * 0.24, 0.1));
+      expect(viewport(tester).padding!.bottom, 0);
+      expect(bearing(tester), 123);
+      expect(find.byIcon(Icons.navigation), findsOneWidget);
+      expect(find.byIcon(Icons.gps_fixed), findsNothing);
 
-    headings.values.add(210);
-    await tester.pumpAndSettle();
-    expect(bearing(tester), 210);
-    expect(viewport(tester).pitch, 60);
-    expect(viewport(tester).padding!.top, lookAhead);
-    gps.positions.add(focusPosition(latitude: 43.31));
-    await tester.pumpAndSettle();
-    expect(viewport(tester).padding!.top, lookAhead);
-    await press(tester, 'Revenir au nord vrai à plat');
-    expect(bearing(tester), 0);
-    expect(viewport(tester).pitch, 0);
-    expect(viewport(tester).padding!.top, 0);
-    headings.values.add(270);
-    await tester.pumpAndSettle();
-    expect(bearing(tester), 0);
-  });
+      headings.values.add(210);
+      await tester.pumpAndSettle();
+      expect(bearing(tester), 210);
+      expect(viewport(tester).pitch, GlobePitchController.defaultPitch);
+      expect(viewport(tester).padding!.top, lookAhead);
+      gps.positions.add(focusPosition(latitude: 43.31));
+      await tester.pumpAndSettle();
+      expect(viewport(tester).padding!.top, lookAhead);
+      await press(tester, 'Revenir au nord vrai à plat');
+      expect(bearing(tester), 0);
+      expect(viewport(tester).pitch, 0);
+      expect(viewport(tester).padding!.top, 0);
+      headings.values.add(270);
+      await tester.pumpAndSettle();
+      expect(bearing(tester), 0);
+    },
+  );
 
   navigationTest('le contrôleur vide ne coupe pas le premier GPS tardif', (
     tester,
@@ -269,7 +253,7 @@ void main() {
     pending.complete(focusPosition());
     await tester.pumpAndSettle();
     expect(viewport(tester).zoom, 14);
-    expect(viewport(tester).pitch, 60);
+    expect(viewport(tester).pitch, GlobePitchController.defaultPitch);
     await press(tester, 'Recentrer sur ma position');
     expect(viewport(tester).pitch, 0);
   });
@@ -306,28 +290,14 @@ void main() {
     expect(viewport(tester), same(following));
   });
 
-  for (final maxPitch in [60.0, 85.0]) {
-    navigationTest('inclinaison calculée sur le maximum natif $maxPitch', (
-      tester,
-    ) async {
-      map.maxPitch = maxPitch;
-      await mount(tester);
-      headings.values.add(45);
-      await press(tester, 'Recentrer sur ma position');
-      await press(tester, 'Suivre la direction du téléphone');
-      expect(viewport(tester).pitch, maxPitch * 0.75);
-    });
-  }
-
   navigationTest('deuxième appui pendant le recentrage depuis le globe', (
     tester,
   ) async {
-    map.maxPitch = 0; // La contrainte native du globe est encore en place.
     await mount(tester);
     headings.values.add(90);
     await press(tester, 'Recentrer sur ma position');
     await press(tester, 'Suivre la direction du téléphone');
-    expect(viewport(tester).pitch, 85 * .75);
+    expect(viewport(tester).pitch, GlobePitchController.defaultPitch);
     expect(bearing(tester), 90);
     expect(find.byTooltip('Revenir au nord vrai à plat'), findsOneWidget);
   });
@@ -360,7 +330,7 @@ void main() {
       expect(widget(tester).viewport, isA<mb.FollowPuckViewportState>());
       await touch.up();
       await tester.pumpAndSettle();
-      expect(viewport(tester).pitch, 60);
+      expect(viewport(tester).pitch, GlobePitchController.defaultPitch);
       expect(bearing(tester), 90);
       expect(find.byTooltip('Revenir au nord vrai à plat'), findsOneWidget);
     },
@@ -488,7 +458,6 @@ void main() {
     await press(tester, 'Suivre la direction du téléphone');
     expect(find.text('Cap du téléphone indisponible.'), findsOneWidget);
     expect(viewport(tester).pitch, 0);
-    expect(map.boundsRequests, 0);
     headings.values.add(45);
     await press(tester, 'Suivre la direction du téléphone');
     final lastValid = viewport(tester);
@@ -510,7 +479,7 @@ void main() {
     await press(tester, 'Suivre la direction du téléphone');
     gps.onCurrent = () => Future.error(TimeoutException('GPS'));
     await press(tester, 'Revenir au nord vrai à plat');
-    expect(viewport(tester).pitch, 60);
+    expect(viewport(tester).pitch, GlobePitchController.defaultPitch);
     expect(bearing(tester), 45);
     expect(find.byTooltip('Revenir au nord vrai à plat'), findsOneWidget);
     expect(
@@ -518,22 +487,6 @@ void main() {
       findsWidgets,
     );
   });
-
-  navigationTest(
-    'erreur Mapbox : conserver le nord et permettre un nouvel essai',
-    (tester) async {
-      await mount(tester);
-      headings.values.add(45);
-      await press(tester, 'Recentrer sur ma position');
-      map.onBounds = () => Future.error(StateError('Mapbox indisponible'));
-      await press(tester, 'Suivre la direction du téléphone');
-      expect(viewport(tester).pitch, 0);
-      expect(find.text('Impossible de changer l’orientation.'), findsOneWidget);
-      map.onBounds = null;
-      await press(tester, 'Suivre la direction du téléphone');
-      expect(viewport(tester).pitch, 60);
-    },
-  );
 
   navigationTest('appuis rapides et geste pendant une demande GPS', (
     tester,
@@ -562,25 +515,6 @@ void main() {
     expect(find.byTooltip('Recentrer sur ma position'), findsOneWidget);
   });
 
-  navigationTest(
-    'geste pendant la lecture des limites : pas de reprise tardive',
-    (tester) async {
-      await mount(tester);
-      headings.values.add(60);
-      await press(tester, 'Recentrer sur ma position');
-      final pending = Completer<mb.CameraBounds>();
-      map.onBounds = () => pending.future;
-      await tester.tap(find.byTooltip('Suivre la direction du téléphone'));
-      await tester.pump();
-      widget(tester).onZoomListener!(getGesture());
-      pending.complete(map.bounds);
-      await tester.pumpAndSettle();
-      expect(widget(tester).viewport, isA<mb.IdleViewportState>());
-      await press(tester, 'Recentrer sur ma position');
-      expect(viewport(tester).pitch, 0);
-    },
-  );
-
   navigationTest('le formulaire masque le bouton et restaure le suivi du cap', (
     tester,
   ) async {
@@ -598,7 +532,7 @@ void main() {
     await tester.pumpAndSettle();
     expect(widget(tester).viewport, isA<mb.CameraViewportState>());
     await press(tester, 'Fermer');
-    expect(viewport(tester).pitch, 60);
+    expect(viewport(tester).pitch, GlobePitchController.defaultPitch);
     expect(bearing(tester), 120);
     expect(viewport(tester).padding!.top, lookAhead);
     headings.values.add(180);
@@ -628,7 +562,7 @@ void main() {
       )) {
         expect(rotation.duration, Duration.zero);
       }
-      expect(viewport(tester).pitch, 60);
+      expect(viewport(tester).pitch, GlobePitchController.defaultPitch);
       expect(map.animationDurations, isEmpty);
     } finally {
       semantics.dispose();

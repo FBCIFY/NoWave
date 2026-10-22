@@ -1,3 +1,4 @@
+import 'package:blueway/core/map/globe_pitch_controller.dart';
 import 'package:blueway/features/map/presentation/map_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -68,7 +69,7 @@ void main() {
         tester.widget<MapWidget>(find.byType(MapWidget)).viewport
             as FollowPuckViewportState;
     expect(initial.zoom, 14);
-    expect(initial.pitch, 60);
+    expect(initial.pitch, GlobePitchController.defaultPitch);
     expect(gps.positions.hasListener, true);
     expect(find.textContaining('Lat.'), findsOneWidget);
     gps.positions.add(focusPosition(latitude: 43.30));

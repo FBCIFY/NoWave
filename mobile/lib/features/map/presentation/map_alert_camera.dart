@@ -4,6 +4,7 @@ import 'package:flutter/widgets.dart' as widgets;
 import 'package:geolocator/geolocator.dart' as geo;
 import 'package:mapbox_maps_flutter/mapbox_maps_flutter.dart';
 
+import '../../../core/map/globe_pitch_controller.dart';
 import '../../reports/domain/report_detail.dart';
 
 /// Fits the native map's actual viewport, not a zoom chosen from a distance table.
@@ -17,11 +18,6 @@ class MapAlertCamera {
 
   /// Depuis Mes alertes, la vue de départ peut être très large.
   static const historyMinZoom = 14.0;
-
-  /// Fiche ouverte : la carte s'incline un peu, dans une plage confortable.
-  static const detailPitchStep = 15.0;
-  static const detailMinPitch = 35.0;
-  static const detailMaxPitch = 55.0;
 
   static bool usable(geo.Position? position) =>
       position != null &&
@@ -107,7 +103,7 @@ class MapAlertCamera {
   }
 
   /// Fiche ouverte : le signalement au centre de la carte visible à côté
-  /// de la fiche, un peu plus près et un peu plus incliné que la vue [from].
+  /// de la fiche, un peu plus près que la vue [from], incliné de [pitch].
   static Future<CameraOptions> detail(
     MapboxMap map,
     ReportDetail report, {
@@ -117,21 +113,19 @@ class MapAlertCamera {
     required double panelHeight,
     bool panelOnTop = false,
     double minZoom = 0,
+    double pitch = GlobePitchController.defaultPitch,
   }) async {
     if (viewport.width <= 0 || viewport.height <= 0) {
       throw StateError('Map viewport is not ready');
     }
-    // Une carte déjà plus proche ou plus penchée n'est pas reculée.
+    // Une carte déjà plus proche n'est pas reculée.
     final zoom = from.zoom >= detailMaxZoom
         ? from.zoom
         : math.min(from.zoom + detailZoomStep, detailMaxZoom);
-    final pitch = from.pitch >= detailMaxPitch
-        ? from.pitch
-        : (from.pitch + detailPitchStep).clamp(detailMinPitch, detailMaxPitch);
     return CameraOptions(
       center: Point(coordinates: Position(report.longitude, report.latitude)),
       zoom: math.max(zoom, minZoom),
-      pitch: pitch.toDouble(),
+      pitch: pitch,
       bearing: bearing,
       padding: detailPadding(viewport, panelHeight, top: panelOnTop),
     );

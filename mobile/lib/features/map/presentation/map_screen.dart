@@ -762,7 +762,8 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
       'Centré sur ma position, direction du téléphone',
   };
 
-  /// Un appui recentre au nord à plat, le suivant suit la direction.
+  /// Un appui recentre au nord, vu de dessus ; le suivant suit la direction,
+  /// incliné au maximum.
   Future<void> _navigateUser() async {
     final map = _mapboxMap;
     if (map == null || _mapError != null || _navigationBusy || _isLocating) {
@@ -780,27 +781,13 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
       }
       await _stopGlobeRotation();
       if (!_navigationIsCurrent(request)) return;
-      if (_deviceHeading == null) {
-        _showNotice('Cap du téléphone indisponible.', MapNoticeKind.error);
-        return;
-      }
-      final bounds = await map.getBounds();
-      if (!_navigationIsCurrent(request)) return;
-      if (!bounds.maxPitch.isFinite || bounds.maxPitch < 0) {
-        throw StateError('Inclinaison indisponible.');
-      }
-      // The globe temporarily pins the native maximum to zero. A second
-      // press during recentering must use the detailed map's actual maximum.
-      final maxPitch = bounds.maxPitch == 0
-          ? GlobePitchController.maxPitch
-          : bounds.maxPitch;
-      final viewport = _viewport;
-      if (viewport is! FollowPuckViewportState) return;
       final heading = _deviceHeading;
       if (heading == null) {
         _showNotice('Cap du téléphone indisponible.', MapNoticeKind.error);
         return;
       }
+      final viewport = _viewport;
+      if (viewport is! FollowPuckViewportState) return;
       // ignore: experimental_member_use
       _setViewport(
         () {
@@ -808,7 +795,7 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
           _viewport = FollowPuckViewportState(
             zoom: viewport.zoom,
             padding: _navigationPadding(heading: true),
-            pitch: maxPitch * 0.75,
+            pitch: GlobePitchController.maxPitch,
             // Le cap reste à la caméra de cap.
             bearing: null,
           );
@@ -1276,7 +1263,7 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
                   MediaQuery.paddingOf(context),
                   viewport: _mapViewport,
                   bearing: currentCamera.bearing,
-                  pitch: currentCamera.pitch,
+                  pitch: _globePitch.detailedPitch,
                 )
               // Changer de fiche garde le rapprochement de la première.
               : await MapAlertCamera.detail(
@@ -1284,6 +1271,7 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
                   report,
                   from: _cameraBeforeDetail ?? currentCamera,
                   bearing: currentCamera.bearing,
+                  pitch: _globePitch.detailedPitch,
                   viewport: _mapViewport,
                   panelHeight: _detailPanelHeight,
                   panelOnTop: _alertsOpen,
@@ -1973,7 +1961,6 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
       if (!mounted) return;
     }
     final gestureRevision = _mapGestureRevision;
-    final wasWatching = _positionSubscription != null;
     setState(() {
       _isLocating = true;
       _locationError = null;
@@ -2008,17 +1995,6 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
         _selectionTouched = true;
         _latePositionFocus = false;
       }
-      CameraState? previousCamera;
-      if (wasWatching) {
-        try {
-          previousCamera = await _mapboxMap?.getCameraState();
-        } catch (_) {
-          // Pas de caméra précédente : valeurs par défaut ci-dessous.
-        }
-      }
-
-      if (!mounted) return;
-
       if (!_navigationIsCurrent(request)) return;
       if (gestureRevision != _mapGestureRevision) return;
 
@@ -2029,12 +2005,8 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
           zoom: animated ? _navigationZoom : _userZoom,
           padding: animated ? _navigationPadding() : null,
           bearing: const FollowPuckViewportStateBearingConstant(0),
-          pitch: animated
-              ? 0
-              : previousCamera != null &&
-                    previousCamera.zoom >= GlobePitchController.detailedZoom
-              ? previousCamera.pitch
-              : _globePitch.detailedPitch,
+          // Le bouton met la carte à plat ; le suivi au lancement garde la vue.
+          pitch: animated ? 0 : _globePitch.detailedPitch,
         );
       }
 
@@ -2442,7 +2414,11 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
         _isFollowing = true;
         _viewport = FollowPuckViewportState(
           zoom: camera?.zoom ?? _userZoom,
-          pitch: camera?.pitch ?? 60,
+          pitch: switch (_orientationMode) {
+            _MapOrientationMode.heading => GlobePitchController.maxPitch,
+            _MapOrientationMode.north => 0,
+            _MapOrientationMode.free => _globePitch.detailedPitch,
+          },
           padding: switch (_orientationMode) {
             _MapOrientationMode.heading => _navigationPadding(heading: true),
             _MapOrientationMode.north => _navigationPadding(),
