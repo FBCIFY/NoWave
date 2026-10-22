@@ -948,14 +948,14 @@ void main() {
       focus.focus(focusReport(), origin: MapFocusOrigin.notification);
       await pumpFrames(tester);
       final halo = map.style.layers['alert-selected-halo']!;
-      expect(halo['circle-color'], '#DC3545');
-      expect(halo['circle-stroke-color'], '#DC3545');
+      expect(halo['circle-color'], '#FF2028');
+      expect(halo['circle-stroke-color'], '#FF2028');
       final mapWidget = tester.widget<mb.MapWidget>(find.byType(mb.MapWidget));
       final cameraCount = map.cameras.length;
       await tester.pump(const Duration(milliseconds: 1100));
       expect(halo['circle-radius'], inInclusiveRange(30, 31.5));
       expect(halo['circle-radius'], greaterThan(30));
-      expect(halo['circle-opacity'], inInclusiveRange(.22, .28));
+      expect(halo['circle-opacity'], inInclusiveRange(.34, .40));
       expect(map.cameras, hasLength(cameraCount));
       expect(
         tester.widget<mb.MapWidget>(find.byType(mb.MapWidget)),
@@ -966,7 +966,7 @@ void main() {
       await pumpFrames(tester);
       expect(
         map.style.layers['alert-selected-halo']!['circle-color'],
-        '#DC3545',
+        '#FF2028',
       );
       focus.focus(focusReport(id: 'another'));
       await pumpFrames(tester);
@@ -985,9 +985,9 @@ void main() {
     await pumpFrames(tester);
     await tester.pump(const Duration(milliseconds: 1100));
     final halo = map.style.layers['alert-selected-halo']!;
-    expect(halo['circle-color'], '#DC3545');
+    expect(halo['circle-color'], '#FF2028');
     expect(halo['circle-radius'], 30);
-    expect(halo['circle-opacity'], .22);
+    expect(halo['circle-opacity'], .34);
   });
 
   focusTestWidgets('halo : arrêt en arrière-plan et reprise au retour', (

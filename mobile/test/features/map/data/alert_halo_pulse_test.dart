@@ -21,7 +21,7 @@ void main() {
     expect(samples.any((s) => s.radius > 31.4), isTrue);
     for (final sample in samples) {
       expect(sample.radius, inInclusiveRange(30, 31.5));
-      expect(sample.opacity, inInclusiveRange(.22, .28));
+      expect(sample.opacity, inInclusiveRange(.34, .40));
     }
     await pulse.stop();
     final count = samples.length;

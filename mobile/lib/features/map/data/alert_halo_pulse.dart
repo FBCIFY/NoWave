@@ -8,7 +8,7 @@ class AlertHaloPulse {
   final Future<void> Function(double radius, double opacity) paint;
   static const interval = Duration(milliseconds: 80);
   static const radius = 30.0;
-  static const opacity = 0.22;
+  static const opacity = 0.34;
   Timer? _timer;
   Future<void>? _pending;
 

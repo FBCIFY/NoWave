@@ -1646,26 +1646,26 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
           sourceId: 'alert-selected',
           minZoom: ReportTiles.badgesMinZoom,
           circleRadius: _selectedHaloRadius,
-          circleColor: (notification ? const Color(0xFFDC3545) : Colors.white)
+          circleColor: (notification ? const Color(0xFFFF2028) : Colors.white)
               .toARGB32(),
           circleOpacity: notification ? AlertHaloPulse.opacity : .45,
           circleStrokeColor:
-              (notification ? const Color(0xFFDC3545) : Colors.white)
+              (notification ? const Color(0xFFFF2028) : Colors.white)
                   .toARGB32(),
-          circleStrokeWidth: notification ? 2 : 3,
-          circleStrokeOpacity: notification ? .65 : 1,
+          circleStrokeWidth: 3,
+          circleStrokeOpacity: 1,
           circleEmissiveStrength: 1,
         ),
       );
     }
     // Une sélection remplace aussi l'apparence d'une couche déjà installée.
     for (final property in {
-      'circle-color': notification ? '#DC3545' : '#FFFFFF',
-      'circle-stroke-color': notification ? '#DC3545' : '#FFFFFF',
+      'circle-color': notification ? '#FF2028' : '#FFFFFF',
+      'circle-stroke-color': notification ? '#FF2028' : '#FFFFFF',
       'circle-radius': _selectedHaloRadius,
       'circle-opacity': notification ? AlertHaloPulse.opacity : .45,
-      'circle-stroke-width': notification ? 2.0 : 3.0,
-      'circle-stroke-opacity': notification ? .65 : 1.0,
+      'circle-stroke-width': 3.0,
+      'circle-stroke-opacity': 1.0,
     }.entries) {
       await map.style.setStyleLayerProperty(
         'alert-selected-halo',
