@@ -16,9 +16,10 @@ testé. Le commit local est autorisé par la mission ; aucune publication n'est 
   des marques de Z10 à Z12**, 0 % à Z10, 50 % à Z11 et 100 % à Z12. Cette décision
   remplace leur invisibilité jusqu'à Z12 encore indiquée dans Linear. Aucun
   changement du ticket n'a été effectué.
-- Aucun changement de palette, de satellite, d'océan ou d'atmosphère pendant
-  cette reprise. La modification du slot du raster déjà présente relève de son
-  affichage à Z5 ; les fichiers de colorimétrie ne sont pas modifiés.
+- Au 21 octobre, cette reprise n'avait pas changé la palette, le satellite,
+  l'océan ou l'atmosphère. Les corrections ultérieures du 22 octobre ont remplacé
+  la palette bathymétrique et retiré satellite, nuages, Lune et textures du globe ;
+  voir [le rapport de palette](NW-220-color-palette.md).
 - Aucun rebase, merge, stash, nettoyage destructif, push, PR ou déploiement.
   Aucun travail effectué dans les autres worktrees. L'interpréteur Python du
   venv existant est réutilisé sans installation dans ce venv.

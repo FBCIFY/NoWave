@@ -1,5 +1,10 @@
 # NW-220 — corrections locales après revue de la PR #122
 
+> État historique relevé avant le commit `26d17b4` du 22 octobre 2026. Les
+> mentions de `0e43c6d` comme HEAD et SHA GitHub ci-dessous valent uniquement
+> pour cette première revue ; la PR #122 pointait sur `26d17b4` au début de la
+> revue complémentaire du même jour.
+
 ## A. État Git initial
 
 - Dépôt et worktree de la branche PR : `/home/palms/NoWave`, `feature/NW-220-satellite-bathymetry-colors`.

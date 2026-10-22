@@ -15,9 +15,9 @@ Linear ; le ticket n'est pas modifié dans cette mission. Les données sont
 préchargées à Z10, mais les sources de placement des marques restent vides à
 Z10 exactement et en dessous, pour ne pas réserver de collisions invisibles.
 
-Le raster garde sa palette, ses masques et ses crédits. Son opacité nominale vaut
-1 dès Z5. Le slot MIDDLE le place après le décor satellite/océan du globe qui
-atténuait autrement le raster entre Z5 et Z7. Les infrastructures et symboles
+Le raster utilise désormais la palette marine sombre `marine-palette-3`, avec
+masques et crédits conservés. Son opacité nominale vaut 1 dès Z5. Le slot MIDDLE
+le place au-dessus du fond marin du globe. Les infrastructures et symboles
 installés ensuite restent au-dessus ; la terre du raster est transparente.
 
 ## Récupération et budgets
@@ -46,6 +46,13 @@ Z8 : 144 lectures amont logiques au maximum par lot froid, amorties par le cache
 Cache client : 64 snapshots / 12 Mio de JSON encodé, plus au maximum 8 000 points
 conservés / 4 Mio encodés. Les objets Dart et les buffers GPU ne sont pas inclus
 dans ces budgets : la mémoire réelle doit être mesurée sur l'appareil. Chaque
+famille garde sa dernière résolution affichée dans le cache pendant le chargement
+des cellules demandées à la résolution suivante (neuf au maximum). Les surfaces,
+lignes et cellules modélisées ne basculent qu'après leurs réponses complètes ;
+une réponse dégradée ou HTTP 503 ne couvre pas la zone. Les anciennes cellules
+sont alors libérées.
+Une saturation refuse les nouveaux snapshots et laisse l'ancienne couverture
+affichée ; les limites de 64 snapshots et 12 Mio restent strictes. Chaque
 réponse est limitée à 4 Mio / 6 000 objets côté serveur ; le cache serveur final
 reste borné à 512 entrées / 32 Mio, tous formats confondus. En saturation, les
 nouveaux snapshots sont refusés, sans éviction des géométries utiles déjà gardées.
@@ -71,9 +78,11 @@ fourni. Aucun rapprochement nom/proximité n'est ajouté.
 La sélection utilise les positions projetées réelles de Mapbox et des boîtes
 écran conservatrices de 32,88 points logiques. L'ordre initial est déterministe :
 objets nommés, catégorie publiée, puis identité. Chaque identité sélectionnée
-reçoit ensuite un ordre conservé. Les perdants d'une collision initiale ne
-redeviennent éligibles qu'à Z10. Les nouveaux candidats passent après les ports
-conservés. Les coordonnées du premier point réellement récupéré sont gardées ;
+reçoit ensuite un ordre conservé. Les collisions sont recalculées sur les
+positions projetées à chaque caméra : un perdant redevient éligible dès que son
+représentant quitte l'écran ou cesse de le bloquer. Les nouveaux candidats
+passent après les ports conservés. Les coordonnées du premier point réellement
+récupéré sont gardées ;
 on ne substitue pas un point différemment quantifié d'une tuile plus détaillée.
 Les sources GeoJSON sont reconstituées après rechargement du style.
 

@@ -295,7 +295,8 @@ Cette extension ne modifie pas la normalisation ou les styles des bouées/aides 
 
 ## Masque littoral raster — correction du 18 octobre 2026
 
-Le proxy PNG conserve le WMS EMODnet et sa palette. Après recoloration, son
+Depuis la correction de palette du 22 octobre 2026, le proxy PNG conserve le WMS
+EMODnet mais recolore sa palette en `marine-palette-3`. Après recoloration, son
 alpha est intersecté avec les surfaces `ocean` et les bassins/canaux publiés
 par les tuiles OSM Shortbread. Les polygones d'îles restent des trous. Aucune
 profondeur n'est calculée à partir du masque ; aucun seuil de profondeur ne

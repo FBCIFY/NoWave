@@ -33,17 +33,14 @@ class MarineCell {
   bool contains(double lon, double lat) => at(lon, lat, z).key == key;
 }
 
-/// Stable representative placement. Rejects from the initial collision group
-/// become eligible at Z10. Retained ports precede all newcomers. Rotation can
-/// force two retained ports together: the oldest stays drawn, both stay listed.
+/// Stable representative placement. Collision eligibility is recalculated from
+/// the current screen positions; retained ports precede all newcomers.
 class HarbourSelection {
   final order = <String, int>{};
-  final rejected = <String>{};
   int _sequence = 0;
 
   void reset() {
     order.clear();
-    rejected.clear();
     _sequence = 0;
   }
 
@@ -58,9 +55,22 @@ class HarbourSelection {
       reset();
       return [];
     }
-    final visibleIds = features.map((f) => f['id'].toString()).toSet();
+    // A formerly selected port cannot keep priority after leaving the screen.
+    const spacing = 24 * 1.12 + 6;
+    final visibleIds = <String>{};
+    for (var i = 0; i < features.length; i++) {
+      final p = pixels[i];
+      if (p != null &&
+          p.x.isFinite &&
+          p.y.isFinite &&
+          p.x >= -spacing &&
+          p.y >= -spacing &&
+          p.x <= width + spacing &&
+          p.y <= height + spacing) {
+        visibleIds.add(features[i]['id'].toString());
+      }
+    }
     order.removeWhere((id, _) => !visibleIds.contains(id));
-    rejected.removeWhere((id) => !visibleIds.contains(id));
     final indexes = List.generate(features.length, (i) => i);
     int rank(Map<String, dynamic> f) {
       final p = f['properties'] as Map;
@@ -80,7 +90,6 @@ class HarbourSelection {
     final occupied = <ScreenCoordinate>[];
     final selected = <Map<String, dynamic>>[];
     // 24 logical px PNG at max icon size 1.12 plus six px padding.
-    final spacing = 24 * 1.12 + 6;
     for (final i in indexes) {
       final p = pixels[i];
       final f = features[i];
@@ -94,15 +103,9 @@ class HarbourSelection {
           p.y > height + spacing) {
         continue;
       }
-      if (zoom < MarineZoom.harbourEnrichment && rejected.contains(id)) {
-        continue;
-      }
       if (occupied.any(
         (q) => (q.x - p.x).abs() < spacing && (q.y - p.y).abs() < spacing,
       )) {
-        if (!order.containsKey(id) && zoom < MarineZoom.harbourEnrichment) {
-          rejected.add(id);
-        }
         continue;
       }
       order.putIfAbsent(id, () => _sequence++);
@@ -117,17 +120,26 @@ class HarbourSelection {
 }
 
 class _Snapshot {
-  _Snapshot(this.family, this.cell, this.features, this.bytes, this.expires);
+  _Snapshot(
+    this.family,
+    this.cell,
+    this.features,
+    this.bytes,
+    this.expires,
+    this.complete,
+  );
   final String family;
   final MarineCell cell;
   final List<Map<String, dynamic>> features;
   final int bytes;
   final DateTime expires;
+  final bool complete;
 }
 
 /// Public data only: two in-flight requests, at most nine cells per family,
 /// 64 cached snapshots / 12 MiB encoded data. No Firebase headers or credentials.
-/// Old contour geometry remains pinned while its fixed Z12 cell is useful.
+/// Displayed geometry remains pinned until complete replacement coverage arrives;
+/// contours keep their fixed Z12 ownership.
 class MarineViewport {
   MarineViewport({
     String? apiBaseUrl,
@@ -147,6 +159,7 @@ class MarineViewport {
   final _cancelledFlights = <String>{};
   final _failures = <String, DateTime>{};
   final _wanted = <String, (String, MarineCell)>{};
+  final _displayZoom = <String, int>{};
   MarineCell? _useful;
   CoordinateBounds? _visibleBounds;
   int _retainedBytes = 0;
@@ -306,6 +319,9 @@ class MarineViewport {
           _wanted['$family/${cell.key}'] = (family, cell);
         }
       }
+      _displayZoom.removeWhere(
+        (family, _) => !_wanted.values.any((entry) => entry.$1 == family),
+      );
       // Diagnostics and retry metadata belong to the current request set too.
       // Successful degraded responses otherwise accumulate stale keys on pan.
       _failures.removeWhere((key, _) => !_wanted.containsKey(key));
@@ -330,9 +346,7 @@ class MarineViewport {
       bool nearby(_Snapshot snapshot) {
         final c = snapshot.cell;
         if (snapshot.family == 'depth-contours' && _cellVisible(c)) return true;
-        if (c.z < useful.z) {
-          return _wanted.containsKey('${snapshot.family}/${c.key}');
-        }
+        if (c.z < useful.z) return _cellVisible(c);
         final delta = c.z - useful.z;
         final x = c.x >> delta, y = c.y >> delta;
         final n = 1 << useful.z;
@@ -341,9 +355,12 @@ class MarineViewport {
       }
 
       for (final key in _cache.keys.toList()) {
-        if (!nearby(_cache[key]!) ||
-            (_cache[key]!.family != 'depth-contours' &&
-                !_wanted.containsKey(key))) {
+        final snapshot = _cache[key]!;
+        final fallback = _displayZoom[snapshot.family];
+        if (!nearby(snapshot) ||
+            (!_wanted.containsKey(key) &&
+                (snapshot.cell.z != fallback ||
+                    !_cellVisible(snapshot.cell)))) {
           _bytes -= _cache.remove(key)!.bytes;
         }
       }
@@ -502,14 +519,20 @@ class MarineViewport {
         return;
       }
       final previous = _cache[key];
-      if (family == 'depth-contours' && previous != null) {
+      final marineStatus = response.headers['x-nowave-marine-status'];
+      final complete =
+          marineStatus == null ||
+          marineStatus == 'ok' ||
+          marineStatus == 'below-minzoom';
+      if (previous != null && (family == 'depth-contours' || !complete)) {
         final kept = {for (final f in previous.features) f['id'].toString(): f};
         for (final f in features) {
           kept.putIfAbsent(f['id'].toString(), () => f);
         }
         features = kept.values.toList();
       }
-      final bytes = family == 'depth-contours' && previous != null
+      final bytes =
+          previous != null && (family == 'depth-contours' || !complete)
           ? utf8
                 .encode(
                   jsonEncode({
@@ -527,7 +550,7 @@ class MarineViewport {
       _bytes += bytes - (previous?.bytes ?? 0);
       _failureReasons.remove(key);
       _failures.remove(key);
-      if (response.headers['x-nowave-marine-status'] == 'degraded') {
+      if (!complete) {
         _failures[key] = _now().add(const Duration(seconds: 15));
         _failureReasons[key] = 'degraded';
       }
@@ -536,13 +559,8 @@ class MarineViewport {
         cell,
         features,
         bytes,
-        _now().add(
-          Duration(
-            seconds: response.headers['x-nowave-marine-status'] == 'degraded'
-                ? 15
-                : 300,
-          ),
-        ),
+        _now().add(Duration(seconds: complete ? 300 : 15)),
+        complete,
       );
       if (kDebugMode) {
         debugPrint(
@@ -607,7 +625,55 @@ class MarineViewport {
 
   List<Map<String, dynamic>> features(String family) {
     final all = <String, Map<String, dynamic>>{};
-    for (final snapshot in _cache.values.where((s) => s.family == family)) {
+    final target = _wanted.values
+        .where((entry) => entry.$1 == family)
+        .map((entry) => entry.$2.z)
+        .firstOrNull;
+    if (target != null) {
+      final displayed = _displayZoom[family];
+      if (displayed == null ||
+          !_cache.values.any(
+            (snapshot) =>
+                snapshot.family == family &&
+                snapshot.cell.z == displayed &&
+                _cellVisible(snapshot.cell),
+          )) {
+        if (_cache.values.any(
+          (snapshot) => snapshot.family == family && snapshot.cell.z == target,
+        )) {
+          _displayZoom[family] = target;
+        }
+      }
+      final wanted = _wanted.entries.where((entry) => entry.value.$1 == family);
+      if (wanted.every((entry) {
+        final snapshot = _cache[entry.key];
+        return snapshot != null &&
+            snapshot.complete &&
+            snapshot.expires.isAfter(_now());
+      })) {
+        _displayZoom[family] = target;
+        for (final key in _cache.keys.toList()) {
+          final snapshot = _cache[key]!;
+          if (snapshot.family == family && snapshot.cell.z != target) {
+            _bytes -= _cache.remove(key)!.bytes;
+          }
+        }
+      }
+    }
+    final fallback = _displayZoom[family];
+    final selectedZoom =
+        fallback != null &&
+            _cache.values.any(
+              (s) =>
+                  s.family == family &&
+                  s.cell.z == fallback &&
+                  _cellVisible(s.cell),
+            )
+        ? fallback
+        : target;
+    for (final snapshot in _cache.values.where(
+      (s) => s.family == family && s.cell.z == selectedZoom,
+    )) {
       for (final f in snapshot.features) {
         all.putIfAbsent(f['id'].toString(), () => f);
       }

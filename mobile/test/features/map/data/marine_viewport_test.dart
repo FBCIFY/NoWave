@@ -75,40 +75,72 @@ Future<void> until(bool Function() done) async {
 }
 
 void main() {
-  test('deterministic Z8 collision winner is retained against earlier-sorting newcomers through Z18', () {
-    final selector = HarbourSelection();
-    final a = harbour('a'), b = harbour('b'), c = harbour('0');
-    List<ScreenCoordinate> positions(double d) => [
-      ScreenCoordinate(x: 100, y: 100),
-      ScreenCoordinate(x: 100 + d, y: 100),
-    ];
-    expect(
-      selector.select([b, a], positions(0), 8, 360, 805).single['id'],
-      'a',
-    );
-    expect(
-      selector
-          .select([b, a], positions(100), 9.99, 360, 805)
-          .map((f) => f['id']),
-      ['a'],
-    );
-    for (final zoom in [10.0, 12.0, 13.0, 14.0, 15.0, 16.0, 18.0]) {
-      final selected = selector.select(
-        [c, a, b],
-        [
-          ScreenCoordinate(x: 100, y: 100),
-          ScreenCoordinate(x: 100, y: 100),
-          ScreenCoordinate(x: 200, y: 100),
-        ],
-        zoom,
-        360,
-        805,
+  test(
+    'harbour collisions follow the screen while retaining visible winners',
+    () {
+      final selector = HarbourSelection();
+      final a = harbour('a'), b = harbour('b'), c = harbour('0');
+      List<ScreenCoordinate> positions(double d) => [
+        ScreenCoordinate(x: 100, y: 100),
+        ScreenCoordinate(x: 100 + d, y: 100),
+      ];
+      expect(
+        selector.select([b, a], positions(0), 8, 360, 805).single['id'],
+        'a',
       );
-      expect(selected.first['id'], 'a');
-      expect(selected.map((f) => f['id']), ['a', 'b']);
-    }
-    expect(selector.select([a, b], positions(100), 7.99, 360, 805), isEmpty);
-    expect(selector.order, isEmpty);
+      expect(
+        selector
+            .select([b, a], positions(100), 9.99, 360, 805)
+            .map((f) => f['id']),
+        ['a', 'b'],
+      );
+      for (final zoom in [10.0, 12.0, 13.0, 14.0, 15.0, 16.0, 18.0]) {
+        final selected = selector.select(
+          [c, a, b],
+          [
+            ScreenCoordinate(x: 100, y: 100),
+            ScreenCoordinate(x: 100, y: 100),
+            ScreenCoordinate(x: 200, y: 100),
+          ],
+          zoom,
+          360,
+          805,
+        );
+        expect(selected.first['id'], 'a');
+        expect(selected.map((f) => f['id']), ['a', 'b']);
+      }
+      expect(selector.select([a, b], positions(100), 7.99, 360, 805), isEmpty);
+      expect(selector.order, isEmpty);
+    },
+  );
+
+  test('rejected port appears after its blocker leaves; rotation, pitch and tile changes recalculate placement', () {
+    final selector = HarbourSelection();
+    final a = harbour('a'), b = harbour('b'), c = harbour('c');
+    List<String> ids(
+      List<Map<String, dynamic>> features,
+      List<ScreenCoordinate?> pixels,
+      double zoom,
+    ) => selector
+        .select(features, pixels, zoom, 360, 805)
+        .map((feature) => feature['id'].toString())
+        .toList();
+    ScreenCoordinate at(double x, double y) => ScreenCoordinate(x: x, y: y);
+    expect(ids([b, a, c], [at(100, 100), at(100, 100), at(100, 100)], 8), [
+      'a',
+    ]);
+    expect(ids([a, b], [at(-100, 100), at(100, 100)], 9), ['b']);
+    expect(ids([a, b], [at(100, 100), at(100, 100)], 9), ['b']);
+    expect(ids([a, b], [at(100, 100), at(200, 100)], 9), ['b', 'a']);
+    expect(ids([a, b, c], [at(100, 100), at(100, 100), at(220, 100)], 9), [
+      'b',
+      'c',
+    ]);
+    expect(ids([a, b], [at(100, 100), at(200, 100)], 10), ['b', 'a']);
+    expect(ids([a], [at(100, 100)], 9), ['a']);
+    expect(ids([b], [at(100, 100)], 9), ['b']);
+    expect(ids([a, b], [at(100, 100), at(100, 100)], 7.9), isEmpty);
+    expect(ids([a, b], [at(100, 100), at(100, 100)], 8), ['a']);
   });
 
   test('actual downloads at Z6, Z10, Z12; cache reuse and line geometry survives reload/zoom/reverse', () async {
@@ -303,6 +335,279 @@ void main() {
     viewport.resume(map);
     viewport.dispose();
   });
+
+  test(
+    'non-point coverage survives pending, 503, degraded, Z14 and style reload',
+    () async {
+      var clock = DateTime.utc(2026, 10, 22);
+      final map = ViewMap()..zoom = 12;
+      final gate13 = Completer<void>(), gate14 = Completer<void>();
+      var mode = 'pending';
+      var peak = 0, active = 0;
+      Map<String, dynamic> feature(
+        String id,
+        String type,
+        Object coordinates,
+      ) => {
+        'type': 'Feature',
+        'id': id,
+        'geometry': {'type': type, 'coordinates': coordinates},
+        'properties': {'display_minzoom': 12},
+      };
+      final shapes = [
+        feature('polygon', 'Polygon', [
+          [
+            [5.92, 43.07],
+            [5.94, 43.07],
+            [5.94, 43.09],
+            [5.92, 43.07],
+          ],
+        ]),
+        feature('multi-polygon', 'MultiPolygon', [
+          [
+            [
+              [5.92, 43.07],
+              [5.94, 43.07],
+              [5.94, 43.09],
+              [5.92, 43.07],
+            ],
+          ],
+        ]),
+        feature('line', 'LineString', [
+          [5.92, 43.07],
+          [5.94, 43.09],
+        ]),
+        feature('multi-line', 'MultiLineString', [
+          [
+            [5.92, 43.07],
+            [5.94, 43.09],
+          ],
+        ]),
+      ];
+      final cell = feature('modeled-cell', 'Polygon', [
+        [
+          [5.92, 43.07],
+          [5.94, 43.07],
+          [5.94, 43.09],
+          [5.92, 43.07],
+        ],
+      ]);
+      final viewport = MarineViewport(
+        apiBaseUrl: 'https://marine.example',
+        now: () => clock,
+        clientFactory: () => MockClient((request) async {
+          active++;
+          if (active > peak) peak = active;
+          try {
+            final path = request.url.path;
+            final hazard = path.contains('underwater-hazards');
+            final sounding = path.contains('soundings');
+            final z13 = path.contains('/13/'), z14 = path.contains('/14/');
+            if ((hazard || sounding) && z13 && mode == 'pending') {
+              await gate13.future;
+            }
+            if ((hazard || sounding) && z14) {
+              await gate14.future;
+            }
+            if ((hazard || sounding) && z13 && mode == 'pending') {
+              return http.Response('{}', 503);
+            }
+            final degraded = z13 && (mode == 'degraded' || mode == 'partial');
+            final data = map.longitude > 20 || !(hazard || sounding)
+                ? []
+                : degraded
+                ? [
+                    feature('partial', 'Polygon', [
+                      [
+                        [5.92, 43.07],
+                        [5.94, 43.07],
+                        [5.94, 43.09],
+                        [5.92, 43.07],
+                      ],
+                    ]),
+                  ]
+                : hazard
+                ? shapes
+                      .map(
+                        (f) => {
+                          ...f,
+                          'id':
+                              '${f['id']}-z${z14
+                                  ? 14
+                                  : z13
+                                  ? 13
+                                  : 12}',
+                        },
+                      )
+                      .toList()
+                : [
+                    {
+                      ...cell,
+                      'id':
+                          'modeled-cell-z${z14
+                              ? 14
+                              : z13
+                              ? 13
+                              : 12}',
+                    },
+                  ];
+            return http.Response(
+              jsonEncode({'type': 'FeatureCollection', 'features': data}),
+              200,
+              headers: {'x-nowave-marine-status': degraded ? mode : 'ok'},
+            );
+          } finally {
+            active--;
+          }
+        }),
+      );
+      addTearDown(viewport.dispose);
+      List<String> drawn(String source) =>
+          (jsonDecode(map.style.data[source]!)['features'] as List)
+              .map((f) => f['id'].toString())
+              .toList();
+      void oldPresent() {
+        expect(drawn('nowave-underwater-hazards').toSet(), {
+          'polygon-z12',
+          'multi-polygon-z12',
+          'line-z12',
+          'multi-line-z12',
+        });
+        expect(drawn('nowave-soundings'), ['modeled-cell-z12']);
+      }
+
+      await viewport.synchronize(map);
+      oldPresent();
+      map.zoom = 13;
+      final pending = viewport.synchronize(map);
+      await until(() => viewport.requests > 45);
+      oldPresent();
+      expect(viewport.metrics['cache_entries'] as int, lessThanOrEqualTo(64));
+      viewport.styleLoaded();
+      map.style.data.clear();
+      final reload = viewport.synchronize(map);
+      await until(
+        () =>
+            map.style.data.containsKey('nowave-underwater-hazards') &&
+            map.style.data.containsKey('nowave-soundings'),
+      );
+      oldPresent();
+      gate13.complete();
+      await Future.wait([pending, reload]);
+      oldPresent();
+      mode = 'degraded';
+      clock = clock.add(const Duration(seconds: 16));
+      await viewport.synchronize(map);
+      oldPresent();
+      expect(viewport.metrics['cache_entries'] as int, lessThanOrEqualTo(64));
+      mode = 'partial';
+      clock = clock.add(const Duration(seconds: 16));
+      await viewport.synchronize(map);
+      oldPresent();
+      mode = 'ok';
+      clock = clock.add(const Duration(seconds: 16));
+      await viewport.synchronize(map);
+      expect(drawn('nowave-underwater-hazards').toSet(), {
+        'polygon-z13',
+        'multi-polygon-z13',
+        'line-z13',
+        'multi-line-z13',
+      });
+      expect(drawn('nowave-soundings'), ['modeled-cell-z13']);
+      map.zoom = 14;
+      final pending14 = viewport.synchronize(map);
+      await until(() => viewport.requests > 90);
+      expect(drawn('nowave-underwater-hazards').toSet(), {
+        'polygon-z13',
+        'multi-polygon-z13',
+        'line-z13',
+        'multi-line-z13',
+      });
+      expect(viewport.metrics['cache_entries'] as int, lessThanOrEqualTo(64));
+      gate14.complete();
+      await pending14;
+      expect(drawn('nowave-underwater-hazards').toSet(), {
+        'polygon-z14',
+        'multi-polygon-z14',
+        'line-z14',
+        'multi-line-z14',
+      });
+      expect(drawn('nowave-soundings'), ['modeled-cell-z14']);
+      expect(peak, lessThanOrEqualTo(2));
+      expect(viewport.metrics['cache_entries'] as int, lessThanOrEqualTo(64));
+      expect(
+        viewport.metrics['cache_encoded_bytes'] as int,
+        lessThanOrEqualTo(12 * 1024 * 1024),
+      );
+      map.longitude = 30;
+      await viewport.synchronize(map);
+      expect(drawn('nowave-underwater-hazards'), isEmpty);
+      expect(drawn('nowave-soundings'), isEmpty);
+      expect(viewport.metrics['cache_entries'] as int, lessThanOrEqualTo(64));
+    },
+  );
+
+  test(
+    'saturated cache keeps displayed polygon within the 12 MiB cap',
+    () async {
+      final map = ViewMap()..zoom = 12;
+      final body = jsonEncode({
+        'type': 'FeatureCollection',
+        'features': [
+          {
+            'type': 'Feature',
+            'id': 'large-polygon',
+            'geometry': {
+              'type': 'Polygon',
+              'coordinates': [
+                [
+                  [5.92, 43.07],
+                  [5.94, 43.07],
+                  [5.94, 43.09],
+                  [5.92, 43.07],
+                ],
+              ],
+            },
+            'properties': {'payload': 'a' * (2 * 1024 * 1024)},
+          },
+        ],
+      });
+      final viewport = MarineViewport(
+        apiBaseUrl: 'https://marine.example',
+        clientFactory: () => MockClient(
+          (request) async => http.Response(
+            request.url.path.contains('underwater-hazards')
+                ? body
+                : '{"type":"FeatureCollection","features":[]}',
+            200,
+          ),
+        ),
+      );
+      addTearDown(viewport.dispose);
+      await viewport.synchronize(map);
+      expect(
+        viewport.features('underwater-hazards').single['id'],
+        'large-polygon',
+      );
+      expect(viewport.metrics['cache_entries'] as int, lessThanOrEqualTo(64));
+      expect(
+        viewport.metrics['cache_encoded_bytes'] as int,
+        lessThanOrEqualTo(12 * 1024 * 1024),
+      );
+      map.zoom = 13;
+      await viewport.synchronize(map);
+      expect(
+        viewport.features('underwater-hazards').single['id'],
+        'large-polygon',
+      );
+      expect(viewport.metrics['cache_entries'] as int, lessThanOrEqualTo(64));
+      expect(
+        viewport.metrics['cache_encoded_bytes'] as int,
+        lessThanOrEqualTo(12 * 1024 * 1024),
+      );
+      expect(viewport.errors, greaterThan(0));
+    },
+  );
 
   test(
     'continuous camera movement loads and renders during five seconds',
