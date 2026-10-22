@@ -3,9 +3,16 @@ import 'dart:math' as math;
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/scheduler.dart';
 
 /// Bord de l'écran où le panneau est posé.
 enum MapPanelSide { top, bottom }
+
+typedef MapPanelScrollableBuilder = Widget Function(
+  BuildContext context,
+  ScrollController scrollController,
+  ValueChanged<double> onContentHeightChanged,
+);
 
 /// Consultation au-dessus de la carte. Un contenu défilant peut agrandir
 /// le panneau avant de défiler, puis le réduire jusqu'à sa fermeture.
@@ -32,7 +39,7 @@ class MapPanel extends StatefulWidget {
   final String? title;
   final List<Widget> actions;
   final Widget? child;
-  final ScrollableWidgetBuilder? scrollableBuilder;
+  final MapPanelScrollableBuilder? scrollableBuilder;
   final bool showCloseButton;
 
   /// Conserve le contenu jusqu'à la fin de l'animation de sortie.
@@ -62,14 +69,20 @@ class _MapPanelState extends State<MapPanel>
   final _surfaceKey = GlobalKey();
   late final _offset = AnimationController.unbounded(vsync: this);
   final _sheet = DraggableScrollableController();
+  final _visibleExtent = ValueNotifier<double?>(null);
+  bool _extentUpdateScheduled = false;
+  bool _hasUserDragged = false;
   ScrollController? _contentScroll;
   Drag? _headerDrag;
+  double? _contentHeight;
+  List<double> _snapSizes = const [];
   bool _closing = false;
   double _motionHeight = 160;
 
   @override
   void initState() {
     super.initState();
+    _sheet.addListener(_followSheetSize);
     if (widget.dismissRequested) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (mounted) _close();
@@ -95,10 +108,36 @@ class _MapPanelState extends State<MapPanel>
       View.of(context).platformDispatcher.accessibilityFeatures.reduceMotion;
   double get _height => _surfaceKey.currentContext?.size?.height ?? 160;
 
+  void _updateContentHeight(double height) {
+    if (!mounted ||
+        _closing ||
+        (_contentHeight != null && (height - _contentHeight!).abs() < 0.5)) {
+      return;
+    }
+    setState(() => _contentHeight = height);
+  }
+
+  void _followSheetSize() {
+    if (!mounted || !_sheet.isAttached) return;
+    // Modifier les bornes du panneau notifie aussi pendant sa construction.
+    if (SchedulerBinding.instance.schedulerPhase ==
+        SchedulerPhase.persistentCallbacks) {
+      if (_extentUpdateScheduled) return;
+      _extentUpdateScheduled = true;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _extentUpdateScheduled = false;
+        _followSheetSize();
+      });
+    } else {
+      _visibleExtent.value = _sheet.size;
+    }
+  }
+
   @override
   void dispose() {
     _headerDrag?.cancel();
     _sheet.dispose();
+    _visibleExtent.dispose();
     _offset.dispose();
     super.dispose();
   }
@@ -106,6 +145,7 @@ class _MapPanelState extends State<MapPanel>
   void _dragStart(DragStartDetails details) {
     if (!_closing) {
       if (widget.scrollableBuilder != null && _contentScroll!.hasClients) {
+        _hasUserDragged = true;
         _headerDrag = _contentScroll!.position.drag(
           details,
           () => _headerDrag = null,
@@ -212,13 +252,12 @@ class _MapPanelState extends State<MapPanel>
     final radius = _ios
         ? BorderRadius.circular(24)
         : const BorderRadius.vertical(top: Radius.circular(24));
+    final headerHeight =
+        widget.showCloseButton || widget.onBack != null || widget.title != null
+        ? 48.0
+        : 32.0;
     final header = SizedBox(
-      height:
-          widget.showCloseButton ||
-              widget.onBack != null ||
-              widget.title != null
-          ? 48
-          : 32,
+      height: headerHeight,
       width: double.infinity,
       child: Stack(
         alignment: Alignment.center,
@@ -330,17 +369,27 @@ class _MapPanelState extends State<MapPanel>
         1.0,
         mediaQuery.size.height - mediaQuery.padding.top - margin - 8,
       );
-      final initial = (MapPanel.maxHeightFor(mediaQuery) / available).clamp(
-        0.25,
-        0.65,
+      // Le panneau ne peut dépasser la hauteur réelle de son contenu.
+      final maximum = _contentHeight == null
+          ? 0.92
+          : math.min(0.92, (_contentHeight! + headerHeight) / available);
+      final initial = math.min(
+        maximum,
+        MapPanel.maxHeightFor(mediaQuery) / available,
       );
+      final minimum = math.min(0.18, initial * 0.45);
+      if (_snapSizes.isEmpty || _snapSizes.single != initial) {
+        _snapSizes = [initial];
+      }
       panel = AnimatedBuilder(
-        animation: _sheet,
+        animation: _visibleExtent,
         builder: (context, child) => Align(
           alignment: Alignment.bottomCenter,
           // La boîte mesurée par la carte suit la hauteur visible du panneau.
           // La zone au-dessus reste disponible pour toucher les signalements.
-          heightFactor: _sheet.isAttached ? _sheet.size : initial,
+          heightFactor: _hasUserDragged
+              ? (_visibleExtent.value ?? initial).clamp(minimum, maximum)
+              : initial,
           child: child,
         ),
         child: SizedBox(
@@ -354,22 +403,32 @@ class _MapPanelState extends State<MapPanel>
               }
               return true;
             },
-            child: DraggableScrollableSheet(
-              controller: _sheet,
-              initialChildSize: initial,
-              minChildSize: 0.18,
-              maxChildSize: 0.92,
-              snap: !_reduceMotion,
-              snapSizes: [initial],
-              snapAnimationDuration: const Duration(milliseconds: 200),
-              shouldCloseOnMinExtent: false,
-              builder: (context, scrollController) {
-                _contentScroll = scrollController;
-                return surface(
-                  scrollableBuilder(context, scrollController),
-                  fill: true,
-                );
+            child: NotificationListener<ScrollStartNotification>(
+              onNotification: (notification) {
+                if (notification.dragDetails != null) _hasUserDragged = true;
+                return false;
               },
+              child: DraggableScrollableSheet(
+                controller: _sheet,
+                initialChildSize: initial,
+                minChildSize: minimum,
+                maxChildSize: maximum,
+                snap: !_reduceMotion,
+                snapSizes: _snapSizes,
+                snapAnimationDuration: const Duration(milliseconds: 200),
+                shouldCloseOnMinExtent: false,
+                builder: (context, scrollController) {
+                  _contentScroll = scrollController;
+                  return surface(
+                    scrollableBuilder(
+                      context,
+                      scrollController,
+                      _updateContentHeight,
+                    ),
+                    fill: true,
+                  );
+                },
+              ),
             ),
           ),
         ),

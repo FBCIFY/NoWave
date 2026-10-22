@@ -1415,6 +1415,12 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
             _stopFollowing();
           });
           await WidgetsBinding.instance.endOfFrame;
+          if (!withUser) {
+            // Le contenu est mesuré après sa mise en page ; le panneau
+            // applique ensuite sa hauteur avant le premier cadrage.
+            await WidgetsBinding.instance.endOfFrame;
+            await WidgetsBinding.instance.endOfFrame;
+          }
           if (!_isCurrentFocus(request) ||
               cameraRequest != _cameraFocusRevision ||
               _selectionTouched ||

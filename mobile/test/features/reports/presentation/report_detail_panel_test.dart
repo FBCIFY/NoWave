@@ -34,6 +34,7 @@ void main() {
     Future<void> mount(
       WidgetTester tester, {
       Future<ReportDetail>? loading,
+      ReportDetail? report,
       bool reduceMotion = false,
     }) async {
       closed = 0;
@@ -72,7 +73,8 @@ void main() {
                         child: ReportDetailPanel(
                           reportId: 'photo-report',
                           dismissRequested: dismiss,
-                          loadReport: (_) => loading ?? Future.value(_report),
+                          loadReport: (_) =>
+                              loading ?? Future.value(report ?? _report),
                           loadPhoto: (_) async => _photo,
                           onClose: () => closed++,
                         ),
@@ -95,6 +97,55 @@ void main() {
     final surface = find.byKey(const ValueKey('map-panel-surface'));
     Offset contentStart(WidgetTester tester) =>
         Offset(210, tester.getTopLeft(surface).dy + 180);
+
+    for (final hasPhoto in [false, true]) {
+      testWidgets(
+        '$platform : ${hasPhoto ? 'photo' : 'manuel'} sans blanc après le contenu',
+        (tester) async {
+          final shortReport = ReportDetail(
+            id: _report.id,
+            category: _report.category,
+            description: 'Nappe près du port.',
+            latitude: _report.latitude,
+            longitude: _report.longitude,
+            observedAt: _report.observedAt,
+            expiresAt: _report.expiresAt,
+            author: _report.author,
+            boat: null,
+            photo: hasPhoto ? _report.photo : null,
+          );
+          await mount(tester, report: shortReport);
+          final content = find.descendant(
+            of: find.byType(ReportDetailSheet),
+            matching: find.byType(SizeChangedLayoutNotifier),
+          );
+          final naturalHeight =
+              tester.getSize(content).height +
+              32 +
+              (platform == TargetPlatform.android ? 24 : 0);
+          if (!hasPhoto) {
+            expect(tester.getSize(surface).height, closeTo(naturalHeight, 1));
+            expect(naturalHeight, lessThan(400));
+          }
+          // Même en insistant vers le haut, le panneau s'arrête à son contenu.
+          await tester.dragFrom(contentStart(tester), const Offset(0, -600));
+          await tester.pumpAndSettle();
+          expect(tester.getSize(surface).height, closeTo(naturalHeight, 1));
+          final scroll = tester
+              .widget<ReportDetailSheet>(find.byType(ReportDetailSheet))
+              .scrollController!;
+          expect(scroll.position.maxScrollExtent, closeTo(0, 1));
+          await tester.dragFrom(contentStart(tester), const Offset(0, -300));
+          await tester.pumpAndSettle();
+          expect(tester.getSize(surface).height, closeTo(naturalHeight, 1));
+          expect(scroll.offset, closeTo(0, 1));
+          expect(closed, 0);
+          await tester.dragFrom(contentStart(tester), const Offset(0, 720));
+          await tester.pumpAndSettle();
+          expect(closed, 1);
+        },
+      );
+    }
 
     testWidgets(
       '$platform : le contenu agrandit la fiche avec photo puis défile',

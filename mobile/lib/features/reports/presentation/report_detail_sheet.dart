@@ -24,10 +24,12 @@ class ReportDetailSheet extends StatefulWidget {
     this.now = DateTime.now,
     this.onShowOnMap,
     this.scrollController,
+    this.onContentHeightChanged,
   });
 
   final String reportId;
   final ScrollController? scrollController;
+  final ValueChanged<double>? onContentHeightChanged;
   final Future<void> Function(ReportDetail)? onShowOnMap;
 
   /// Charge la fiche, en général `ReportDetailService.fetchReport`.
@@ -79,17 +81,37 @@ class ReportDetailPanel extends StatelessWidget {
     backgroundColor: Colors.white.withValues(alpha: 0.96),
     extendToBottom: Theme.of(context).platform == TargetPlatform.android,
     dismissRequested: dismissRequested,
-    scrollableBuilder: (context, scrollController) => ReportDetailSheet(
-      reportId: reportId,
-      scrollController: scrollController,
-      loadReport: loadReport,
-      loadPhoto: loadPhoto,
-      userPosition: userPosition,
-    ),
+    scrollableBuilder: (context, scrollController, onContentHeightChanged) =>
+        ReportDetailSheet(
+          reportId: reportId,
+          scrollController: scrollController,
+          onContentHeightChanged: onContentHeightChanged,
+          loadReport: loadReport,
+          loadPhoto: loadPhoto,
+          userPosition: userPosition,
+        ),
   );
 }
 
 class _ReportDetailSheetState extends State<ReportDetailSheet> {
+  final _contentKey = GlobalKey();
+  double? _lastContentHeight;
+
+  void _measureContent() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      final size = _contentKey.currentContext?.size;
+      if (size == null) return;
+      final height = size.height + MediaQuery.paddingOf(context).bottom;
+      if (_lastContentHeight != null &&
+          (height - _lastContentHeight!).abs() < 0.5) {
+        return;
+      }
+      _lastContentHeight = height;
+      widget.onContentHeightChanged?.call(height);
+    });
+  }
+
   /// Chargement en cours ou terminé ; remplacé à chaque nouvel essai.
   late Future<ReportDetail> _report = widget.loadReport(widget.reportId);
 
@@ -107,6 +129,7 @@ class _ReportDetailSheetState extends State<ReportDetailSheet> {
 
   @override
   Widget build(BuildContext context) {
+    _measureContent();
     return SafeArea(
       top: false,
       child: SingleChildScrollView(
@@ -116,32 +139,41 @@ class _ReportDetailSheetState extends State<ReportDetailSheet> {
             : const ClampingScrollPhysics(
                 parent: AlwaysScrollableScrollPhysics(),
               ),
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(24, 0, 24, 24),
-          child: FutureBuilder<ReportDetail>(
-            future: _report,
-            builder: (context, snapshot) {
-              if (snapshot.hasData) {
-                return _ReportDetailContent(
-                  report: snapshot.requireData,
-                  onShowOnMap: widget.onShowOnMap,
-                  userPosition: widget.userPosition,
-                  now: widget.now(),
-                  loadPhoto: widget.loadPhoto,
-                  refreshPhotoUrl: _refreshPhotoUrl,
-                );
-              }
-              if (snapshot.hasError) {
-                return _ReportDetailError(
-                  error: snapshot.error!,
-                  onRetry: _retry,
-                );
-              }
-              return const SizedBox(
-                height: 160,
-                child: Center(child: CircularProgressIndicator()),
-              );
-            },
+        child: NotificationListener<SizeChangedLayoutNotification>(
+          onNotification: (_) {
+            _measureContent();
+            return true;
+          },
+          child: SizeChangedLayoutNotifier(
+            child: Padding(
+              key: _contentKey,
+              padding: const EdgeInsets.fromLTRB(24, 0, 24, 12),
+              child: FutureBuilder<ReportDetail>(
+                future: _report,
+                builder: (context, snapshot) {
+                  if (snapshot.hasData) {
+                    return _ReportDetailContent(
+                      report: snapshot.requireData,
+                      onShowOnMap: widget.onShowOnMap,
+                      userPosition: widget.userPosition,
+                      now: widget.now(),
+                      loadPhoto: widget.loadPhoto,
+                      refreshPhotoUrl: _refreshPhotoUrl,
+                    );
+                  }
+                  if (snapshot.hasError) {
+                    return _ReportDetailError(
+                      error: snapshot.error!,
+                      onRetry: _retry,
+                    );
+                  }
+                  return const SizedBox(
+                    height: 160,
+                    child: Center(child: CircularProgressIndicator()),
+                  );
+                },
+              ),
+            ),
           ),
         ),
       ),

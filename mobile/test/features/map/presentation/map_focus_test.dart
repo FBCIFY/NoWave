@@ -1120,6 +1120,15 @@ void main() {
   focusTestWidgets(
     'fiche qui grandit : le signalement reste au milieu de la carte visible',
     (tester) async {
+      reports.response = Completer<ReportDetail>()
+        ..complete(
+          focusReport(
+            photo: const ReportPhoto(
+              status: ReportPhotoStatus.uploaded,
+              url: 'https://photo.test/report-a',
+            ),
+          ),
+        );
       await mount(tester);
       tapBadge('report-a');
       await pumpFrames(tester);
