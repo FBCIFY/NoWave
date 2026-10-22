@@ -348,7 +348,7 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
   }
 
   final _hydrographyLayer = HydrographyLayer();
-  final _marineViewport = MarineViewport();
+  late final _marineViewport = MarineViewport(viewportSize: () => _mapViewport);
   bool _marineInteractionAdded = false;
   final _buoyLayer = BuoyLayer();
   final _fixedAidLayer = FixedAidLayer();

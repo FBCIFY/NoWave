@@ -48,6 +48,10 @@ abstract final class MarineDebug {
           await map.loadStyleURI(MapConfig.styleUrl);
         } else if (args['action'] == 'sync') {
           await viewport.synchronize(map);
+        } else if (args['action'] == 'snapshot') {
+          return developer.ServiceExtensionResponse.result(
+            jsonEncode({'png': base64Encode(await map.snapshot())}),
+          );
         } else if (args['action'] == 'style') {
           final images = <String, Object?>{};
           final imageIds = args['images'] == null
@@ -94,7 +98,7 @@ abstract final class MarineDebug {
           );
         }
         final camera = await map.getCameraState();
-        final size = await map.getSize();
+        final size = viewport.viewportSize();
         final rendered = await map.queryRenderedFeatures(
           RenderedQueryGeometry.fromScreenBox(
             ScreenBox(
