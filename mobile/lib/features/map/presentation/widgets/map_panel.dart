@@ -19,6 +19,7 @@ class MapPanel extends StatefulWidget {
     this.actions = const [],
     this.showCloseButton = true,
     this.dismissRequested = false,
+    this.backgroundColor,
   });
 
   final MapPanelSide side;
@@ -31,6 +32,7 @@ class MapPanel extends StatefulWidget {
 
   /// Conserve le contenu jusqu'à la fin de l'animation de sortie.
   final bool dismissRequested;
+  final Color? backgroundColor;
 
   static double maxHeightFor(
     MediaQueryData mediaQuery, {
@@ -263,7 +265,9 @@ class _MapPanelState extends State<MapPanel>
                 ),
                 child: Material(
                   key: const ValueKey('map-panel-surface'),
-                  color: Colors.white.withValues(alpha: _ios ? 0.86 : 0.90),
+                  color:
+                      widget.backgroundColor ??
+                      Colors.white.withValues(alpha: _ios ? 0.86 : 0.90),
                   borderRadius: radius,
                   clipBehavior: Clip.antiAlias,
                   child: ScrollConfiguration(

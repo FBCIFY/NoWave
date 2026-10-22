@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart' as geo;
 
+import '../../../app/theme.dart';
 import '../../../core/api/api_exception.dart';
 import '../../map/presentation/widgets/map_panel.dart';
 import '../../reports/presentation/report_category_icon.dart';
 import '../../reports/presentation/report_category_style.dart';
+import '../../reports/presentation/report_category_badge.dart';
 import '../../reports/presentation/report_detail_format.dart';
 import '../data/alert_history_controller.dart';
 import '../domain/alert.dart';
@@ -60,6 +62,7 @@ class AlertsPanel extends StatelessWidget {
   Widget build(BuildContext context) => MapPanel(
     side: MapPanelSide.bottom,
     title: 'Mes alertes',
+    backgroundColor: Colors.white,
     onClose: onClose,
     dismissRequested: dismissRequested,
     actions: [
@@ -81,8 +84,17 @@ class AlertsPanel extends StatelessWidget {
           // Retour depuis une fiche : la liste reprend où elle était.
           key: const PageStorageKey('alerts-list'),
           shrinkWrap: true,
-          padding: const EdgeInsets.fromLTRB(8, 0, 8, 4),
+          padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
           children: [
+            if (items.isNotEmpty)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 12),
+                child: Text(
+                  'Les plus récentes en premier',
+                  style: Theme.of(context).textTheme.bodySmall
+                      ?.copyWith(color: const Color(0xFF475569)),
+                ),
+              ),
             if (error != null)
               _ErrorRow(
                 message: items.isEmpty
@@ -96,18 +108,12 @@ class AlertsPanel extends StatelessWidget {
                 child: Text('Aucune alerte pour le moment.'),
               ),
             for (final alert in items)
-              ListTile(
+              _AlertCard(
                 key: ValueKey(alert.id),
-                dense: true,
-                leading: ReportCategoryIcon(
-                  alert.category,
-                  color: alert.category.color,
-                ),
-                title: Text(alert.category.label),
-                subtitle: Text(
-                  '${formatDayTime(alert.alertedAt!, now: now())} · ${_distance(alert)}',
-                ),
-                trailing: const Icon(Icons.chevron_right),
+                alert: alert,
+                receivedAt: formatDayTime(alert.alertedAt!, now: now()),
+                distance: _distance(alert),
+                currentDistance: userPosition != null,
                 onTap: () => onOpen(alert),
               ),
             if (history.loading)
@@ -123,6 +129,115 @@ class AlertsPanel extends StatelessWidget {
       },
     ),
   );
+}
+
+class _AlertCard extends StatelessWidget {
+  const _AlertCard({
+    super.key,
+    required this.alert,
+    required this.receivedAt,
+    required this.distance,
+    required this.currentDistance,
+    required this.onTap,
+  });
+
+  final Alert alert;
+  final String receivedAt;
+  final String distance;
+  final bool currentDistance;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final text = Theme.of(context).textTheme;
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 10),
+      child: Material(
+        color: AppColors.background,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(16),
+          side: const BorderSide(color: Color(0xFFD7E0EB)),
+        ),
+        clipBehavior: Clip.antiAlias,
+        child: InkWell(
+          onTap: onTap,
+          child: Padding(
+            padding: const EdgeInsets.all(14),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Row(
+                  children: [
+                    ReportCategoryBadge(category: alert.category),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            alert.category.label,
+                            style: text.titleMedium?.copyWith(
+                              color: AppColors.text,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            'Reçue $receivedAt',
+                            style: text.bodySmall?.copyWith(
+                              color: const Color(0xFF475569),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    const Icon(Icons.chevron_right, color: AppColors.slate900),
+                  ],
+                ),
+                const Padding(
+                  padding: EdgeInsets.symmetric(vertical: 10),
+                  child: Divider(height: 1, color: Color(0xFFD7E0EB)),
+                ),
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Icon(
+                      Icons.near_me_outlined,
+                      size: 18,
+                      color: AppColors.blue950,
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text.rich(
+                        TextSpan(
+                          text: currentDistance
+                              ? 'Distance actuelle\n'
+                              : 'Distance\n',
+                          style: text.bodySmall?.copyWith(
+                            color: const Color(0xFF475569),
+                          ),
+                          children: [
+                            TextSpan(
+                              text: distance,
+                              style: text.bodyMedium?.copyWith(
+                                color: AppColors.text,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
 }
 
 class _ErrorRow extends StatelessWidget {

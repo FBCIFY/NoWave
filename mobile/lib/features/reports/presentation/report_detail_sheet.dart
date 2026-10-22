@@ -7,7 +7,7 @@ import '../../../core/api/api_exception.dart';
 import '../../map/presentation/widgets/map_panel.dart';
 import '../data/report_detail_service.dart';
 import '../domain/report_detail.dart';
-import 'report_category_icon.dart';
+import 'report_category_badge.dart';
 import 'report_category_style.dart';
 import 'report_detail_format.dart';
 import 'report_photo_viewer.dart';
@@ -74,6 +74,7 @@ class ReportDetailPanel extends StatelessWidget {
     onClose: onClose,
     onBack: onBack,
     showCloseButton: false,
+    backgroundColor: Colors.white,
     dismissRequested: dismissRequested,
     child: ReportDetailSheet(
       reportId: reportId,
@@ -105,7 +106,7 @@ class _ReportDetailSheetState extends State<ReportDetailSheet> {
     return SafeArea(
       top: false,
       child: Padding(
-        padding: const EdgeInsets.fromLTRB(24, 0, 24, 24),
+        padding: const EdgeInsets.fromLTRB(16, 0, 16, 20),
         child: FutureBuilder<ReportDetail>(
           future: _report,
           builder: (context, snapshot) {
@@ -190,17 +191,7 @@ class _ReportDetailContent extends StatelessWidget {
         children: [
           Row(
             children: [
-              Container(
-                width: 48,
-                height: 48,
-                decoration: BoxDecoration(
-                  color: category.color,
-                  borderRadius: BorderRadius.circular(14),
-                ),
-                child: Center(
-                  child: ReportCategoryIcon(category, color: Colors.white),
-                ),
-              ),
+              ReportCategoryBadge(category: category),
               const SizedBox(width: 14),
               Expanded(
                 child: Column(
@@ -209,13 +200,14 @@ class _ReportDetailContent extends StatelessWidget {
                     Text(
                       category.label,
                       style: theme.textTheme.titleLarge?.copyWith(
+                        color: AppColors.text,
                         fontWeight: FontWeight.w700,
                       ),
                     ),
                     Text(
                       'Observé ${formatDayTime(report.observedAt, now: now)}',
                       style: theme.textTheme.bodyMedium?.copyWith(
-                        color: theme.colorScheme.onSurfaceVariant,
+                        color: const Color(0xFF475569),
                       ),
                     ),
                   ],
@@ -224,17 +216,41 @@ class _ReportDetailContent extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 16),
-          Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            children: [
-              _InfoChip(icon: Icons.near_me_outlined, label: _distance),
-              _InfoChip(
-                icon: Icons.schedule,
-                label: 'Expire ${formatDayTime(report.expiresAt, now: now)}',
-              ),
-            ],
+          Container(
+            padding: const EdgeInsets.all(14),
+            decoration: BoxDecoration(
+              color: AppColors.background,
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: const Color(0xFFD7E0EB)),
+            ),
+            child: Column(
+              children: [
+                _DetailInformation(
+                  icon: Icons.near_me_outlined,
+                  title: 'Distance et direction',
+                  value: _distance,
+                ),
+                const Padding(
+                  padding: EdgeInsets.symmetric(vertical: 12),
+                  child: Divider(height: 1, color: Color(0xFFD7E0EB)),
+                ),
+                _DetailInformation(
+                  icon: Icons.schedule,
+                  title: 'Validité du signalement',
+                  value: 'Expire ${formatDayTime(report.expiresAt, now: now)}',
+                ),
+              ],
+            ),
           ),
+          if (description != null && description.isNotEmpty) ...[
+            const SizedBox(height: 20),
+            const _SectionTitle('Observation'),
+            const SizedBox(height: 6),
+            Text(
+              description,
+              style: theme.textTheme.bodyLarge?.copyWith(color: AppColors.text),
+            ),
+          ],
           if (photo != null) ...[
             const SizedBox(height: 16),
             if (photoUrl != null)
@@ -246,11 +262,12 @@ class _ReportDetailContent extends StatelessWidget {
             else
               _PhotoStatus(photo.status),
           ],
-          if (description != null && description.isNotEmpty) ...[
-            const SizedBox(height: 16),
-            Text(description, style: theme.textTheme.bodyLarge),
-          ],
-          const SizedBox(height: 16),
+          const Padding(
+            padding: EdgeInsets.symmetric(vertical: 16),
+            child: Divider(height: 1, color: Color(0xFFD7E0EB)),
+          ),
+          const _SectionTitle('Signalé par'),
+          const SizedBox(height: 10),
           _AuthorRow(author: report.author, boat: report.boat),
           if (onShowOnMap != null) ...[
             const SizedBox(height: 20),
@@ -262,37 +279,61 @@ class _ReportDetailContent extends StatelessWidget {
   }
 }
 
-/// Petite information en pastille : distance, fin du signalement.
-class _InfoChip extends StatelessWidget {
-  const _InfoChip({required this.icon, required this.label});
+class _SectionTitle extends StatelessWidget {
+  const _SectionTitle(this.title);
+
+  final String title;
+
+  @override
+  Widget build(BuildContext context) => Text(
+    title,
+    style: Theme.of(context).textTheme.titleSmall
+        ?.copyWith(color: AppColors.blue950, fontWeight: FontWeight.w700),
+  );
+}
+
+/// Libellé séparé de sa valeur pour distinguer distance et validité.
+class _DetailInformation extends StatelessWidget {
+  const _DetailInformation({
+    required this.icon,
+    required this.title,
+    required this.value,
+  });
 
   final IconData icon;
-  final String label;
+  final String title;
+  final String value;
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
-      decoration: BoxDecoration(
-        color: AppColors.background,
-        borderRadius: BorderRadius.circular(999),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(icon, size: 16, color: theme.colorScheme.onSurfaceVariant),
-          const SizedBox(width: 6),
-          Flexible(
-            child: Text(
-              label,
-              style: theme.textTheme.labelLarge?.copyWith(
-                color: AppColors.text,
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Icon(icon, size: 20, color: AppColors.blue950),
+        const SizedBox(width: 10),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                title,
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: const Color(0xFF475569),
+                ),
               ),
-            ),
+              const SizedBox(height: 4),
+              Text(
+                value,
+                style: theme.textTheme.bodyMedium?.copyWith(
+                  color: AppColors.text,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ],
           ),
-        ],
-      ),
+        ),
+      ],
     );
   }
 }
@@ -368,14 +409,20 @@ class _AuthorRow extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(name, style: theme.textTheme.titleSmall),
+              Text(
+                name,
+                style: theme.textTheme.titleSmall?.copyWith(
+                  color: AppColors.text,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
               if (boat != null)
                 Text(
                   boat.name == null
                       ? boat.type.label
                       : '${boat.name} · ${boat.type.label}',
                   style: theme.textTheme.bodySmall?.copyWith(
-                    color: theme.colorScheme.onSurfaceVariant,
+                    color: const Color(0xFF475569),
                   ),
                 ),
             ],
