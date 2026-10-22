@@ -17,6 +17,11 @@ typedef MapSonarTarget = ({
 
 /// One selection on the existing map; a superseding request releases its waiter.
 class MapFocusController extends ChangeNotifier {
+  MapFocusController({this.onReportOpened});
+
+  final ValueChanged<String>? onReportOpened;
+  void recordReportOpened(String reportId) => onReportOpened?.call(reportId);
+
   ReportDetail? _report;
   bool _blocked = false;
   MapFocusOrigin origin = MapFocusOrigin.history;

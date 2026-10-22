@@ -1922,6 +1922,7 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
     if (!mounted || _reportComposerOpen) return;
     if (widget.reportDetailService == null) return;
     if (reportId == _detailReportId) {
+      widget.focusController?.recordReportOpened(reportId);
       _acknowledgeNotification(reportId);
       return;
     }
@@ -1935,6 +1936,7 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
       _detailRequest++;
       _detailFocused = false;
     });
+    widget.focusController?.recordReportOpened(reportId);
     _acknowledgeNotification(reportId);
     if (opening) unawaited(_rememberCameraBeforeDetail(_detailRequest));
   }

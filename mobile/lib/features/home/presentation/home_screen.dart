@@ -6,7 +6,10 @@ import '../../../core/api/api_exception.dart';
 import '../../../core/notifications/alert_push_controller.dart';
 import '../../../core/notifications/notification_permission.dart';
 import '../../../core/notifications/push_notification_listener.dart';
+import '../../alerts/data/alert_read_store.dart';
 import '../../alerts/data/alert_service.dart';
+import '../../alerts/data/unread_alert_recovery.dart';
+import '../../alerts/domain/alert.dart';
 import '../../camera/data/position_estimate_service.dart';
 import '../../camera/domain/photo_report_draft.dart';
 import '../../camera/presentation/camera_screen.dart';
@@ -59,8 +62,11 @@ class HomeScreen extends StatefulWidget {
   State<HomeScreen> createState() => _HomeScreenState();
 }
 
-class _HomeScreenState extends State<HomeScreen> {
-  final MapFocusController _mapFocusController = MapFocusController();
+class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
+  late final MapFocusController _mapFocusController = MapFocusController(
+    onReportOpened: (id) => unawaited(_alertRecovery?.markOpened(id)),
+  );
+  UnreadAlertRecovery? _alertRecovery;
   int _pushRequest = 0;
 
   /// Pavillon du bateau pour le mât du curseur, relu au retour du profil
@@ -71,20 +77,80 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    _configureAlertRecovery();
     _watchIntro(widget.intro);
   }
 
   @override
-  void didUpdateWidget(HomeScreen oldWidget) {
+  void didUpdateWidget(covariant HomeScreen oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.intro != widget.intro) {
       oldWidget.intro?.removeListener(_handleIntro);
       _watchIntro(widget.intro);
     }
+    if (oldWidget.profile?.id != widget.profile?.id ||
+        oldWidget.profile?.notificationsEnabled !=
+            widget.profile?.notificationsEnabled ||
+        oldWidget.alertService != widget.alertService ||
+        oldWidget.reportDetailService != widget.reportDetailService) {
+      _configureAlertRecovery();
+    }
+  }
+
+  void _configureAlertRecovery() {
+    _alertRecovery?.dispose();
+    _alertRecovery = null;
+    final profile = widget.profile;
+    final alerts = widget.alertService;
+    final reports = widget.reportDetailService;
+    if (profile == null ||
+        !profile.notificationsEnabled ||
+        alerts == null ||
+        reports == null) {
+      return;
+    }
+    _alertRecovery = UnreadAlertRecovery(
+      alerts: alerts,
+      reports: reports,
+      readStore: AlertReadStore(accountId: profile.id),
+      onUnread: _mapFocusController.showNotification,
+      canReceive: () => mounted && (widget.pushController?.ready ?? true),
+    );
+    if (WidgetsBinding.instance.lifecycleState == null ||
+        WidgetsBinding.instance.lifecycleState == AppLifecycleState.resumed) {
+      _alertRecovery!.start();
+    }
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      _alertRecovery?.start();
+    } else {
+      _alertRecovery?.pause();
+    }
+  }
+
+  void _receiveAlert(AlertPush push) {
+    final recovery = _alertRecovery;
+    if (recovery != null) {
+      unawaited(recovery.receive(push));
+      return;
+    }
+    _mapFocusController.showNotification((
+      id: push.alert.reportId,
+      latitude: push.alert.latitude,
+      longitude: push.alert.longitude,
+      category: push.alert.category,
+      expiresAt: push.expiresAt,
+    ));
   }
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    _alertRecovery?.dispose();
     _pushRequest++;
     _boatFlagRequest++;
     widget.intro?.removeListener(_handleIntro);
@@ -293,13 +359,7 @@ class _HomeScreenState extends State<HomeScreen> {
         ? map
         : PushNotificationListener(
             controller: controller,
-            onReceived: (push) => _mapFocusController.showNotification((
-              id: push.alert.reportId,
-              latitude: push.alert.latitude,
-              longitude: push.alert.longitude,
-              category: push.alert.category,
-              expiresAt: push.expiresAt,
-            )),
+            onReceived: _receiveAlert,
             onOpen: (push) => _openReportFromPush(push.alert.reportId),
             onOpenHistory: _openAlerts,
             child: map,

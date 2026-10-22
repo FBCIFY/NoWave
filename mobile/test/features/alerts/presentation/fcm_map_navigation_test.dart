@@ -2,6 +2,10 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:typed_data';
 
+import 'package:blueway/features/alerts/data/alert_service.dart';
+import 'package:blueway/features/alerts/domain/alert.dart';
+import 'package:blueway/features/profile/domain/user_profile.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:blueway/features/map/presentation/report_marker.dart' as badges;
 import 'package:blueway/features/reports/domain/manual_report.dart';
 import 'package:image/image.dart' as img;
@@ -47,6 +51,19 @@ class _UnavailableGps extends geo.GeolocatorPlatform {
   Future<bool> isLocationServiceEnabled() async => false;
 }
 
+class _History extends Fake implements AlertService {
+  List<Alert> items = [];
+  @override
+  Future<AlertPage> fetchPage({int page = 1, int limit = 20}) async =>
+      AlertPage(
+        items: items,
+        page: page,
+        limit: limit,
+        total: items.length,
+        pages: items.isEmpty ? 0 : 1,
+      );
+}
+
 void focusTestWidgets(
   String description,
   Future<void> Function(WidgetTester) body,
@@ -81,14 +98,33 @@ void main() {
   MapFocusController selection(WidgetTester tester) =>
       tester.widget<MapScreen>(find.byType(MapScreen)).focusController!;
 
-  Future<void> mount(WidgetTester tester) async {
+  Future<void> mount(WidgetTester tester, {_History? history}) async {
     await prepareFocusMarkers(tester);
     push.setSession('user-a');
     push.setReady(true);
     await push.start();
     await tester.pumpWidget(
       MaterialApp(
-        home: HomeScreen(pushController: push, reportDetailService: reports),
+        home: HomeScreen(
+          pushController: push,
+          reportDetailService: reports,
+          alertService: history,
+          profile: history == null
+              ? null
+              : UserProfile(
+                  id: 'account-a',
+                  username: 'Brice',
+                  dateOfBirth: null,
+                  nationality: null,
+                  role: 'user',
+                  status: 'active',
+                  showUserName: true,
+                  showBoatInfo: true,
+                  notificationsEnabled: true,
+                  createdAt: testNow,
+                  updatedAt: testNow,
+                ),
+        ),
       ),
     );
     tester.widget<mb.MapWidget>(find.byType(mb.MapWidget)).onMapCreated!(map);
@@ -108,6 +144,26 @@ void main() {
             map.style.sources['alert-notification-sonar']!['data'] as String,
           ) as Map<String, dynamic>)['features']
           as List;
+
+  void background(WidgetTester tester) {
+    for (final state in [
+      AppLifecycleState.inactive,
+      AppLifecycleState.hidden,
+      AppLifecycleState.paused,
+    ]) {
+      tester.binding.handleAppLifecycleStateChanged(state);
+    }
+  }
+
+  void resume(WidgetTester tester) {
+    for (final state in [
+      AppLifecycleState.hidden,
+      AppLifecycleState.inactive,
+      AppLifecycleState.resumed,
+    ]) {
+      tester.binding.handleAppLifecycleStateChanged(state);
+    }
+  }
 
   void tapReport(String reportId, {String layerId = 'alert-selected-point'}) {
     map.interactions
@@ -131,6 +187,53 @@ void main() {
           ),
         );
   }
+
+  focusTestWidgets(
+    'retour sans clic sur la notification : sonar et badge puis arrêt au détail',
+    (tester) async {
+      SharedPreferences.setMockInitialValues({});
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+      final history = _History();
+      await mount(tester, history: history);
+      background(tester);
+      history.items = [alert()];
+      await tester.pumpAndSettle();
+      expect(map.style.sources, isNot(contains('alert-notification-sonar')));
+      resume(tester);
+      await tester.pumpAndSettle();
+      expect(sonarFeatures(), isNotEmpty);
+      expect(map.style.layers, contains('alert-notification-point'));
+      expect(map.cameras, isEmpty);
+      expect(selection(tester).report, isNull);
+      expect(find.byType(ReportDetailSheet), findsNothing);
+      tapReport('report-a', layerId: 'alert-notification-point');
+      await tester.pumpAndSettle();
+      expect(find.byType(ReportDetailSheet), findsOneWidget);
+      expect(sonarFeatures(), isEmpty);
+      background(tester);
+      resume(tester);
+      await tester.pumpAndSettle();
+      expect(sonarFeatures(), isEmpty);
+      await tester.pumpWidget(const SizedBox.shrink());
+    },
+  );
+
+  focusTestWidgets(
+    'réception avec récupération active : sonar immédiat sans clic',
+    (tester) async {
+      SharedPreferences.setMockInitialValues({});
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+      await mount(tester, history: _History());
+      source.messages.add(
+        pushMessage(expiry: DateTime.now().add(const Duration(hours: 1))),
+      );
+      await tester.pumpAndSettle();
+      expect(sonarFeatures(), isNotEmpty);
+      expect(map.cameras, isEmpty);
+      expect(reports.calls, isEmpty);
+      await tester.pumpWidget(const SizedBox.shrink());
+    },
+  );
 
   focusTestWidgets(
     'sonar et icône arrivent ensemble même si le badge tarde à charger',
