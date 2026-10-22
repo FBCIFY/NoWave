@@ -20,6 +20,7 @@ class MapPanel extends StatefulWidget {
     this.showCloseButton = true,
     this.dismissRequested = false,
     this.backgroundColor,
+    this.extendToBottom = false,
   });
 
   final MapPanelSide side;
@@ -33,6 +34,9 @@ class MapPanel extends StatefulWidget {
   /// Conserve le contenu jusqu'à la fin de l'animation de sortie.
   final bool dismissRequested;
   final Color? backgroundColor;
+
+  /// Prolonge le fond jusqu'en bas et laisse le contenu gérer sa zone sûre.
+  final bool extendToBottom;
 
   static double maxHeightFor(
     MediaQueryData mediaQuery, {
@@ -169,7 +173,10 @@ class _MapPanelState extends State<MapPanel>
   @override
   Widget build(BuildContext context) {
     final mediaQuery = MediaQuery.of(context);
-    final margin = MapPanel._margin(mediaQuery, widget.side);
+    final extendToBottom = !_top && widget.extendToBottom;
+    final margin = extendToBottom
+        ? 0.0
+        : MapPanel._margin(mediaQuery, widget.side);
     final radius = _ios
         ? BorderRadius.circular(24)
         : const BorderRadius.vertical(top: Radius.circular(24));
@@ -288,7 +295,7 @@ class _MapPanelState extends State<MapPanel>
                           child: MediaQuery.removePadding(
                             context: context,
                             removeTop: true,
-                            removeBottom: true,
+                            removeBottom: !extendToBottom,
                             child: widget.child,
                           ),
                         ),

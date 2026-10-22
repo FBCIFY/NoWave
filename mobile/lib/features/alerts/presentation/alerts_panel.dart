@@ -4,9 +4,8 @@ import 'package:geolocator/geolocator.dart' as geo;
 import '../../../app/theme.dart';
 import '../../../core/api/api_exception.dart';
 import '../../map/presentation/widgets/map_panel.dart';
-import '../../reports/presentation/report_category_icon.dart';
-import '../../reports/presentation/report_category_style.dart';
 import '../../reports/presentation/report_category_badge.dart';
+import '../../reports/presentation/report_category_style.dart';
 import '../../reports/presentation/report_detail_format.dart';
 import '../data/alert_history_controller.dart';
 import '../domain/alert.dart';
@@ -98,29 +97,62 @@ class AlertsPanel extends StatelessWidget {
                 padding: EdgeInsets.all(16),
                 child: Text('Aucune alerte pour le moment.'),
               ),
-            for (final alert in items)
+            for (final (index, alert) in items.indexed) ...[
+              if (index > 0)
+                const Divider(
+                  height: 1,
+                  indent: 64,
+                  endIndent: 12,
+                  color: Color(0xFFD7E0EB),
+                ),
               ListTile(
                 key: ValueKey(alert.id),
-                dense: true,
+                contentPadding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 6,
+                ),
+                titleAlignment: ListTileTitleAlignment.center,
+                minLeadingWidth: 40,
+                horizontalTitleGap: 12,
                 leading: ReportCategoryBadge(
                   category: alert.category,
-                  size: 32,
+                  size: 40,
                 ),
                 title: Text(
                   alert.category.label,
                   style: const TextStyle(
                     color: AppColors.text,
-                    fontWeight: FontWeight.w600,
+                    fontSize: 16,
+                    fontWeight: FontWeight.w700,
                   ),
                 ),
                 isThreeLine: true,
-                subtitle: Text(
-                  '${formatDayTime(alert.alertedAt!, now: now())}\n${_distance(alert)}',
-                  style: const TextStyle(color: Color(0xFF475569)),
+                subtitle: Text.rich(
+                  TextSpan(
+                    text: '${formatDayTime(alert.alertedAt!, now: now())}\n',
+                    children: [
+                      TextSpan(
+                        text: _distance(alert),
+                        style: const TextStyle(
+                          color: AppColors.text,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ],
+                  ),
+                  style: const TextStyle(
+                    color: Color(0xFF475569),
+                    fontSize: 14,
+                    height: 1.45,
+                  ),
                 ),
-                trailing: const Icon(Icons.chevron_right),
+                trailing: const Icon(
+                  Icons.chevron_right,
+                  color: AppColors.slate900,
+                ),
                 onTap: () => onOpen(alert),
               ),
+            ],
             if (history.loading)
               const Padding(
                 padding: EdgeInsets.all(12),

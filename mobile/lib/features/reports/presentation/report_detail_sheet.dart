@@ -75,6 +75,7 @@ class ReportDetailPanel extends StatelessWidget {
     onBack: onBack,
     showCloseButton: false,
     backgroundColor: Colors.white,
+    extendToBottom: Theme.of(context).platform == TargetPlatform.android,
     dismissRequested: dismissRequested,
     child: ReportDetailSheet(
       reportId: reportId,
