@@ -8,6 +8,7 @@ import 'package:http/http.dart' as http;
 import 'package:mapbox_maps_flutter/mapbox_maps_flutter.dart';
 
 import '../../../core/api/api_config.dart';
+import '../../../core/map/map_performance.dart';
 import 'buoy_layer.dart';
 import 'harbour_layer.dart';
 import 'hydrography_layer.dart';
@@ -56,6 +57,7 @@ class HarbourSelection {
       reset();
       return [];
     }
+    final span = MapPerformance.begin();
     // A formerly selected port cannot keep priority after leaving the screen.
     const spacing = 24 * 1.12 + 6;
     final visibleIds = <String>{};
@@ -116,6 +118,7 @@ class HarbourSelection {
         'properties': {...f['properties'] as Map, 'selection_order': order[id]},
       });
     }
+    MapPerformance.finish('ports_us', span);
     return selected;
   }
 }
@@ -274,11 +277,15 @@ class MarineViewport {
     _busy = true;
     final revision = _revision;
     try {
+      MapPerformance.count('viewport_camera_reads');
+      final cameraSpan = MapPerformance.begin();
       final camera = await map.getCameraState();
+      MapPerformance.finish('camera_read_us', cameraSpan);
       if (_disposed || revision != _revision) return;
       final lon = camera.center.coordinates.lng.toDouble();
       final lat = camera.center.coordinates.lat.toDouble();
       final zoom = camera.zoom;
+      final boundsSpan = MapPerformance.begin();
       final bounds = await map.coordinateBoundsForCamera(
         CameraOptions(
           center: camera.center,
@@ -287,6 +294,7 @@ class MarineViewport {
           pitch: camera.pitch,
         ),
       );
+      MapPerformance.finish('bounds_us', boundsSpan);
       _visibleBounds = bounds;
       _currentMap = map;
       _currentZoom = zoom;
@@ -510,6 +518,7 @@ class MarineViewport {
       if (response.bodyBytes.length > 4 * 1024 * 1024) {
         throw StateError('snapshot budget');
       }
+      final decodeSpan = MapPerformance.begin();
       final data = jsonDecode(response.body) as Map<String, dynamic>;
       if (data['type'] != 'FeatureCollection') {
         throw const FormatException('GeoJSON');
@@ -517,6 +526,7 @@ class MarineViewport {
       var features = (data['features'] as List)
           .map((f) => Map<String, dynamic>.from(f as Map))
           .toList();
+      MapPerformance.finish('decode_us', decodeSpan);
       if (_disposed ||
           _paused ||
           _cancelledFlights.contains(key) ||
@@ -633,6 +643,7 @@ class MarineViewport {
   }
 
   List<Map<String, dynamic>> features(String family) {
+    final span = MapPerformance.begin();
     final all = <String, Map<String, dynamic>>{};
     final target = _wanted.values
         .where((entry) => entry.$1 == family)
@@ -734,6 +745,7 @@ class MarineViewport {
         }
       }
     }
+    MapPerformance.finish('features_us', span);
     return all.values.toList();
   }
 
@@ -751,6 +763,7 @@ class MarineViewport {
         if (size.isEmpty || !size.width.isFinite || !size.height.isFinite) {
           data = [];
         } else {
+          final projectionSpan = MapPerformance.begin();
           final pixels = await map.pixelsForCoordinates([
             for (final f in data)
               Point(
@@ -759,20 +772,25 @@ class MarineViewport {
                 ),
               ),
           ]);
+          MapPerformance.finish('projection_us', projectionSpan);
           if (_disposed || revision != _renderRevision) return;
           data = selection.select(data, pixels, zoom, size.width, size.height);
         }
       }
       if (_disposed || revision != _renderRevision) return;
+      final encodeSpan = MapPerformance.begin();
       final encoded = jsonEncode({
         'type': 'FeatureCollection',
         'features': data,
       });
+      MapPerformance.finish('encode_us', encodeSpan);
       if (_renderedData[entry.value] != encoded &&
           await map.style.styleSourceExists(entry.value) &&
           !_disposed &&
           revision == _renderRevision) {
+        final publishSpan = MapPerformance.begin();
         await map.style.setStyleSourceProperty(entry.value, 'data', encoded);
+        MapPerformance.finish('publish_us', publishSpan);
         if (_disposed || revision != _renderRevision) return;
         _renderedData[entry.value] = encoded;
       }

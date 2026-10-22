@@ -20,6 +20,7 @@ import '../../../core/map/globe_rotation_controller.dart';
 import '../../../core/map/globe_pitch_controller.dart';
 import '../../../core/map/heading_camera.dart';
 import '../../../core/map/map_config.dart';
+import '../../../core/map/map_performance.dart';
 import '../../../core/map/map_motion.dart';
 import '../../../core/map/marine/marine_map_controller.dart';
 import '../../../core/map/marine/marine_zoom.dart';
@@ -672,6 +673,7 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
   @override
   void initState() {
     super.initState();
+    MapPerformance.initialize();
     final lifecycle = WidgetsBinding.instance.lifecycleState;
     _appHidden = lifecycle != null && lifecycle != AppLifecycleState.resumed;
     widget.intro?.attach();
@@ -782,6 +784,7 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
   /// passe en orientation libre.
   void _handleMapCameraChange(CameraChangedEventData event) {
     if (!mounted || _hidden) return;
+    MapPerformance.count('camera_events');
     final wasRotating = _globeRotation.isRotating;
     final previousZoom = _cameraZoom;
     if (_userCameraMotion) _scheduleRotationAfterGesture();
@@ -3224,6 +3227,7 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
 
   @override
   void dispose() {
+    MapPerformance.detach();
     _marineViewport.dispose();
     unawaited(_alertHaloPulse.stop());
     widget.intro?.removeListener(_handleIntro);
@@ -3395,13 +3399,20 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
                 // globe surfaces and atmospheric fog remain native Mapbox.
                 isOpaque: false,
                 textureView: true,
+                androidHostingMode: MapPerformance.hostingMode,
                 // The default HEIGHT_ONLY constraint locks latitude near
                 // the equator at the minimum zoom on tall phone screens.
                 mapOptions: MapOptions(
                   constrainMode: ConstrainMode.NONE,
                   pixelRatio: mediaQuery.devicePixelRatio,
                 ),
+                onRenderFrameFinishedListener: MapPerformance.enabled
+                    ? MapPerformance.nativeFrame
+                    : null,
                 onMapCreated: (map) {
+                  if (MapPerformance.enabled) {
+                    MapPerformance.nativeMapsCreated++;
+                  }
                   _sonarReady = false;
                   unawaited(_alertHaloPulse.stop());
                   setState(() => _mapboxMap = map);
