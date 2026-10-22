@@ -1,0 +1,114 @@
+{
+  "tile": [
+    14,
+    8463,
+    6013
+  ],
+  "bbox": [
+    662861.9092890471,
+    5327355.123363644,
+    665307.8941941728,
+    5329801.108268769
+  ],
+  "wms": {
+    "service": "WMS",
+    "request": "GetMap",
+    "version": "1.1.1",
+    "layers": "emodnet:mean_multicolour",
+    "styles": "",
+    "format": "image/png",
+    "transparent": "true",
+    "width": "262",
+    "height": "262",
+    "srs": "EPSG:3857",
+    "bbox": "662833.245403,5327326.459478,665336.558080,5329829.772154"
+  },
+  "source": {
+    "zero": 42880,
+    "partial": 0,
+    "opaque": 22656
+  },
+  "feather": {
+    "zero": 42880,
+    "partial": 1101,
+    "opaque": 21555
+  },
+  "final": {
+    "zero": 43116,
+    "partial": 889,
+    "opaque": 21531
+  },
+  "source_zero_in_osm_water": 434,
+  "valid_source_removed_by_mask": 236,
+  "partial_mask": 200,
+  "layers": {
+    "ocean": {
+      "extent": 4096,
+      "features": 1
+    },
+    "water_polygons": {
+      "extent": 4096,
+      "features": 5
+    },
+    "water_lines": {
+      "extent": 4096,
+      "features": 1
+    },
+    "water_lines_labels": {
+      "extent": 4096,
+      "features": 1
+    },
+    "pier_lines": {
+      "extent": 4096,
+      "features": 1
+    },
+    "boundaries": {
+      "extent": 4096,
+      "features": 1
+    },
+    "place_labels": {
+      "extent": 4096,
+      "features": 4
+    },
+    "land": {
+      "extent": 4096,
+      "features": 4
+    },
+    "sites": {
+      "extent": 4096,
+      "features": 15
+    },
+    "buildings": {
+      "extent": 4096,
+      "features": 1
+    },
+    "addresses": {
+      "extent": 4096,
+      "features": 177
+    },
+    "streets": {
+      "extent": 4096,
+      "features": 266
+    },
+    "street_polygons": {
+      "extent": 4096,
+      "features": 2
+    },
+    "street_labels": {
+      "extent": 4096,
+      "features": 251
+    },
+    "streets_polygons_labels": {
+      "extent": 4096,
+      "features": 1
+    },
+    "public_transport": {
+      "extent": 4096,
+      "features": 32
+    },
+    "pois": {
+      "extent": 4096,
+      "features": 419
+    }
+  }
+}

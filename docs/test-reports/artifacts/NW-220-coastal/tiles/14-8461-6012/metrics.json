@@ -1,0 +1,122 @@
+{
+  "tile": [
+    14,
+    8461,
+    6012
+  ],
+  "bbox": [
+    657969.939478796,
+    5329801.108268769,
+    660415.9243839217,
+    5332247.093173895
+  ],
+  "wms": {
+    "service": "WMS",
+    "request": "GetMap",
+    "version": "1.1.1",
+    "layers": "emodnet:mean_multicolour",
+    "styles": "",
+    "format": "image/png",
+    "transparent": "true",
+    "width": "262",
+    "height": "262",
+    "srs": "EPSG:3857",
+    "bbox": "657941.275593,5329772.444383,660444.588270,5332275.757060"
+  },
+  "source": {
+    "zero": 53008,
+    "partial": 0,
+    "opaque": 12528
+  },
+  "feather": {
+    "zero": 53008,
+    "partial": 3336,
+    "opaque": 9192
+  },
+  "final": {
+    "zero": 53562,
+    "partial": 2827,
+    "opaque": 9147
+  },
+  "source_zero_in_osm_water": 1480,
+  "valid_source_removed_by_mask": 554,
+  "partial_mask": 621,
+  "layers": {
+    "ocean": {
+      "extent": 4096,
+      "features": 1
+    },
+    "water_polygons": {
+      "extent": 4096,
+      "features": 19
+    },
+    "water_polygons_labels": {
+      "extent": 4096,
+      "features": 14
+    },
+    "pier_lines": {
+      "extent": 4096,
+      "features": 21
+    },
+    "pier_polygons": {
+      "extent": 4096,
+      "features": 3
+    },
+    "boundaries": {
+      "extent": 4096,
+      "features": 1
+    },
+    "place_labels": {
+      "extent": 4096,
+      "features": 6
+    },
+    "land": {
+      "extent": 4096,
+      "features": 6
+    },
+    "sites": {
+      "extent": 4096,
+      "features": 71
+    },
+    "buildings": {
+      "extent": 4096,
+      "features": 1
+    },
+    "addresses": {
+      "extent": 4096,
+      "features": 782
+    },
+    "streets": {
+      "extent": 4096,
+      "features": 887
+    },
+    "street_polygons": {
+      "extent": 4096,
+      "features": 20
+    },
+    "street_labels": {
+      "extent": 4096,
+      "features": 831
+    },
+    "streets_polygons_labels": {
+      "extent": 4096,
+      "features": 18
+    },
+    "street_labels_points": {
+      "extent": 4096,
+      "features": 1
+    },
+    "ferries": {
+      "extent": 4096,
+      "features": 11
+    },
+    "public_transport": {
+      "extent": 4096,
+      "features": 96
+    },
+    "pois": {
+      "extent": 4096,
+      "features": 1089
+    }
+  }
+}

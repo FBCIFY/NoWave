@@ -1,0 +1,98 @@
+{
+  "tile": [
+    14,
+    8462,
+    6015
+  ],
+  "bbox": [
+    660415.9243839234,
+    5322463.153553393,
+    662861.9092890491,
+    5324909.138458518
+  ],
+  "wms": {
+    "service": "WMS",
+    "request": "GetMap",
+    "version": "1.1.1",
+    "layers": "emodnet:mean_multicolour",
+    "styles": "",
+    "format": "image/png",
+    "transparent": "true",
+    "width": "262",
+    "height": "262",
+    "srs": "EPSG:3857",
+    "bbox": "660387.260498,5322434.489668,662890.573175,5324937.802344"
+  },
+  "source": {
+    "zero": 41036,
+    "partial": 0,
+    "opaque": 24500
+  },
+  "feather": {
+    "zero": 41036,
+    "partial": 1481,
+    "opaque": 23019
+  },
+  "final": {
+    "zero": 41226,
+    "partial": 1305,
+    "opaque": 23005
+  },
+  "source_zero_in_osm_water": 588,
+  "valid_source_removed_by_mask": 190,
+  "partial_mask": 225,
+  "layers": {
+    "ocean": {
+      "extent": 4096,
+      "features": 1
+    },
+    "pier_lines": {
+      "extent": 4096,
+      "features": 1
+    },
+    "pier_polygons": {
+      "extent": 4096,
+      "features": 2
+    },
+    "boundaries": {
+      "extent": 4096,
+      "features": 1
+    },
+    "land": {
+      "extent": 4096,
+      "features": 6
+    },
+    "sites": {
+      "extent": 4096,
+      "features": 7
+    },
+    "buildings": {
+      "extent": 4096,
+      "features": 1
+    },
+    "addresses": {
+      "extent": 4096,
+      "features": 1
+    },
+    "streets": {
+      "extent": 4096,
+      "features": 70
+    },
+    "street_labels": {
+      "extent": 4096,
+      "features": 61
+    },
+    "ferries": {
+      "extent": 4096,
+      "features": 2
+    },
+    "public_transport": {
+      "extent": 4096,
+      "features": 2
+    },
+    "pois": {
+      "extent": 4096,
+      "features": 46
+    }
+  }
+}

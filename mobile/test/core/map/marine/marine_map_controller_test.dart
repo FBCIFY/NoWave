@@ -101,6 +101,14 @@ void main() {
       expect(map.style.config['showPointOfInterestLabels'], false);
       expect(source['tiles'], ['$local?v=marine-palette-3']);
       expect(source['maxzoom'], 14);
+      expect(
+        source['attribution'],
+        contains('Fond gris : couverture bathymétrique colorée indisponible'),
+      );
+      expect(
+        source['attribution'],
+        contains('https://emodnet.ec.europa.eu/en/bathymetry'),
+      );
       expect(source['volatile'], false);
       expect(source['prefetch-zoom-delta'], 0);
       expect(layer['slot'], 'middle');

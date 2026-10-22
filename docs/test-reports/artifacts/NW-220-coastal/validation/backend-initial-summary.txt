@@ -1,0 +1,2 @@
+Missing local test DB configuration: KeyError: NOWAVE_TEST_ADMIN_URL
+1006 passed, 2 skipped, 1 warning, 277 errors in 35.85s

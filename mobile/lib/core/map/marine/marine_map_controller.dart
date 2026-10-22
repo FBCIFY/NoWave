@@ -60,6 +60,9 @@ class MarineMapController {
           tileSize: 256,
           minzoom: 0,
           maxzoom: 14,
+          attribution:
+              '<a href="https://emodnet.ec.europa.eu/en/bathymetry">'
+              'Fond gris : couverture bathymétrique colorée indisponible</a>',
           // The versioned URL keeps old coastal renders separate. Reuse valid
           // public tiles on disk when returning to a place or reopening the app.
           volatile: false,
