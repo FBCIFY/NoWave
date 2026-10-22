@@ -9,6 +9,7 @@ import '../../../core/api/api_exception.dart';
 import '../../../core/haptics/app_haptics.dart';
 import '../../../core/text/capitalize_first_letter_formatter.dart';
 import '../domain/manual_report.dart';
+import 'report_category_icon.dart';
 import 'report_category_style.dart';
 import 'report_photo_viewer.dart';
 
@@ -475,7 +476,7 @@ class _ReportComposerSheetState extends State<ReportComposerSheet> {
                   mainAxisSize: MainAxisSize.min,
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    Icon(category.icon, color: foreground),
+                    ReportCategoryIcon(category, color: foreground),
                     const SizedBox(height: 4),
                     Padding(
                       padding: const EdgeInsets.symmetric(horizontal: 4),

@@ -4,18 +4,12 @@ import '../domain/manual_report.dart';
 
 /// Apparence d'une catégorie, partagée par le formulaire, la carte et la
 /// fiche de détail. Le `switch` oblige à tout définir pour une nouvelle
-/// catégorie.
+/// catégorie. Le pictogramme est dans `report_category_icon.dart`.
 extension ReportCategoryStyle on ReportCategory {
   String get label => switch (this) {
     ReportCategory.marineAnimal => 'Animal marin',
     ReportCategory.obstruction => 'Obstacle',
     ReportCategory.pollution => 'Pollution',
-  };
-
-  IconData get icon => switch (this) {
-    ReportCategory.marineAnimal => Icons.pets_outlined,
-    ReportCategory.obstruction => Icons.warning_amber_rounded,
-    ReportCategory.pollution => Icons.water_drop_outlined,
   };
 
   /// Couleur du badge sur la carte.

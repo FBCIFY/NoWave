@@ -3,6 +3,7 @@ import 'package:geolocator/geolocator.dart' as geo;
 
 import '../../../core/api/api_exception.dart';
 import '../../map/presentation/widgets/map_panel.dart';
+import '../../reports/presentation/report_category_icon.dart';
 import '../../reports/presentation/report_category_style.dart';
 import '../../reports/presentation/report_detail_format.dart';
 import '../data/alert_history_controller.dart';
@@ -95,7 +96,10 @@ class AlertsPanel extends StatelessWidget {
               ListTile(
                 key: ValueKey(alert.id),
                 dense: true,
-                leading: Icon(alert.category.icon, color: alert.category.color),
+                leading: ReportCategoryIcon(
+                  alert.category,
+                  color: alert.category.color,
+                ),
                 title: Text(alert.category.label),
                 subtitle: Text(
                   '${formatDayTime(alert.alertedAt!, now: now())} · ${_distance(alert)}',

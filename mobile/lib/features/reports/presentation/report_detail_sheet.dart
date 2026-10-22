@@ -7,6 +7,7 @@ import '../../../core/api/api_exception.dart';
 import '../../map/presentation/widgets/map_panel.dart';
 import '../data/report_detail_service.dart';
 import '../domain/report_detail.dart';
+import 'report_category_icon.dart';
 import 'report_category_style.dart';
 import 'report_detail_format.dart';
 import 'report_photo_viewer.dart';
@@ -194,7 +195,9 @@ class _ReportDetailContent extends StatelessWidget {
                   color: category.color,
                   borderRadius: BorderRadius.circular(14),
                 ),
-                child: Icon(category.icon, color: Colors.white),
+                child: Center(
+                  child: ReportCategoryIcon(category, color: Colors.white),
+                ),
               ),
               const SizedBox(width: 14),
               Expanded(
