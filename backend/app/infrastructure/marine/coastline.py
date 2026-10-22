@@ -3,6 +3,7 @@
 import asyncio
 import time
 from collections import OrderedDict
+from dataclasses import dataclass
 from io import BytesIO
 
 import mapbox_vector_tile
@@ -16,6 +17,14 @@ from app.infrastructure.marine.visual_water import PADDING, context_neighbours
 
 SIZE = 256
 SUBPIXELS = 4
+
+
+@dataclass(frozen=True)
+class CoastlineContext:
+    """Mandatory central mask and optional halo availability, kept separate."""
+
+    mask: Image.Image
+    complete: bool = True
 
 
 def has_raster_data(content: bytes) -> bool:
@@ -110,7 +119,7 @@ class CoastlineMask:
         self._bytes = 0
         self._flights = [asyncio.Lock() for _ in range(64)]
 
-    async def get_context(self, tile, content):
+    async def get_context(self, tile: Tile, content: bytes) -> CoastlineContext:
         """Use published neighbouring water, never extend a clipped polygon."""
         main = await self.get_mask(tile)
         neighbours = await asyncio.to_thread(context_neighbours, content, main)
@@ -121,14 +130,20 @@ class CoastlineMask:
         async def neighbour(dx, dy):
             y = tile.y + dy
             if not 0 <= y < (1 << tile.z):
-                return
+                return True
             target = Tile(tile.z, (tile.x + dx) % (1 << tile.z), y)
-            mask = await self.get_mask(target)
+            try:
+                mask = await self.get_mask(target)
+            except ProviderUnavailable:
+                # Optional context only: leave these pixels unknown (zero).
+                # Never cache a failure as a valid empty coastline mask.
+                return False
             with Image.open(BytesIO(mask)) as image:
                 context.paste(image, (PADDING + dx * SIZE, PADDING + dy * SIZE))
+            return True
 
-        await asyncio.gather(*(neighbour(dx, dy) for dx, dy in neighbours))
-        return context
+        available = await asyncio.gather(*(neighbour(dx, dy) for dx, dy in neighbours))
+        return CoastlineContext(context, complete=all(available))
 
     async def get_mask(self, tile):
         async with self._flights[hash(tile) % len(self._flights)]:

@@ -245,3 +245,55 @@ def test_queue_is_bounded_and_shutdown_cancels_waiters(tmp_path):
         assert not cache._pending
 
     asyncio.run(scenario())
+
+
+def test_incomplete_context_shares_cold_requests_but_retries_and_never_persists(tmp_path):
+    from app.infrastructure.marine.bathymetry_cache import UncachedBathymetryTile
+
+    async def scenario():
+        started, release = asyncio.Event(), asyncio.Event()
+        calls = 0
+        path = tmp_path / 'cache.sqlite3'
+
+        async def render(tile):
+            nonlocal calls
+            calls += 1
+            if calls == 1:
+                started.set()
+                await release.wait()
+                return UncachedBathymetryTile(b'degraded but valid png')
+            return b'complete png'
+
+        cache = BathymetryTileCache(render, path)
+        first = asyncio.create_task(cache.get(TILE))
+        await started.wait()
+        others = [asyncio.create_task(cache.get(TILE)) for _ in range(11)]
+        await asyncio.sleep(0)
+        first.cancel()
+        with pytest.raises(asyncio.CancelledError):
+            await first
+        release.set()
+        results = await asyncio.gather(*others)
+        assert all(isinstance(item, UncachedBathymetryTile) for item in results)
+        assert results == [b'degraded but valid png'] * 11
+        assert cache.metrics['shared'] == 11
+        assert not cache._memory
+        assert cache._bytes == 0
+        with sqlite3.connect(path) as db:
+            assert db.execute('SELECT COUNT(*) FROM tiles').fetchone()[0] == 0
+        assert calls == 1
+        assert await cache.get(TILE) == b'complete png'
+        assert calls == 2
+        assert await cache.get(TILE) == b'complete png'
+        assert cache.metrics['memory_hits'] == 1
+        await cache.close()
+
+        async def forbidden(tile):
+            raise AssertionError('recovered normal tile should persist')
+
+        restarted = BathymetryTileCache(forbidden, path)
+        assert await restarted.get(TILE) == b'complete png'
+        assert restarted.metrics['disk_hits'] == 1
+        await restarted.close()
+
+    asyncio.run(scenario())

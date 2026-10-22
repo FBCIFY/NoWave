@@ -14,6 +14,10 @@ from app.domain.marine import ProviderUnavailable
 logger = logging.getLogger(__name__)
 
 
+class UncachedBathymetryTile(bytes):
+    """Valid PNG with incomplete optional context; retry on the next request."""
+
+
 class BathymetryTileCache:
     VERSION = "marine-visual-7"
     TTL = 86400
@@ -127,6 +131,10 @@ class BathymetryTileCache:
         async with self._slots:
             self.metrics["renders"] += 1
             content = await self.render(tile)
+        if isinstance(content, UncachedBathymetryTile):
+            # Keep single-flight and worker limits, but do not persist a
+            # degraded render in either positive cache for the normal 24h TTL.
+            return content
         expires = time.time() + self.TTL
         self._remember(key, expires, content)
         await asyncio.to_thread(self._write, key, expires, content)

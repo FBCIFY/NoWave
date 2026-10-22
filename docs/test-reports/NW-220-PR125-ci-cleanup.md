@@ -1,6 +1,6 @@
 # PR #125 — correction CI et sélection des preuves
 
-Cette intervention corrige la sécurité des images Web et allège la revue. Le code cartographique, ses tests, ses verrous de dépendances, `marine-visual-7`, les couleurs, les zooms et les configurations de cache restent identiques au HEAD de référence.
+Les sections A à E retracent les deux missions initiales (sécurité Web et sélection des preuves), validées au commit `c5d39fab`. Le complément F documente la correction ultérieure des masques voisins facultatifs. Les couleurs, les profondeurs, les règles de zoom et les algorithmes de reconstruction restent inchangés.
 
 ## A. Audit Trivy
 
@@ -85,3 +85,57 @@ Branche : `fix/NW-220-coastal-raster-artifacts`. PR [#125](https://github.com/FB
 Ce rapport est préparé avant le commit et le push de la correction. Le SHA publié, l'état de fusion et les résultats de chaque job distant seront vérifiés après le push et rapportés dans le compte rendu final et la description de la PR. La réussite locale ne vaut pas CI verte.
 
 Verdict à ce stade : **PR non prête** tant que la nouvelle exécution GitHub Actions n'ont pas confirmé tous les contrôles. Le verdict final doit être fondé sur cette exécution, jamais sur les seuls résultats locaux.
+
+
+## F. Complément obligatoire — indisponibilité des masques voisins
+
+### Diagnostic et reproduction
+
+Départ : `c5d39fabc38f729d7949ac106307c0497610548e`, HEAD local/distant/PR identiques après fetch, sur la même branche autorisée. Seuls les deux dossiers utilisateur protégés sont non suivis. La CI précédente était verte : [run39862529925](https://github.com/FBCIFY/NoWave/actions/runs/39862529925). La revue a néanmoins identifié une régression fonctionnelle non couverte.
+
+Reproduction automatisée, sans dépendre du réseau : tuile centrale **14/8462/6014**, raster utilisable et géométrie centrale valide ; le masque ouest **14/8461/6014** lève `ProviderUnavailable`. Avant correction, le nouveau test exigeant HTTP200 échoue avec **HTTP503**, en0,97s. Le `gather` de `CoastlineMask.get_context()` propageait cette exception facultative jusqu'à la route, qui appliquait alors la même erreur qu'à un masque central manquant.
+
+Contre-vérification sur les véritables entrées WMS/masques conservées de cette tuile : cette capture précise demande le voisin **sud14/8462/6015**, sans demander l'ouest. En injectant la panne de ce voisin effectivement nécessaire, le code initial extrait par `git archive c5d39fab backend` renvoie503 ; le correctif renvoie200 avec `no-store`. Avec le voisin disponible, les deux versions reproduisent exactement les pixels du PNG final enregistré. Le scénario ouest demandé est reproduit par les tests automatisés, avec un trou de couverture au bord ouest ; la sélection de voisins reste celle de l'algorithme validé, sans la forcer artificiellement.
+
+### Correction et contrat des caches
+
+- Le masque central est toujours chargé avant les voisins, hors de la nouvelle interception. Son indisponibilité continue de produire HTTP503, sans raster non masqué ni succès vide.
+- Seule une **`ProviderUnavailable` lors du chargement d'un voisin facultatif** est traitée comme un contexte incomplet. La portion correspondante du halo reste à zéro ; aucune duplication, extrapolation ou dilatation de la géométrie centrale.
+- `CoastlineContext` sépare explicitement le masque de son indicateur `complete`. `asyncio.gather`, les sémaphores, single-flights, budgets et verrous existants restent en place. Aucune interception d'`asyncio.CancelledError`, `RuntimeError`, `AssertionError`, `TypeError` ou `ValueError` n'est ajoutée au repli facultatif.
+- La route appelle le même `render_visual_water` avec le masque réellement disponible. En cas de contexte incomplet, les octets PNG sont marqués par le type interne `UncachedBathymetryTile`, sans modifier les pixels ou les métadonnées de couverture du moteur de rendu.
+- Ce résultat reste partagé par les requêtes simultanées du même single-flight, mais **n'entre ni dans le cache positif RAM ni dans SQLite**. La réponse HTTP200 porte **`Cache-Control: no-store`**, évitant également de figer ce rendu chez un client ou un cache intermédiaire.
+- Une nouvelle requête peut retenter le voisin, sans attendre24h. Le backoff HTTP existant du fournisseur reste respecté (par exemple au moins30s après429/503) ; aucun retry réseau immédiat n'est ajouté. Les masques valides gardent leur cache OSM durable ; une panne n'est jamais mémorisée comme un masque vide valide.
+- Après récupération, le PNG complet retrouve le cache normal **24h**, RAM et disque. Sa persistance après redémarrage est vérifiée. La version reste **`marine-visual-7`** : les résultats complets sont inchangés ; l'ancien chemin en échec ne créait aucun PNG dégradé dans ce cache.
+
+### Tests et double validation
+
+**20 nouveaux cas automatisés** : huit cas API, onze cas de contexte côtier et un cas de cache concurrent. Les tests existants sont adaptés au conteneur de contexte, sans retirer leurs assertions.
+
+Couverture : voisin ouest indisponible/HTTP200 ; central indisponible/HTTP503 ; voisins disponibles/rendu normal exact ; groupes de voisins et huit voisins indisponibles/repli contrôlé ; halo inconnu à zéro et jetée non peinte ; annulation du central, du voisin et de la requête ; annulation du contexte avec ses huit appels en attente ; quatre catégories d'erreurs de programmation propagées ; récupération immédiate avec ou sans redémarrage du cache ; cache RAM/SQLite vides pendant la panne ; résultat complet persisté après récupération ; onze demandes partagées après annulation d'un premier appelant.
+
+| Contrôle | Résultat local |
+| --- | --- |
+| Reproduction avant correction | Échec attendu : HTTP503 au lieu de200 |
+| Première passe — pipeline, exceptions, cache et API ciblés | **118 réussites**,0 échec,3,11s |
+| Deuxième passe — suite backend complète avec PostGIS isolé | **1344 réussites,2 ignorés,0 échec/erreur**,43,87s |
+| Rejeu des deux tuiles réelles conservées | **2/2 : pixels et couverture strictement identiques** |
+| Ruff | Réussi |
+| Formatage des deux nouveaux modules de tests | Réussi |
+| `git diff --check` | Réussi |
+| Sept empreintes utilisateur protégées | Identiques |
+
+Commandes réellement utilisées :
+
+```sh
+.venv/bin/python -m pytest backend/tests/api/test_bathymetry_neighbour_masks.py backend/tests/api/test_map_tiles.py backend/tests/unit/test_coastline.py backend/tests/unit/test_coastline_context.py backend/tests/unit/test_visual_water.py backend/tests/unit/test_bathymetry_cache.py backend/tests/unit/test_emodnet_bathymetry.py backend/tests/unit/test_bathymetry_sampling.py backend/tests/unit/test_coastal_raster_artifacts.py -q
+NOWAVE_TEST_PORT=55436 docker compose -p nowave-pr125-neighbours -f compose.test.yaml up -d --build --wait --wait-timeout 120 database
+NOWAVE_TEST_ADMIN_URL=postgresql://nowave_ci:ci-test-only@127.0.0.1:55436/nowave_ci .venv/bin/python -m pytest backend/tests -q --junitxml=/tmp/nowave-pr125-neighbours/pass2-backend.xml
+PYTHONPATH=backend .venv/bin/python docs/test-reports/artifacts/NW-220-gray-pixelation/replay_saved_tiles.py docs/test-reports/artifacts/NW-220-gray-pixelation/tiles
+NOWAVE_TEST_PORT=55436 docker compose -p nowave-pr125-neighbours -f compose.test.yaml down
+```
+
+Les deux skips restent SHOM local absent et sonde Nginx native optionnelle non activée ; même avertissement Starlette préexistant. Les journaux/JUnit locaux sont dans `/tmp/nowave-pr125-neighbours/`, sans ajouter de nouveaux artefacts lourds au dépôt. Les prochains résultats CI sont publiés par les workflows inchangés.
+
+**Seconde lecture distincte :** reprise du diff complet de la PR contre la base commune de `origin/dev`, puis du seul complément contre `c5d39fab`. Le correctif produit se limite à `coastline.py`, au transport de la politique de cache dans `map_tiles.py` et à l'abstention de stockage dans `bathymetry_cache.py`. Aucun changement de `visual_water.py`, du fournisseur EMODnet, des couleurs, des profondeurs, des règles de zoom, des sources mobiles, de Nginx, de Trivy ou des workflows. Budgets RAM/disque/concurrence, TTL des résultats complets et politique OSM identiques. Les43 preuves sélectionnées restent présentes ; aucun fichier utilisateur n'est ajouté ou supprimé.
+
+Ces deux passes sont successives et distinctes, effectuées par le même intervenant. La validation locale est suffisante pour publier le correctif ; elle ne vaut pas CI verte sur le prochain commit. Le SHA poussé, les résultats distants et le verdict actualisé sont contrôlés après publication et consignés dans le compte rendu final et la description de la PR. Aucune fusion dans `dev` ni mise en production n'est autorisée ou effectuée.

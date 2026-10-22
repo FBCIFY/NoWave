@@ -172,7 +172,8 @@ def test_neighbour_masks_reuse_the_existing_persistent_osm_cache():
         raw.putpixel((PADDING, PADDING + 100), (0, 0, 0, 0))
         first = await coast.get_context(Tile(14, 8462, 6014), png(raw))
         second = await coast.get_context(Tile(14, 8462, 6014), png(raw))
-        assert first.tobytes() == second.tobytes()
+        assert first.complete and second.complete
+        assert first.mask.tobytes() == second.mask.tobytes()
         assert http.calls == 2  # Central mask and one western neighbour, not nine.
-        assert first.getpixel((0, 100)) == 255
+        assert first.mask.getpixel((0, 100)) == 255
     asyncio.run(run())

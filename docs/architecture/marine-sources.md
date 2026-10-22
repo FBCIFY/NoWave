@@ -324,8 +324,16 @@ isobathe, unité, datum ou valeur numérique n'est déduite des couleurs.
 
 Le cache RAM32Mio / SQLite128Mio / TTL24h utilise `marine-visual-7`, comme l'URL
 Flutter ; les anciennes entrées restent séparées et ne sont pas purgées.
-Une panne du masque requis renvoie503 ; un contexte WMS totalement transparent
-évite le téléchargement du masque. Les seuils de zoom, slots et opacités des
+Une panne du masque central requis renvoie503. Les masques voisins ne servent
+qu'au contexte facultatif : une `ProviderUnavailable` sur un voisin laisse sa
+portion du halo à zéro, sans prolongement des géométries centrales. Le PNG
+ainsi dégradé n'entre ni dans le cache RAM ni dans SQLite et porte
+`Cache-Control: no-store` ; la requête suivante peut retenter le voisin, sous
+réserve du backoff fournisseur existant. Les rendus complets gardent le TTL24h,
+les single-flights et limites inchangés. Annulations et erreurs de programmation
+ne sont pas converties en contexte facultatif vide.
+Un contexte WMS totalement transparent évite le téléchargement du masque.
+Les seuils de zoom, slots et opacités des
 couches existantes sont conservés. Les géométries OSM et Mapbox peuvent
 présenter des différences locales ; ce ne sont pas des côtes hydrographiques
 corrigées de la marée. OSM/ODbL reste crédité.

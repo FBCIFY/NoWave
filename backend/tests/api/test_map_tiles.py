@@ -7,6 +7,7 @@ from app.api.dependencies.auth import get_current_identity
 from app.main import app
 from app.domain.report import ReportCategory
 from app.infrastructure.marine.bathymetry_cache import BathymetryTileCache
+from app.infrastructure.marine.coastline import CoastlineContext
 
 
 @pytest.fixture(autouse=True)
@@ -93,7 +94,7 @@ def test_bathymetry_tile_is_public_png(monkeypatch):
     class Coast:
         async def get_context(self, tile, raw):
             assert (tile.z, tile.x, tile.y) == (8, 131, 94)
-            return b"coastal mask"
+            return CoastlineContext(b"coastal mask")
 
     monkeypatch.setattr("app.api.routes.map_tiles.get_coastline_mask", lambda: Coast())
     monkeypatch.setattr("app.api.routes.map_tiles.has_raster_data", lambda raw: True)
@@ -194,7 +195,7 @@ def test_visual_continuity_keeps_original_coverage_and_shares_warm_requests(monk
 
     class Coast:
         async def get_context(self, tile, raw):
-            return Image.new('L', (280, 280), 255)
+            return CoastlineContext(Image.new('L', (280, 280), 255))
 
     monkeypatch.setattr('app.api.routes.map_tiles.fetch_bathymetry_tile', fetch)
     monkeypatch.setattr('app.api.routes.map_tiles.get_coastline_mask', lambda: Coast())
