@@ -67,7 +67,7 @@ void main() {
       expect(map.moves.last.pitch, 20);
       await sync(6, 20);
       expect(map.moves.last.pitch, 40);
-      expect(map.bounds.last.maxPitch, 85);
+      expect(map.bounds.last.maxPitch, GlobePitchController.maxPitch);
       expect(map.gestures.enabled.last, true);
       for (final move in map.moves) {
         expect(move.center, isNull);
@@ -117,7 +117,7 @@ void main() {
         );
       }
       expect(map.moves, isEmpty);
-      expect(map.bounds.last.maxPitch, 85);
+      expect(map.bounds.last.maxPitch, GlobePitchController.maxPitch);
       for (final pitch in [0.0, 10.0, 25.0, 38.25]) {
         await controller.synchronize(
           map,
@@ -148,7 +148,7 @@ void main() {
     await Future.wait([pending, follow]);
     expect(map.moves, isEmpty);
     expect(controller.detailedPitch, 0);
-    expect(map.bounds.last.maxPitch, 85);
+    expect(map.bounds.last.maxPitch, GlobePitchController.maxPitch);
   });
 
   test(
@@ -175,9 +175,16 @@ void main() {
     final latest = sync(8, 40);
     gate.complete();
     await Future.wait([first, latest]);
-    expect(map.bounds.last.maxPitch, 85);
-    expect(map.moves.last.pitch, 60);
+    expect(map.bounds.last.maxPitch, GlobePitchController.maxPitch);
+    expect(map.moves.last.pitch, GlobePitchController.defaultPitch);
     expect(map.moves.any((move) => move.pitch == 0), false);
+  });
+
+  test('geste au-delà de 63,75° : ramené au maximum', () async {
+    await sync(14, 80);
+    expect(GlobePitchController.maxPitch, 63.75);
+    expect(controller.detailedPitch, GlobePitchController.maxPitch);
+    expect(map.moves.last.pitch, GlobePitchController.maxPitch);
   });
 
   test(

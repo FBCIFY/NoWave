@@ -470,10 +470,10 @@ restent possibles pendant une forte rafale.
 
 ### Position de l'utilisateur
 
-La flèche orange NoWave indique la position et suit le même cap que la
-boussole. Elle est plus petite de loin et agrandie de 12,5 % aux deux niveaux
-de détail. Aucun point bleu ni halo de précision ne la recouvre. Sans cap
-disponible, un point orange neutre indique la position.
+Un chevron bleu marine indique la position et suit le même cap que la
+boussole. Un mât planté à son pied porte le pavillon du bateau (voir
+« Curseur de position »). Sans cap disponible, un disque marine remplace le
+chevron.
 
 ### Limites connues
 
@@ -565,19 +565,50 @@ au nord vrai :
   être fausse d’un facteur 2 environ ; l’utilisateur confirme toujours le
   point sur la carte.
 
-### Flèche de position
+### Curseur de position
 
-Les images `assets/images/nowave_arrow_small.png` et
-`nowave_arrow_large.png` pointent vers le nord à 0°. `LocationMarker` les
-affiche dans une couche native `LocationIndicatorLayer`, à l’échelle 1,125,
-en utilisant le cap de `DeviceOrientationService.mapHeadings`. Un cap de
-350° reste 350° ; Mapbox applique la rotation et l’inclinaison de la carte.
-Le point `nowave_dot_no_heading.png` remplace la flèche quand le cap manque.
+`LocationMarker` dessine deux couches, à partir des images de
+`LocationMast`, dessinées en Dart à la densité de l’écran :
+
+- un chevron bleu marine couché sur la carte, dans une couche native
+  `LocationIndicatorLayer`. Il suit le cap de
+  `DeviceOrientationService.mapHeadings` : un cap de 350° reste 350°, et
+  Mapbox applique la rotation et l’inclinaison de la carte. Sans cap, un
+  disque marine le remplace ;
+- un mât debout face à l’écran, dans une couche de symboles. Il porte le
+  pavillon du bateau (`flag_country` du profil), plié par le vent.
+  Sans pavillon, ou avec un code inconnu, le pavillon est bleu uni.
+
+Les deux couches sont dans l’emplacement `top`. Les pastilles des
+signalements, ajoutées sans emplacement, passent donc devant le pied du mât ;
+seul le pavillon dépasse au-dessus.
+
+Les pavillons viennent de `assets/flags/` : un PNG de 80 pixels de large par
+code ISO à deux lettres (250 pays et territoires, flagcdn.com, drapeaux du
+domaine public). L’accueil relit le bateau au retour du profil, pour hisser
+un pavillon modifié.
+
+Une nouvelle position GPS est rejointe en une seconde, par interpolation en
+Dart (environ 30 images par seconde). Le glissement natif de la couche est
+coupé, pour que le chevron et le mât restent au même endroit.
 
 Le composant de localisation Mapbox reste actif, avec ses images masquées,
 pour conserver le suivi et le recentrage. Il ne dessine ni point bleu ni
 cercle de précision. Le modèle 3D historique et son générateur restent dans
 le dépôt, mais ne sont plus utilisés pour ce repère.
+
+Essai en cours : avec `MapConfig.nativeArrowPuck` à `true`, le chevron et le
+mât ne sont plus dessinés. Le repère est une flèche 3D orange
+(`assets/models/location_puck.glb`, générée par
+`python3 tool/make_location_puck.py`), affichée par le composant natif de
+Mapbox (`LocationPuck3D`). Mapbox la place et l'oriente selon le cap de
+l'appareil à chaque image, sans passer par Dart. Elle mesure 27,44 points dès
+le zoom 6 et diminue au dézoom jusqu'à 13,72 points au zoom 2 et en deçà, pour
+ne pas couvrir un pays entier. Remettre `false` revient au
+chevron et au mât.
+
+Les pastilles des signalements sont dans l'emplacement `top` de Mapbox. La
+flèche native, ajoutée sans emplacement, passe donc devant elles.
 
 ### Limites connues
 

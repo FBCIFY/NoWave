@@ -4,6 +4,7 @@ import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 
 import '../../reports/domain/manual_report.dart';
+import '../../reports/presentation/report_category_icon.dart';
 import '../../reports/presentation/report_category_style.dart';
 
 /// Badge d'un signalement sur la carte : le carré arrondi du choix de
@@ -38,7 +39,11 @@ abstract final class ReportMarker {
   static Future<Uint8List> paintCategory(ReportCategory category) async {
     final cached = _categoryImages[category];
     if (cached != null) return cached;
-    final pixels = await paint(icon: category.icon, color: category.color);
+    final pixels = await _render(
+      category.color,
+      (canvas, center) =>
+          category.paintIcon(canvas, center, _iconSize, Colors.white),
+    );
     _categoryImages[category] = pixels;
     return pixels;
   }
@@ -49,7 +54,16 @@ abstract final class ReportMarker {
   static Future<Uint8List> paint({
     required IconData icon,
     required Color color,
-  }) async {
+  }) => _render(
+    color,
+    (canvas, center) =>
+        paintIconData(canvas, icon, center, _iconSize, Colors.white),
+  );
+
+  static Future<Uint8List> _render(
+    Color color,
+    void Function(Canvas canvas, Offset center) glyph,
+  ) async {
     final recorder = ui.PictureRecorder();
     final canvas = Canvas(recorder)..scale(pixelRatio);
 
@@ -66,24 +80,7 @@ abstract final class ReportMarker {
       )
       ..drawRRect(badge, Paint()..color = Colors.white)
       ..drawRRect(badge.deflate(_borderWidth), Paint()..color = color);
-
-    final glyph = TextPainter(
-      text: TextSpan(
-        text: String.fromCharCode(icon.codePoint),
-        style: TextStyle(
-          fontFamily: icon.fontFamily,
-          package: icon.fontPackage,
-          fontSize: _iconSize,
-          color: Colors.white,
-        ),
-      ),
-      textDirection: TextDirection.ltr,
-    )..layout();
-    glyph.paint(
-      canvas,
-      badge.center - Offset(glyph.width / 2, glyph.height / 2),
-    );
-    glyph.dispose();
+    glyph(canvas, badge.center);
 
     final pixels = (size * pixelRatio).round();
     final picture = recorder.endRecording();

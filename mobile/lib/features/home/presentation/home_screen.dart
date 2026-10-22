@@ -62,11 +62,65 @@ class HomeScreen extends StatefulWidget {
 class _HomeScreenState extends State<HomeScreen> {
   final MapFocusController _mapFocusController = MapFocusController();
   int _pushRequest = 0;
+
+  /// Pavillon du bateau pour le mât du curseur, relu au retour du profil
+  /// où il a pu changer.
+  final ValueNotifier<String?> _boatFlag = ValueNotifier(null);
+  int _boatFlagRequest = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    _watchIntro(widget.intro);
+  }
+
+  @override
+  void didUpdateWidget(HomeScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.intro != widget.intro) {
+      oldWidget.intro?.removeListener(_handleIntro);
+      _watchIntro(widget.intro);
+    }
+  }
+
   @override
   void dispose() {
     _pushRequest++;
+    _boatFlagRequest++;
+    widget.intro?.removeListener(_handleIntro);
     _mapFocusController.dispose();
+    _boatFlag.dispose();
     super.dispose();
+  }
+
+  /// Sous l'onboarding, le bateau n'est pas encore créé : il est lu à la fin
+  /// du parcours.
+  void _watchIntro(MapIntroController? intro) {
+    if (intro?.phase == MapIntroPhase.covered) {
+      intro!.addListener(_handleIntro);
+    } else {
+      _loadBoatFlag();
+    }
+  }
+
+  void _handleIntro() {
+    final intro = widget.intro;
+    if (intro == null || intro.phase == MapIntroPhase.covered) return;
+    intro.removeListener(_handleIntro);
+    _loadBoatFlag();
+  }
+
+  Future<void> _loadBoatFlag() async {
+    final service = widget.profileService;
+    if (service == null) return;
+    final request = ++_boatFlagRequest;
+    try {
+      final boat = await service.getBoat();
+      if (!mounted || request != _boatFlagRequest) return;
+      _boatFlag.value = boat?.flagCountry;
+    } catch (_) {
+      // Hors ligne ou serveur indisponible : le mât garde son pavillon.
+    }
   }
 
   /// A push selects the main map; only the API supplies its actual position.
@@ -197,6 +251,7 @@ class _HomeScreenState extends State<HomeScreen> {
       reportTiles: widget.reportTiles,
       reportDetailService: widget.reportDetailService,
       onUserInactive: widget.onUserInactive,
+      boatFlag: _boatFlag,
       // La caméra renvoie la photo et le point estimé, que la carte fait
       // confirmer avant publication.
       onOpenCamera: positionEstimateService == null
@@ -215,19 +270,21 @@ class _HomeScreenState extends State<HomeScreen> {
               widget.onUpdatePreferences == null
           ? null
           : () {
-              Navigator.of(context).push(
-                MaterialPageRoute<void>(
-                  builder: (_) => ProfileScreen(
-                    profile: widget.profile!,
-                    profileService: widget.profileService,
-                    onDeleteAccount: widget.onDeleteAccount,
-                    onSignOut: widget.onSignOut!,
-                    onUpdatePreferences: widget.onUpdatePreferences!,
-                    notificationPermissions:
-                        const NotificationPermissionService(),
-                  ),
-                ),
-              );
+              Navigator.of(context)
+                  .push(
+                    MaterialPageRoute<void>(
+                      builder: (_) => ProfileScreen(
+                        profile: widget.profile!,
+                        profileService: widget.profileService,
+                        onDeleteAccount: widget.onDeleteAccount,
+                        onSignOut: widget.onSignOut!,
+                        onUpdatePreferences: widget.onUpdatePreferences!,
+                        notificationPermissions:
+                            const NotificationPermissionService(),
+                      ),
+                    ),
+                  )
+                  .then((_) => _loadBoatFlag());
             },
     );
 

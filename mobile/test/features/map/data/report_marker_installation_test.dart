@@ -46,6 +46,8 @@ void main() {
     expect(pointLayer['minzoom'], 9);
     expect(map.style.layers[ReportTiles.heatmapLayerId]!['maxzoom'], 9);
     expect(pointLayer['paint']['icon-opacity'], 1);
+    // Sous la flèche de position, qui n'a pas d'emplacement.
+    expect(pointLayer['slot'], 'top');
     expect(
       pointLayer['layout']['icon-image'],
       ReportTiles.markerImageExpression(),

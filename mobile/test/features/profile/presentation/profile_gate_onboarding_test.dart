@@ -161,6 +161,14 @@ void main() {
       f.requests.map((r) => r.url.path),
       contains('/api/v1/devices/current'),
     );
+    // Le pavillon du curseur est lu une fois le bateau créé.
+    expect(
+      [
+        for (final r in f.requests)
+          if (r.url.path == '/api/v1/users/me/boat') r.method,
+      ],
+      ['POST', 'GET'],
+    );
 
     await tester.pumpWidget(const SizedBox.shrink());
   });

@@ -315,6 +315,9 @@ class ReportTiles {
         sourceId: sourceId,
         sourceLayer: _sourceLayer,
         minZoom: badgesMinZoom,
+        // Au-dessus du fond de carte, mais sous la flèche de position,
+        // ajoutée sans emplacement par Mapbox.
+        slot: LayerSlot.TOP,
         filter: _isReport,
         iconImageExpression: markerImageExpression(),
         // À 9, la zone colorée est déjà masquée : le badge doit être visible.

@@ -1,3 +1,6 @@
+import 'package:blueway/core/map/globe_pitch_controller.dart';
+import 'package:blueway/core/map/map_config.dart';
+
 import 'dart:async';
 import 'dart:math' as math;
 import 'dart:convert';
@@ -13,7 +16,6 @@ import 'package:blueway/features/map/presentation/report_marker.dart' as badges;
 import 'package:blueway/features/reports/domain/manual_report.dart';
 import 'package:blueway/features/reports/data/manual_report_service.dart';
 
-import 'package:blueway/features/map/presentation/map_alert_camera.dart';
 import 'package:blueway/features/map/presentation/map_screen.dart';
 import 'package:blueway/features/map/data/report_tiles.dart';
 import 'package:blueway/features/reports/data/report_detail_service.dart';
@@ -425,10 +427,12 @@ void main() {
   );
 
   focusTestWidgets(
-    'Mes alertes : vise le signalement seul, incliné, en une animation',
+    'Mes alertes : vise le signalement seul, même inclinaison, en une animation',
     (tester) async {
       gps.initial.complete(focusPosition());
-      map.cameraBearing = 130;
+      map
+        ..cameraBearing = 130
+        ..cameraPitch = 30;
       await mount(tester);
       focus.focus(focusReport(longitude: 6));
       await pumpFrames(tester);
@@ -438,10 +442,10 @@ void main() {
       expect(map.easedCameras, hasLength(1));
       final camera = map.easedCameras.single;
       expect(camera.center!.coordinates.lng, 6);
-      // Zoom 14 de départ + 1,5, inclinaison 0 relevée au minimum.
+      // Zoom 14 de départ + 1,5, inclinaison choisie gardée.
       expect(camera.zoom, 15.5);
       expect(camera.bearing, 130);
-      expect(camera.pitch, MapAlertCamera.detailMinPitch);
+      expect(camera.pitch, 30);
       expect(camera.padding!.bottom, mapHeight(tester) / 2);
       expect(map.animationDurations.single, inInclusiveRange(240, 500));
       expect(
@@ -451,14 +455,14 @@ void main() {
     },
   );
 
-  focusTestWidgets('fiche ouverte : garde une carte déjà plus inclinée', (
+  focusTestWidgets('fiche ouverte : inclinaison plafonnée à 63,75°', (
     tester,
   ) async {
-    map.cameraPitch = 60;
+    map.cameraPitch = 70;
     await mount(tester);
     focus.focus(focusReport(), origin: MapFocusOrigin.mapTap);
     await pumpFrames(tester);
-    expect(map.easedCameras.single.pitch, 60);
+    expect(map.easedCameras.single.pitch, GlobePitchController.defaultPitch);
     expect(map.easedCameras.single.zoom, 15.5);
   });
 
@@ -678,11 +682,17 @@ void main() {
         5.37,
       ]);
       expect(map.style.layers, contains('alert-selected-point'));
+      // Le repère reste celui du réglage courant : flèche native ou point
+      // caché sous le chevron.
+      final puck = MapConfig.locationPuckSettings();
       expect(map.location.settings.last.enabled, true);
-      expect(map.location.settings.last.puckBearingEnabled, false);
       expect(
-        map.location.settings.last.locationPuck!.locationPuck2D,
-        isNotNull,
+        map.location.settings.last.puckBearingEnabled,
+        puck.puckBearingEnabled,
+      );
+      expect(
+        map.location.settings.last.locationPuck!.locationPuck3D?.modelUri,
+        puck.locationPuck!.locationPuck3D?.modelUri,
       );
       expect(
         tester.widget<mb.MapWidget>(find.byType(mb.MapWidget)).viewport,
@@ -923,7 +933,7 @@ void main() {
     expect(find.byTooltip('Créer un signalement'), findsNothing);
     final detail = map.easedCameras.single;
     expect(detail.zoom, 15.5);
-    expect(detail.pitch, MapAlertCamera.detailMinPitch);
+    expect(detail.pitch, 10);
     expect(detail.padding!.bottom, panelHeight(tester));
 
     // La croix est à droite, pas sur la poignée centrale.
@@ -1002,11 +1012,10 @@ void main() {
   focusTestWidgets(
     'autre badge touché : la fiche change, la vue d’avant reste la première',
     (tester) async {
+      map.cameraPitch = 30;
       await mount(tester);
       tapBadge('report-a');
       await pumpFrames(tester);
-      // La carte est maintenant inclinée par la première fiche.
-      map.cameraPitch = 35;
       tapBadge('report-b', longitude: 6);
       await pumpFrames(tester);
       expect(reports.calls, ['report-a', 'report-b']);
@@ -1016,11 +1025,11 @@ void main() {
             .reportId,
         'report-b',
       );
-      expect(map.easedCameras.last.pitch, 35);
+      expect(map.easedCameras.last.pitch, 30);
 
       await tester.tap(find.byTooltip('Fermer'));
       await pumpFrames(tester);
-      expect(map.easedCameras.last.pitch, 0);
+      expect(map.easedCameras.last.pitch, 30);
       expect(map.easedCameras.last.zoom, 14);
     },
   );

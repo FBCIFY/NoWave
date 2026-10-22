@@ -5,8 +5,11 @@ import 'package:mapbox_maps_flutter/mapbox_maps_flutter.dart';
 class GlobePitchController {
   static const flatZoom = 4.5;
   static const detailedZoom = 6.0;
-  static const defaultPitch = 60.0;
-  static const maxPitch = 85.0;
+
+  /// Carte détaillée : de la vue de dessus (0°) aux trois quarts des 85°
+  /// permis par Mapbox. La carte part de ce maximum.
+  static const maxPitch = 85.0 * .75;
+  static const defaultPitch = maxPitch;
 
   double _detailedPitch = defaultPitch;
   double? _lastZoom;
