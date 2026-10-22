@@ -16,7 +16,9 @@ from app.domain.marine import ProviderUnavailable
 from app.infrastructure.marine.runtime import (
     get_marine_service, get_coastline_mask, get_bathymetry_cache,
 )
-from app.infrastructure.marine.coastline import apply_ocean_mask, has_raster_data
+from app.infrastructure.marine.coastline import has_raster_data
+from app.infrastructure.marine.bathymetry_cache import UncachedBathymetryTile
+from app.infrastructure.marine.visual_water import crop_context, render_visual_water
 from app.infrastructure.adapters.emodnet_bathymetry import (
     BathymetryUnavailable,
     fetch_bathymetry_tile,
@@ -246,15 +248,21 @@ async def get_bathymetry_tile(
         content=tile,
         media_type="image/png",
         headers={
-            "Cache-Control": "public, max-age=86400",
+            "Cache-Control": (
+                "no-store" if isinstance(tile, UncachedBathymetryTile)
+                else "public, max-age=86400"
+            ),
+            "X-NoWave-Raster-Render": get_bathymetry_cache(_render_bathymetry_tile).VERSION,
+            "X-NoWave-Raster-Usage": "visual-only; local-rgb-continuity",
             "Link": '</api/v1/map/marine-sources>; rel="describedby"',
         },
     )
 
 
 async def _render_bathymetry_tile(tile: Tile) -> bytes:
-    raw = await run_in_threadpool(fetch_bathymetry_tile, tile.z, tile.x, tile.y)
+    raw = await run_in_threadpool(fetch_bathymetry_tile, tile.z, tile.x, tile.y, True)
     if not await run_in_threadpool(has_raster_data, raw):
-        return raw  # No marine colour: no coastline download or decoding.
-    mask = await get_coastline_mask().get_mask(tile)
-    return await run_in_threadpool(apply_ocean_mask, raw, mask)
+        return await run_in_threadpool(crop_context, raw)
+    context = await get_coastline_mask().get_context(tile, raw)
+    content = await run_in_threadpool(render_visual_water, raw, context.mask)
+    return content if context.complete else UncachedBathymetryTile(content)

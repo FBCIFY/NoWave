@@ -53,6 +53,13 @@ Color evaluate(Object expression, double zoom, {String category = ''}) {
         green: a.g + (b.g - a.g) * t,
         blue: a.b + (b.b - a.b) * t,
       );
+    case 'step':
+      Object value = e[2];
+      for (var i = 3; i < e.length; i += 2) {
+        if (zoom < (e[i] as num)) break;
+        value = e[i + 1];
+      }
+      return evaluate(value, zoom, category: category);
     default:
       throw StateError('Unexpected expression: $expression');
   }
@@ -163,7 +170,13 @@ void main() {
       0.0,
     ]);
     final ocean = layers.singleWhere((l) => l['id'] == 'nowave-earth-ocean');
-    expect(ocean['paint']['fill-color'], '#002D51');
+    final water = ocean['paint']['fill-color'] as Object;
+    for (final zoom in [0.65, 4.0, 4.99, 5.0, 5.01, 12.0, 14.0, 16.0]) {
+      expect(
+        evaluate(water, zoom),
+        zoom < 5 ? const Color(0xFF002D51) : const Color(0xFF93ACB0),
+      );
+    }
     expect(ocean['paint']['fill-opacity'], 1);
   });
 }

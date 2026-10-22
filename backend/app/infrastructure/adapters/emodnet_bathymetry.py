@@ -5,6 +5,8 @@ from io import BytesIO
 import httpx
 from PIL import Image, ImageFilter, ImageChops
 
+from app.infrastructure.marine.visual_water import PADDING
+
 
 EMODNET_WMS_URL = "https://ows.emodnet-bathymetry.eu/wms"
 
@@ -125,7 +127,7 @@ def _blue_color_lut() -> ImageFilter.Color3DLUT:
     return ImageFilter.Color3DLUT.generate(33, transform)
 
 
-def recolor_bathymetry_png(content: bytes) -> bytes:
+def recolor_bathymetry_png(content: bytes, *, associated_alpha: bool = False) -> bytes:
     """Applique le dégradé visuel NoWave en préservant exactement l'alpha."""
 
     try:
@@ -133,6 +135,11 @@ def recolor_bathymetry_png(content: bytes) -> bytes:
             if source.format != "PNG":
                 raise BathymetryUnavailable("Expected an EMODnet PNG tile")
             rgba = source.convert("RGBA")
+        if associated_alpha:
+            # The EMODnet bilinear WMS encodes associated RGB at coverage
+            # edges. Undo that association BEFORE the nonlinear colour LUT;
+            # otherwise opacity is misread as a dark bathymetric colour.
+            rgba = Image.frombytes("RGBa", rgba.size, rgba.tobytes()).convert("RGBA")
         recolored = rgba.convert("RGB").filter(_blue_color_lut())
         recolored.putalpha(rgba.getchannel("A"))
         # Adoucissement visuel subpixel, sans mélanger le noir/blanc des
@@ -219,13 +226,14 @@ def fetch_bathymetry_tile(
     z: int,
     x: int,
     y: int,
+    padded: bool = False,
 ) -> bytes:
     """Récupère une tuile PNG et garde le résultat recoloré en cache."""
 
     bbox = web_mercator_tile_bbox(z, x, y)
-    # Three neighbouring display pixels, at the unchanged native sample pitch.
-    # A halo avoids treating XYZ tile edges as no-data coverage boundaries.
-    padding = 3
+    # A finite context for visual coastal continuity, at the unchanged sample
+    # pitch. This remains one WMS request, not one request per neighbour.
+    padding = PADDING
     pixel = (bbox[2] - bbox[0]) / 256
     bbox = (bbox[0] - padding * pixel, bbox[1] - padding * pixel,
             bbox[2] + padding * pixel, bbox[3] + padding * pixel)
@@ -238,6 +246,9 @@ def fetch_bathymetry_tile(
         "styles": "",
         "format": "image/png",
         "transparent": "true",
+        # Interpolate the supplier's visual grid before it is magnified.
+        # Mapbox LINEAR cannot remove nearest-neighbour blocks baked into PNGs.
+        "interpolations": "bilinear",
         "width": str(256 + 2 * padding),
         "height": str(256 + 2 * padding),
         "srs": "EPSG:3857",
@@ -257,12 +268,13 @@ def fetch_bathymetry_tile(
             f"{content_type or 'unknown'}"
         )
 
-    recolored = recolor_bathymetry_png(response.content)
+    recolored = recolor_bathymetry_png(response.content, associated_alpha=True)
     with Image.open(BytesIO(recolored)) as image:
-        if image.size != (262, 262):
+        if image.size != (256 + 2 * padding, 256 + 2 * padding):
             raise BathymetryUnavailable("Unexpected padded raster dimensions")
         rgba = feather_coverage(image.convert("RGBA"))
-        rgba = rgba.crop((padding, padding, padding + 256, padding + 256))
+        if not padded:
+            rgba = rgba.crop((padding, padding, padding + 256, padding + 256))
         output = BytesIO()
         rgba.save(output, format="PNG")
         return output.getvalue()

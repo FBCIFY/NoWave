@@ -99,8 +99,18 @@ void main() {
       expect(map.style.config['colorWater'], '#002D51');
       expect(map.style.config['showRoadLabels'], false);
       expect(map.style.config['showPointOfInterestLabels'], false);
-      expect(source['tiles'], ['$local?v=marine-palette-3']);
+      expect(source['tiles'], ['$local?v=marine-visual-7']);
       expect(source['maxzoom'], 14);
+      expect(
+        source['attribution'],
+        contains(
+          'Couleurs interpolées localement pour l’affichage, sans mesure ajoutée.',
+        ),
+      );
+      expect(
+        source['attribution'],
+        contains('https://emodnet.ec.europa.eu/en/bathymetry'),
+      );
       expect(source['volatile'], false);
       expect(source['prefetch-zoom-delta'], 0);
       expect(layer['slot'], 'middle');
@@ -114,7 +124,7 @@ void main() {
       map.style.layers.clear();
       await marine.install(map);
       expect(map.style.sources.values.single['tiles'], [
-        '$local?v=marine-palette-3',
+        '$local?v=marine-visual-7',
       ]);
       expect(map.style.layers.length, 1);
     },
@@ -132,7 +142,7 @@ void main() {
     await MarineMapController(bathymetryTilesUrl: '$local?region=europe')
         .install(map);
     expect(map.style.sources.values.single['tiles'], [
-      '$local?region=europe&v=marine-palette-3',
+      '$local?region=europe&v=marine-visual-7',
     ]);
   });
 

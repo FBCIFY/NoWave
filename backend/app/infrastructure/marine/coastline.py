@@ -3,6 +3,7 @@
 import asyncio
 import time
 from collections import OrderedDict
+from dataclasses import dataclass
 from io import BytesIO
 
 import mapbox_vector_tile
@@ -11,14 +12,24 @@ from shapely import contains_xy, union_all
 from shapely.geometry import shape
 
 from app.domain.marine import ProviderUnavailable
+from app.domain.marine_tile import Tile
+from app.infrastructure.marine.visual_water import PADDING, context_neighbours
 
 SIZE = 256
 SUBPIXELS = 4
 
 
+@dataclass(frozen=True)
+class CoastlineContext:
+    """Mandatory central mask and optional halo availability, kept separate."""
+
+    mask: Image.Image
+    complete: bool = True
+
+
 def has_raster_data(content: bytes) -> bool:
     with Image.open(BytesIO(content)) as source:
-        if source.size != (SIZE, SIZE):
+        if source.size not in {(SIZE, SIZE), (SIZE + 2 * PADDING, SIZE + 2 * PADDING)}:
             raise ProviderUnavailable("Unexpected coastal raster dimensions")
         return source.convert("RGBA").getchannel("A").getbbox() is not None
 
@@ -34,13 +45,14 @@ def rasterize_ocean(content: bytes) -> bytes:
         raise ProviderUnavailable("Missing coastline tile")
     layers = mapbox_vector_tile.decode(content)
     geometries = []
-    for name in ("ocean", "water_polygons"):
+    structures = []
+    for name in ("ocean", "water_polygons", "pier_polygons"):
         layer = layers.get(name, {})
         extent = layer.get("extent", 4096)
         if not isinstance(extent, (int, float)) or extent <= 0:
             raise ProviderUnavailable("Invalid coastline extent")
         for feature in layer.get("features", []):
-            if name != "ocean" and feature["properties"].get("kind") not in {
+            if name == "water_polygons" and feature["properties"].get("kind") not in {
                 "dock",
                 "canal",
             }:
@@ -53,13 +65,14 @@ def rasterize_ocean(content: bytes) -> bytes:
                 raise ProviderUnavailable("Invalid coastline polygon")
             from shapely.affinity import scale
 
-            geometries.append(
+            target = structures if name == "pier_polygons" else geometries
+            target.append(
                 scale(geometry, xfact=SIZE / extent, yfact=SIZE / extent, origin=(0, 0))
             )
-    water = union_all(geometries)
+    water = union_all(geometries).difference(union_all(structures))
     mask = Image.new("L", (SIZE * SUBPIXELS, SIZE * SUBPIXELS), 0)
     draw = ImageDraw.Draw(mask)
-    polygons = [water] if water.geom_type == "Polygon" else getattr(water, "geoms", [])
+    polygons = [] if water.is_empty else [water] if water.geom_type == "Polygon" else getattr(water, "geoms", [])
     for polygon in polygons:
         for index, ring in enumerate([polygon.exterior, *polygon.interiors]):
             draw.polygon(
@@ -105,6 +118,32 @@ class CoastlineMask:
         self._cache = OrderedDict()
         self._bytes = 0
         self._flights = [asyncio.Lock() for _ in range(64)]
+
+    async def get_context(self, tile: Tile, content: bytes) -> CoastlineContext:
+        """Use published neighbouring water, never extend a clipped polygon."""
+        main = await self.get_mask(tile)
+        neighbours = await asyncio.to_thread(context_neighbours, content, main)
+        context = Image.new("L", (SIZE + 2 * PADDING, SIZE + 2 * PADDING), 0)
+        with Image.open(BytesIO(main)) as image:
+            context.paste(image, (PADDING, PADDING))
+
+        async def neighbour(dx, dy):
+            y = tile.y + dy
+            if not 0 <= y < (1 << tile.z):
+                return True
+            target = Tile(tile.z, (tile.x + dx) % (1 << tile.z), y)
+            try:
+                mask = await self.get_mask(target)
+            except ProviderUnavailable:
+                # Optional context only: leave these pixels unknown (zero).
+                # Never cache a failure as a valid empty coastline mask.
+                return False
+            with Image.open(BytesIO(mask)) as image:
+                context.paste(image, (PADDING + dx * SIZE, PADDING + dy * SIZE))
+            return True
+
+        available = await asyncio.gather(*(neighbour(dx, dy) for dx, dy in neighbours))
+        return CoastlineContext(context, complete=all(available))
 
     async def get_mask(self, tile):
         async with self._flights[hash(tile) % len(self._flights)]:

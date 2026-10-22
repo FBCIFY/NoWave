@@ -55,11 +55,15 @@ class MarineMapController {
           id: bathymetrySourceId,
           // Versioned palette separates cached pixels without purging caches.
           tiles: [
-            ApiConfig.withQueryParameters(tilesUrl, {'v': 'marine-palette-3'}),
+            ApiConfig.withQueryParameters(tilesUrl, {'v': 'marine-visual-7'}),
           ],
           tileSize: 256,
           minzoom: 0,
           maxzoom: 14,
+          attribution:
+              '<a href="https://emodnet.ec.europa.eu/en/bathymetry">'
+              'Couleurs interpolées localement pour l’affichage, sans mesure ajoutée. '
+              'Gris : couverture ou voisinage insuffisant</a>',
           // The versioned URL keeps old coastal renders separate. Reuse valid
           // public tiles on disk when returning to a place or reopening the app.
           volatile: false,

@@ -158,9 +158,10 @@ def test_palette_version_bypasses_old_disk_tile_without_purging_it(tmp_path):
             db.execute(
                 "CREATE TABLE tiles (key TEXT PRIMARY KEY, expires REAL NOT NULL, content BLOB NOT NULL)"
             )
-            db.execute(
+            db.executemany(
                 "INSERT INTO tiles VALUES (?, ?, ?)",
-                (f"coast-feather-2:{TILE.z}/{TILE.x}/{TILE.y}", time.time() + 3600, b"old light png"),
+                [(f"{version}:{TILE.z}/{TILE.x}/{TILE.y}", time.time() + 3600, b"old light png")
+                 for version in ['coast-feather-2', 'marine-palette-3', 'marine-visual-4', 'marine-visual-5', 'marine-visual-6']],
             )
         calls = 0
 
@@ -170,7 +171,7 @@ def test_palette_version_bypasses_old_disk_tile_without_purging_it(tmp_path):
             return b"new dark png"
 
         cache = BathymetryTileCache(render, path)
-        assert cache.VERSION == "marine-palette-3"
+        assert cache.VERSION == "marine-visual-7"
         assert await cache.get(TILE) == b"new dark png"
         assert await cache.get(TILE) == b"new dark png"
         assert calls == 1
@@ -178,8 +179,9 @@ def test_palette_version_bypasses_old_disk_tile_without_purging_it(tmp_path):
         assert cache.MAX_MEMORY == 32 * 1024 * 1024
         with sqlite3.connect(path) as db:
             rows = dict(db.execute("SELECT key, content FROM tiles"))
-        assert rows[f"coast-feather-2:{TILE.z}/{TILE.x}/{TILE.y}"] == b"old light png"
-        assert rows[f"marine-palette-3:{TILE.z}/{TILE.x}/{TILE.y}"] == b"new dark png"
+        for version in ['coast-feather-2', 'marine-palette-3', 'marine-visual-4', 'marine-visual-5', 'marine-visual-6']:
+            assert rows[f"{version}:{TILE.z}/{TILE.x}/{TILE.y}"] == b"old light png"
+        assert rows[f"marine-visual-7:{TILE.z}/{TILE.x}/{TILE.y}"] == b"new dark png"
         await cache.close()
 
     asyncio.run(scenario())
@@ -241,5 +243,57 @@ def test_queue_is_bounded_and_shutdown_cancels_waiters(tmp_path):
         results = await asyncio.gather(first, second, return_exceptions=True)
         assert all(isinstance(result, asyncio.CancelledError) for result in results)
         assert not cache._pending
+
+    asyncio.run(scenario())
+
+
+def test_incomplete_context_shares_cold_requests_but_retries_and_never_persists(tmp_path):
+    from app.infrastructure.marine.bathymetry_cache import UncachedBathymetryTile
+
+    async def scenario():
+        started, release = asyncio.Event(), asyncio.Event()
+        calls = 0
+        path = tmp_path / 'cache.sqlite3'
+
+        async def render(tile):
+            nonlocal calls
+            calls += 1
+            if calls == 1:
+                started.set()
+                await release.wait()
+                return UncachedBathymetryTile(b'degraded but valid png')
+            return b'complete png'
+
+        cache = BathymetryTileCache(render, path)
+        first = asyncio.create_task(cache.get(TILE))
+        await started.wait()
+        others = [asyncio.create_task(cache.get(TILE)) for _ in range(11)]
+        await asyncio.sleep(0)
+        first.cancel()
+        with pytest.raises(asyncio.CancelledError):
+            await first
+        release.set()
+        results = await asyncio.gather(*others)
+        assert all(isinstance(item, UncachedBathymetryTile) for item in results)
+        assert results == [b'degraded but valid png'] * 11
+        assert cache.metrics['shared'] == 11
+        assert not cache._memory
+        assert cache._bytes == 0
+        with sqlite3.connect(path) as db:
+            assert db.execute('SELECT COUNT(*) FROM tiles').fetchone()[0] == 0
+        assert calls == 1
+        assert await cache.get(TILE) == b'complete png'
+        assert calls == 2
+        assert await cache.get(TILE) == b'complete png'
+        assert cache.metrics['memory_hits'] == 1
+        await cache.close()
+
+        async def forbidden(tile):
+            raise AssertionError('recovered normal tile should persist')
+
+        restarted = BathymetryTileCache(forbidden, path)
+        assert await restarted.get(TILE) == b'complete png'
+        assert restarted.metrics['disk_hits'] == 1
+        await restarted.close()
 
     asyncio.run(scenario())

@@ -295,27 +295,48 @@ Cette extension ne modifie pas la normalisation ou les styles des bouées/aides 
 
 ## Masque littoral raster — correction du 18 octobre 2026
 
-Depuis la correction de palette du 22 octobre 2026, le proxy PNG conserve le WMS
-EMODnet mais recolore sa palette en `marine-palette-3`. Après recoloration, son
-alpha est intersecté avec les surfaces `ocean` et les bassins/canaux publiés
-par les tuiles OSM Shortbread. Les polygones d'îles restent des trous. Aucune
-profondeur n'est calculée à partir du masque ; aucun seuil de profondeur ne
-déplace le littoral.
+Le rendu visuel `marine-visual-7` conserve la palette NoWave et demande
+l'interpolation bilinéaire au WMS EMODnet, sans augmenter tileSize (256) ni
+maxzoom (14). Les RGB associés à l'alpha par ce WMS sont normalisés avant la
+LUT ; le lissage subpixel prémultiplié conserve ensuite l'alpha reçu.
+Une image WMS 280×280 fournit un halo de douze pixels au même pas de grille
+(huit pour la reconstruction et trois pour les filtres, plus une garde).
 
-`CoastlineMask` réutilise le client `MarineHTTP` et son cache HTTP OSM durable
-(expiration respectée, minimum sept jours). Les masques PNG sont mémorisés en
-RAM : 512 entrées, 8 Mio au plus. Décodage MVT/rastérisation dans un thread,
-suréchantillonnage ×4, moyenne de couverture limitée aux centres de pixels
-situés dans l'eau ; RGB conservé, alpha jamais augmenté. Pas d'érosion des
-bords de tuiles. Une panne du masque renvoie 503 plutôt qu'un raster non masqué.
-Un PNG complètement transparent évite toute requête de masque supplémentaire.
+La couverture est intersectée avec l'eau OSM Shortbread, bassins/canaux inclus,
+îles et surfaces de jetées exclues. `CoastlineMask` réutilise `MarineHTTP` et son
+cache OSM durable (minimum sept jours), avec512 masques /8Mio en RAM.
+Les centres terrestres restent exclus et les limites XYZ ne sont pas érodées.
 
-La source Flutter garde son ID, son slot, son opacité et son overzoom ; seul
-le paramètre `v=coast-1` invalide les anciennes tuiles natives non masquées.
-La texture reste découpée par les polygones d'eau Mapbox Streets existants.
-Ces deux géométries cartographiques peuvent différer dans leurs détails ;
-elles ne constituent pas une côte hydrographique à une hauteur de marée donnée.
-Attribution OSM/ODbL dans le registre public et dans les attributions de la carte.
+À la demande produit, une continuité locale de **couleur d'affichage** peut
+remplacer un trou dans l'eau connue : donneurs entièrement couverts et marins,
+rayon fini8 pixels, minimum8 donneurs et poids5%, aucune propagation des pixels
+reconstruits. Les masques voisins réels ne sont demandés que près d'une
+frontière nécessitant ce support ; cela n'ajoute pas de requête EMODnet voisine.
+Sans support fiable, l'absence reste transparente sur le fond gris.
+
+L'alpha d'affichage peut ainsi augmenter localement, mais la couverture
+source reste récupérable exactement dans le champ PNG compressé
+`NoWave.SourceCoverage` (base64 de256×256 octets d'alpha). Ce champ est présent
+si une reconstruction a été faite ; sinon l'alpha final est la couverture
+source. `NoWave.VisualFillPixels`, l'attribution native et l'en-tête
+`X-NoWave-Raster-Usage` distinguent cet habillage d'une mesure. Aucune sonde,
+isobathe, unité, datum ou valeur numérique n'est déduite des couleurs.
+
+Le cache RAM32Mio / SQLite128Mio / TTL24h utilise `marine-visual-7`, comme l'URL
+Flutter ; les anciennes entrées restent séparées et ne sont pas purgées.
+Une panne du masque central requis renvoie503. Les masques voisins ne servent
+qu'au contexte facultatif : une `ProviderUnavailable` sur un voisin laisse sa
+portion du halo à zéro, sans prolongement des géométries centrales. Le PNG
+ainsi dégradé n'entre ni dans le cache RAM ni dans SQLite et porte
+`Cache-Control: no-store` ; la requête suivante peut retenter le voisin, sous
+réserve du backoff fournisseur existant. Les rendus complets gardent le TTL24h,
+les single-flights et limites inchangés. Annulations et erreurs de programmation
+ne sont pas converties en contexte facultatif vide.
+Un contexte WMS totalement transparent évite le téléchargement du masque.
+Les seuils de zoom, slots et opacités des
+couches existantes sont conservés. Les géométries OSM et Mapbox peuvent
+présenter des différences locales ; ce ne sont pas des côtes hydrographiques
+corrigées de la marée. OSM/ODbL reste crédité.
 
 Les balises fixes à bandes grises utilisent les mêmes conditions de classe,
 motif horizontal, catégorie et IALA que les variantes blanches. Le gris publié
