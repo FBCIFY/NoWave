@@ -212,10 +212,15 @@ void main() {
       expect(find.byType(ReportDetailSheet), findsNothing);
       expect(find.byType(MapScreen), findsOneWidget);
       expect(find.textContaining('n’est plus disponible'), findsOneWidget);
-      expect(f.calls, ['/api/v1/users/me', '/api/v1/reports/report-a']);
+      // Le bateau donne le pavillon du curseur.
+      expect(f.calls, [
+        '/api/v1/users/me',
+        '/api/v1/users/me/boat',
+        '/api/v1/reports/report-a',
+      ]);
       f.source.taps.add(pushMessage());
       await tester.pumpAndSettle();
-      expect(f.calls, hasLength(2));
+      expect(f.calls, hasLength(3));
       f.auth.changes.add(null);
       await tester.pumpAndSettle();
       expect(find.byType(ReportDetailSheet), findsNothing);
@@ -373,6 +378,7 @@ void main() {
     expect(find.text('Voir sur la carte'), findsNothing);
     expect(f.calls, [
       '/api/v1/users/me',
+      '/api/v1/users/me/boat',
       '/api/v1/users/me/alerts',
       '/api/v1/reports/report-a',
     ]);

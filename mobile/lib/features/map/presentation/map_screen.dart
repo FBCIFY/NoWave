@@ -3,7 +3,7 @@ import 'dart:convert';
 import 'dart:math' as math;
 import 'dart:ui' as ui;
 
-import 'package:flutter/foundation.dart' show kDebugMode;
+import 'package:flutter/foundation.dart' show ValueListenable, kDebugMode;
 import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart' as geo;
 import 'package:mapbox_maps_flutter/mapbox_maps_flutter.dart';
@@ -94,6 +94,10 @@ class MapScreen extends StatefulWidget {
   /// la position qu'à sa fin, puis vole du globe jusqu'à l'utilisateur.
   final MapIntroController? intro;
 
+  /// Pavillon du bateau (code ISO à deux lettres) hissé au mât du curseur ;
+  /// null ou absent : pavillon bleu uni.
+  final ValueListenable<String?>? boatFlag;
+
   const MapScreen({
     super.key,
     this.onOpenProfile,
@@ -107,6 +111,7 @@ class MapScreen extends StatefulWidget {
     this.onUserInactive,
     this.locationService,
     this.intro,
+    this.boatFlag,
   });
 
   @override
@@ -460,6 +465,8 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
     widget.intro?.attach();
     widget.intro?.addListener(_handleIntro);
     widget.focusController?.addListener(_handleFocusRequest);
+    _locationMarker.flagCountry = widget.boatFlag?.value;
+    widget.boatFlag?.addListener(_handleBoatFlag);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) _handleFocusRequest();
     });
@@ -1120,6 +1127,12 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
       oldWidget.intro?.detach();
       widget.intro?.attach();
       widget.intro?.addListener(_handleIntro);
+    }
+
+    if (oldWidget.boatFlag != widget.boatFlag) {
+      oldWidget.boatFlag?.removeListener(_handleBoatFlag);
+      widget.boatFlag?.addListener(_handleBoatFlag);
+      _handleBoatFlag();
     }
 
     if (oldWidget.focusController != widget.focusController) {
@@ -1840,6 +1853,11 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
     } else {
       await map.easeTo(camera, MapAnimationOptions(duration: duration));
     }
+  }
+
+  void _handleBoatFlag() {
+    _locationMarker.flagCountry = widget.boatFlag?.value;
+    _syncLocationPuck().ignore();
   }
 
   /// Repère NoWave piloté par le même cap que la boussole.
@@ -2776,6 +2794,8 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
     _globeFlight.dispose();
     _headingCamera.dispose();
     widget.focusController?.removeListener(_handleFocusRequest);
+    widget.boatFlag?.removeListener(_handleBoatFlag);
+    _locationMarker.dispose();
     _lifecycleListener?.dispose();
     WidgetsBinding.instance.removeObserver(this);
     _reportTilesTokenTimer?.cancel();

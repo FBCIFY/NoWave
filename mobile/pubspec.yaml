@@ -49,6 +49,9 @@ flutter:
     - assets/icons/buoys/
     - assets/icons/fixed-aids/
     - assets/icons/harbours/
+    # Pavillons du curseur de position, un PNG par code ISO à deux lettres
+    # (flagcdn.com, drapeaux du domaine public).
+    - assets/flags/
     # Fonds des écrans de connexion, d'inscription et de création de profil.
     - assets/images/auth/
     # Logo NoWave (variantes 2.0x et 3.0x choisies selon l'écran).
