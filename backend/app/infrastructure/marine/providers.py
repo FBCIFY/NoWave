@@ -42,7 +42,13 @@ async def collect(jobs):
     tasks = {asyncio.create_task(job): name for name, job in jobs}
     if not tasks:
         return [], []
-    done, pending = await asyncio.wait(tasks, timeout=12)
+    try:
+        done, pending = await asyncio.wait(tasks, timeout=12)
+    except asyncio.CancelledError:
+        for task in tasks:
+            task.cancel()
+        await asyncio.gather(*tasks, return_exceptions=True)
+        raise
     for task in pending:
         task.cancel()
     await asyncio.gather(*pending, return_exceptions=True)

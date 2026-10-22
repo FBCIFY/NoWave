@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:ui' as ui;
 
 import 'package:blueway/features/map/data/harbour_layer.dart';
@@ -13,9 +14,9 @@ void main() {
     'ports Z6, taille fluide et bornée, collisions et aucun filtre de rang',
     () {
       final layer = HarbourLayer.layer();
-      expect(layer.minZoom, 6.0);
+      expect(layer.minZoom, 8.0);
       expect(layer.maxZoom, isNull);
-      expect(layer.iconAllowOverlap, false);
+      expect(layer.iconAllowOverlap, true);
       expect(layer.iconIgnorePlacement, false);
       expect(layer.iconSizeExpression, [
         'interpolate',
@@ -55,11 +56,10 @@ void main() {
       expect(map.style.sources.length, 1);
       expect(map.style.layers.length, 1);
       final source = map.style.sources[HarbourLayer.sourceId]!;
-      expect(source['minzoom'], 6);
-      expect(source['maxzoom'], 14);
-      expect(source['tiles'], [
-        'http://127.0.0.1:8004/api/v1/map/harbours/{z}/{x}/{y}.pbf',
-      ]);
+      expect(source['type'], 'geojson');
+      expect(source['maxzoom'], 18);
+      expect(source['tolerance'], 0);
+      expect(jsonDecode(source['data'] as String)['features'], isEmpty);
       expect(map.style.images.length, 2);
       for (final marina in [false, true]) {
         final icon = await HarbourLayer.icon(marina: marina);

@@ -6,7 +6,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mapbox_maps_flutter/mapbox_maps_flutter.dart';
 
-import 'buoy_layer_test.dart' show evaluate;
+import 'buoy_layer_test.dart' show evaluate, expectMarksFade;
 
 class AidMap extends Fake implements MapboxMap {
   @override
@@ -220,12 +220,15 @@ void main() {
 
   test('seuils et priorité ne changent pas les bouées', () {
     final layers = FixedAidLayer.layers();
-    expect(layers.map((l) => l.minZoom), [13, 14, 11, 13, 12, 10]);
+    expect(layers.map((l) => l.minZoom), [10, 10, 10, 10, 10, 10]);
+    for (final layer in layers) {
+      expectMarksFade(layer.iconOpacityExpression!);
+    }
     for (final layer in layers) {
       expect(layer.sourceId, BuoyLayer.sourceId);
-      expect(layer.sourceLayer, 'seamark');
+      expect(layer.sourceLayer, isNull);
       expect(layer.slot, LayerSlot.TOP);
-      expect(layer.iconAllowOverlap, isFalse);
+      expect(layer.iconAllowOverlap, layer.id == 'nowave-beacons-main');
       expect(layer.iconIgnorePlacement, isFalse);
       expect(evaluate(layer.filter, {'type': 'buoy_lateral'}), isFalse);
     }

@@ -1,5 +1,9 @@
 # NoWave — Littoral et aides à la navigation — 18 octobre 2026
 
+> Rapport historique : la mention de palette inchangée décrit l'état du 18
+> octobre. La palette bathymétrique a été remplacée le 22 octobre par
+> `marine-palette-3` ; voir [la correction de palette](NW-220-color-palette.md).
+
 Validation locale sur `feature/marine-bathymetry`. Le masque corrige les pixels raster côtiers placés sur terre dans les tuiles analysées ; aucun débordement bleu perceptible sur les terres des vues finales vérifiées, notamment Z6 et Z9. Le dégradé en mer est conservé. Les balises latérales à bandes grises disposent désormais de leurs icônes qualifiées.
 
 L’audit ne revendique pas une exhaustivité nautique mondiale. Il distingue absence fournisseur, emprise de caméra, seuil de zoom, qualification incomplète, découpage de tuile et collisions. À Porquerolles, le support masqué dans la vue Z14 est visible à Z15,8. Les données numériques européennes restent EMODnet et les américaines NOAA, conformément au choix utilisateur antérieur.

@@ -1,8 +1,8 @@
 import 'package:flutter/foundation.dart';
 import 'package:mapbox_maps_flutter/mapbox_maps_flutter.dart';
 
-/// Only labels change at the continental threshold. Imagery, clouds and fog
-/// fade inside the native renderer, without Dart work on every frame.
+/// Only labels change at the continental threshold. Fog fades
+/// inside the native renderer, without Dart work on every frame.
 class GlobePresentation {
   bool? _applied;
   bool _running = false;

@@ -85,7 +85,7 @@ def test_nonpersistent_mode_cannot_bypass_osm_caching():
     asyncio.run(run())
 
 
-def test_noaa_restored_only_in_chart_coverage_from_z14(monkeypatch):
+def test_noaa_prepares_chart_soundings_from_z12(monkeypatch):
     calls = []
 
     async def fetch(self, tile, family):
@@ -100,9 +100,9 @@ def test_noaa_restored_only_in_chart_coverage_from_z14(monkeypatch):
 
     async def run():
         svc = MarineTileService([p])
-        r = await svc.get_tile(tile_at(-80.157, 25.763, 13), FAMILY)
+        r = await svc.get_tile(tile_at(-80.157, 25.763, 11), FAMILY)
         assert r.status == "below-minzoom" and calls == []
-        await svc.get_tile(tile_at(-80.157, 25.763, 14), FAMILY)
+        await svc.get_tile(tile_at(-80.157, 25.763, 12), FAMILY)
         assert len(calls) == 1
 
     asyncio.run(run())

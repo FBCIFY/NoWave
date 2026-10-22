@@ -13,7 +13,6 @@ import '../../../core/haptics/app_haptics.dart';
 import '../../../core/location/coordinate_formatter.dart';
 import '../../../core/location/location_service.dart';
 import '../../../core/map/location_marker.dart';
-import '../../../core/map/cloud_passage_controller.dart';
 import '../../../core/map/globe_presentation.dart';
 import '../../../core/map/globe_style.dart';
 import '../../../core/map/globe_flight.dart';
@@ -23,6 +22,7 @@ import '../../../core/map/heading_camera.dart';
 import '../../../core/map/map_config.dart';
 import '../../../core/map/map_motion.dart';
 import '../../../core/map/marine/marine_map_controller.dart';
+import '../../../core/map/marine/marine_zoom.dart';
 import '../../../core/sensors/device_orientation_service.dart';
 import '../../alerts/data/alert_history_controller.dart';
 import '../../alerts/data/alert_service.dart';
@@ -41,12 +41,12 @@ import '../data/buoy_layer.dart';
 import '../data/fixed_aid_layer.dart';
 import '../data/port_layer.dart';
 import '../data/harbour_layer.dart';
+import '../data/marine_viewport.dart';
+import '../data/marine_debug.dart';
 import '../data/report_layer_controller.dart';
 import '../data/report_tiles.dart';
-import 'widgets/globe_moon.dart';
 import 'widgets/map_edge_zoom.dart';
 import 'widgets/globe_stars.dart';
-import 'widgets/cloud_passage.dart';
 import 'map_alert_camera.dart';
 import 'map_focus_controller.dart';
 import 'map_intro_controller.dart';
@@ -340,8 +340,9 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
     }
   }
 
-  final _cloudPassage = CloudPassageController();
   final _hydrographyLayer = HydrographyLayer();
+  final _marineViewport = MarineViewport();
+  bool _marineInteractionAdded = false;
   final _buoyLayer = BuoyLayer();
   final _fixedAidLayer = FixedAidLayer();
   String? _mapError;
@@ -597,14 +598,7 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
     }
     _reportMapRevision++;
     final map = _mapboxMap;
-    if (map != null) _hydrographyLayer.invalidateContourLabels(map);
-    _cloudPassage.setCamera(
-      zoom: event.cameraState.zoom,
-      longitude: event.cameraState.center.coordinates.lng.toDouble(),
-      latitude: event.cameraState.center.coordinates.lat.toDouble(),
-      bearing: event.cameraState.bearing,
-      pitch: event.cameraState.pitch,
-    );
+    if (map != null) _marineViewport.schedule(map, cameraChanged: true);
     if (map != null) {
       unawaited(_globePresentation.synchronize(map, event.cameraState.zoom));
     }
@@ -945,6 +939,7 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
   }
 
   void _suspendVisualUpdates() {
+    _marineViewport.pause();
     _interruptCameraMotion();
     _syncGlobeRotation();
     _reportTilesTokenTimer?.cancel();
@@ -961,6 +956,7 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
   }
 
   void _restoreVisualUpdates() {
+    _marineViewport.resume(_mapboxMap);
     _syncGlobeRotation();
     _reportLayer.resume();
     _startReportTilesTokenRenewal();
@@ -1025,9 +1021,8 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
     // 3. bouées (slot TOP, sous les reports sans slot) ;
     // 4. aides fixes insérées sous les bouées dans le même slot.
     //
-    // La bathymétrie et les docks utilisent le slot BOTTOM.
-    // Les ports sont donc ajoutés après ces fonds afin de rester
-    // visibles au-dessus de celle-ci.
+    // Le raster marin MIDDLE passe après le décor du globe ; les docks
+    // restent BOTTOM. Les ports et les marques TOP passent au-dessus.
     await _installMarineMap();
 
     final map = _mapboxMap;
@@ -1054,6 +1049,14 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
 
     try {
       await _buoyLayer.addTo(map);
+      if (!_marineInteractionAdded) {
+        map.addInteraction(
+          LongTapInteraction.onMap((event) {
+            unawaited(_inspectMarineAt(map, event.point));
+          }),
+        );
+        _marineInteractionAdded = true;
+      }
     } catch (error) {
       debugPrint('Couche bouées non installée : $error');
     }
@@ -1063,6 +1066,32 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
     } catch (error) {
       debugPrint('Aides fixes non installées : $error');
     }
+    try {
+      await map.style.moveStyleLayer(
+        'nowave-hazard-points',
+        LayerPosition(above: BuoyLayer.layerId),
+      );
+      await map.style.moveStyleLayer(
+        'nowave-beacons-main',
+        LayerPosition(above: BuoyLayer.safetyLayerId),
+      );
+    } catch (_) {
+      /* Optional style ordering remains retryable after reload. */
+    }
+    _marineViewport.schedule(map);
+    MarineDebug.attach(
+      map: map,
+      viewport: _marineViewport,
+      camera: (options) async {
+        if (!mounted) return;
+        setState(() {
+          _viewport = const IdleViewportState();
+          _isFollowing = false;
+        });
+        await map.setCamera(options);
+        _marineViewport.schedule(map);
+      },
+    );
   }
 
   /// Installe la couche des signalements ; une erreur remonte au
@@ -1120,6 +1149,87 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
         (feature, context) =>
             unawaited(_zoomIntoCluster(feature, context.point)),
         radius: _clusterTapRadius,
+      ),
+    );
+  }
+
+  /// Long press lists original nearby objects, including symbols hidden by
+  /// collisions. Report taps keep their existing interaction and priority.
+  Future<void> _inspectMarineAt(MapboxMap map, Point point) async {
+    if (_reportComposerOpen || _hidden) return;
+    final zoom = (await map.getCameraState()).zoom;
+    final features = <Map<String, dynamic>>[
+      if (zoom >= 8) ..._marineViewport.features('harbours'),
+      if (zoom > MarineZoom.marksPreload)
+        ..._marineViewport.features('seamarks'),
+      if (zoom > MarineZoom.marksPreload)
+        ..._marineViewport.features('underwater-hazards'),
+    ].where((f) => f['geometry']['type'] == 'Point').toList();
+    final origin = await map.pixelForCoordinate(point);
+    final pixels = await map.pixelsForCoordinates([
+      for (final f in features)
+        Point(
+          coordinates: Position.fromJson(
+            (f['geometry']['coordinates'] as List).cast<num>(),
+          ),
+        ),
+    ]);
+    final nearby = <Map<String, dynamic>>[
+      for (var i = 0; i < features.length; i++)
+        if (pixels[i] != null &&
+            (pixels[i]!.x - origin.x).abs() <= 32 &&
+            (pixels[i]!.y - origin.y).abs() <= 32)
+          features[i],
+    ];
+    if (!mounted || _reportComposerOpen || nearby.isEmpty) return;
+    const labels = {
+      'harbour': 'Port',
+      'marina': 'Marina',
+      'buoy_cardinal': 'Bouée cardinale',
+      'beacon_cardinal': 'Balise cardinale',
+      'buoy_isolated_danger': 'Bouée de danger isolé',
+      'beacon_isolated_danger': 'Balise de danger isolé',
+      'buoy_lateral': 'Bouée latérale',
+      'beacon_lateral': 'Balise latérale',
+      'buoy_special_purpose': 'Marque spéciale',
+      'beacon_special_purpose': 'Marque spéciale',
+      'buoy_safe_water': 'Bouée d’eaux saines',
+      'beacon_safe_water': 'Balise d’eaux saines',
+      'lighthouse': 'Phare',
+      'light': 'Feu',
+      'rock': 'Rocher',
+      'wreck': 'Épave',
+      'obstruction': 'Obstruction',
+    };
+    await showModalBottomSheet<void>(
+      context: context,
+      builder: (context) => SafeArea(
+        child: ListView(
+          shrinkWrap: true,
+          children: [
+            const ListTile(
+              title: Text('Objets maritimes à proximité'),
+              subtitle: Text('Inclut les objets masqués par chevauchement'),
+            ),
+            for (final f in nearby)
+              Builder(
+                builder: (_) {
+                  final p = f['properties'] as Map;
+                  final kind =
+                      labels[p['type'] ?? p['hazard_type'] ?? p['category']] ??
+                      'Repère maritime';
+                  final name = (p['name'] ?? '').toString();
+                  final xy = f['geometry']['coordinates'] as List;
+                  return ListTile(
+                    title: Text(name.isEmpty ? kind : name),
+                    subtitle: Text(
+                      '$kind · ${(xy[1] as num).toStringAsFixed(5)}°, ${(xy[0] as num).toStringAsFixed(5)}°',
+                    ),
+                  );
+                },
+              ),
+          ],
+        ),
       ),
     );
   }
@@ -1922,8 +2032,7 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
   /// de partir vers la France.
   static const _introWait = Duration(seconds: 4);
 
-  /// Sans position : la France entière, juste avant le passage des nuages
-  /// ([CloudPassageController.startZoom]).
+  /// Sans position : la France entière.
   static const _franceLongitude = 2.4;
   static const _franceLatitude = 46.6;
   static const _franceZoom = 4.2;
@@ -2792,6 +2901,7 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
 
   @override
   void dispose() {
+    _marineViewport.dispose();
     widget.intro?.removeListener(_handleIntro);
     widget.intro?.detach();
     _rotationGestureTimer?.cancel();
@@ -2813,7 +2923,6 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
     _displayedZoom.dispose();
     _scaleCamera.dispose();
     _cameraTurns.dispose();
-    _cloudPassage.dispose();
     _reportPoint.dispose();
     _reportMarkerLifted.dispose();
     final subscription = _positionSubscription;
@@ -2865,17 +2974,12 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
       resizeToAvoidBottomInset: false,
       body: Stack(
         children: [
-          // Both decorations stay behind the transparent native platform view.
-          // A retained Flutter background keeps the moon visible while Mapbox
-          // continuously redraws; opaque globe surfaces occlude it naturally.
+          // Fixed stars behind the transparent native globe and atmosphere.
           Positioned.fill(
             child: RepaintBoundary(
               child: Stack(
                 fit: StackFit.expand,
-                children: [
-                  GlobeStars(zoom: _displayedZoom),
-                  GlobeMoon(zoom: _displayedZoom),
-                ],
+                children: [GlobeStars(zoom: _displayedZoom)],
               ),
             ),
           ),
@@ -2922,6 +3026,7 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
                 },
                 onMapLoadedListener: _handleMapLoaded,
                 onStyleLoadedListener: (_) {
+                  _marineViewport.styleLoaded();
                   _styleReady = true;
                   unawaited(_prepareGlobeRotation());
                   _globePresentation.styleLoaded();
@@ -2941,22 +3046,8 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
                 onMapLoadErrorListener: _handleMapLoadError,
                 onSourceDataLoadedListener: _handleSourceDataLoaded,
                 onCameraChangeListener: _handleMapCameraChange,
-                onRenderFrameFinishedListener: (event) {
-                  if (!mounted || _hidden || _globeRotation.isRotating) return;
-                  // Placement can finish before unrelated network tiles do.
-                  if (!event.placementChanged) return;
-                  final map = _mapboxMap;
-                  if (map != null) {
-                    unawaited(_hydrographyLayer.synchronizeContourLabels(map));
-                  }
-                },
                 onMapIdleListener: (_) {
                   _completeMapGesture();
-                  if (!mounted || _hidden || _globeRotation.isRotating) return;
-                  final map = _mapboxMap;
-                  if (map != null) {
-                    unawaited(_hydrographyLayer.synchronizeContourLabels(map));
-                  }
                 },
                 onScrollListener: _handleMapGesture,
                 onZoomListener: _handleMapGesture,
@@ -2965,7 +3056,6 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
               ),
             ),
           ),
-          Positioned.fill(child: CloudPassage(camera: _cloudPassage)),
           Positioned.fill(
             child: MapEdgeZoom(onStart: _startEdgeZoom, onZoom: _edgeZoomBy),
           ),

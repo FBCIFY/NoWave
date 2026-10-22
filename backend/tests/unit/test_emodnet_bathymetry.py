@@ -105,34 +105,33 @@ def test_recolor_orders_source_colors_from_light_shallows_to_dark_depths():
     ]
 
     assert all(a > b for a, b in zip(luminances, luminances[1:]))
-    assert colors[0][:3] == (230, 247, 253)
-    assert colors[-1][:3] == (30, 111, 168)
-    assert all(red < green < blue and alpha == 255 for red, green, blue, alpha in colors)
+    assert colors[0][:3] == (97, 170, 164)
+    assert colors[-1][:3] == (0, 23, 49)
+    assert all(red < min(green, blue) and alpha == 255 for red, green, blue, alpha in colors)
 
 
 def test_recolor_produces_a_continuous_blue_gradient():
-    # Dégradé cyan -> bleu observé, sur 256 nuances, sans quantification
-    # aux seules six couleurs cibles.
-    source = Image.new("RGB", (256, 1))
-    source.putdata([
-        (8, round(171 - 79 * step / 255), round(230 + 8 * step / 255))
+    # Sweep the entire observed legend: the deep-blue segment alone spans
+    # only five 8-bit colours in the restrained navy palette.
+    samples = [
+        tuple(round(a + (b - a) * step / 255) for a, b in zip(left, right))
+        for (_, left), (_, right) in zip(
+            bathymetry._EMODNET_RAMP, bathymetry._EMODNET_RAMP[1:]
+        )
         for step in range(256)
-    ])
-
+    ]
+    source = Image.new("RGB", (len(samples), 1))
+    source.putdata(samples)
     result = Image.open(BytesIO(recolor_bathymetry_png(png_bytes(source))))
     colors = [result.getpixel((x, 0))[:3] for x in range(result.width)]
-
-    assert len(set(colors)) > 20
-    assert all(red < green < blue for red, green, blue in colors)
+    assert len(set(colors)) > 128
+    assert all(red < min(green, blue) for red, green, blue in colors)
     assert all(
-        all(0 <= a - b <= 1 for a, b in zip(left, right))
+        all(abs(a - b) <= 1 for a, b in zip(left, right))
         for left, right in zip(colors, colors[1:])
     )
-    # Ce segment se situe dans les bleus soutenus de la nouvelle palette.
-    assert all(
-        30 <= red <= 143 and 111 <= green <= 208 and 168 <= blue <= 238
-        for red, green, blue in colors
-    )
+    assert colors[0] == (97, 170, 164)
+    assert colors[-1] == (0, 23, 49)
 
 
 def test_recolor_is_deterministic_across_lut_rebuilds():
@@ -196,7 +195,7 @@ def test_fetch_caches_the_final_recolored_png(monkeypatch):
     assert Image.open(BytesIO(first)).size == (256, 256)
     result = Image.open(BytesIO(first))
     assert result.getpixel((0, 0))[3] == 127
-    assert all(abs(a - b) <= 2 for a, b in zip(result.getpixel((0, 0))[:3], (30, 111, 168)))
+    assert all(abs(a - b) <= 2 for a, b in zip(result.getpixel((0, 0))[:3], (0, 23, 49)))
 
 
 def test_smoothing_softens_depth_edges_without_darkening_transparent_coast():
@@ -212,7 +211,7 @@ def test_smoothing_softens_depth_edges_without_darkening_transparent_coast():
     assert black.getpixel((15, 2)) == white.getpixel((15, 2))
     assert black.getpixel((15, 2))[3] == 255
     assert black.getpixel((16, 2))[3] == 0
-    assert all(abs(a - b) <= 2 for a, b in zip(black.getpixel((15, 2))[:3], (30, 111, 168)))
+    assert all(abs(a - b) <= 2 for a, b in zip(black.getpixel((15, 2))[:3], (0, 23, 49)))
 
     source = Image.new("RGB", (32, 4), EMODNET_COLORS[0])
     for y in range(4):

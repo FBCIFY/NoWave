@@ -12,6 +12,21 @@ Object? evaluate(Object? expression, Map<String, Object> properties) {
   if (expression is! List) return expression;
   Object? at(int i) => evaluate(expression[i], properties);
   switch (expression.first) {
+    case 'zoom':
+      return properties['zoom'];
+    case 'interpolate':
+      final zoom = at(2) as num;
+      if (zoom <= (expression[3] as num)) return at(4);
+      for (var i = 5; i < expression.length; i += 2) {
+        final end = expression[i] as num;
+        if (zoom <= end) {
+          final start = expression[i - 2] as num;
+          final a = evaluate(expression[i - 1], properties) as num;
+          final b = evaluate(expression[i + 1], properties) as num;
+          return a + (b - a) * (zoom - start) / (end - start);
+        }
+      }
+      return evaluate(expression.last, properties);
     case 'get':
       return properties[expression[1]];
     case 'geometry-type':
@@ -41,6 +56,25 @@ Object? evaluate(Object? expression, Map<String, Object> properties) {
       return evaluate(expression.last, properties);
     default:
       throw UnsupportedError('${expression.first}');
+  }
+}
+
+void expectMarksFade(Object expression, {double nominal = 1}) {
+  for (final (zoom, fraction) in [
+    (9.99, 0.0),
+    (10.0, 0.0),
+    (10.5, .25),
+    (11.0, .5),
+    (11.5, .75),
+    (12.0, 1.0),
+    (14.0, 1.0),
+    (18.0, 1.0),
+  ]) {
+    expect(
+      evaluate(expression, {'zoom': zoom}),
+      closeTo(nominal * fraction, 1e-9),
+      reason: 'zoom $zoom',
+    );
   }
 }
 
@@ -92,6 +126,15 @@ class TestStyle extends Fake implements StyleManager {
   Future<bool> styleSourceExists(String id) async => sources.containsKey(id);
 
   @override
+  Future<void> setStyleSourceProperty(
+    String id,
+    String property,
+    Object value,
+  ) async {
+    (sources[id] as Map)[property] = value;
+  }
+
+  @override
   Future<void> setStyleSourceProperties(String id, String properties) async {}
 
   @override
@@ -130,7 +173,12 @@ void main() {
       'buoy_safe_water',
       'buoy_special_purpose',
     ]) {
-      expect(evaluate(filter, {'type': type}), isTrue);
+      expect(
+        evaluate(filter, {'type': type}) == true ||
+            evaluate(BuoyLayer.layer(priority: true).filter, {'type': type}) ==
+                true,
+        isTrue,
+      );
       expect(evaluate(filter, {'type': type, 'geometry': 'Polygon'}), isFalse);
     }
     for (final type in [
@@ -322,8 +370,13 @@ void main() {
   test('ordre, collision et zoom progressif restent explicites', () {
     final layer = BuoyLayer.layer();
     expect(layer.slot, LayerSlot.TOP);
-    expect(layer.sourceLayer, 'seamark');
+    expect(layer.sourceLayer, isNull);
     expect(layer.minZoom, 10);
+    for (final priority in [false, true]) {
+      expectMarksFade(
+        BuoyLayer.layer(priority: priority).iconOpacityExpression!,
+      );
+    }
     expect(layer.iconSize, isNull);
     final size = layer.iconSizeExpression!;
     expect(size.take(3), [
@@ -343,6 +396,7 @@ void main() {
       expect(scale - previous, lessThan(1));
     }
     expect(layer.iconAllowOverlap, isFalse);
+    expect(BuoyLayer.layer(priority: true).iconAllowOverlap, isTrue);
     expect(layer.iconIgnorePlacement, isFalse);
     expect(layer.iconPitchAlignment, IconPitchAlignment.VIEWPORT);
   });
@@ -357,13 +411,12 @@ void main() {
       await buoy.addTo(map);
       expect(map.style.imageAdds, 12);
       expect(map.style.sourceAdds, 1);
-      expect(map.style.layerAdds, 1);
+      expect(map.style.layerAdds, 2);
       final source = map.style.sources[BuoyLayer.sourceId] as Map;
-      expect(source['tiles'], [
-        BuoyLayer.tilesUrl(apiBaseUrl: 'https://api.example.com/gateway/'),
-      ]);
+      expect(source['type'], 'geojson');
+      expect(source['tolerance'], 0);
       expect(source['url'], isNull);
-      expect(source['maxzoom'], 14);
+      expect(source['maxzoom'], 18);
       expect(source['attribution'], contains('Open Waters: Seamap'));
       expect(source['attribution'], contains('OpenStreetMap contributors'));
       expect(
@@ -374,7 +427,7 @@ void main() {
       await buoy.addTo(map);
       expect(map.style.imageAdds, 24);
       expect(map.style.sourceAdds, 2);
-      expect(map.style.layerAdds, 2);
+      expect(map.style.layerAdds, 4);
     });
   });
 
@@ -389,7 +442,7 @@ void main() {
       await buoy.addTo(map);
       expect(map.style.imageAdds, 12);
       expect(map.style.sourceAdds, 1);
-      expect(map.style.layerAdds, 1);
+      expect(map.style.layerAdds, 2);
     });
   });
 

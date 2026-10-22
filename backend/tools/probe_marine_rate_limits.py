@@ -26,12 +26,19 @@ from app.infrastructure.marine.http import MarineHTTP
 
 FAMILIES = ["bathymetry", "depth-contours", "soundings", "seamarks",
             "underwater-hazards", "port-infrastructure", "harbours"]
+SNAPSHOT_FAMILIES = ["harbours", "seamarks", "depth-contours", "soundings",
+                     "underwater-hazards"]
 
 
 def tile_paths(offset, count, zoom=12):
     return [f"/api/v1/map/{family}/{zoom}/{2115 + offset + i}/1503."
             f"{'png' if family == 'bathymetry' else 'pbf'}"
             for i in range(count) for family in FAMILIES]
+
+
+def snapshot_paths(count):
+    return [f"/api/v1/map/marine-features/{family}/12/{2115 + i}/1503.geojson"
+            for i in range(count) for family in SNAPSHOT_FAMILIES]
 
 
 def probe(nginx, config):
@@ -54,7 +61,7 @@ def probe(nginx, config):
 
             def do_GET(self):
                 data = (asyncio.run_coroutine_threadsafe(get(self.path), loop).result(10)
-                        if self.path.startswith("/api/v1/map/") and self.path.endswith((".png", ".pbf"))
+                        if self.path.startswith("/api/v1/map/") and self.path.endswith((".png", ".pbf", ".geojson"))
                         else b"{}")
                 # One real viewport can request 9 tiles across 7 sources at
                 # once. Keep those streams open to expose connection limits.
@@ -108,6 +115,7 @@ def probe(nginx, config):
             ("zoom_out", tile_paths(0, 4, 11)),
             ("other_zone", tile_paths(20, 4)),
             ("revisit", tile_paths(0, 4)),
+            ("geojson_viewport", snapshot_paths(9)),
             ("full_viewport", viewport_paths),
             ("repeat_viewport", viewport_paths),
         ]

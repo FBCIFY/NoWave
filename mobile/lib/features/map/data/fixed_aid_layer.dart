@@ -2,6 +2,7 @@ import 'package:mapbox_maps_flutter/mapbox_maps_flutter.dart';
 
 import 'buoy_layer.dart';
 import 'marine_icon_image.dart';
+import '../../../core/map/marine/marine_zoom.dart';
 
 /// Aides fixes sur la source seamark existante, sous les bouées prioritaires.
 class FixedAidLayer {
@@ -204,9 +205,8 @@ class FixedAidLayer {
       0,
     ];
     const mainBeacons = ['beacon_cardinal', 'beacon_isolated_danger'];
-    final specs = <(double, List<Object>, bool)>[
+    final specs = <(List<Object>, bool)>[
       (
-        13,
         [
           'all',
           [
@@ -221,7 +221,6 @@ class FixedAidLayer {
         false,
       ),
       (
-        14,
         [
           'all',
           [
@@ -234,7 +233,6 @@ class FixedAidLayer {
         false,
       ),
       (
-        11,
         [
           'all',
           [
@@ -247,7 +245,6 @@ class FixedAidLayer {
         false,
       ),
       (
-        13,
         [
           'all',
           [
@@ -268,7 +265,6 @@ class FixedAidLayer {
         false,
       ),
       (
-        12,
         [
           'match',
           ['get', 'type'],
@@ -279,7 +275,6 @@ class FixedAidLayer {
         false,
       ),
       (
-        10,
         [
           '==',
           ['get', 'type'],
@@ -293,9 +288,8 @@ class FixedAidLayer {
         SymbolLayer(
           id: layerIds[i],
           sourceId: BuoyLayer.sourceId,
-          sourceLayer: BuoyLayer.sourceLayer,
           slot: LayerSlot.TOP,
-          minZoom: specs[i].$1,
+          minZoom: MarineZoom.marksPreload,
           filter: [
             'all',
             [
@@ -303,13 +297,20 @@ class FixedAidLayer {
               ['geometry-type'],
               'Point',
             ],
-            specs[i].$2,
+            specs[i].$1,
             // Un support inconnu ne doit pas masquer son feu qualifié.
-            if (i == 3 || i == 4)
-              ['!=', _fixedBeaconImage(), 'nowave-beacon-neutral'],
+            if (i == 3) ['!=', _fixedBeaconImage(), 'nowave-beacon-neutral'],
+            if (i == 0)
+              [
+                'match',
+                ['get', 'type'],
+                mainBeacons,
+                false,
+                true,
+              ],
           ],
           iconImageExpression: imageExpression(),
-          iconSizeExpression: specs[i].$3
+          iconSizeExpression: specs[i].$2
               ? [
                   'interpolate',
                   ['linear'],
@@ -336,7 +337,8 @@ class FixedAidLayer {
                   18,
                   1.1,
                 ],
-          iconAllowOverlap: false,
+          iconAllowOverlap: i == 4,
+          iconOpacityExpression: MarineZoom.marksOpacity(),
           iconIgnorePlacement: false,
           iconPadding: 2,
           iconAnchor: IconAnchor.CENTER,

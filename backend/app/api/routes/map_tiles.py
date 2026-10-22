@@ -96,7 +96,36 @@ async def get_underwater_hazard_tile(
     return await _marine_tile(z, x, y, MarineFamily.HAZARDS)
 
 
-async def _marine_tile(z, x, y, family):
+@router.get("/marine-features/{family}/{z}/{x}/{y}.geojson")
+async def get_marine_features(
+    request: Request,
+    family: MarineFamily,
+    z: Annotated[int, Path(ge=6, le=16)],
+    x: Annotated[int, Path(ge=0)],
+    y: Annotated[int, Path(ge=0)],
+) -> Response:
+    # Contours use a fixed, unbuffered Z12 grid at every camera zoom. This
+    # preserves source coordinates and identities instead of replacing MVT
+    # fragments when the native tile resolution changes.
+    if (z > 14 and family != MarineFamily.SOUNDINGS) or family == MarineFamily.PORTS or (
+        family == MarineFamily.CONTOURS and z != 12
+    ) or (family != MarineFamily.HARBOURS and z < 10):
+        raise HTTPException(status_code=422, detail="Unsupported marine snapshot.")
+    work = asyncio.create_task(_marine_tile(z, x, y, family, geojson=True))
+    try:
+        while not work.done():
+            if await request.is_disconnected():
+                raise HTTPException(status_code=499, detail="Tile request cancelled.")
+            await asyncio.wait({work}, timeout=0.1)
+        return await work
+    finally:
+        if not work.done():
+            work.cancel()
+            with suppress(asyncio.CancelledError):
+                await work
+
+
+async def _marine_tile(z, x, y, family, *, geojson=False):
     try:
         tile = Tile(z, x, y)
     except ValueError as error:
@@ -104,7 +133,7 @@ async def _marine_tile(z, x, y, family):
             status_code=422, detail="Invalid marine XYZ tile."
         ) from error
     try:
-        result = await get_marine_service().get_tile(tile, family)
+        result = await get_marine_service().get_tile(tile, family, **({"geojson": True} if geojson else {}))
     except ProviderUnavailable as error:
         if family == MarineFamily.SOUNDINGS:
             # The application's generic exception handler drops custom headers.
@@ -129,7 +158,7 @@ async def _marine_tile(z, x, y, family):
         ) from error
     return Response(
         content=result.content,
-        media_type="application/vnd.mapbox-vector-tile",
+        media_type="application/geo+json" if geojson else "application/vnd.mapbox-vector-tile",
         headers={
             "Cache-Control": "no-store"
             if family == MarineFamily.SOUNDINGS

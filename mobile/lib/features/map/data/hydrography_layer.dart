@@ -1,5 +1,3 @@
-import 'dart:async';
-import 'dart:convert';
 import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
@@ -8,6 +6,7 @@ import 'package:mapbox_maps_flutter/mapbox_maps_flutter.dart';
 import '../../../core/api/api_config.dart';
 import '../../../core/map/marine/marine_palette.dart';
 import 'marine_tiles.dart';
+import '../../../core/map/marine/marine_zoom.dart';
 
 /// Contrat NoWave : courbes, échantillons ponctuels et dangers restent distincts.
 class HydrographyLayer {
@@ -20,98 +19,6 @@ class HydrographyLayer {
   static const hazardSourceId = 'nowave-underwater-hazards';
   static const sourceIds = [contourSourceId, soundingSourceId, hazardSourceId];
   Future<void>? _installing;
-  Future<void> _labelWork = Future.value();
-  final Set<String> _labelledContours = {};
-  int _labelRevision = 0;
-  bool _labelQueryPending = false;
-  bool _labelQueryAgain = false;
-
-  /// During movement, placement changes: never retain an unlabelled line from
-  /// the previous viewport. Work is serialized against the next idle query.
-  void invalidateContourLabels(MapboxMap map) {
-    _labelRevision++;
-    final previous = _labelledContours.toList();
-    _labelledContours.clear();
-    if (previous.isEmpty) return;
-    _labelWork = _labelWork
-        .then((_) async {
-          await Future.wait([
-            for (final id in previous) _markLabel(map, id, false),
-          ]);
-        })
-        .catchError((Object _) {});
-  }
-
-  Future<void> _markLabel(MapboxMap map, String id, bool visible) =>
-      map.setFeatureState(
-        contourSourceId,
-        'depth_contour',
-        id,
-        jsonEncode({'label_visible': visible}),
-      );
-
-  /// Native collisions and short fragments may suppress every annotation of
-  /// a feature. Draw its line only after at least one label is actually placed
-  /// in this viewport. Symbol placement itself remains entirely native.
-  Future<void> synchronizeContourLabels(MapboxMap map) async {
-    if (_labelQueryPending) {
-      _labelQueryAgain = true;
-      return;
-    }
-    _labelQueryPending = true;
-    final revision = _labelRevision;
-    final work = _labelWork
-        .then((_) async {
-          final size = await map.getSize();
-          final rendered = await map.queryRenderedFeatures(
-            RenderedQueryGeometry.fromScreenBox(
-              ScreenBox(
-                min: ScreenCoordinate(x: 0, y: 0),
-                max: ScreenCoordinate(x: size.width, y: size.height),
-              ),
-            ),
-            RenderedQueryOptions(layerIds: ['nowave-depth-labels']),
-          );
-          if (revision != _labelRevision) return;
-          final next = <String>{
-            for (final feature in rendered)
-              if (feature?.queriedFeature.feature['id'] != null)
-                feature!.queriedFeature.feature['id'].toString(),
-          };
-          final removed = _labelledContours.difference(next);
-          final added = next.difference(_labelledContours);
-          _labelledContours
-            ..clear()
-            ..addAll(next);
-          await Future.wait([
-            for (final id in removed) _markLabel(map, id, false),
-            for (final id in added) _markLabel(map, id, true),
-          ]);
-        })
-        .catchError((Object _) async {
-          // Failed optional enrichment remains hidden, rather than a mute curve.
-          final previous = _labelledContours.toList();
-          _labelledContours.clear();
-          try {
-            await Future.wait([
-              for (final id in previous) _markLabel(map, id, false),
-            ]);
-          } catch (_) {
-            // A replaced/disposed native style cannot retain visible lines.
-          }
-        });
-    _labelWork = work;
-    try {
-      await work;
-    } finally {
-      _labelQueryPending = false;
-      if (_labelQueryAgain) {
-        _labelQueryAgain = false;
-        unawaited(synchronizeContourLabels(map));
-      }
-    }
-  }
-
   Future<void> addTo(MapboxMap map) async {
     final pending = _installing;
     if (pending != null) {
@@ -131,30 +38,13 @@ class HydrographyLayer {
     }
   }
 
-  static List<VectorSource> sources({String? apiBaseUrl}) => [
-    for (final spec in [
-      (contourSourceId, 'depth-contours', 12.0, 14.0),
-      (soundingSourceId, 'soundings', 12.0, 16.0),
-      (hazardSourceId, 'underwater-hazards', 12.0, 14.0),
-    ])
-      VectorSource(
-        id: spec.$1,
-        // Numeric contract: modeled grid cells and original point soundings.
-        tiles: [
-          MarineTiles.template(
-            spec.$2,
-            apiBaseUrl: apiBaseUrl,
-            queryParameters: {
-              'v': spec.$1 == soundingSourceId ? 'depths-4' : '3',
-            },
-          ),
-        ],
-        minzoom: spec.$3,
-        maxzoom: spec.$4,
-        prefetchZoomDelta: 0,
-        // Only this source changes disk-cache policy; other layers keep theirs.
-        volatile: spec.$1 == soundingSourceId ? true : null,
-        tileNetworkRequestsDelay: .25,
+  static List<GeoJsonSource> sources({String? apiBaseUrl}) => [
+    for (final id in sourceIds)
+      GeoJsonSource(
+        id: id,
+        data: '{"type":"FeatureCollection","features":[]}',
+        tolerance: 0,
+        maxzoom: 18,
         attribution: MarineTiles.attribution(apiBaseUrl: apiBaseUrl),
       ),
   ];
@@ -163,10 +53,6 @@ class HydrographyLayer {
     final style = map.style;
     for (final source in sources(apiBaseUrl: apiBaseUrl)) {
       if (!await style.styleSourceExists(source.id)) {
-        if (source.id == contourSourceId) {
-          _labelRevision++;
-          _labelledContours.clear();
-        }
         await style.addSource(source);
       }
     }
@@ -200,29 +86,11 @@ class HydrographyLayer {
     }
   }
 
-  // Identical eligibility for lines and their annotations. Generalized DTM
-  // contours are regional context only; no port-level precision is implied.
+  // Lines are independent of label placement and have no upper zoom cutoff.
   static List<Object> get contourFilter => [
-    'all',
-    ['has', 'depth_label'],
-    [
-      '<=',
-      ['get', 'display_minzoom'],
-      ['zoom'],
-    ],
-    [
-      'any',
-      [
-        '!=',
-        ['get', 'derivation'],
-        'published_dtm_contour_2022',
-      ],
-      [
-        '<',
-        ['zoom'],
-        15,
-      ],
-    ],
+    '<=',
+    ['get', 'display_minzoom'],
+    ['zoom'],
   ];
 
   static List<Object> get depthTextSize => [
@@ -253,74 +121,38 @@ class HydrographyLayer {
     224,
   ];
 
-  static List<Object> _labelledOpacity(Object opacity) => [
-    'case',
-    [
-      'boolean',
-      ['feature-state', 'label_visible'],
-      false,
-    ],
-    opacity,
-    0,
-  ];
-
   static List<Layer> layers() => [
     for (final major in [false, true])
       LineLayer(
         id: 'nowave-depth-${major ? 'major' : 'minor'}',
         sourceId: contourSourceId,
-        sourceLayer: 'depth_contour',
         slot: LayerSlot.MIDDLE,
-        minZoom: 12,
+        minZoom: MarineZoom.depths,
         filter: [
-          ...contourFilter,
+          'all',
+          contourFilter,
           [
             '==',
             ['get', 'contour_class'],
             major ? 'major' : 'minor',
           ],
         ],
-        lineColor: 0xFF507F99,
+        lineColor: 0xFF6F9FA8,
         lineWidth: major ? .95 : .55,
-        lineOpacityExpression: [
-          'interpolate',
-          ['linear'],
-          ['zoom'],
-          13,
-          _labelledOpacity(major ? .72 : .48),
-          14,
-          _labelledOpacity([
-            'case',
-            [
-              '==',
-              ['get', 'derivation'],
-              'published_dtm_contour_2022',
-            ],
-            major ? .32 : .22,
-            major ? .72 : .48,
-          ]),
-          15,
-          _labelledOpacity([
-            'case',
-            [
-              '==',
-              ['get', 'derivation'],
-              'published_dtm_contour_2022',
-            ],
-            0,
-            major ? .72 : .48,
-          ]),
-        ],
+        lineOpacity: major ? .72 : .48,
         lineJoin: LineJoin.ROUND,
         lineCap: LineCap.ROUND,
       ),
     SymbolLayer(
       id: 'nowave-depth-labels',
       sourceId: contourSourceId,
-      sourceLayer: 'depth_contour',
       slot: LayerSlot.MIDDLE,
-      minZoom: 12,
-      filter: contourFilter,
+      minZoom: MarineZoom.depths,
+      filter: [
+        'all',
+        ['has', 'depth_label'],
+        contourFilter,
+      ],
       symbolPlacement: SymbolPlacement.LINE,
       symbolSpacingExpression: contourSymbolSpacing,
       textFieldExpression: ['get', 'depth_label'],
@@ -330,9 +162,9 @@ class HydrographyLayer {
       textKeepUpright: true,
       textMaxAngle: 70,
       textFont: MarinePalette.labelFont,
-      textColor: 0xFF354D5B,
-      textHaloColor: 0xFFEDF8FC,
-      textHaloWidth: .3,
+      textColor: 0xFFD8E7E9,
+      textHaloColor: 0xFF123A50,
+      textHaloWidth: .6,
       textPadding: 1,
       textAllowOverlap: false,
       textIgnorePlacement: false,
@@ -341,9 +173,8 @@ class HydrographyLayer {
     SymbolLayer(
       id: 'nowave-depth-soundings',
       sourceId: soundingSourceId,
-      sourceLayer: 'sounding',
       slot: LayerSlot.MIDDLE,
-      minZoom: 12,
+      minZoom: MarineZoom.depths,
       filter: [
         'match',
         ['get', 'nature'],
@@ -354,9 +185,9 @@ class HydrographyLayer {
       textFieldExpression: ['get', 'depth_label'],
       textSizeExpression: depthTextSize,
       textFont: MarinePalette.labelFont,
-      textColor: 0xFF354D5B,
-      textHaloColor: 0xFFEDF8FC,
-      textHaloWidth: .3,
+      textColor: 0xFFD8E7E9,
+      textHaloColor: 0xFF123A50,
+      textHaloWidth: .5,
       textAllowOverlap: false,
       textIgnorePlacement: false,
       textPadding: 2,
@@ -365,23 +196,21 @@ class HydrographyLayer {
     FillLayer(
       id: 'nowave-hazard-areas',
       sourceId: hazardSourceId,
-      sourceLayer: 'underwater_hazard',
       slot: LayerSlot.TOP,
-      minZoom: 12,
+      minZoom: MarineZoom.marksPreload,
       filter: [
         '==',
         ['geometry-type'],
         'Polygon',
       ],
       fillColor: 0xFF596874,
-      fillOpacity: .07,
+      fillOpacityExpression: MarineZoom.marksOpacity(nominal: .07),
     ),
     LineLayer(
       id: 'nowave-hazard-outlines',
       sourceId: hazardSourceId,
-      sourceLayer: 'underwater_hazard',
       slot: LayerSlot.TOP,
-      minZoom: 12,
+      minZoom: MarineZoom.marksPreload,
       filter: [
         '!=',
         ['geometry-type'],
@@ -389,15 +218,14 @@ class HydrographyLayer {
       ],
       lineColor: 0xFF596874,
       lineWidth: 1,
-      lineOpacity: .8,
+      lineOpacityExpression: MarineZoom.marksOpacity(nominal: .8),
       lineDasharray: [2, 2],
     ),
     SymbolLayer(
       id: 'nowave-hazard-points',
       sourceId: hazardSourceId,
-      sourceLayer: 'underwater_hazard',
       slot: LayerSlot.TOP,
-      minZoom: 12,
+      minZoom: MarineZoom.marksPreload,
       filter: [
         '==',
         ['geometry-type'],
@@ -427,6 +255,7 @@ class HydrographyLayer {
         'nowave-hazard-unknown',
       ],
       iconSize: .75,
+      iconOpacityExpression: MarineZoom.marksOpacity(),
       iconPadding: 3,
       iconAllowOverlap: false,
       iconIgnorePlacement: false,
