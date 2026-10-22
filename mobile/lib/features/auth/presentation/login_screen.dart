@@ -5,6 +5,7 @@ import '../data/auth_service.dart';
 import 'register_screen.dart';
 import 'reset_password_screen.dart';
 import 'widgets/auth_photo_layout.dart';
+import 'widgets/auth_photo_route.dart';
 import 'widgets/auth_primary_button.dart';
 import 'widgets/auth_text_field.dart';
 
@@ -150,7 +151,7 @@ class _LoginScreenState extends State<LoginScreen> {
                       ? null
                       : () {
                           Navigator.of(context).push(
-                            MaterialPageRoute<void>(
+                            AuthPhotoRoute<void>(
                               builder: (context) => ResetPasswordScreen(
                                 authService: widget.authService,
                                 initialEmail: _emailController.text,
@@ -227,7 +228,7 @@ class _LoginScreenState extends State<LoginScreen> {
                               onRegister();
                             } else {
                               Navigator.of(context).push(
-                                MaterialPageRoute<void>(
+                                AuthPhotoRoute<void>(
                                   builder: (context) => RegisterScreen(
                                     authService: widget.authService,
                                   ),

@@ -6,7 +6,9 @@ import '../../auth/data/auth_service.dart';
 import 'profile_service.dart';
 
 /// Reprise persistante d'une suppression explicitement confirmée.
-/// Aucune erreur (y compris 401/404) ne prouve la suppression complète.
+/// Aucune erreur HTTP (y compris 401/404) ne prouve la suppression complète :
+/// seul un compte Firebase introuvable la prouve, car le serveur efface la base
+/// avant Firebase.
 class AccountDeletion {
   AccountDeletion({
     required this.profileService,
@@ -62,7 +64,13 @@ class AccountDeletion {
     await reporter.stop();
     await registration.pauseForAccountDeletion();
     if (!confirmed) {
-      await profileService.deleteAccount();
+      try {
+        await profileService.deleteAccount();
+      } catch (_) {
+        // Réponse 204 perdue : le jeton d'un compte supprimé ne se renouvelle
+        // plus et chaque nouvel essai échouerait.
+        if (!await authService.isIdentityDeleted()) rethrow;
+      }
       confirmed = true;
     }
     // Retenter l'écriture si elle avait échoué après le 204.
@@ -74,5 +82,16 @@ class AccountDeletion {
     if (!await preferences.remove(_key)) {
       throw StateError('Impossible d’effacer le journal de suppression.');
     }
+  }
+
+  /// Sortie sans confirmation du serveur : ferme la session sur ce téléphone
+  /// sans appeler l'API. Le journal est gardé : une reconnexion au même compte
+  /// reprend la suppression.
+  Future<void> leave() async {
+    registration.beginSignOut();
+    await reporter.stop();
+    await registration.finishAccountDeletion();
+    await authService.signOut();
+    registration.completeSignOut();
   }
 }

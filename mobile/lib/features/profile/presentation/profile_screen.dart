@@ -4,6 +4,7 @@ import '../data/profile_service.dart';
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:package_info_plus/package_info_plus.dart';
 
 import '../../../app/theme.dart';
 import '../../auth/presentation/widgets/auth_layout.dart';
@@ -48,6 +49,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
   late UserProfile _profile;
   bool _isSaving = false;
   NotificationPermission? _permission;
+  String? _buildLabel;
   late final AppLifecycleListener _lifecycleListener;
 
   @override
@@ -55,9 +57,23 @@ class _ProfileScreenState extends State<ProfileScreen> {
     super.initState();
     _profile = widget.profile;
     unawaited(_loadPermission());
+    unawaited(_loadBuildLabel());
     _lifecycleListener = AppLifecycleListener(
       onResume: () => unawaited(_loadPermission()),
     );
+  }
+
+  Future<void> _loadBuildLabel() async {
+    try {
+      final info = await PackageInfo.fromPlatform();
+      if (mounted) {
+        setState(
+          () => _buildLabel = 'NoWave ${info.version} · ${info.buildNumber}',
+        );
+      }
+    } catch (_) {
+      // Version information is optional on platforms without the plugin.
+    }
   }
 
   @override
@@ -354,6 +370,17 @@ class _ProfileScreenState extends State<ProfileScreen> {
               onPressed: _isSaving ? null : widget.onDeleteAccount,
               child: const Text('Supprimer mon compte'),
             ),
+          if (_buildLabel case final label?) ...[
+            const SizedBox(height: 16),
+            Text(
+              label,
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                color: Colors.white.withValues(alpha: .45),
+                fontSize: 12,
+              ),
+            ),
+          ],
         ],
       ),
     );

@@ -21,34 +21,46 @@ void main() {
     expect(markers.values, isNot(contains(expression.last)));
   });
 
-  test('la zone colorée bat de 1 à 1,25 fois sa taille', () {
-    expect(ReportTiles.pulseScale(Duration.zero), 1);
-    expect(
-      ReportTiles.pulseScale(const Duration(seconds: 1)),
-      closeTo(1.25, 1e-9),
-    );
-    expect(
-      ReportTiles.pulseScale(const Duration(seconds: 2)),
-      closeTo(1, 1e-9),
-    );
-    for (var ms = 0; ms <= 2000; ms += 50) {
-      final scale = ReportTiles.pulseScale(Duration(milliseconds: ms));
-      expect(scale, inInclusiveRange(1, 1.25));
-    }
-  });
-
-  test('le battement agrandit le rayon à chaque zoom', () {
+  test('la zone colorée garde un rayon fixe à chaque zoom', () {
+    const expression = ReportTiles.heatmapRadiusExpression;
     // Après ['interpolate', ['linear'], ['zoom']] : des paires zoom/rayon.
-    List<num> radii(List<Object> expression) => [
+    final radii = [
       for (var i = 4; i < expression.length; i += 2) expression[i] as num,
     ];
 
-    final base = radii(ReportTiles.heatmapRadiusExpression());
-    final pulsed = radii(ReportTiles.heatmapRadiusExpression(1.25));
-
-    expect(base, [25, 50, 80]);
-    expect(pulsed, [for (final r in base) r * 1.25]);
+    expect(radii, [25, 50, 80]);
   });
+
+  test(
+    'zones colorées du violet au rouge foncé, transparentes sur les bords',
+    () {
+      const expression = ReportTiles.heatmapColorExpression;
+      // Après ['interpolate', ['linear'], ['heatmap-density']] : des paires
+      // densité/couleur.
+      final stops = [
+        for (var i = 3; i < expression.length; i += 2) expression[i] as num,
+      ];
+      final colors = [
+        for (var i = 4; i < expression.length; i += 2) expression[i],
+      ];
+
+      expect(stops.first, 0);
+      expect(stops.last, 1);
+      expect(stops, orderedEquals([...stops]..sort()));
+      expect(colors.first, 'rgba(139, 92, 246, 0)');
+      expect(colors.last, 'rgb(110, 20, 20)');
+      expect(colors, contains('rgba(59, 130, 246, 0.55)'));
+      expect(colors, contains('rgba(34, 197, 94, 0.7)'));
+      // L'opacité monte du bord vers le centre.
+      final alphas = [
+        for (final color in colors.cast<String>())
+          color.startsWith('rgba')
+              ? double.parse(color.split(',').last.replaceAll(')', ''))
+              : 1.0,
+      ];
+      expect(alphas, orderedEquals([...alphas]..sort()));
+    },
+  );
 
   test('reconnaît un refus d’accès aux tuiles', () {
     const prefix = 'Failed to load tile: HTTP status code';

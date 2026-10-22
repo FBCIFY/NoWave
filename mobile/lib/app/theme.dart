@@ -91,4 +91,7 @@ final appTheme = ThemeData(
       ),
     ),
   ),
+  // Pas de bulle à l'appui long sur un bouton. Le texte reste lu par
+  // VoiceOver et TalkBack.
+  tooltipTheme: const TooltipThemeData(triggerMode: TooltipTriggerMode.manual),
 );

@@ -10,9 +10,13 @@ class MarinePalette {
   static const crop = '#A39F6B';
   static const snow = '#ECEDE5';
 
+  /// Mapbox Standard glyphs use the app font.
+  static const labelFont = ['Raleway Medium'];
+
   static final basemapConfig = <String, Object>{
     'lightPreset': 'day',
     'theme': 'faded',
+    'font': 'Raleway',
     for (final entry in land.entries) entry.key: LandColors.color(entry.value),
     'colorPlaceLabels': '#3A4843',
     'colorAdminBoundaries': '#CED1C8',

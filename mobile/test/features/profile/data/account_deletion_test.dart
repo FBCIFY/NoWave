@@ -131,6 +131,42 @@ void main() {
     },
   );
 
+  test(
+    'réponse perdue puis compte Firebase introuvable : suppression terminée',
+    () async {
+      var serverDeleted = false;
+      f.respond = (_) async {
+        if (serverDeleted) return http.Response('{}', 401);
+        serverDeleted = true;
+        throw TimeoutException('réponse perdue après commit serveur');
+      };
+      await expectLater(f.deletion.run(), throwsA(isA<TimeoutException>()));
+      f.auth.identityDeleted = true;
+      await f.deletion.run();
+      expect(f.deletion.confirmed, isTrue);
+      expect(f.auth.signOutCalls, 1);
+      expect(f.push.deletions, 1);
+      final prefs = await SharedPreferences.getInstance();
+      expect(prefs.getStringList('account_deletion'), isNull);
+    },
+  );
+
+  test(
+    'sortie sans confirmation : session fermée, reprise gardée pour ce compte',
+    () async {
+      f.respond = (_) async => http.Response('{}', 503);
+      await expectLater(f.deletion.run(), throwsA(isA<ApiException>()));
+      await f.deletion.leave();
+      expect(f.auth.currentUser, isNull);
+      expect(f.requests, hasLength(1));
+      final prefs = await SharedPreferences.getInstance();
+      expect(prefs.getStringList('account_deletion'), ['account-a', 'pending']);
+
+      f.auth.currentUser = TestUser('account-a');
+      expect(await f.newDeletion().restore(), isTrue);
+    },
+  );
+
   test('deux appels partagent une seule suppression', () async {
     final response = Completer<http.Response>();
     f.respond = (_) => response.future;

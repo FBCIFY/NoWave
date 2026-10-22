@@ -79,6 +79,21 @@ class AuthService {
     return _firebaseAuth.signOut();
   }
 
+  /// Vrai seulement si Firebase répond que le compte connecté n'existe plus.
+  /// Toute autre erreur (réseau, session révoquée) laisse la question ouverte.
+  Future<bool> isIdentityDeleted() async {
+    final user = currentUser;
+    if (user == null) return false;
+    try {
+      await user.reload();
+      return false;
+    } on FirebaseAuthException catch (error) {
+      return error.code == 'user-not-found';
+    } catch (_) {
+      return false;
+    }
+  }
+
   /// Token Firebase à envoyer au backend dans l'en-tête `Authorization`.
   Future<String> getIdToken() async {
     final user = currentUser;

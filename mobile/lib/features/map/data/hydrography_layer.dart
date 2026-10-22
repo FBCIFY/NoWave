@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:mapbox_maps_flutter/mapbox_maps_flutter.dart';
 
 import '../../../core/api/api_config.dart';
+import '../../../core/map/marine/marine_palette.dart';
 import 'marine_tiles.dart';
 import '../../../core/map/marine/marine_zoom.dart';
 
@@ -160,6 +161,7 @@ class HydrographyLayer {
       textPitchAlignment: TextPitchAlignment.MAP,
       textKeepUpright: true,
       textMaxAngle: 70,
+      textFont: MarinePalette.labelFont,
       textColor: 0xFFD8E7E9,
       textHaloColor: 0xFF123A50,
       textHaloWidth: .6,
@@ -182,6 +184,7 @@ class HydrographyLayer {
       ],
       textFieldExpression: ['get', 'depth_label'],
       textSizeExpression: depthTextSize,
+      textFont: MarinePalette.labelFont,
       textColor: 0xFFD8E7E9,
       textHaloColor: 0xFF123A50,
       textHaloWidth: .5,

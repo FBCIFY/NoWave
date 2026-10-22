@@ -1,0 +1,160 @@
+import 'package:flutter/material.dart';
+import 'package:geolocator/geolocator.dart' as geo;
+
+import '../../../core/api/api_exception.dart';
+import '../../map/presentation/widgets/map_panel.dart';
+import '../../reports/presentation/report_category_style.dart';
+import '../../reports/presentation/report_detail_format.dart';
+import '../data/alert_history_controller.dart';
+import '../domain/alert.dart';
+
+/// Mes alertes, posé en haut de la carte : les plus récentes d'abord. Une
+/// alerte touchée ouvre sa fiche à la même place.
+class AlertsPanel extends StatelessWidget {
+  const AlertsPanel({
+    super.key,
+    required this.history,
+    required this.onOpen,
+    required this.onClose,
+    this.userPosition,
+    this.now = DateTime.now,
+  });
+
+  /// Gardé par la carte : revenir de la fiche ne recharge pas la liste.
+  final AlertHistoryController history;
+  final void Function(Alert) onOpen;
+  final VoidCallback onClose;
+
+  /// Position actuelle pour la distance ; sinon celle au moment de l'alerte.
+  final ({double latitude, double longitude})? userPosition;
+  final DateTime Function() now;
+
+  String _error(Object error) => switch (error) {
+    ApiException(statusCode: 401) =>
+      'Votre session a expiré. Reconnectez-vous puis réessayez.',
+    ApiException(statusCode: 403) => 'L’accès aux alertes est refusé.',
+    ApiException(statusCode: 404) =>
+      'L’historique des alertes est indisponible sur ce serveur.',
+    _ => 'Impossible de charger les alertes. Vérifiez votre connexion. L’historique n’est pas disponible hors ligne.',
+  };
+
+  String _distance(Alert alert) {
+    final from = userPosition;
+    if (from == null) {
+      return '${formatNauticalMiles(alert.distanceM)} lors de l’alerte';
+    }
+    return formatNauticalMiles(
+      geo.Geolocator.distanceBetween(
+        from.latitude,
+        from.longitude,
+        alert.latitude,
+        alert.longitude,
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) => MapPanel(
+    side: MapPanelSide.top,
+    title: 'Mes alertes',
+    onClose: onClose,
+    actions: [
+      ListenableBuilder(
+        listenable: history,
+        builder: (_, _) => IconButton(
+          tooltip: 'Actualiser les alertes',
+          onPressed: history.loading ? null : () => history.load(refresh: true),
+          icon: const Icon(Icons.refresh),
+        ),
+      ),
+    ],
+    child: ListenableBuilder(
+      listenable: history,
+      builder: (context, _) {
+        final error = history.error;
+        final items = history.items;
+        return ListView(
+          // Retour depuis une fiche : la liste reprend où elle était.
+          key: const PageStorageKey('alerts-list'),
+          shrinkWrap: true,
+          padding: const EdgeInsets.fromLTRB(8, 0, 8, 4),
+          children: [
+            if (error != null)
+              _ErrorRow(
+                message: items.isEmpty
+                    ? _error(error)
+                    : '${_error(error)} Les alertes affichées peuvent ne plus être à jour.',
+                onRetry: history.loading ? null : history.retry,
+              ),
+            if (history.loaded && items.isEmpty && error == null)
+              const Padding(
+                padding: EdgeInsets.all(16),
+                child: Text('Aucune alerte pour le moment.'),
+              ),
+            for (final alert in items)
+              ListTile(
+                key: ValueKey(alert.id),
+                dense: true,
+                leading: Icon(alert.category.icon, color: alert.category.color),
+                title: Text(alert.category.label),
+                subtitle: Text(
+                  '${formatDayTime(alert.alertedAt!, now: now())} · ${_distance(alert)}',
+                ),
+                trailing: const Icon(Icons.chevron_right),
+                onTap: () => onOpen(alert),
+              ),
+            if (history.loading)
+              const Padding(
+                padding: EdgeInsets.all(12),
+                child: Center(child: CircularProgressIndicator()),
+              )
+            else if (history.hasMore && error == null)
+              // Bas de liste atteint : la page suivante arrive seule.
+              _LoadMore(onVisible: history.load),
+          ],
+        );
+      },
+    ),
+  );
+}
+
+class _ErrorRow extends StatelessWidget {
+  const _ErrorRow({required this.message, required this.onRetry});
+
+  final String message;
+  final VoidCallback? onRetry;
+
+  @override
+  Widget build(BuildContext context) => Padding(
+    padding: const EdgeInsets.fromLTRB(8, 4, 8, 4),
+    child: Row(
+      children: [
+        Expanded(child: Text(message)),
+        TextButton(onPressed: onRetry, child: const Text('Réessayer')),
+      ],
+    ),
+  );
+}
+
+/// Construit seulement près du bas de la liste : demande la page suivante.
+class _LoadMore extends StatefulWidget {
+  const _LoadMore({required this.onVisible});
+
+  final Future<void> Function() onVisible;
+
+  @override
+  State<_LoadMore> createState() => _LoadMoreState();
+}
+
+class _LoadMoreState extends State<_LoadMore> {
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) widget.onVisible();
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) => const SizedBox(height: 48);
+}

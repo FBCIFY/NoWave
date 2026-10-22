@@ -92,3 +92,7 @@ def test_actual_nginx_navigation_with_warm_cache_and_protected_general_api():
     assert result["general_api_abuse_statuses"][429] > 0
     assert result["proxy_rate_rejections"] > 0
     assert result["upstream_429"] == 0
+    assert result["marine_connection_rejections"] == 0
+    assert {"full_viewport", "repeat_viewport"} <= {
+        case["scenario"] for case in result["cases"]
+    }

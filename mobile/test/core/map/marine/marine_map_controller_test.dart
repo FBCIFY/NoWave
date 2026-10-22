@@ -101,7 +101,7 @@ void main() {
       expect(map.style.config['showPointOfInterestLabels'], false);
       expect(source['tiles'], ['$local?v=marine-palette-3']);
       expect(source['maxzoom'], 14);
-      expect(source['volatile'], true);
+      expect(source['volatile'], false);
       expect(source['prefetch-zoom-delta'], 0);
       expect(layer['slot'], 'middle');
       expect(layer['minzoom'], 5); // No marine tile requests in globe view.

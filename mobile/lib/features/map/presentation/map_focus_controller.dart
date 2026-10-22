@@ -4,15 +4,22 @@ import 'package:flutter/foundation.dart';
 
 import '../../reports/domain/report_detail.dart';
 
+enum MapFocusOrigin { mapTap, notification, history }
+
 /// One selection on the existing map; a superseding request releases its waiter.
 class MapFocusController extends ChangeNotifier {
   ReportDetail? _report;
   bool _blocked = false;
-  bool includeUserPosition = false;
+  MapFocusOrigin origin = MapFocusOrigin.history;
+
+  /// Seule une notification cadre aussi l'utilisateur : depuis la carte ou
+  /// Mes alertes, la fiche s'ouvre et la caméra vise le signalement seul.
+  bool get includeUserPosition => origin == MapFocusOrigin.notification;
   int revision = 0;
   Completer<void>? _completion;
   Completer<void>? _unblocked;
   bool Function()? _isCurrent;
+  bool _alertsRequested = false;
 
   ReportDetail? get report => _report;
   bool get isBlocked => _blocked;
@@ -30,11 +37,29 @@ class MapFocusController extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// The history's explicit “show on map” action retains its existing contract.
-  bool focus(ReportDetail report) {
+  bool focus(
+    ReportDetail report, {
+    MapFocusOrigin origin = MapFocusOrigin.history,
+  }) {
     if (_blocked) return false;
-    _select(report, includeUser: false);
+    _select(report, origin: origin);
     return true;
+  }
+
+  /// Mes alertes s'ouvre en panneau sur la carte : la carte le prend en
+  /// charge à son prochain passage.
+  bool openAlerts() {
+    if (_blocked) return false;
+    _alertsRequested = true;
+    notifyListeners();
+    return true;
+  }
+
+  /// Rend la demande d'ouverture une seule fois.
+  bool takeAlerts() {
+    final requested = _alertsRequested;
+    _alertsRequested = false;
+    return requested;
   }
 
   Future<void> focusAlert(ReportDetail report, {bool Function()? isCurrent}) {
@@ -42,7 +67,7 @@ class MapFocusController extends ChangeNotifier {
     final completion = Completer<void>();
     _select(
       report,
-      includeUser: true,
+      origin: MapFocusOrigin.notification,
       completion: completion,
       isCurrent: isCurrent,
     );
@@ -51,14 +76,14 @@ class MapFocusController extends ChangeNotifier {
 
   void _select(
     ReportDetail report, {
-    required bool includeUser,
+    required MapFocusOrigin origin,
     Completer<void>? completion,
     bool Function()? isCurrent,
   }) {
     _finish();
     _report = report;
     _isCurrent = isCurrent;
-    includeUserPosition = includeUser;
+    this.origin = origin;
     _completion = completion;
     revision++;
     notifyListeners();

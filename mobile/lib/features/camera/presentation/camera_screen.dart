@@ -119,8 +119,6 @@ class _CameraScreenState extends State<CameraScreen> {
   @override
   void initState() {
     super.initState();
-    // L'aperçu plein écran suppose le portrait.
-    SystemChrome.setPreferredOrientations([DeviceOrientation.portraitUp]);
     _openCamera();
     _listenToPosition();
     _listenToOrientation();
@@ -690,7 +688,6 @@ class _CameraScreenState extends State<CameraScreen> {
   @override
   void dispose() {
     _freshnessTimer?.cancel();
-    SystemChrome.setPreferredOrientations(const []);
     _lifecycleListener.dispose();
     _positionSubscription?.cancel();
     _orientationSubscription?.cancel();

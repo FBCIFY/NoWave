@@ -167,16 +167,6 @@ class _Tiles implements ReportTiles {
     });
     if (!ready.isCompleted) ready.complete(map);
   }
-
-  @override
-  void stopPulse() {}
-
-  @override
-  void updatePulse(
-    MapboxMap map, {
-    required double zoom,
-    required bool enabled,
-  }) {}
 }
 
 class _Validation extends StatefulWidget {

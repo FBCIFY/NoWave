@@ -16,6 +16,11 @@ import 'package:image/image.dart' as img;
 import 'package:mapbox_maps_flutter/mapbox_maps_flutter.dart';
 
 class _Gps extends geo.GeolocatorPlatform {
+  _Gps({this.age = Duration.zero});
+
+  /// Âge de la position renvoyée : GPS décroché depuis un moment.
+  final Duration age;
+
   @override
   Future<bool> isLocationServiceEnabled() async => true;
   @override
@@ -27,7 +32,7 @@ class _Gps extends geo.GeolocatorPlatform {
   }) async => geo.Position(
     longitude: 5.37,
     latitude: 43.29,
-    timestamp: DateTime.now(),
+    timestamp: DateTime.now().subtract(age),
     accuracy: 5,
     altitude: 0,
     altitudeAccuracy: 1,
@@ -131,6 +136,37 @@ void main() {
     await tester.tap(find.text('Pollution'));
     await tester.pump();
   }
+
+  testWidgets('position GPS trop ancienne : pas de signalement manuel', (
+    tester,
+  ) async {
+    geo.GeolocatorPlatform.instance = _Gps(age: const Duration(minutes: 1));
+    final client = MockClient((r) async => fail('aucune requête attendue'));
+    addTearDown(client.close);
+    await tester.pumpWidget(
+      MaterialApp(
+        home: MapScreen(
+          reportService: ManualReportService(
+            apiService: ApiService(
+              client: client,
+              baseUrl: 'https://nowave.test/',
+            ),
+            getIdToken: () async => 'test-token',
+          ),
+        ),
+      ),
+    );
+    tester.widget<MapWidget>(find.byType(MapWidget)).onMapCreated!(_Map());
+    await tester.pumpAndSettle();
+    await tester.tap(find.byTooltip('Créer un signalement'));
+    await tester.pumpAndSettle();
+    expect(find.byType(ReportComposerSheet), findsNothing);
+    expect(
+      find.text('Position GPS trop ancienne. Attendez une nouvelle mesure.'),
+      findsOneWidget,
+    );
+    await tester.pumpWidget(const SizedBox.shrink());
+  });
 
   testWidgets(
     'NW128-I06 réponse POST perdue : même clé et une création serveur simulée',

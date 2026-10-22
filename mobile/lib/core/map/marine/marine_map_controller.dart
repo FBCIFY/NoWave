@@ -60,7 +60,9 @@ class MarineMapController {
           tileSize: 256,
           minzoom: 0,
           maxzoom: 14,
-          volatile: true,
+          // The versioned URL keeps old coastal renders separate. Reuse valid
+          // public tiles on disk when returning to a place or reopening the app.
+          volatile: false,
           prefetchZoomDelta: 0,
           tileNetworkRequestsDelay: 0.25,
         ),

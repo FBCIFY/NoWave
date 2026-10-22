@@ -1,10 +1,25 @@
 from uuid import UUID
 
+import pytest
 from fastapi.testclient import TestClient
 
 from app.api.dependencies.auth import get_current_identity
 from app.main import app
 from app.domain.report import ReportCategory
+from app.infrastructure.marine.bathymetry_cache import BathymetryTileCache
+
+
+@pytest.fixture(autouse=True)
+def isolated_bathymetry_cache(tmp_path, monkeypatch):
+    cache = None
+
+    def get_cache(render):
+        nonlocal cache
+        if cache is None:
+            cache = BathymetryTileCache(render, tmp_path / "bathymetry.sqlite3")
+        return cache
+
+    monkeypatch.setattr("app.api.routes.map_tiles.get_bathymetry_cache", get_cache)
 
 
 def verified_identity():

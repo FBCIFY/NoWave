@@ -11,7 +11,6 @@ import 'package:blueway/core/api/api_service.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 import 'package:blueway/core/notifications/alert_push_controller.dart';
-import 'package:blueway/features/alerts/presentation/alert_report_screen.dart';
 import 'package:blueway/features/home/presentation/home_screen.dart';
 import 'package:blueway/features/map/presentation/map_screen.dart';
 import 'package:blueway/features/reports/data/report_detail_service.dart';
@@ -195,10 +194,6 @@ void main() {
             expect(reports.photoCalls, isEmpty);
 
             expect(
-              find.byType(AlertReportScreen, skipOffstage: false),
-              findsNothing,
-            );
-            expect(
               find.byType(ReportDetailSheet, skipOffstage: false),
               findsNothing,
             );
@@ -243,7 +238,12 @@ void main() {
               reports.photoCalls,
               photo ? ['https://storage.test/report-b.png'] : isEmpty,
             );
-            if (photo) expect(find.text('Photo'), findsOneWidget);
+            if (photo) {
+              expect(
+                find.bySemanticsLabel('Agrandir la photo'),
+                findsOneWidget,
+              );
+            }
           },
         );
       }
@@ -269,7 +269,6 @@ void main() {
       await tester.pumpAndSettle();
       expect(reports.calls, ['report-a', 'report-a']);
       expect(map.cameras, hasLength(1));
-      expect(find.byType(AlertReportScreen), findsNothing);
     },
   );
 
@@ -328,7 +327,6 @@ void main() {
           expect(map.style.layers, isNot(contains('alert-selected-point')));
           expect(map.style.sources, isNot(contains('alert-selected')));
           expect(reports.photoCalls, isEmpty);
-          expect(find.byType(AlertReportScreen), findsNothing);
           expect(find.byType(ReportDetailSheet), findsNothing);
         },
       );
