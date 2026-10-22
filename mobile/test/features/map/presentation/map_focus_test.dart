@@ -1037,7 +1037,7 @@ void main() {
     expect(find.byTooltip('Fermer'), findsNothing);
     await tester.fling(
       find.byKey(const ValueKey('map-panel-drag-handle')),
-      const Offset(0, 140),
+      const Offset(0, 400),
       900,
     );
     await pumpFrames(tester);
@@ -1045,7 +1045,10 @@ void main() {
     expect(find.byTooltip('Créer un signalement'), findsOneWidget);
     expect(map.style.layers, isNot(contains('alert-selected-point')));
     expect(map.style.layers, isNot(contains('alert-selected-halo')));
-    expect(map.easedCameras, hasLength(2));
+    expect(
+      map.easedCameras.where((camera) => camera.zoom == 9.25),
+      hasLength(1),
+    );
     final restored = map.easedCameras.last;
     expect(restored.center!.coordinates.lng, 5.37);
     expect(restored.zoom, 9.25);
@@ -1122,26 +1125,29 @@ void main() {
       await pumpFrames(tester);
       final first = map.easedCameras.single;
       expect(first.padding!.bottom, panelHeight(tester));
-      expect(panelHeight(tester), lessThan(mapHeight(tester) / 2));
+      expect(panelHeight(tester), lessThanOrEqualTo(mapHeight(tester) / 2));
 
-      // Texte agrandi : la fiche gagne en hauteur, pas la carte.
-      tester.platformDispatcher.textScaleFactorTestValue = 1.3;
-      addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
+      // Le contenu tiré vers le haut agrandit la fiche, pas le zoom.
+      final surface = find.byKey(const ValueKey('map-panel-surface'));
+      await tester.dragFrom(
+        tester.getTopLeft(surface) + const Offset(200, 120),
+        const Offset(0, -200),
+      );
       await pumpFrames(tester);
       final grown = map.easedCameras.last;
-      expect(map.easedCameras, hasLength(2));
+      expect(map.easedCameras.length, greaterThan(1));
       expect(grown.padding!.bottom, panelHeight(tester));
       expect(grown.padding!.bottom, greaterThan(first.padding!.bottom));
       expect(grown.center!.coordinates.lng, 5.373);
       expect(grown.zoom, first.zoom);
 
       // Carte déplacée à la main : plus de recalage.
+      final cameraCount = map.easedCameras.length;
       tester.widget<mb.MapWidget>(find.byType(mb.MapWidget)).onScrollListener!(
         touch(),
       );
-      tester.platformDispatcher.textScaleFactorTestValue = 1;
       await pumpFrames(tester);
-      expect(map.easedCameras, hasLength(2));
+      expect(map.easedCameras, hasLength(cameraCount));
       expect(find.byType(ReportDetailPanel), findsNothing);
     },
   );

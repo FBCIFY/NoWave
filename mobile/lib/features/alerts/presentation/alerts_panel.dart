@@ -45,7 +45,7 @@ class AlertsPanel extends StatelessWidget {
   String _distance(Alert alert) {
     final from = userPosition;
     if (from == null) {
-      return '${formatNauticalMiles(alert.distanceM)} lors de l’alerte';
+      return formatNauticalMiles(alert.distanceM);
     }
     return formatNauticalMiles(
       geo.Geolocator.distanceBetween(
@@ -61,7 +61,7 @@ class AlertsPanel extends StatelessWidget {
   Widget build(BuildContext context) => MapPanel(
     side: MapPanelSide.bottom,
     title: 'Mes alertes',
-    backgroundColor: Colors.white,
+    backgroundColor: Colors.white.withValues(alpha: 0.96),
     onClose: onClose,
     dismissRequested: dismissRequested,
     actions: [
@@ -101,56 +101,72 @@ class AlertsPanel extends StatelessWidget {
               if (index > 0)
                 const Divider(
                   height: 1,
-                  indent: 64,
+                  indent: 58,
                   endIndent: 12,
                   color: Color(0xFFD7E0EB),
                 ),
-              ListTile(
+              InkWell(
                 key: ValueKey(alert.id),
-                contentPadding: const EdgeInsets.symmetric(
-                  horizontal: 12,
-                  vertical: 6,
-                ),
-                titleAlignment: ListTileTitleAlignment.center,
-                minLeadingWidth: 40,
-                horizontalTitleGap: 12,
-                leading: ReportCategoryBadge(
-                  category: alert.category,
-                  size: 40,
-                ),
-                title: Text(
-                  alert.category.label,
-                  style: const TextStyle(
-                    color: AppColors.text,
-                    fontSize: 16,
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-                isThreeLine: true,
-                subtitle: Text.rich(
-                  TextSpan(
-                    text: '${formatDayTime(alert.alertedAt!, now: now())}\n',
-                    children: [
-                      TextSpan(
-                        text: _distance(alert),
-                        style: const TextStyle(
-                          color: AppColors.text,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                    ],
-                  ),
-                  style: const TextStyle(
-                    color: Color(0xFF475569),
-                    fontSize: 14,
-                    height: 1.45,
-                  ),
-                ),
-                trailing: const Icon(
-                  Icons.chevron_right,
-                  color: AppColors.slate900,
-                ),
                 onTap: () => onOpen(alert),
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(minHeight: 64),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 8,
+                    ),
+                    child: Row(
+                      children: [
+                        ReportCategoryBadge(category: alert.category, size: 36),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                alert.category.label,
+                                style: const TextStyle(
+                                  color: AppColors.text,
+                                  fontSize: 15,
+                                  fontWeight: FontWeight.w700,
+                                  height: 1.2,
+                                ),
+                              ),
+                              const SizedBox(height: 3),
+                              Text.rich(
+                                TextSpan(
+                                  text:
+                                      '${formatDayTime(alert.alertedAt!, now: now())} · ',
+                                  children: [
+                                    TextSpan(
+                                      text: _distance(alert),
+                                      style: const TextStyle(
+                                        color: AppColors.text,
+                                        fontWeight: FontWeight.w600,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                                style: const TextStyle(
+                                  color: Color(0xFF475569),
+                                  fontSize: 13,
+                                  height: 1.25,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        const Icon(
+                          Icons.chevron_right,
+                          size: 18,
+                          color: AppColors.slate900,
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
               ),
             ],
             if (history.loading)

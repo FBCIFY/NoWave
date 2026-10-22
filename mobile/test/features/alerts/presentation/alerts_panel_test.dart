@@ -76,7 +76,8 @@ void main() {
     respond = (_) async => http.Response(jsonEncode(pageJson()), 200);
     await open(tester);
     expect(find.text('Pollution'), findsOneWidget);
-    expect(find.textContaining('1,8 NM lors de l’alerte'), findsOneWidget);
+    expect(find.textContaining('1,8 NM'), findsOneWidget);
+    expect(find.textContaining('lors de l’alerte'), findsNothing);
     await tester.tap(find.byKey(const ValueKey('alert-a')));
     await tester.pumpAndSettle();
     expect(opened, ['report-a']);

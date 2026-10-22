@@ -1,19 +1,21 @@
 import 'dart:math' as math;
 
 import 'package:flutter/cupertino.dart';
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 
 /// Bord de l'écran où le panneau est posé.
 enum MapPanelSide { top, bottom }
 
-/// Consultation au-dessus de la carte, limitée à la moitié de l'écran.
-/// La poignée déplace le panneau ; le contenu conserve son défilement.
+/// Consultation au-dessus de la carte. Un contenu défilant peut agrandir
+/// le panneau avant de défiler, puis le réduire jusqu'à sa fermeture.
 class MapPanel extends StatefulWidget {
   const MapPanel({
     super.key,
     required this.side,
     required this.onClose,
-    required this.child,
+    this.child,
+    this.scrollableBuilder,
     this.onBack,
     this.title,
     this.actions = const [],
@@ -21,14 +23,16 @@ class MapPanel extends StatefulWidget {
     this.dismissRequested = false,
     this.backgroundColor,
     this.extendToBottom = false,
-  });
+  }) : assert((child == null) != (scrollableBuilder == null)),
+       assert(scrollableBuilder == null || side == MapPanelSide.bottom);
 
   final MapPanelSide side;
   final VoidCallback onClose;
   final VoidCallback? onBack;
   final String? title;
   final List<Widget> actions;
-  final Widget child;
+  final Widget? child;
+  final ScrollableWidgetBuilder? scrollableBuilder;
   final bool showCloseButton;
 
   /// Conserve le contenu jusqu'à la fin de l'animation de sortie.
@@ -57,6 +61,9 @@ class _MapPanelState extends State<MapPanel>
     with SingleTickerProviderStateMixin {
   final _surfaceKey = GlobalKey();
   late final _offset = AnimationController.unbounded(vsync: this);
+  final _sheet = DraggableScrollableController();
+  ScrollController? _contentScroll;
+  Drag? _headerDrag;
   bool _closing = false;
   double _motionHeight = 160;
 
@@ -90,12 +97,21 @@ class _MapPanelState extends State<MapPanel>
 
   @override
   void dispose() {
+    _headerDrag?.cancel();
+    _sheet.dispose();
     _offset.dispose();
     super.dispose();
   }
 
-  void _dragStart(DragStartDetails _) {
+  void _dragStart(DragStartDetails details) {
     if (!_closing) {
+      if (widget.scrollableBuilder != null && _contentScroll!.hasClients) {
+        _headerDrag = _contentScroll!.position.drag(
+          details,
+          () => _headerDrag = null,
+        );
+        return;
+      }
       _motionHeight = _height;
       _offset.stop();
     }
@@ -103,12 +119,21 @@ class _MapPanelState extends State<MapPanel>
 
   void _dragUpdate(DragUpdateDetails details) {
     if (_closing) return;
+    if (widget.scrollableBuilder != null) {
+      _headerDrag?.update(details);
+      return;
+    }
     final distance = (_offset.value + details.delta.dy) * _direction;
     _offset.value = _direction * distance.clamp(0, _height);
   }
 
   void _dragEnd(DragEndDetails details) {
     if (_closing) return;
+    if (widget.scrollableBuilder != null) {
+      _headerDrag?.end(details);
+      _headerDrag = null;
+      return;
+    }
     final velocity = (details.primaryVelocity ?? 0) * _direction;
     if (_offset.value.abs() >= _height * 0.25 || velocity > 500) {
       _close();
@@ -130,9 +155,16 @@ class _MapPanelState extends State<MapPanel>
     );
   }
 
+  void _dragCancel() {
+    _headerDrag?.cancel();
+    _headerDrag = null;
+    if (widget.scrollableBuilder == null) _settle();
+  }
+
   Future<void> _close() async {
     if (_closing) return;
     _closing = true;
+    if (_sheet.isAttached) _sheet.jumpTo(_sheet.size);
     _motionHeight = _height;
     if (!_reduceMotion) {
       await _offset.animateTo(
@@ -151,7 +183,7 @@ class _MapPanelState extends State<MapPanel>
         onVerticalDragStart: _dragStart,
         onVerticalDragUpdate: _dragUpdate,
         onVerticalDragEnd: _dragEnd,
-        onVerticalDragCancel: _settle,
+        onVerticalDragCancel: _dragCancel,
         child: child,
       );
 
@@ -226,6 +258,124 @@ class _MapPanelState extends State<MapPanel>
       ),
     );
 
+    Widget surface(Widget content, {bool fill = false}) => DecoratedBox(
+      key: _surfaceKey,
+      decoration: BoxDecoration(
+        borderRadius: radius,
+        border: Border.all(color: const Color(0x60FFFFFF)),
+        boxShadow: const [
+          BoxShadow(
+            color: Color(0x180D2238),
+            blurRadius: 20,
+            offset: Offset(0, 6),
+          ),
+        ],
+      ),
+      child: Material(
+        key: const ValueKey('map-panel-surface'),
+        color:
+            widget.backgroundColor ??
+            Colors.white.withValues(alpha: _ios ? 0.86 : 0.90),
+        borderRadius: radius,
+        clipBehavior: Clip.antiAlias,
+        child: ScrollConfiguration(
+          behavior: _ios
+              ? const CupertinoScrollBehavior()
+              : const MaterialScrollBehavior(),
+          child: Column(
+            mainAxisSize: fill ? MainAxisSize.max : MainAxisSize.min,
+            children: [
+              if (_top)
+                header
+              else
+                _dragHandle(
+                  key: const ValueKey('map-panel-drag-handle'),
+                  child: header,
+                ),
+              Flexible(
+                fit: fill ? FlexFit.tight : FlexFit.loose,
+                child: MediaQuery.removePadding(
+                  context: context,
+                  removeTop: true,
+                  removeBottom: !extendToBottom,
+                  child: content,
+                ),
+              ),
+              if (_top)
+                _dragHandle(
+                  key: const ValueKey('map-panel-drag-handle'),
+                  child: const SizedBox(
+                    height: 32,
+                    width: double.infinity,
+                    child: Center(child: _Grip()),
+                  ),
+                ),
+            ],
+          ),
+        ),
+      ),
+    );
+
+    final Widget panel;
+    final scrollableBuilder = widget.scrollableBuilder;
+    if (scrollableBuilder == null) {
+      panel = ConstrainedBox(
+        constraints: BoxConstraints(
+          maxHeight: MapPanel.maxHeightFor(mediaQuery, side: widget.side),
+        ),
+        child: surface(widget.child!),
+      );
+    } else {
+      final available = math.max(
+        1.0,
+        mediaQuery.size.height - mediaQuery.padding.top - margin - 8,
+      );
+      final initial = (MapPanel.maxHeightFor(mediaQuery) / available).clamp(
+        0.25,
+        0.65,
+      );
+      panel = AnimatedBuilder(
+        animation: _sheet,
+        builder: (context, child) => Align(
+          alignment: Alignment.bottomCenter,
+          // La boîte mesurée par la carte suit la hauteur visible du panneau.
+          // La zone au-dessus reste disponible pour toucher les signalements.
+          heightFactor: _sheet.isAttached ? _sheet.size : initial,
+          child: child,
+        ),
+        child: SizedBox(
+          height: available,
+          child: NotificationListener<DraggableScrollableNotification>(
+            onNotification: (notification) {
+              if (notification.extent <= notification.minExtent + 0.001) {
+                WidgetsBinding.instance.addPostFrameCallback((_) {
+                  if (mounted) _close();
+                });
+              }
+              return true;
+            },
+            child: DraggableScrollableSheet(
+              controller: _sheet,
+              initialChildSize: initial,
+              minChildSize: 0.18,
+              maxChildSize: 0.92,
+              snap: !_reduceMotion,
+              snapSizes: [initial],
+              snapAnimationDuration: const Duration(milliseconds: 200),
+              shouldCloseOnMinExtent: false,
+              builder: (context, scrollController) {
+                _contentScroll = scrollController;
+                return surface(
+                  scrollableBuilder(context, scrollController),
+                  fill: true,
+                );
+              },
+            ),
+          ),
+        ),
+      );
+    }
+
     return PopScope(
       canPop: false,
       onPopInvokedWithResult: (didPop, _) {
@@ -253,67 +403,7 @@ class _MapPanelState extends State<MapPanel>
                 ),
               );
             },
-            child: ConstrainedBox(
-              constraints: BoxConstraints(
-                maxHeight: MapPanel.maxHeightFor(mediaQuery, side: widget.side),
-              ),
-              child: DecoratedBox(
-                key: _surfaceKey,
-                decoration: BoxDecoration(
-                  borderRadius: radius,
-                  border: Border.all(color: const Color(0x60FFFFFF)),
-                  boxShadow: const [
-                    BoxShadow(
-                      color: Color(0x180D2238),
-                      blurRadius: 20,
-                      offset: Offset(0, 6),
-                    ),
-                  ],
-                ),
-                child: Material(
-                  key: const ValueKey('map-panel-surface'),
-                  color:
-                      widget.backgroundColor ??
-                      Colors.white.withValues(alpha: _ios ? 0.86 : 0.90),
-                  borderRadius: radius,
-                  clipBehavior: Clip.antiAlias,
-                  child: ScrollConfiguration(
-                    behavior: _ios
-                        ? const CupertinoScrollBehavior()
-                        : const MaterialScrollBehavior(),
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        if (_top)
-                          header
-                        else
-                          _dragHandle(
-                            key: const ValueKey('map-panel-drag-handle'),
-                            child: header,
-                          ),
-                        Flexible(
-                          child: MediaQuery.removePadding(
-                            context: context,
-                            removeTop: true,
-                            removeBottom: !extendToBottom,
-                            child: widget.child,
-                          ),
-                        ),
-                        if (_top)
-                          _dragHandle(
-                            key: const ValueKey('map-panel-drag-handle'),
-                            child: const SizedBox(
-                              height: 32,
-                              width: double.infinity,
-                              child: Center(child: _Grip()),
-                            ),
-                          ),
-                      ],
-                    ),
-                  ),
-                ),
-              ),
-            ),
+            child: panel,
           ),
         ),
       ),

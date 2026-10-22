@@ -23,9 +23,11 @@ class ReportDetailSheet extends StatefulWidget {
     this.userPosition,
     this.now = DateTime.now,
     this.onShowOnMap,
+    this.scrollController,
   });
 
   final String reportId;
+  final ScrollController? scrollController;
   final Future<void> Function(ReportDetail)? onShowOnMap;
 
   /// Charge la fiche, en général `ReportDetailService.fetchReport`.
@@ -74,11 +76,12 @@ class ReportDetailPanel extends StatelessWidget {
     onClose: onClose,
     onBack: onBack,
     showCloseButton: false,
-    backgroundColor: Colors.white,
+    backgroundColor: Colors.white.withValues(alpha: 0.96),
     extendToBottom: Theme.of(context).platform == TargetPlatform.android,
     dismissRequested: dismissRequested,
-    child: ReportDetailSheet(
+    scrollableBuilder: (context, scrollController) => ReportDetailSheet(
       reportId: reportId,
+      scrollController: scrollController,
       loadReport: loadReport,
       loadPhoto: loadPhoto,
       userPosition: userPosition,
@@ -106,32 +109,40 @@ class _ReportDetailSheetState extends State<ReportDetailSheet> {
   Widget build(BuildContext context) {
     return SafeArea(
       top: false,
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(24, 0, 24, 24),
-        child: FutureBuilder<ReportDetail>(
-          future: _report,
-          builder: (context, snapshot) {
-            if (snapshot.hasData) {
-              return _ReportDetailContent(
-                report: snapshot.requireData,
-                onShowOnMap: widget.onShowOnMap,
-                userPosition: widget.userPosition,
-                now: widget.now(),
-                loadPhoto: widget.loadPhoto,
-                refreshPhotoUrl: _refreshPhotoUrl,
+      child: SingleChildScrollView(
+        controller: widget.scrollController,
+        physics: widget.scrollController == null
+            ? null
+            : const ClampingScrollPhysics(
+                parent: AlwaysScrollableScrollPhysics(),
+              ),
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(24, 0, 24, 24),
+          child: FutureBuilder<ReportDetail>(
+            future: _report,
+            builder: (context, snapshot) {
+              if (snapshot.hasData) {
+                return _ReportDetailContent(
+                  report: snapshot.requireData,
+                  onShowOnMap: widget.onShowOnMap,
+                  userPosition: widget.userPosition,
+                  now: widget.now(),
+                  loadPhoto: widget.loadPhoto,
+                  refreshPhotoUrl: _refreshPhotoUrl,
+                );
+              }
+              if (snapshot.hasError) {
+                return _ReportDetailError(
+                  error: snapshot.error!,
+                  onRetry: _retry,
+                );
+              }
+              return const SizedBox(
+                height: 160,
+                child: Center(child: CircularProgressIndicator()),
               );
-            }
-            if (snapshot.hasError) {
-              return _ReportDetailError(
-                error: snapshot.error!,
-                onRetry: _retry,
-              );
-            }
-            return const SizedBox(
-              height: 160,
-              child: Center(child: CircularProgressIndicator()),
-            );
-          },
+            },
+          ),
         ),
       ),
     );
@@ -185,72 +196,70 @@ class _ReportDetailContent extends StatelessWidget {
     final photoUrl = photo?.url;
     final onShowOnMap = this.onShowOnMap;
 
-    return SingleChildScrollView(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Row(
-            children: [
-              ReportCategoryBadge(category: category),
-              const SizedBox(width: 14),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      category.label,
-                      style: theme.textTheme.titleLarge?.copyWith(
-                        color: AppColors.text,
-                        fontWeight: FontWeight.w700,
-                      ),
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Row(
+          children: [
+            ReportCategoryBadge(category: category),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    category.label,
+                    style: theme.textTheme.titleLarge?.copyWith(
+                      color: AppColors.text,
+                      fontWeight: FontWeight.w700,
                     ),
-                    Text(
-                      'Observé ${formatDayTime(report.observedAt, now: now)}',
-                      style: theme.textTheme.bodyMedium?.copyWith(
-                        color: const Color(0xFF475569),
-                      ),
+                  ),
+                  Text(
+                    'Observé ${formatDayTime(report.observedAt, now: now)}',
+                    style: theme.textTheme.bodyMedium?.copyWith(
+                      color: const Color(0xFF475569),
                     ),
-                  ],
-                ),
+                  ),
+                ],
               ),
-            ],
-          ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 16),
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: [
+            _InfoChip(icon: Icons.near_me_outlined, label: _distance),
+            _InfoChip(
+              icon: Icons.schedule,
+              label: 'Expire ${formatDayTime(report.expiresAt, now: now)}',
+            ),
+          ],
+        ),
+        if (photo != null) ...[
           const SizedBox(height: 16),
-          Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            children: [
-              _InfoChip(icon: Icons.near_me_outlined, label: _distance),
-              _InfoChip(
-                icon: Icons.schedule,
-                label: 'Expire ${formatDayTime(report.expiresAt, now: now)}',
-              ),
-            ],
-          ),
-          if (photo != null) ...[
-            const SizedBox(height: 16),
-            if (photoUrl != null)
-              _ReportPhoto(
-                url: photoUrl,
-                loadPhoto: loadPhoto,
-                refreshUrl: refreshPhotoUrl,
-              )
-            else
-              _PhotoStatus(photo.status),
-          ],
-          if (description != null && description.isNotEmpty) ...[
-            const SizedBox(height: 16),
-            Text(description, style: theme.textTheme.bodyLarge),
-          ],
-          const SizedBox(height: 16),
-          _AuthorRow(author: report.author, boat: report.boat),
-          if (onShowOnMap != null) ...[
-            const SizedBox(height: 20),
-            _ShowOnMapButton(onPressed: () => onShowOnMap(report)),
-          ],
+          if (photoUrl != null)
+            _ReportPhoto(
+              url: photoUrl,
+              loadPhoto: loadPhoto,
+              refreshUrl: refreshPhotoUrl,
+            )
+          else
+            _PhotoStatus(photo.status),
         ],
-      ),
+        if (description != null && description.isNotEmpty) ...[
+          const SizedBox(height: 16),
+          Text(description, style: theme.textTheme.bodyLarge),
+        ],
+        const SizedBox(height: 16),
+        _AuthorRow(author: report.author, boat: report.boat),
+        if (onShowOnMap != null) ...[
+          const SizedBox(height: 20),
+          _ShowOnMapButton(onPressed: () => onShowOnMap(report)),
+        ],
+      ],
     );
   }
 }
