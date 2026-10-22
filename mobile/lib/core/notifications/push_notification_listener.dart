@@ -15,11 +15,13 @@ class PushNotificationListener extends StatefulWidget {
     required this.onOpen,
     required this.child,
     this.onOpenHistory,
+    this.onReceived,
   });
   final AlertPushController controller;
   final Future<void> Function(AlertPush) onOpen;
   final Widget child;
   final VoidCallback? onOpenHistory;
+  final ValueChanged<AlertPush>? onReceived;
   @override
   State<PushNotificationListener> createState() =>
       _PushNotificationListenerState();
@@ -70,6 +72,9 @@ class _PushNotificationListenerState extends State<PushNotificationListener> {
     controller.foreground = null;
     controller.notice = null;
     if (push == null && notice == null) return;
+    if (push != null && notice == null && controller.ready) {
+      widget.onReceived?.call(push);
+    }
     VoidCallback? action;
     String? label;
     if (notice == null && push != null) {

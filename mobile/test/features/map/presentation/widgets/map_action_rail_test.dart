@@ -3,6 +3,73 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  for (final reduceMotion in [false, true]) {
+    testWidgets(
+      'sortie sans clic parasite et retour fluide (réduit : $reduceMotion)',
+      (tester) async {
+        final visible = ValueNotifier(true);
+        addTearDown(visible.dispose);
+        var tapped = 0;
+        await tester.pumpWidget(
+          MaterialApp(
+            home: MediaQuery(
+              data: MediaQueryData(disableAnimations: reduceMotion),
+              child: Scaffold(
+                floatingActionButtonAnimator:
+                    FloatingActionButtonAnimator.noAnimation,
+                floatingActionButton: ValueListenableBuilder<bool>(
+                  valueListenable: visible,
+                  builder: (context, shown, _) => MapActionRailTransition(
+                    visible: shown,
+                    child: MapActionRail(
+                      actions: [
+                        MapRailAction(
+                          id: 'test',
+                          label: 'Action',
+                          icon: const Icon(Icons.add),
+                          onPressed: () => tapped++,
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        );
+        await tester.pumpAndSettle();
+        final rest = tester.getCenter(find.byTooltip('Action'));
+        visible.value = false;
+        await tester.pump();
+        expect(find.byTooltip('Action').hitTestable(), findsNothing);
+        if (!reduceMotion) {
+          await tester.pump(const Duration(milliseconds: 100));
+          expect(find.byTooltip('Action'), findsOneWidget);
+          expect(
+            tester.getCenter(find.byTooltip('Action')).dy,
+            greaterThan(rest.dy),
+          );
+        }
+        await tester.pumpAndSettle();
+        expect(find.byType(MapActionRail), findsNothing);
+        visible.value = true;
+        await tester.pump();
+        if (!reduceMotion) {
+          await tester.pump(const Duration(milliseconds: 100));
+          expect(
+            tester.getCenter(find.byTooltip('Action')).dy,
+            greaterThan(rest.dy),
+          );
+        }
+        await tester.pumpAndSettle();
+        expect(tester.getCenter(find.byTooltip('Action')), rest);
+        await tester.tap(find.byTooltip('Action'));
+        expect(tapped, 1);
+        expect(tester.takeException(), isNull);
+      },
+    );
+  }
+
   testWidgets('barre fine en bas : manuel, position et photo seulement', (
     tester,
   ) async {

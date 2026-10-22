@@ -607,10 +607,12 @@ void main() {
     styleReady(tester);
     await pumpFrames(tester);
     expect(map.style.layers.keys.where((id) => id.startsWith('alert-')), [
+      'alert-notification-sonar',
       'alert-selected-halo',
       'alert-selected-point',
     ]);
     expect(map.style.sources.keys.where((id) => id.startsWith('alert-')), [
+      'alert-notification-sonar',
       'alert-selected',
     ]);
     expect(
@@ -648,6 +650,7 @@ void main() {
       expect(data['properties'], {'report_id': 'b', 'category': 'obstruction'});
       expect(data['geometry']['coordinates'], [7, 43.29]);
       expect(map.style.layers.keys.where((id) => id.startsWith('alert-')), [
+        'alert-notification-sonar',
         'alert-selected-halo',
         'alert-selected-point',
       ]);
@@ -941,71 +944,146 @@ void main() {
       .singleWhere((interaction) => interaction.featuresetDescriptor == null)
       .action(null, touch());
 
+  List<dynamic> sonarFeatures() =>
+      (jsonDecode(
+            map.style.sources['alert-notification-sonar']!['data'] as String,
+          ) as Map<String, dynamic>)['features']
+          as List;
+
+  double sonarRange() {
+    final feature = sonarFeatures().first;
+    final point = feature['geometry']['coordinates'][0] as List;
+    final progress = 1 - (feature['properties']['opacity'] as num).toDouble();
+    return ReportReach.distance(
+          43.29,
+          5.373,
+          point[1] as double,
+          point[0] as double,
+        ) /
+        progress;
+  }
+
   focusTestWidgets(
-    'notification : halo rouge discret sans mouvement ni reconstruction de la carte',
+    'sonar : cercles vers le bateau sans mouvement ni reconstruction',
     (tester) async {
+      gps.initial.complete(focusPosition());
       await mount(tester);
       focus.focus(focusReport(), origin: MapFocusOrigin.notification);
       await pumpFrames(tester);
       final halo = map.style.layers['alert-selected-halo']!;
-      expect(halo['circle-color'], '#FF2028');
-      expect(halo['circle-stroke-color'], '#FF2028');
+      expect(halo['circle-color'], '#FFFFFF');
+      expect(halo['circle-radius'], 30);
+      final expectedDistance = ReportReach.distance(43.29, 5.373, 43.29, 5.37);
+      expect(sonarRange(), closeTo(expectedDistance, .01));
+      final previousOpacity =
+          sonarFeatures().first['properties']['opacity'] as double;
       final mapWidget = tester.widget<mb.MapWidget>(find.byType(mb.MapWidget));
       final cameraCount = map.cameras.length;
-      await tester.pump(const Duration(milliseconds: 1100));
-      expect(halo['circle-radius'], inInclusiveRange(30, 31.5));
-      expect(halo['circle-radius'], greaterThan(30));
-      expect(halo['circle-opacity'], inInclusiveRange(.34, .40));
+      await tester.pump(const Duration(milliseconds: 100));
+      expect(
+        sonarFeatures().first['properties']['opacity'],
+        lessThan(previousOpacity),
+      );
       expect(map.cameras, hasLength(cameraCount));
       expect(
         tester.widget<mb.MapWidget>(find.byType(mb.MapWidget)),
         same(mapWidget),
       );
-      // Le rouge reste cohérent quand on ouvre ensuite le détail de cette alerte.
-      tapBadge('report-a');
+      gps.positions.add(focusPosition(longitude: 5.36));
       await pumpFrames(tester);
       expect(
-        map.style.layers['alert-selected-halo']!['circle-color'],
-        '#FF2028',
+        sonarRange(),
+        closeTo(ReportReach.distance(43.29, 5.373, 43.29, 5.36), .01),
       );
-      focus.focus(focusReport(id: 'another'));
+      tapBadge('report-a');
       await pumpFrames(tester);
+      expect(sonarFeatures(), isEmpty);
       expect(
         map.style.layers['alert-selected-halo']!['circle-color'],
         '#FFFFFF',
       );
-      await tester.pump(const Duration(seconds: 1));
       expect(map.style.layers['alert-selected-halo']!['circle-radius'], 30);
+      await tester.pump(const Duration(seconds: 5));
+      expect(sonarFeatures(), isEmpty);
     },
   );
 
-  focusTestWidgets('animations réduites : halo rouge fixe', (tester) async {
+  focusTestWidgets(
+    'sonar non consulté : reste actif après un toucher ailleurs',
+    (tester) async {
+      await mount(tester);
+      focus.focus(focusReport(), origin: MapFocusOrigin.notification);
+      await pumpFrames(tester);
+      expect(sonarRange(), closeTo(350, .01));
+      tapMap();
+      await pumpFrames(tester);
+      expect(sonarFeatures(), isNotEmpty);
+      focus.focus(focusReport(id: 'another', longitude: 6));
+      await pumpFrames(tester);
+      expect(sonarRange(), closeTo(350, .01));
+      focus.clear();
+      await pumpFrames(tester);
+      expect(sonarFeatures(), isNotEmpty);
+      tapBadge('report-a');
+      await pumpFrames(tester);
+      expect(sonarFeatures(), isEmpty);
+    },
+  );
+
+  focusTestWidgets('animations réduites : repère fixe sans ondes', (
+    tester,
+  ) async {
     await mount(tester, reduceMotion: true);
     focus.focus(focusReport(), origin: MapFocusOrigin.notification);
     await pumpFrames(tester);
     await tester.pump(const Duration(milliseconds: 1100));
-    final halo = map.style.layers['alert-selected-halo']!;
-    expect(halo['circle-color'], '#FF2028');
-    expect(halo['circle-radius'], 30);
-    expect(halo['circle-opacity'], .34);
+    expect(sonarFeatures(), isEmpty);
+    expect(map.style.layers['alert-selected-halo']!['circle-color'], '#FFFFFF');
+    expect(map.style.layers['alert-selected-halo']!['circle-radius'], 30);
   });
 
-  focusTestWidgets('halo : arrêt en arrière-plan et reprise au retour', (
+  focusTestWidgets('sonar : pause hors écran et reprise au retour', (
     tester,
   ) async {
     await mount(tester);
     focus.focus(focusReport(), origin: MapFocusOrigin.notification);
     await pumpFrames(tester);
     tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.inactive);
-    final radius = map.style.layers['alert-selected-halo']!['circle-radius'];
+    final data = map.style.sources['alert-notification-sonar']!['data'];
     await tester.pump(const Duration(seconds: 1));
-    expect(map.style.layers['alert-selected-halo']!['circle-radius'], radius);
+    expect(map.style.sources['alert-notification-sonar']!['data'], data);
     tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
-    await tester.pump(const Duration(milliseconds: 1100));
-    expect(
-      map.style.layers['alert-selected-halo']!['circle-radius'],
-      greaterThan(31.4),
+    await tester.pump(const Duration(milliseconds: 200));
+    expect(sonarFeatures(), isNotEmpty);
+    expect(map.style.sources['alert-notification-sonar']!['data'], isNot(data));
+  });
+
+  focusTestWidgets('toucher l’alerte retire le sonar avant le détail', (
+    tester,
+  ) async {
+    await mount(tester);
+    focus.focus(focusReport(), origin: MapFocusOrigin.notification);
+    await pumpFrames(tester);
+    final response = reports.response = Completer<ReportDetail>();
+    tapBadge('report-a');
+    await tester.pump();
+    expect(sonarFeatures(), isEmpty);
+    expect(map.style.layers['alert-selected-halo']!['circle-color'], '#FFFFFF');
+    await tester.pump(const Duration(seconds: 5));
+    expect(sonarFeatures(), isEmpty);
+    response.complete(focusReport());
+    await pumpFrames(tester);
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.inactive);
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+    await tester.pump(const Duration(seconds: 5));
+    expect(sonarFeatures(), isEmpty);
+    expect(map.style.layers['alert-selected-halo']!['circle-color'], '#FFFFFF');
+    focus.focus(
+      focusReport(id: 'report-b'),
+      origin: MapFocusOrigin.notification,
     );
+    await pumpFrames(tester);
+    expect(sonarFeatures(), isNotEmpty);
   });
 
   focusTestWidgets('toucher la carte ferme la fiche sans restaurer la caméra', (
@@ -1206,7 +1284,7 @@ void main() {
       await mount(tester);
       tapBadge('report-a');
       await pumpFrames(tester);
-      expect(map.easedCameras.single.zoom, 13);
+      expect(map.easedCameras.single.zoom, 14);
       map.cameras.clear();
       map.easedCameras.clear();
 
@@ -1361,7 +1439,7 @@ void main() {
       final detail = map.easedCameras.single;
       expect(detail.padding!.top, 0);
       expect(detail.padding!.bottom, panelHeight(tester));
-      expect(detail.zoom, 13);
+      expect(detail.zoom, 14);
       expect(detail.center!.coordinates.lng, 5.373);
 
       // Flèche de retour : la liste revient, la carte reste où elle est.

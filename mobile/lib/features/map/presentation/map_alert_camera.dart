@@ -104,6 +104,7 @@ class MapAlertCamera {
     MapboxMap map,
     ReportDetail report, {
     required CameraState from,
+    double? currentZoom,
     required double bearing,
     required widgets.Size viewport,
     required double panelHeight,
@@ -114,7 +115,7 @@ class MapAlertCamera {
     if (viewport.width <= 0 || viewport.height <= 0) {
       throw StateError('Map viewport is not ready');
     }
-    final zoom = math.max(detailZoom, from.zoom);
+    final zoom = math.max(detailZoom, currentZoom ?? from.zoom);
     return CameraOptions(
       center: Point(coordinates: Position(report.longitude, report.latitude)),
       zoom: math.max(zoom, minZoom),

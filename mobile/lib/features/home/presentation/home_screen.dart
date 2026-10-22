@@ -293,6 +293,12 @@ class _HomeScreenState extends State<HomeScreen> {
         ? map
         : PushNotificationListener(
             controller: controller,
+            onReceived: (push) => _mapFocusController.showNotification((
+              id: push.alert.reportId,
+              latitude: push.alert.latitude,
+              longitude: push.alert.longitude,
+              expiresAt: push.expiresAt,
+            )),
             onOpen: (push) => _openReportFromPush(push.alert.reportId),
             onOpenHistory: _openAlerts,
             child: map,

@@ -103,6 +103,97 @@ void main() {
     addTearDown(() async => tester.pumpWidget(const SizedBox.shrink()));
   }
 
+  List<dynamic> sonarFeatures() =>
+      (jsonDecode(
+            map.style.sources['alert-notification-sonar']!['data'] as String,
+          ) as Map<String, dynamic>)['features']
+          as List;
+
+  void tapReport(String reportId) {
+    map.interactions
+        .singleWhere(
+          (interaction) =>
+              interaction.featuresetDescriptor?.layerId ==
+              'alert-selected-point',
+        )
+        .action(
+          mb.TypedFeaturesetFeature(
+            mb.FeaturesetDescriptor(layerId: 'alert-selected-point'),
+            {
+              'type': 'Point',
+              'coordinates': [5.37, 43.29],
+            },
+            {'report_id': reportId},
+            {},
+          ),
+          mb.MapContentGestureContext(
+            point: mb.Point(coordinates: mb.Position(5.37, 43.29)),
+            touchPosition: mb.ScreenCoordinate(x: 100, y: 100),
+            gestureState: mb.GestureState.ended,
+          ),
+        );
+  }
+
+  focusTestWidgets(
+    'réception sans clic : sonar immédiat, persistant et sans cadrage',
+    (tester) async {
+      await mount(tester);
+      final message = pushMessage(
+        expiry: DateTime.now().add(const Duration(hours: 1)),
+      );
+      source.messages.add(message);
+      await tester.pumpAndSettle();
+      expect(sonarFeatures(), isNotEmpty);
+      expect(reports.calls, isEmpty);
+      expect(selection(tester).report, isNull);
+      expect(map.cameras, isEmpty);
+      // La disparition de la bannière ne vaut pas consultation de l'alerte.
+      await tester.pump(const Duration(seconds: 9));
+      await tester.pumpAndSettle();
+      expect(find.text('Ouvrir'), findsNothing);
+      expect(sonarFeatures(), isNotEmpty);
+      expect(map.cameras, isEmpty);
+      source.taps.add(message);
+      await tester.pumpAndSettle();
+      expect(sonarFeatures(), isNotEmpty);
+      expect(reports.calls, ['report-a']);
+      expect(selection(tester).report!.id, 'report-a');
+      expect(map.cameras, hasLength(1));
+      expect(find.byType(ReportDetailSheet), findsNothing);
+      // Ouvrir la notification ne remplace pas la consultation du détail.
+      tapReport('report-a');
+      await tester.pumpAndSettle();
+      expect(find.byType(ReportDetailSheet), findsOneWidget);
+      expect(sonarFeatures(), isEmpty);
+      // Une redélivrance SDK ne doit pas relancer le sonar déjà consulté.
+      source.messages.add(message);
+      await tester.pumpAndSettle();
+      expect(sonarFeatures(), isEmpty);
+    },
+  );
+
+  focusTestWidgets(
+    'bannière masquée : le sonar reste jusqu’au toucher du report',
+    (tester) async {
+      await mount(tester);
+      source.messages.add(
+        pushMessage(expiry: DateTime.now().add(const Duration(hours: 1))),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.byTooltip('Masquer la notification'));
+      await tester.pumpAndSettle();
+      expect(sonarFeatures(), isNotEmpty);
+      expect(map.cameras, isEmpty);
+      tapReport('report-a');
+      await tester.pumpAndSettle();
+      expect(sonarFeatures(), isEmpty);
+      expect(reports.calls, ['report-a']);
+      expect(selection(tester).report!.id, 'report-a');
+      await tester.pump(const Duration(seconds: 7));
+      expect(sonarFeatures(), isEmpty);
+    },
+  );
+
   for (final photo in [false, true]) {
     for (final category in ReportCategory.values) {
       for (final delivery in ['foreground', 'background', 'terminated']) {

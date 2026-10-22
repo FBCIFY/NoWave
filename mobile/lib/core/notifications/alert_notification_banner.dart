@@ -41,74 +41,39 @@ class AlertNotificationBanner extends StatelessWidget {
         child: InkWell(
           onTap: onAction,
           child: Padding(
-            padding: const EdgeInsets.fromLTRB(12, 6, 4, 6),
+            padding: const EdgeInsets.fromLTRB(12, 8, 4, 8),
             child: Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
+              crossAxisAlignment: CrossAxisAlignment.center,
               children: [
-                Padding(
-                  padding: const EdgeInsets.only(top: 8),
-                  child: alert == null
-                      ? const Icon(
-                          Icons.notifications_outlined,
-                          color: AppColors.blue600,
-                          size: 32,
-                        )
-                      : ReportCategoryBadge(category: alert.category, size: 32),
-                ),
+                alert == null
+                    ? const Icon(
+                        Icons.notifications_outlined,
+                        color: AppColors.blue600,
+                        size: 32,
+                      )
+                    : ReportCategoryBadge(category: alert.category, size: 32),
                 const SizedBox(width: 10),
                 Expanded(
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        children: [
-                          Expanded(
-                            child: Text(
-                              notice == null
-                                  ? 'Nouvelle alerte'
-                                  : 'Alertes NoWave',
-                              style: text.labelMedium?.copyWith(
-                                color: AppColors.blue950,
-                                fontWeight: FontWeight.w700,
-                              ),
-                            ),
-                          ),
-                          if (onAction != null)
-                            TextButton(
-                              onPressed: onAction,
-                              style: TextButton.styleFrom(
-                                foregroundColor: AppColors.blue600,
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 8,
-                                ),
-                                minimumSize: const Size(48, 40),
-                                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                              ),
-                              child: Text(actionLabel!),
-                            ),
-                        ],
-                      ),
-                      Text(
-                        notice ??
-                            '${alert!.category.label} · ${formatNauticalMiles(alert.distanceM)}',
-                        style: text.bodyMedium?.copyWith(
-                          color: AppColors.text,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                      if (alert != null) ...[
-                        const SizedBox(height: 2),
-                        Text(
-                          alert.positionDms,
-                          style: text.bodySmall?.copyWith(
-                            color: const Color(0xFF475569),
-                          ),
-                        ),
-                      ],
-                    ],
+                  child: Text(
+                    notice ??
+                        '${alert!.category.label} · ${formatNauticalMiles(alert.distanceM)}',
+                    style: text.bodyMedium?.copyWith(
+                      color: AppColors.text,
+                      fontWeight: FontWeight.w600,
+                    ),
                   ),
                 ),
+                if (onAction != null && actionLabel != null)
+                  TextButton(
+                    onPressed: onAction,
+                    style: TextButton.styleFrom(
+                      foregroundColor: AppColors.blue600,
+                      padding: const EdgeInsets.symmetric(horizontal: 8),
+                      minimumSize: const Size(48, 48),
+                      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                    ),
+                    child: Text(actionLabel!),
+                  ),
                 IconButton(
                   tooltip: 'Masquer la notification',
                   onPressed: onDismiss,

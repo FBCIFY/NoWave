@@ -2,6 +2,60 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 
+/// Garde la barre en place pendant sa sortie, puis retire ses commandes.
+class MapActionRailTransition extends StatelessWidget {
+  const MapActionRailTransition({
+    super.key,
+    required this.visible,
+    required this.child,
+  });
+
+  final bool visible;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    final reduceMotion =
+        MediaQuery.disableAnimationsOf(context) ||
+        View.of(context).platformDispatcher.accessibilityFeatures.reduceMotion;
+    return IgnorePointer(
+      ignoring: !visible,
+      child: ExcludeSemantics(
+        excluding: !visible,
+        child: AnimatedSwitcher(
+          duration: reduceMotion
+              ? Duration.zero
+              : const Duration(milliseconds: 360),
+          reverseDuration: reduceMotion
+              ? Duration.zero
+              : const Duration(milliseconds: 240),
+          switchInCurve: Curves.easeOutCubic,
+          switchOutCurve: Curves.easeInCubic,
+          layoutBuilder: (current, previous) => Stack(
+            alignment: Alignment.bottomCenter,
+            children: [
+              for (final outgoing in previous)
+                ExcludeSemantics(child: IgnorePointer(child: outgoing)),
+              ?current,
+            ],
+          ),
+          transitionBuilder: (child, animation) => FadeTransition(
+            opacity: animation,
+            child: SlideTransition(
+              position: Tween<Offset>(
+                begin: const Offset(0, .65),
+                end: Offset.zero,
+              ).animate(animation),
+              child: child,
+            ),
+          ),
+          child: visible ? child : const SizedBox.shrink(),
+        ),
+      ),
+    );
+  }
+}
+
 /// Une action de la carte ; son identité reste stable quand son libellé change.
 class MapRailAction {
   const MapRailAction({

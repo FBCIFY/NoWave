@@ -381,38 +381,133 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
   Timer? _selectedExpiryTimer;
   bool _selectedExpired = false;
   ReportDetail? _selectedReport;
-  String? _notificationHighlightId;
-  bool _haloReady = false;
+  bool _notificationPulseAcknowledged = false;
+  MapSonarTarget? _notificationSonarReport;
+  int _sonarNotificationRevision = -1;
+  bool _sonarReady = false;
   late final _alertHaloPulse = AlertHaloPulse(
-    paint: (radius, opacity) async {
+    paint: (waves) async {
       final map = _mapboxMap;
-      if (map == null || !mounted || _hidden || !_haloReady) return;
-      await map.style.setStyleLayerProperty(
-        'alert-selected-halo',
-        'circle-radius',
-        radius,
-      );
-      if (mounted && !_hidden && _haloReady) {
-        await map.style.setStyleLayerProperty(
-          'alert-selected-halo',
-          'circle-opacity',
-          opacity,
-        );
+      final report = _notificationSonarReport;
+      if (map == null ||
+          !mounted ||
+          _hidden ||
+          !_sonarReady ||
+          report == null) {
+        return;
       }
+      if (!_canAnimateNotificationSonar) {
+        _syncNotificationHalo();
+        return;
+      }
+      final position = _position;
+      final distance = MapAlertCamera.usable(position)
+          ? ReportReach.distance(
+              report.latitude,
+              report.longitude,
+              position!.latitude,
+              position.longitude,
+            )
+          : 350.0;
+      await map.style.setStyleSourceProperty(
+        'alert-notification-sonar',
+        'data',
+        jsonEncode(
+          AlertHaloPulse.data(
+            latitude: report.latitude,
+            longitude: report.longitude,
+            distanceMeters: distance,
+            waves: waves,
+          ),
+        ),
+      );
     },
   );
 
+  bool get _canAnimateNotificationSonar =>
+      _sonarReady &&
+      !_hidden &&
+      !_reduceMotion &&
+      !_notificationPulseAcknowledged &&
+      !(_selectedExpired &&
+          _selectedReport?.id == _notificationSonarReport?.id) &&
+      (_notificationSonarReport?.expiresAt.isAfter(DateTime.now()) ?? false);
+
   void _syncNotificationHalo() {
-    if (_haloReady &&
-        !_hidden &&
-        !_reduceMotion &&
-        !_selectedExpired &&
-        _selectedReport != null &&
-        _selectedReport!.id == _notificationHighlightId) {
+    if (_canAnimateNotificationSonar) {
       _alertHaloPulse.start();
     } else {
-      unawaited(_alertHaloPulse.stop());
+      unawaited(_silenceNotificationSonar());
     }
+  }
+
+  void _acknowledgeNotification(String reportId) {
+    if (_notificationSonarReport?.id != reportId ||
+        _notificationPulseAcknowledged) {
+      return;
+    }
+    _notificationPulseAcknowledged = true;
+    widget.focusController?.acknowledgeNotification(reportId);
+    _syncNotificationHalo();
+  }
+
+  Future<void> _silenceNotificationSonar() async {
+    await _alertHaloPulse.stop();
+    final map = _mapboxMap;
+    if (!mounted ||
+        map == null ||
+        !_sonarReady ||
+        _canAnimateNotificationSonar) {
+      return;
+    }
+    try {
+      await map.style.setStyleSourceProperty(
+        'alert-notification-sonar',
+        'data',
+        jsonEncode(AlertHaloPulse.empty),
+      );
+    } catch (_) {
+      // Un changement de style peut déjà avoir retiré la source.
+    }
+  }
+
+  Future<void> _prepareNotificationSonar(MapboxMap map) async {
+    if (_sonarReady) {
+      _syncNotificationHalo();
+      return;
+    }
+    await _alertHaloPulse.stop();
+    if (_notificationSonarReport == null) return;
+    if (!await map.style.styleSourceExists('alert-notification-sonar')) {
+      await map.style.addSource(
+        GeoJsonSource(
+          id: 'alert-notification-sonar',
+          data: jsonEncode(AlertHaloPulse.empty),
+        ),
+      );
+    } else {
+      await map.style.setStyleSourceProperty(
+        'alert-notification-sonar',
+        'data',
+        jsonEncode(AlertHaloPulse.empty),
+      );
+    }
+    if (!await map.style.styleLayerExists('alert-notification-sonar')) {
+      await map.style.addLayer(
+        LineLayer(
+          id: 'alert-notification-sonar',
+          sourceId: 'alert-notification-sonar',
+          lineColor: const Color(0xFFFF2028).toARGB32(),
+          lineWidth: 2,
+          lineBlur: .4,
+          lineOpacityExpression: ['get', 'opacity'],
+          lineEmissiveStrength: 1,
+        ),
+      );
+    }
+    await map.style.moveStyleLayer('alert-notification-sonar', LayerPosition());
+    _sonarReady = true;
+    _syncNotificationHalo();
   }
 
   /// Fiche ouverte en bas de la carte, et la vue à retrouver en la fermant.
@@ -1141,7 +1236,7 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
 
   /// Mise en valeur du signalement sélectionné.
   static const _selectedMarkerScale = 1.35;
-  static const _selectedHaloRadius = AlertHaloPulse.radius;
+  static const _selectedHaloRadius = 30.0;
 
   /// Niveaux de zoom gagnés en touchant une zone.
   static const _clusterZoomStep = 2.0;
@@ -1287,6 +1382,7 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
       oldWidget.focusController?.removeListener(_handleFocusRequest);
       widget.focusController?.addListener(_handleFocusRequest);
       _focusRevision = -1;
+      _sonarNotificationRevision = -1;
       _handleFocusRequest();
     }
 
@@ -1300,12 +1396,30 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
     final controller = widget.focusController;
     if (controller == null) return;
     if (controller.takeAlerts()) _openAlerts();
-    if (_focusRevision == controller.revision) return;
-    _haloReady = false;
-    unawaited(_alertHaloPulse.stop());
+    var notificationChanged = false;
+    if (_sonarNotificationRevision != controller.notificationRevision) {
+      _sonarNotificationRevision = controller.notificationRevision;
+      final notification = controller.notification;
+      if (notification != null) {
+        _notificationSonarReport = notification;
+        _notificationPulseAcknowledged = false;
+        _sonarReady = false;
+        unawaited(_alertHaloPulse.stop());
+        notificationChanged = true;
+      } else if (_notificationSonarReport case final target?) {
+        if (controller.isNotificationAcknowledged(target.id)) {
+          _acknowledgeNotification(target.id);
+        }
+      }
+    }
+    if (_focusRevision == controller.revision) {
+      if (notificationChanged) unawaited(_applySelection());
+      return;
+    }
     _focusRevision = controller.revision;
     final report = controller.report;
     if (report == null && _selectedReport == null && controller.revision == 0) {
+      if (notificationChanged) unawaited(_applySelection());
       return;
     }
     if ((_detailOpen && report?.id != _detailReportId) ||
@@ -1325,10 +1439,26 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
     _selectedExpiryTimer?.cancel();
     setState(() {
       _selectedReport = report;
-      if (controller.origin == MapFocusOrigin.notification && report != null) {
-        _notificationHighlightId = report.id;
-      } else if (report?.id != _notificationHighlightId) {
-        _notificationHighlightId = null;
+      if (controller.origin == MapFocusOrigin.notification &&
+          report != null &&
+          (controller.notification == null ||
+              controller.notification?.id == report.id)) {
+        _notificationSonarReport = (
+          id: report.id,
+          latitude: report.latitude,
+          longitude: report.longitude,
+          expiresAt: report.expiresAt,
+        );
+        _sonarReady = false;
+        unawaited(_alertHaloPulse.stop());
+        _notificationPulseAcknowledged = controller.isNotificationAcknowledged(
+          report.id,
+        );
+      } else if (report?.id == _notificationSonarReport?.id &&
+          report != null &&
+          _detailReportId == report.id &&
+          controller.origin != MapFocusOrigin.notification) {
+        _acknowledgeNotification(report.id);
       }
       _selectedExpired =
           report != null && !report.expiresAt.isAfter(DateTime.now());
@@ -1434,11 +1564,12 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
                   bearing: currentCamera.bearing,
                   pitch: _globePitch.detailedPitch,
                 )
-              // Toutes les fiches partagent la même échelle de consultation.
+              // Le zoom suit la carte actuelle, l’inclinaison choisie est conservée.
               : await MapAlertCamera.detail(
                   map,
                   report,
                   from: _cameraBeforeDetail ?? currentCamera,
+                  currentZoom: currentCamera.zoom,
                   bearing: currentCamera.bearing,
                   pitch: _globePitch.detailedPitch,
                   viewport: _mapViewport,
@@ -1598,9 +1729,7 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
     final report = _selectedReport;
     final map = _mapboxMap;
     if (report == null || map == null || _selectedExpired) return;
-    _haloReady = false;
-    await _alertHaloPulse.stop();
-    final notification = report.id == _notificationHighlightId;
+    await _prepareNotificationSonar(map);
 
     final data = jsonEncode({
       'type': 'Feature',
@@ -1646,12 +1775,9 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
           sourceId: 'alert-selected',
           minZoom: ReportTiles.badgesMinZoom,
           circleRadius: _selectedHaloRadius,
-          circleColor: (notification ? const Color(0xFFFF2028) : Colors.white)
-              .toARGB32(),
-          circleOpacity: notification ? AlertHaloPulse.opacity : .45,
-          circleStrokeColor:
-              (notification ? const Color(0xFFFF2028) : Colors.white)
-                  .toARGB32(),
+          circleColor: Colors.white.toARGB32(),
+          circleOpacity: .45,
+          circleStrokeColor: Colors.white.toARGB32(),
           circleStrokeWidth: 3,
           circleStrokeOpacity: 1,
           circleEmissiveStrength: 1,
@@ -1660,10 +1786,10 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
     }
     // Une sélection remplace aussi l'apparence d'une couche déjà installée.
     for (final property in {
-      'circle-color': notification ? '#FF2028' : '#FFFFFF',
-      'circle-stroke-color': notification ? '#FF2028' : '#FFFFFF',
+      'circle-color': '#FFFFFF',
+      'circle-stroke-color': '#FFFFFF',
       'circle-radius': _selectedHaloRadius,
-      'circle-opacity': notification ? AlertHaloPulse.opacity : .45,
+      'circle-opacity': .45,
       'circle-stroke-width': 3.0,
       'circle-stroke-opacity': 1.0,
     }.entries) {
@@ -1696,13 +1822,9 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
     // Halo puis badge, au-dessus de tous les autres signalements.
     await map.style.moveStyleLayer('alert-selected-halo', LayerPosition());
     await map.style.moveStyleLayer('alert-selected-point', LayerPosition());
-    _haloReady = true;
-    _syncNotificationHalo();
   }
 
   Future<void> _hideSelectedReport(MapboxMap map) async {
-    _haloReady = false;
-    await _alertHaloPulse.stop();
     for (final layer in ['alert-selected-point', 'alert-selected-halo']) {
       if (await map.style.styleLayerExists(layer)) {
         await map.style.removeStyleLayer(layer);
@@ -1711,6 +1833,7 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
     if (await map.style.styleSourceExists('alert-selected')) {
       await map.style.removeStyleSource('alert-selected');
     }
+    await _prepareNotificationSonar(map);
   }
 
   /// Ouvre la fiche du signalement touché, sauf pendant une création.
@@ -1727,7 +1850,9 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
     required MapFocusOrigin origin,
   }) {
     if (!mounted || _reportComposerOpen) return;
-    if (widget.reportDetailService == null || reportId == _detailReportId) {
+    if (widget.reportDetailService == null) return;
+    if (reportId == _detailReportId) {
+      _acknowledgeNotification(reportId);
       return;
     }
     if (origin == MapFocusOrigin.mapTap) AppHaptics.selection();
@@ -1740,6 +1865,7 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
       _detailRequest++;
       _detailFocused = false;
     });
+    _acknowledgeNotification(reportId);
     if (opening) unawaited(_rememberCameraBeforeDetail(_detailRequest));
   }
 
@@ -3102,71 +3228,70 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
       resizeToAvoidBottomInset: false,
       floatingActionButtonLocation: FloatingActionButtonLocation.centerFloat,
       floatingActionButtonAnimator: FloatingActionButtonAnimator.noAnimation,
-      floatingActionButton: !_reportComposerOpen && !panelOpen
-          ? MapActionRail(
-              actions: [
-                MapRailAction(
-                  id: 'create-report',
-                  label: 'Créer un signalement',
-                  onPressed: _mapError == null ? _openReportComposer : null,
-                  icon: const Icon(Icons.add, size: 30),
-                ),
-                MapRailAction(
-                  id: 'navigation',
-                  label: _navigationAction,
-                  onPressed:
-                      _isLocating ||
-                          _navigationBusy ||
-                          _mapboxMap == null ||
-                          _mapError != null
-                      ? null
-                      : () => unawaited(_navigateUser()),
-                  icon: Semantics(
-                    label: _navigationLabel,
-                    value: _isLocating || _navigationBusy
-                        ? 'Localisation…'
-                        : null,
-                    child: ValueListenableBuilder<double>(
-                      valueListenable: _cameraTurns,
-                      builder: (context, cameraTurns, _) => _NavigationGlyph(
-                        mode: _isFollowing
-                            ? _orientationMode
-                            : _MapOrientationMode.free,
-                        headingTurns: _compassTurns - cameraTurns,
-                        northTurns: -cameraTurns,
-                        reduceMotion: _reduceMotion,
-                        busy: _isLocating || _navigationBusy,
-                      ),
-                    ),
+      floatingActionButton: MapActionRailTransition(
+        visible: !_reportComposerOpen && !panelOpen,
+        child: MapActionRail(
+          actions: [
+            MapRailAction(
+              id: 'create-report',
+              label: 'Créer un signalement',
+              onPressed: _mapError == null ? _openReportComposer : null,
+              icon: const Icon(Icons.add, size: 30),
+            ),
+            MapRailAction(
+              id: 'navigation',
+              label: _navigationAction,
+              onPressed:
+                  _isLocating ||
+                      _navigationBusy ||
+                      _mapboxMap == null ||
+                      _mapError != null
+                  ? null
+                  : () => unawaited(_navigateUser()),
+              icon: Semantics(
+                label: _navigationLabel,
+                value: _isLocating || _navigationBusy ? 'Localisation…' : null,
+                child: ValueListenableBuilder<double>(
+                  valueListenable: _cameraTurns,
+                  builder: (context, cameraTurns, _) => _NavigationGlyph(
+                    mode: _isFollowing
+                        ? _orientationMode
+                        : _MapOrientationMode.free,
+                    headingTurns: _compassTurns - cameraTurns,
+                    northTurns: -cameraTurns,
+                    reduceMotion: _reduceMotion,
+                    busy: _isLocating || _navigationBusy,
                   ),
                 ),
-                if (widget.onOpenCamera != null)
-                  MapRailAction(
-                    id: 'camera',
-                    label: 'Signaler avec une photo',
-                    onPressed: _mapError == null
-                        ? () => unawaited(_openCamera())
-                        : null,
-                    icon: const Icon(Icons.photo_camera_outlined),
-                  ),
-                if (widget.alertService != null &&
-                    widget.reportDetailService != null)
-                  MapRailAction(
-                    id: 'alerts',
-                    label: 'Mes alertes',
-                    onPressed: _openAlerts,
-                    icon: const Icon(Icons.notifications_outlined),
-                  ),
-                if (widget.onOpenProfile != null)
-                  MapRailAction(
-                    id: 'profile',
-                    label: 'Mon profil',
-                    onPressed: widget.onOpenProfile,
-                    icon: const Icon(Icons.person_outline),
-                  ),
-              ],
-            )
-          : null,
+              ),
+            ),
+            if (widget.onOpenCamera != null)
+              MapRailAction(
+                id: 'camera',
+                label: 'Signaler avec une photo',
+                onPressed: _mapError == null
+                    ? () => unawaited(_openCamera())
+                    : null,
+                icon: const Icon(Icons.photo_camera_outlined),
+              ),
+            if (widget.alertService != null &&
+                widget.reportDetailService != null)
+              MapRailAction(
+                id: 'alerts',
+                label: 'Mes alertes',
+                onPressed: _openAlerts,
+                icon: const Icon(Icons.notifications_outlined),
+              ),
+            if (widget.onOpenProfile != null)
+              MapRailAction(
+                id: 'profile',
+                label: 'Mon profil',
+                onPressed: widget.onOpenProfile,
+                icon: const Icon(Icons.person_outline),
+              ),
+          ],
+        ),
+      ),
       body: Stack(
         children: [
           // Fixed stars behind the transparent native globe and atmosphere.
@@ -3205,7 +3330,7 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
                   pixelRatio: mediaQuery.devicePixelRatio,
                 ),
                 onMapCreated: (map) {
-                  _haloReady = false;
+                  _sonarReady = false;
                   unawaited(_alertHaloPulse.stop());
                   setState(() => _mapboxMap = map);
                   _pinchPanEnabled = null;
@@ -3224,7 +3349,7 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
                 onMapLoadedListener: _handleMapLoaded,
                 onStyleLoadedListener: (_) {
                   _marineViewport.styleLoaded();
-                  _haloReady = false;
+                  _sonarReady = false;
                   unawaited(_alertHaloPulse.stop());
                   _styleReady = true;
                   unawaited(_prepareGlobeRotation());

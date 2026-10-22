@@ -6,6 +6,13 @@ import '../../reports/domain/report_detail.dart';
 
 enum MapFocusOrigin { mapTap, notification, history }
 
+typedef MapSonarTarget = ({
+  String id,
+  double latitude,
+  double longitude,
+  DateTime expiresAt,
+});
+
 /// One selection on the existing map; a superseding request releases its waiter.
 class MapFocusController extends ChangeNotifier {
   ReportDetail? _report;
@@ -20,6 +27,32 @@ class MapFocusController extends ChangeNotifier {
   Completer<void>? _unblocked;
   bool Function()? _isCurrent;
   bool _alertsRequested = false;
+  MapSonarTarget? _notification;
+  int notificationRevision = 0;
+  String? _acknowledgedNotificationId;
+
+  MapSonarTarget? get notification => _notification;
+  bool isNotificationAcknowledged(String id) =>
+      _acknowledgedNotificationId == id;
+
+  /// La réception affiche le sonar sans changer la sélection ni son cadrage.
+  void showNotification(MapSonarTarget target) {
+    if (!target.expiresAt.isAfter(DateTime.now())) return;
+    _notification = target;
+    if (_acknowledgedNotificationId == target.id) {
+      _acknowledgedNotificationId = null;
+    }
+    notificationRevision++;
+    notifyListeners();
+  }
+
+  void acknowledgeNotification(String reportId) {
+    _acknowledgedNotificationId = reportId;
+    if (_notification?.id != reportId) return;
+    _notification = null;
+    notificationRevision++;
+    notifyListeners();
+  }
 
   ReportDetail? get report => _report;
   bool get isBlocked => _blocked;

@@ -7,7 +7,7 @@ import 'package:flutter_test/flutter_test.dart';
 import '../../features/alerts/support/alert_fixtures.dart';
 
 void main() {
-  testWidgets('foreground : catégorie DMS distance puis action Ouvrir unique', (
+  testWidgets('foreground : catégorie et distance puis action Ouvrir unique', (
     tester,
   ) async {
     final source = FakeAlertPushSource();
@@ -20,11 +20,13 @@ void main() {
     controller.setReady(true);
     await controller.start();
     final opened = <String>[];
+    final received = <String>[];
     await tester.pumpWidget(
       MaterialApp(
         home: PushNotificationListener(
           controller: controller,
           onOpen: (push) async => opened.add(push.alert.reportId),
+          onReceived: (push) => received.add(push.alert.reportId),
           child: const Scaffold(body: Text('Accueil')),
         ),
       ),
@@ -34,10 +36,18 @@ void main() {
     source.messages.add(pushMessage());
     await tester.pumpAndSettle();
     expect(find.textContaining('Pollution · 1,8 NM'), findsOneWidget);
-    expect(find.textContaining('43° 17′ 24″ N'), findsOneWidget);
+    expect(find.textContaining('43° 17′ 24″ N'), findsNothing);
+    expect(find.text('Nouvelle alerte'), findsNothing);
+    final messageCenter = tester.getCenter(find.text('Pollution · 1,8 NM'));
+    expect(tester.getCenter(find.text('Ouvrir')).dy, messageCenter.dy);
+    expect(
+      tester.getCenter(find.byTooltip('Masquer la notification')).dy,
+      messageCenter.dy,
+    );
     expect(find.byType(SnackBar), findsNothing);
     expect(tester.getTopLeft(find.byType(AlertNotificationBanner)).dy, 8);
     expect(opened, isEmpty);
+    expect(received, ['report-a']);
     await tester.tap(find.text('Ouvrir'));
     await tester.pumpAndSettle();
     expect(opened, ['report-a']);
