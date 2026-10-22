@@ -606,6 +606,9 @@ le zoom 6 et diminue au dézoom jusqu'à 13,72 points au zoom 2 et en deçà, po
 ne pas couvrir un pays entier. Remettre `false` revient au
 chevron et au mât.
 
+Les pastilles des signalements sont dans l'emplacement `top` de Mapbox. La
+flèche native, ajoutée sans emplacement, passe donc devant elles.
+
 ### Limites connues
 
 - l’envoi de la photo suit le contrat de la doc technique mais n’a pas encore

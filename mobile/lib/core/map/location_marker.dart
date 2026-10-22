@@ -75,8 +75,8 @@ class LocationMarker {
     imagePitchDisplacement: 0,
   );
 
-  /// Mât debout au-dessus du chevron, dans le même emplacement : les
-  /// pastilles des signalements, ajoutées sans emplacement, passent devant.
+  /// Mât debout au-dessus du chevron, dans le même emplacement que les
+  /// pastilles des signalements : le dernier calque ajouté passe devant.
   @visibleForTesting
   static SymbolLayer mastLayer() => SymbolLayer(
     id: mastLayerId,
