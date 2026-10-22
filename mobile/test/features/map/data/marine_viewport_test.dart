@@ -1,7 +1,9 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:ui' as ui;
 
 import 'package:blueway/features/map/data/marine_viewport.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
@@ -66,6 +68,12 @@ class ViewMap extends Fake implements MapboxMap {
   ) async => [for (final _ in points) ScreenCoordinate(x: 180, y: 400)];
 }
 
+class IosViewMap extends ViewMap {
+  @override
+  Future<Size> getSize() async =>
+      throw PlatformException(code: '0', message: 'Not available.');
+}
+
 Future<void> until(bool Function() done) async {
   for (var i = 0; i < 200; i++) {
     if (done()) return;
@@ -75,6 +83,74 @@ Future<void> until(bool Function() done) async {
 }
 
 void main() {
+  test('iOS without native getSize publishes every marine source', () async {
+    final map = IosViewMap()..zoom = 0;
+    var size = const ui.Size(360, 805);
+    final viewport = MarineViewport(
+      viewportSize: () => size,
+      apiBaseUrl: 'https://marine.example/',
+      clientFactory: () => MockClient((request) async {
+        final family = request.url.pathSegments[4];
+        final feature = harbour(family);
+        if (family == 'depth-contours') {
+          feature['geometry'] = {
+            'type': 'LineString',
+            'coordinates': [
+              [5.9, 43.08],
+              [6.0, 43.08],
+            ],
+          };
+        }
+        return http.Response(
+          jsonEncode({
+            'type': 'FeatureCollection',
+            'features': [feature],
+          }),
+          200,
+        );
+      }),
+    );
+    addTearDown(viewport.dispose);
+
+    await viewport.synchronize(map);
+    expect(map.style.data.keys, containsAll(MarineViewport.sources.values));
+
+    map.zoom = 13;
+    await viewport.synchronize(map);
+    for (final source in MarineViewport.sources.values) {
+      expect(
+        jsonDecode(map.style.data[source]!)['features'],
+        isNotEmpty,
+        reason: source,
+      );
+    }
+
+    // Layout can temporarily be empty; this must not block the other layers.
+    size = ui.Size.zero;
+    await viewport.synchronize(map);
+    expect(jsonDecode(map.style.data['nowave-harbours']!)['features'], isEmpty);
+    expect(
+      jsonDecode(map.style.data['nowave-soundings']!)['features'],
+      isNotEmpty,
+    );
+
+    // A resize and a native style reload use the new Flutter bounds.
+    size = const ui.Size(100, 805);
+    await viewport.synchronize(map);
+    expect(jsonDecode(map.style.data['nowave-harbours']!)['features'], isEmpty);
+    size = const ui.Size(360, 805);
+    viewport.styleLoaded();
+    map.style.data.clear();
+    await viewport.synchronize(map);
+    for (final source in MarineViewport.sources.values) {
+      expect(
+        jsonDecode(map.style.data[source]!)['features'],
+        isNotEmpty,
+        reason: source,
+      );
+    }
+  });
+
   test(
     'harbour collisions follow the screen while retaining visible winners',
     () {
@@ -148,6 +224,7 @@ void main() {
     var concurrent = 0, peak = 0;
     final map = ViewMap();
     final viewport = MarineViewport(
+      viewportSize: () => const ui.Size(360, 805),
       apiBaseUrl: 'http://marine.example/proxy?tenant=eu',
       clientFactory: () => MockClient((request) async {
         expect(request.headers.containsKey('authorization'), isFalse);
@@ -244,6 +321,7 @@ void main() {
     () async {
       final map = ViewMap();
       final viewport = MarineViewport(
+        viewportSize: () => const ui.Size(360, 805),
         apiBaseUrl: 'https://marine.example',
         clientFactory: () => MockClient((_) async => http.Response('{}', 503)),
       );
@@ -261,6 +339,7 @@ void main() {
     () async {
       final map = ViewMap();
       final viewport = MarineViewport(
+        viewportSize: () => const ui.Size(360, 805),
         apiBaseUrl: 'https://marine.example',
         clientFactory: () => MockClient(
           (_) async => http.Response(
@@ -300,6 +379,7 @@ void main() {
       'properties': {'id': id, 'display_minzoom': 12, 'value_m': 10},
     };
     final viewport = MarineViewport(
+      viewportSize: () => const ui.Size(360, 805),
       apiBaseUrl: 'https://marine.example',
       now: () => now,
       clientFactory: () => MockClient((request) async {
@@ -360,6 +440,7 @@ void main() {
           'properties': {'display_minzoom': 12},
         };
         final viewport = MarineViewport(
+          viewportSize: () => const ui.Size(360, 805),
           apiBaseUrl: 'https://marine.example',
           now: () => clock,
           clientFactory: () => MockClient((request) async {
@@ -418,6 +499,7 @@ void main() {
         final map = ViewMap()..zoom = 12;
         final seen = <Uri>[];
         final viewport = MarineViewport(
+          viewportSize: () => const ui.Size(360, 805),
           apiBaseUrl: 'https://marine.example',
           now: () => clock,
           clientFactory: () => MockClient((request) async {
@@ -545,6 +627,7 @@ void main() {
         ],
       ]);
       final viewport = MarineViewport(
+        viewportSize: () => const ui.Size(360, 805),
         apiBaseUrl: 'https://marine.example',
         now: () => clock,
         clientFactory: () => MockClient((request) async {
@@ -725,6 +808,7 @@ void main() {
         ],
       });
       final viewport = MarineViewport(
+        viewportSize: () => const ui.Size(360, 805),
         apiBaseUrl: 'https://marine.example',
         clientFactory: () => MockClient(
           (request) async => http.Response(
@@ -767,6 +851,7 @@ void main() {
       final map = ViewMap()..zoom = 9;
       var active = 0, peak = 0;
       final viewport = MarineViewport(
+        viewportSize: () => const ui.Size(360, 805),
         apiBaseUrl: 'https://marine.example',
         clientFactory: () => MockClient((_) async {
           active++;
@@ -815,6 +900,7 @@ void main() {
     final pending = <Completer<http.Response>>[];
     var active = 0, peak = 0;
     final viewport = MarineViewport(
+      viewportSize: () => const ui.Size(360, 805),
       apiBaseUrl: 'https://marine.example',
       clientFactory: () => MockClient((request) async {
         active++;
@@ -882,6 +968,7 @@ void main() {
       final map = ViewMap()..zoom = 9;
       final old = <Completer<http.Response>>[];
       final viewport = MarineViewport(
+        viewportSize: () => const ui.Size(360, 805),
         apiBaseUrl: 'https://marine.example',
         clientFactory: () => MockClient((_) async {
           if (old.length < 2) {
@@ -933,6 +1020,7 @@ void main() {
     final pending = Completer<http.Response>();
     var firstCall = true;
     final viewport = MarineViewport(
+      viewportSize: () => const ui.Size(360, 805),
       apiBaseUrl: 'https://marine.example',
       clientFactory: () => MockClient((_) async {
         if (firstCall) {
@@ -993,6 +1081,7 @@ void main() {
     var clock = DateTime.utc(2026, 10, 22);
     var attempts = 0;
     final viewport = MarineViewport(
+      viewportSize: () => const ui.Size(360, 805),
       apiBaseUrl: 'https://marine.example',
       now: () => clock,
       clientFactory: () => MockClient((_) async {

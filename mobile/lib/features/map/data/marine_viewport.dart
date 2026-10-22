@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:math' as math;
+import 'dart:ui' as ui;
 
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
@@ -142,6 +143,7 @@ class _Snapshot {
 /// contours keep their fixed Z12 ownership.
 class MarineViewport {
   MarineViewport({
+    required this.viewportSize,
     String? apiBaseUrl,
     http.Client Function()? clientFactory,
     DateTime Function()? now,
@@ -150,6 +152,9 @@ class MarineViewport {
        _now = now ?? DateTime.now;
 
   final String apiBaseUrl;
+
+  /// Logical pixels from Flutter layout; native getSize is unavailable on iOS.
+  final ui.Size Function() viewportSize;
   final DateTime Function() _now;
   final http.Client Function() _clientFactory;
   final _cache = <String, _Snapshot>{};
@@ -742,17 +747,21 @@ class MarineViewport {
         data = [];
       }
       if (entry.key == 'harbours') {
-        final size = await map.getSize();
-        final pixels = await map.pixelsForCoordinates([
-          for (final f in data)
-            Point(
-              coordinates: Position.fromJson(
-                (f['geometry']['coordinates'] as List).cast<num>(),
+        final size = viewportSize();
+        if (size.isEmpty || !size.width.isFinite || !size.height.isFinite) {
+          data = [];
+        } else {
+          final pixels = await map.pixelsForCoordinates([
+            for (final f in data)
+              Point(
+                coordinates: Position.fromJson(
+                  (f['geometry']['coordinates'] as List).cast<num>(),
+                ),
               ),
-            ),
-        ]);
-        if (_disposed || revision != _renderRevision) return;
-        data = selection.select(data, pixels, zoom, size.width, size.height);
+          ]);
+          if (_disposed || revision != _renderRevision) return;
+          data = selection.select(data, pixels, zoom, size.width, size.height);
+        }
       }
       if (_disposed || revision != _renderRevision) return;
       final encoded = jsonEncode({
