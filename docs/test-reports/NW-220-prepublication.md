@@ -4,6 +4,9 @@
 > preuves du code final, consulter [la validation finale](NW-220-validation-finale.md).
 > Le fondu des marques Z10–Z12 a été confirmé par l'utilisateur après cette
 > première phase ; les seuils, empreintes et réserves ci-dessous sont historiques.
+> Les liens vers le code pointent désormais vers les fichiers versionnés. Les
+> captures, journaux et JSON de `test-results/` restent des preuves locales non
+> versionnées : leur nom est conservé, sans lien GitHub trompeur.
 
 **21 octobre 2026 — Phase A terminée sans publication. Verdict : PARTIELLEMENT VALIDÉ.**
 
@@ -26,45 +29,45 @@ isolé et les huit combinaisons cardinales fixe/flottante N/E/S/O sont vérifié
 - Le worktree d'origine `/home/palms/NoWave` et ses fichiers préexistants `docs/design/` et `mobile/codex_photo/` ont été conservés. Aucun travail n'a été fait directement sur `dev`.
 - Modifications **non committées et non indexées** ; aucun push, aucune création de PR, fusion ou publication. Linear laissé **In Progress**.
 - Aucun déploiement de production/VPS. Le serveur de recette est local.
-- Empreinte SHA-256 des fichiers de code, tests et outils modifiés : `65414ca0c7897aa16d98d8d690d790718dd9bcf9a0f5644cb1b003fab0dc8801`. Détail dans [code-manifest.json](/home/palms/NoWave-NW220/test-results/NW-220/code-manifest.json).
-- APK finale compilée et installée, SHA-256 : `1fb60e9118a44280e90d727aefe2cb9bd2a24d660ea12957111a609381d43519`. Comparaison avec le fichier réellement installé : **identique = true**, preuve [apk-proof.json](/home/palms/NoWave-NW220/test-results/NW-220/apk-proof.json).
+- Empreinte SHA-256 des fichiers de code, tests et outils modifiés : `65414ca0c7897aa16d98d8d690d790718dd9bcf9a0f5644cb1b003fab0dc8801`. Détail dans code-manifest.json (`test-results/NW-220/code-manifest.json`, preuve locale non versionnée).
+- APK finale compilée et installée, SHA-256 : `1fb60e9118a44280e90d727aefe2cb9bd2a24d660ea12957111a609381d43519`. Comparaison avec le fichier réellement installé : **identique = true**, preuve apk-proof.json (`test-results/NW-220/apk-proof.json`, preuve locale non versionnée).
 - Le code testé n'a pas de nouveau SHA Git : il s'agit du SHA de base ci-dessus **plus le diff local**, identifié par le manifeste et l'APK.
-- Résumé du diff hors présent rapport : environ **2210 lignes ajoutées, 520 supprimées** ; nouvel accès GeoJSON borné, contrôleur de viewport/cache/sélection, séparation lignes/étiquettes, seuils, tests et outils Android. Patch local complet : [review.patch](/home/palms/NoWave-NW220/test-results/NW-220/review.patch).
+- Résumé du diff hors présent rapport : environ **2210 lignes ajoutées, 520 supprimées** ; nouvel accès GeoJSON borné, contrôleur de viewport/cache/sélection, séparation lignes/étiquettes, seuils, tests et outils Android. Patch local complet : review.patch (`test-results/NW-220/review.patch`, preuve locale non versionnée).
 - `.env.json` reste privé, ignoré et non modifié. Le worktree utilise le fichier existant sans le copier dans les fichiers de revue. Aucun littéral de jeton détecté dans les fichiers modifiés/nouveaux.
 
 ### Fichiers modifiés ou ajoutés (31)
 
-- [backend/app/api/routes/map_tiles.py](/home/palms/NoWave-NW220/backend/app/api/routes/map_tiles.py)
-- [backend/app/application/services/marine_tiles.py](/home/palms/NoWave-NW220/backend/app/application/services/marine_tiles.py)
-- [backend/app/infrastructure/marine/hydro_normalization.py](/home/palms/NoWave-NW220/backend/app/infrastructure/marine/hydro_normalization.py)
-- [backend/app/infrastructure/marine/hydro_providers.py](/home/palms/NoWave-NW220/backend/app/infrastructure/marine/hydro_providers.py)
-- [backend/app/infrastructure/marine/providers.py](/home/palms/NoWave-NW220/backend/app/infrastructure/marine/providers.py)
-- [backend/app/infrastructure/marine/viewport_encoding.py](/home/palms/NoWave-NW220/backend/app/infrastructure/marine/viewport_encoding.py)
-- [backend/tests/unit/test_marine_viewport.py](/home/palms/NoWave-NW220/backend/tests/unit/test_marine_viewport.py)
-- [backend/tests/unit/test_noaa_soundings.py](/home/palms/NoWave-NW220/backend/tests/unit/test_noaa_soundings.py)
-- [docs/architecture/marine-zoom-persistence.md](/home/palms/NoWave-NW220/docs/architecture/marine-zoom-persistence.md)
-- [docs/test-reports/NW-220-prepublication.md](/home/palms/NoWave-NW220/docs/test-reports/NW-220-prepublication.md)
-- [mobile/README.md](/home/palms/NoWave-NW220/mobile/README.md)
-- [mobile/lib/core/map/marine/marine_map_controller.dart](/home/palms/NoWave-NW220/mobile/lib/core/map/marine/marine_map_controller.dart)
-- [mobile/lib/core/map/marine/marine_zoom.dart](/home/palms/NoWave-NW220/mobile/lib/core/map/marine/marine_zoom.dart)
-- [mobile/lib/features/map/data/buoy_layer.dart](/home/palms/NoWave-NW220/mobile/lib/features/map/data/buoy_layer.dart)
-- [mobile/lib/features/map/data/fixed_aid_layer.dart](/home/palms/NoWave-NW220/mobile/lib/features/map/data/fixed_aid_layer.dart)
-- [mobile/lib/features/map/data/harbour_layer.dart](/home/palms/NoWave-NW220/mobile/lib/features/map/data/harbour_layer.dart)
-- [mobile/lib/features/map/data/hydrography_layer.dart](/home/palms/NoWave-NW220/mobile/lib/features/map/data/hydrography_layer.dart)
-- [mobile/lib/features/map/data/marine_debug.dart](/home/palms/NoWave-NW220/mobile/lib/features/map/data/marine_debug.dart)
-- [mobile/lib/features/map/data/marine_viewport.dart](/home/palms/NoWave-NW220/mobile/lib/features/map/data/marine_viewport.dart)
-- [mobile/lib/features/map/presentation/map_screen.dart](/home/palms/NoWave-NW220/mobile/lib/features/map/presentation/map_screen.dart)
-- [mobile/test/core/map/marine/marine_map_controller_test.dart](/home/palms/NoWave-NW220/mobile/test/core/map/marine/marine_map_controller_test.dart)
-- [mobile/test/features/map/data/api_sources_test.dart](/home/palms/NoWave-NW220/mobile/test/features/map/data/api_sources_test.dart)
-- [mobile/test/features/map/data/buoy_layer_test.dart](/home/palms/NoWave-NW220/mobile/test/features/map/data/buoy_layer_test.dart)
-- [mobile/test/features/map/data/fixed_aid_layer_test.dart](/home/palms/NoWave-NW220/mobile/test/features/map/data/fixed_aid_layer_test.dart)
-- [mobile/test/features/map/data/harbour_layer_test.dart](/home/palms/NoWave-NW220/mobile/test/features/map/data/harbour_layer_test.dart)
-- [mobile/test/features/map/data/hydrography_layer_test.dart](/home/palms/NoWave-NW220/mobile/test/features/map/data/hydrography_layer_test.dart)
-- [mobile/test/features/map/data/marine_viewport_test.dart](/home/palms/NoWave-NW220/mobile/test/features/map/data/marine_viewport_test.dart)
-- [mobile/tool/nw220_device_validation.py](/home/palms/NoWave-NW220/mobile/tool/nw220_device_validation.py)
-- [mobile/tool/nw220_extra_validation.py](/home/palms/NoWave-NW220/mobile/tool/nw220_extra_validation.py)
-- [mobile/tool/nw220_final_validation.py](/home/palms/NoWave-NW220/mobile/tool/nw220_final_validation.py)
-- [mobile/tool/nw220_vm.py](/home/palms/NoWave-NW220/mobile/tool/nw220_vm.py)
+- [backend/app/api/routes/map_tiles.py](../../backend/app/api/routes/map_tiles.py)
+- [backend/app/application/services/marine_tiles.py](../../backend/app/application/services/marine_tiles.py)
+- [backend/app/infrastructure/marine/hydro_normalization.py](../../backend/app/infrastructure/marine/hydro_normalization.py)
+- [backend/app/infrastructure/marine/hydro_providers.py](../../backend/app/infrastructure/marine/hydro_providers.py)
+- [backend/app/infrastructure/marine/providers.py](../../backend/app/infrastructure/marine/providers.py)
+- [backend/app/infrastructure/marine/viewport_encoding.py](../../backend/app/infrastructure/marine/viewport_encoding.py)
+- [backend/tests/unit/test_marine_viewport.py](../../backend/tests/unit/test_marine_viewport.py)
+- [backend/tests/unit/test_noaa_soundings.py](../../backend/tests/unit/test_noaa_soundings.py)
+- [docs/architecture/marine-zoom-persistence.md](../../docs/architecture/marine-zoom-persistence.md)
+- [docs/test-reports/NW-220-prepublication.md](../../docs/test-reports/NW-220-prepublication.md)
+- [mobile/README.md](../../mobile/README.md)
+- [mobile/lib/core/map/marine/marine_map_controller.dart](../../mobile/lib/core/map/marine/marine_map_controller.dart)
+- [mobile/lib/core/map/marine/marine_zoom.dart](../../mobile/lib/core/map/marine/marine_zoom.dart)
+- [mobile/lib/features/map/data/buoy_layer.dart](../../mobile/lib/features/map/data/buoy_layer.dart)
+- [mobile/lib/features/map/data/fixed_aid_layer.dart](../../mobile/lib/features/map/data/fixed_aid_layer.dart)
+- [mobile/lib/features/map/data/harbour_layer.dart](../../mobile/lib/features/map/data/harbour_layer.dart)
+- [mobile/lib/features/map/data/hydrography_layer.dart](../../mobile/lib/features/map/data/hydrography_layer.dart)
+- [mobile/lib/features/map/data/marine_debug.dart](../../mobile/lib/features/map/data/marine_debug.dart)
+- [mobile/lib/features/map/data/marine_viewport.dart](../../mobile/lib/features/map/data/marine_viewport.dart)
+- [mobile/lib/features/map/presentation/map_screen.dart](../../mobile/lib/features/map/presentation/map_screen.dart)
+- [mobile/test/core/map/marine/marine_map_controller_test.dart](../../mobile/test/core/map/marine/marine_map_controller_test.dart)
+- [mobile/test/features/map/data/api_sources_test.dart](../../mobile/test/features/map/data/api_sources_test.dart)
+- [mobile/test/features/map/data/buoy_layer_test.dart](../../mobile/test/features/map/data/buoy_layer_test.dart)
+- [mobile/test/features/map/data/fixed_aid_layer_test.dart](../../mobile/test/features/map/data/fixed_aid_layer_test.dart)
+- [mobile/test/features/map/data/harbour_layer_test.dart](../../mobile/test/features/map/data/harbour_layer_test.dart)
+- [mobile/test/features/map/data/hydrography_layer_test.dart](../../mobile/test/features/map/data/hydrography_layer_test.dart)
+- [mobile/test/features/map/data/marine_viewport_test.dart](../../mobile/test/features/map/data/marine_viewport_test.dart)
+- [mobile/tool/nw220_device_validation.py](../../mobile/tool/nw220_device_validation.py)
+- [mobile/tool/nw220_extra_validation.py](../../mobile/tool/nw220_extra_validation.py)
+- [mobile/tool/nw220_final_validation.py](../../mobile/tool/nw220_final_validation.py)
+- [mobile/tool/nw220_vm.py](../../mobile/tool/nw220_vm.py)
 
 ## B. Fonctionnalités réalisées
 
@@ -91,7 +94,7 @@ A/B, GPS, boussole, projection, comptes, Firebase et signalements gardent leurs
 contrats. Les tests de navigation des alertes et des reports font partie de la
 suite Flutter. Aucun compte ou faux signalement n'a été créé pour la recette.
 
-Contrat technique détaillé : [marine-zoom-persistence.md](/home/palms/NoWave-NW220/docs/architecture/marine-zoom-persistence.md).
+Contrat technique détaillé : [marine-zoom-persistence.md](../../docs/architecture/marine-zoom-persistence.md).
 **Les courbes EMODnet généralisées conservées ne sont pas des levés de précision
 portuaire ni une carte officielle de navigation.**
 
@@ -106,13 +109,13 @@ portuaire ni une carte officielle de navigation.**
 
 | Commande | Résultat final | Journal |
 |---|---|---|
-| `flutter pub get` | Réussi ; versions verrouillées conservées | [pub-get.log](/home/palms/NoWave-NW220/test-results/NW-220/pub-get.log) |
-| `dart format --output=none --set-exit-if-changed lib test` | **215 fichiers, 0 changement** | [format-final.log](/home/palms/NoWave-NW220/test-results/NW-220/format-final.log) |
-| `flutter analyze --no-pub` | **Aucun problème** | [analyze-final.log](/home/palms/NoWave-NW220/test-results/NW-220/analyze-final.log) |
-| `flutter test --no-pub` | **718 tests réussis** | [flutter-tests-final.log](/home/palms/NoWave-NW220/test-results/NW-220/flutter-tests-final.log) |
+| `flutter pub get` | Réussi ; versions verrouillées conservées | pub-get.log (`test-results/NW-220/pub-get.log`, preuve locale non versionnée) |
+| `dart format --output=none --set-exit-if-changed lib test` | **215 fichiers, 0 changement** | format-final.log (`test-results/NW-220/format-final.log`, preuve locale non versionnée) |
+| `flutter analyze --no-pub` | **Aucun problème** | analyze-final.log (`test-results/NW-220/analyze-final.log`, preuve locale non versionnée) |
+| `flutter test --no-pub` | **718 tests réussis** | flutter-tests-final.log (`test-results/NW-220/flutter-tests-final.log`, preuve locale non versionnée) |
 | `ruff check .` | **Tous contrôles réussis** | Exécuté sur l'ensemble du worktree |
-| `python -m pytest -q -rs` | **974 réussis, 2 ignorés, 0 échec** | [pytest-final.log](/home/palms/NoWave-NW220/test-results/NW-220/pytest-final.log) |
-| `flutter build apk --debug --no-pub ...` | **Réussi** | [build-final.log](/home/palms/NoWave-NW220/test-results/NW-220/build-final.log) |
+| `python -m pytest -q -rs` | **974 réussis, 2 ignorés, 0 échec** | pytest-final.log (`test-results/NW-220/pytest-final.log`, preuve locale non versionnée) |
+| `flutter build apk --debug --no-pub ...` | **Réussi** | build-final.log (`test-results/NW-220/build-final.log`, preuve locale non versionnée) |
 | `git diff --check` / index | **Aucune erreur / index vide** | Contrôle final local |
 
 La commande Python complète utilise `PATH=/tmp/nw220-docker/root/usr/bin:$PATH`
@@ -192,17 +195,17 @@ Autres zones : Marseille, Toulon, Saint-Mandrier, Porquerolles/Port-Cros ;
 Le Marin en Martinique pour les balises de danger isolé disponibles ; Lorient
 pour rechercher un exemplaire flottant sans en fabriquer.
 
-Preuve consolidée des seuils et ports : [functional-proof.json](/home/palms/NoWave-NW220/test-results/NW-220/functional-proof.json) : **aucun rendu d'une famille sous son seuil** dans la matrice.
-La matrice complète comprend 36 captures et leurs JSON : [summary.json](/home/palms/NoWave-NW220/test-results/NW-220/final-matrix/summary.json).
+Preuve consolidée des seuils et ports : functional-proof.json (`test-results/NW-220/functional-proof.json`, preuve locale non versionnée) : **aucun rendu d'une famille sous son seuil** dans la matrice.
+La matrice complète comprend 36 captures et leurs JSON : summary.json (`test-results/NW-220/final-matrix/summary.json`, preuve locale non versionnée).
 
 | Résultat attendu et observé | Capture réelle / données |
 |---|---|
-| Z4,99 : pas de raster marin ; Z5 : raster opaque visible | [Z4,99](/home/palms/NoWave-NW220/test-results/NW-220/final-matrix/00-forward-z4.99.png) · [Z5](/home/palms/NoWave-NW220/test-results/NW-220/final-matrix/01-forward-z5.00.png) |
-| Z7,99 : aucun port ; Z8 : représentants présents | [Z7,99](/home/palms/NoWave-NW220/test-results/NW-220/final-matrix/05-forward-z7.99.png) · [Z8](/home/palms/NoWave-NW220/test-results/NW-220/final-matrix/06-forward-z8.00.png) |
-| Z11,99 : aucune marque ; Z12 : marques présentes | [Z11,99](/home/palms/NoWave-NW220/test-results/NW-220/final-matrix/10-forward-z11.99.png) · [Z12](/home/palms/NoWave-NW220/test-results/NW-220/final-matrix/11-forward-z12.00.png) |
-| Z12,99 : aucune courbe/sonde ; Z13 : données présentes | [Z12,99](/home/palms/NoWave-NW220/test-results/NW-220/verified-contours/01-contours-z12.99.png) · [Z13 final](/home/palms/NoWave-NW220/test-results/NW-220/verified-final-map.png) |
-| Consultation des ports masqués par collision | [Appui long](/home/palms/NoWave-NW220/test-results/NW-220/extras/longpress-sheet.png) |
-| Crédits et licences dans l'interface native | [Attributions](/home/palms/NoWave-NW220/test-results/NW-220/installed-final/credits.png) |
+| Z4,99 : pas de raster marin ; Z5 : raster opaque visible | Z4,99 (`test-results/NW-220/final-matrix/00-forward-z4.99.png`, preuve locale non versionnée) · Z5 (`test-results/NW-220/final-matrix/01-forward-z5.00.png`, preuve locale non versionnée) |
+| Z7,99 : aucun port ; Z8 : représentants présents | Z7,99 (`test-results/NW-220/final-matrix/05-forward-z7.99.png`, preuve locale non versionnée) · Z8 (`test-results/NW-220/final-matrix/06-forward-z8.00.png`, preuve locale non versionnée) |
+| Z11,99 : aucune marque ; Z12 : marques présentes | Z11,99 (`test-results/NW-220/final-matrix/10-forward-z11.99.png`, preuve locale non versionnée) · Z12 (`test-results/NW-220/final-matrix/11-forward-z12.00.png`, preuve locale non versionnée) |
+| Z12,99 : aucune courbe/sonde ; Z13 : données présentes | Z12,99 (`test-results/NW-220/verified-contours/01-contours-z12.99.png`, preuve locale non versionnée) · Z13 final (`test-results/NW-220/verified-final-map.png`, preuve locale non versionnée) |
+| Consultation des ports masqués par collision | Appui long (`test-results/NW-220/extras/longpress-sheet.png`, preuve locale non versionnée) |
+| Crédits et licences dans l'interface native | Attributions (`test-results/NW-220/installed-final/credits.png`, preuve locale non versionnée) |
 
 Les captures citées et les ciblages N/E/S/O à Z16 ont été réellement examinés.
 Les preuves ne sont pas des images générées ni une application de fixture.
@@ -217,7 +220,7 @@ champ sont respectivement **10, 6, 3, 1, 1, 1, 1** aux paliers 8/9/10/12/14/16/1
 **aucun port attendu manquant**, aucun nouvel objet ne les remplace.
 Les autres sortent du champ lorsque le cadrage se resserre.
 
-Séries et identités : [persistence-proof.json](/home/palms/NoWave-NW220/test-results/NW-220/persistence-proof.json) et [série finale ports](/home/palms/NoWave-NW220/test-results/NW-220/verified-ports/summary.json).
+Séries et identités : persistence-proof.json (`test-results/NW-220/persistence-proof.json`, preuve locale non versionnée) et série finale ports (`test-results/NW-220/verified-ports/summary.json`, preuve locale non versionnée).
 La vérification porte sur les coordonnées conservées et les identités source,
 pas sur l'égalité bit à bit de coordonnées arrondies par les tuiles internes du
 moteur à deux zooms différents.
@@ -234,10 +237,10 @@ simultanément. Une paire SHOM/Open Waters ne constitue pas à elle seule une
 preuve de deux objets physiques distincts ; aucune correspondance nouvelle
 fondée seulement sur la proximité n'a été inventée.
 
-Preuve : [installed-safety-proof.json](/home/palms/NoWave-NW220/test-results/NW-220/installed-safety-proof.json) ;
-captures dans [série de sécurité](/home/palms/NoWave-NW220/test-results/NW-220/installed-final).
+Preuve : installed-safety-proof.json (`test-results/NW-220/installed-safety-proof.json`, preuve locale non versionnée) ;
+captures dans série de sécurité (`test-results/NW-220/installed-final`, preuve locale non versionnée).
 Après le dernier ajustement des sondes Z16, des contrôles de sécurité ciblés ont
-également été rejoués sur l'APK finale : [verified-safety](/home/palms/NoWave-NW220/test-results/NW-220/verified-safety).
+également été rejoués sur l'APK finale : verified-safety (`test-results/NW-220/verified-safety`, preuve locale non versionnée).
 **Limite :** aucun exemplaire réel de `buoy_isolated_danger` récupéré dans les
 zones essayées ; son code, sa couche et son pictogramme sont testés, mais sa
 preuve visuelle Android ne peut pas être déclarée faite.
@@ -256,12 +259,12 @@ frontière vérifient la réunion des fragments et l'absence de segment artifici
 doublé. Les comptes de fragments internes retournés par Mapbox ne doivent pas
 être confondus avec des objets dupliqués dans le GeoJSON.
 
-Preuves : [empreintes et identités](/home/palms/NoWave-NW220/test-results/NW-220/persistence-proof.json),
-[50 m](/home/palms/NoWave-NW220/test-results/NW-220/audit-contours/summary.json),
-[100 m](/home/palms/NoWave-NW220/test-results/NW-220/audit-contours100/summary.json),
-[200 m](/home/palms/NoWave-NW220/test-results/NW-220/audit-contours200/summary.json).
+Preuves : empreintes et identités (`test-results/NW-220/persistence-proof.json`, preuve locale non versionnée),
+50 m (`test-results/NW-220/audit-contours/summary.json`, preuve locale non versionnée),
+100 m (`test-results/NW-220/audit-contours100/summary.json`, preuve locale non versionnée),
+200 m (`test-results/NW-220/audit-contours200/summary.json`, preuve locale non versionnée).
 Le dernier APK, après restitution de la résolution des sondes Z16, a reçu un
-nouveau parcours ports et 50 m : [courbe finale](/home/palms/NoWave-NW220/test-results/NW-220/verified-contours/summary.json).
+nouveau parcours ports et 50 m : courbe finale (`test-results/NW-220/verified-contours/summary.json`, preuve locale non versionnée).
 Les couches/coordonnées des courbes de 100/200 m n'ont pas changé dans ce dernier
 correctif, qui concerne la résolution des sondes.
 
@@ -274,9 +277,9 @@ correctif, qui concerne la résolution des sondes.
 - Aucun changement de réglage réseau global, de permission ou de GPS du téléphone.
 - Superposition exacte d'un report NoWave avec une marque de sécurité non produite artificiellement ; ce cas précis n'a pas été exercé en réel. Les tests de régression et les règles de rendu/interactions des reports passent.
 
-Journaux et captures : [extras.log](/home/palms/NoWave-NW220/test-results/NW-220/extras.log),
-[rechargement](/home/palms/NoWave-NW220/test-results/NW-220/extras/style-reload.png),
-[reconnexion](/home/palms/NoWave-NW220/test-results/NW-220/extras/marine-reconnected.json).
+Journaux et captures : extras.log (`test-results/NW-220/extras.log`, preuve locale non versionnée),
+rechargement (`test-results/NW-220/extras/style-reload.png`, preuve locale non versionnée),
+reconnexion (`test-results/NW-220/extras/marine-reconnected.json`, preuve locale non versionnée).
 
 ## E. Performances mesurées et périmètre
 
@@ -288,7 +291,7 @@ Journaux et captures : [extras.log](/home/palms/NoWave-NW220/test-results/NW-220
 - Pic Python tracemalloc de la sonde : **5055319 octets** ; processus de sonde max RSS **75968 Kio**. Ce ne sont pas des mesures de mémoire du téléphone.
 - Avec neuf cellules publiques par lot Z6, la borne logique est 144 enfants. Un scénario froid complet de 144 téléchargements amont n'est pas présenté comme mesuré.
 
-Détail : [z6-provider-real-probe.json](/home/palms/NoWave-NW220/test-results/NW-220/z6-provider-real-probe.json).
+Détail : z6-provider-real-probe.json (`test-results/NW-220/z6-provider-real-probe.json`, preuve locale non versionnée).
 
 ### Dernière série Android ports/profondeurs après correction Z16
 
@@ -299,7 +302,7 @@ Détail : [z6-provider-real-probe.json](/home/palms/NoWave-NW220/test-results/NW
 - Concurrence client bornée à deux, neuf cellules par famille ; tests de concurrence et traces associés.
 - La série longue précédente utilisait au plus **45 snapshots**, **915293 octets** de cache JSON et **1135313 octets** de points conservés dans les instantanés enregistrés, sous les plafonds 12 Mio + 4 Mio.
 
-Mesure finale : [verified-performance-summary.json](/home/palms/NoWave-NW220/test-results/NW-220/verified-performance-summary.json).
+Mesure finale : verified-performance-summary.json (`test-results/NW-220/verified-performance-summary.json`, preuve locale non versionnée).
 Ces octets n'incluent ni les rasters PNG, ni les tuiles du fond Mapbox, ni TLS,
 ni les échanges métier, ni tous les flux amont du backend. Les hits du cache
 client comptent des consultations de cellules, pas des requêtes réseau évitées
@@ -312,9 +315,9 @@ Un profil réel de la longue série sur l'APK installée donne **817793 Ko PSS**
 Le compteur HWUI global debug indique **914 images janky / 16669 (5,48 %)**.
 Une autre séquence plus longue donne 7,84 %, avec chargements et nombreux sauts
 volontaires de caméra. Les relevés finaux sont également enregistrés :
-[mémoire finale](/home/palms/NoWave-NW220/test-results/NW-220/verified-final-memory.txt),
-[HWUI final](/home/palms/NoWave-NW220/test-results/NW-220/verified-final-gfx.txt),
-[tas Dart final](/home/palms/NoWave-NW220/test-results/NW-220/verified-final-dart-memory.json).
+mémoire finale (`test-results/NW-220/verified-final-memory.txt`, preuve locale non versionnée),
+HWUI final (`test-results/NW-220/verified-final-gfx.txt`, preuve locale non versionnée),
+tas Dart final (`test-results/NW-220/verified-final-dart-memory.json`, preuve locale non versionnée).
 
 Ces valeurs globales debug incluent moteur, globe, textures, fond et outil de
 recette. Elles ne constituent ni un FPS Flutter/Mapbox de production, ni une
@@ -338,7 +341,7 @@ fluidité/mémoire en release non démontrée**, aucun résultat de ce type n'es
 | Jeton public Mapbox affiché dans une sortie de diagnostic de processus | Erreur de manipulation pendant l'analyse | Signalé dans la conversation ; aucune copie du jeton dans le diff ou les nouveaux fichiers de revue. `.env.json` non modifié, aucune publication |
 
 Le diagnostic fournisseur est conservé dans
-[openwaters-outage-probe.json](/home/palms/NoWave-NW220/test-results/NW-220/openwaters-outage-probe.json).
+openwaters-outage-probe.json (`test-results/NW-220/openwaters-outage-probe.json`, preuve locale non versionnée).
 Les 503 Open Waters de la série détaillée sont séparés des 45 erreurs volontaires
 de la coupure USB. Aucun 404 de nouveau contrat n'est présenté comme une réussite.
 Les mesures et captures restent locales et ignorées par Git.

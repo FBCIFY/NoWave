@@ -151,6 +151,40 @@ def test_expired_or_other_version_tiles_are_not_reused(tmp_path):
     asyncio.run(scenario())
 
 
+def test_palette_version_bypasses_old_disk_tile_without_purging_it(tmp_path):
+    async def scenario():
+        path = tmp_path / "cache.sqlite3"
+        with sqlite3.connect(path) as db:
+            db.execute(
+                "CREATE TABLE tiles (key TEXT PRIMARY KEY, expires REAL NOT NULL, content BLOB NOT NULL)"
+            )
+            db.execute(
+                "INSERT INTO tiles VALUES (?, ?, ?)",
+                (f"coast-feather-2:{TILE.z}/{TILE.x}/{TILE.y}", time.time() + 3600, b"old light png"),
+            )
+        calls = 0
+
+        async def render(tile):
+            nonlocal calls
+            calls += 1
+            return b"new dark png"
+
+        cache = BathymetryTileCache(render, path)
+        assert cache.VERSION == "marine-palette-3"
+        assert await cache.get(TILE) == b"new dark png"
+        assert await cache.get(TILE) == b"new dark png"
+        assert calls == 1
+        assert cache.metrics["memory_hits"] == 1
+        assert cache.MAX_MEMORY == 32 * 1024 * 1024
+        with sqlite3.connect(path) as db:
+            rows = dict(db.execute("SELECT key, content FROM tiles"))
+        assert rows[f"coast-feather-2:{TILE.z}/{TILE.x}/{TILE.y}"] == b"old light png"
+        assert rows[f"marine-palette-3:{TILE.z}/{TILE.x}/{TILE.y}"] == b"new dark png"
+        await cache.close()
+
+    asyncio.run(scenario())
+
+
 def test_cache_disk_and_memory_stay_bounded(tmp_path):
     async def scenario():
         async def render(tile):

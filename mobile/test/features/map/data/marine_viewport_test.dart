@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:blueway/features/map/data/marine_viewport.dart';
@@ -33,22 +34,28 @@ class ViewStyle extends Fake implements StyleManager {
 class ViewMap extends Fake implements MapboxMap {
   double zoom = 6;
   double longitude = 5.93;
+  double bearing = 0;
+  int cameraReads = 0;
   @override
   final ViewStyle style = ViewStyle();
   @override
-  Future<CameraState> getCameraState() async => CameraState(
-    center: Point(coordinates: Position(longitude, 43.08)),
-    padding: MbxEdgeInsets(top: 0, left: 0, bottom: 0, right: 0),
-    zoom: zoom,
-    bearing: 0,
-    pitch: 0,
-  );
+  Future<CameraState> getCameraState() async {
+    cameraReads++;
+    return CameraState(
+      center: Point(coordinates: Position(longitude, 43.08)),
+      padding: MbxEdgeInsets(top: 0, left: 0, bottom: 0, right: 0),
+      zoom: zoom,
+      bearing: bearing,
+      pitch: 0,
+    );
+  }
+
   @override
   Future<CoordinateBounds> coordinateBoundsForCamera(
     CameraOptions options,
   ) async => CoordinateBounds(
-    southwest: Point(coordinates: Position(5.8, 43)),
-    northeast: Point(coordinates: Position(6, 43.2)),
+    southwest: Point(coordinates: Position(longitude - .13, 43)),
+    northeast: Point(coordinates: Position(longitude + .13, 43.2)),
     infiniteBounds: false,
   );
   @override
@@ -57,6 +64,14 @@ class ViewMap extends Fake implements MapboxMap {
   Future<List<ScreenCoordinate?>> pixelsForCoordinates(
     List<Point> points,
   ) async => [for (final _ in points) ScreenCoordinate(x: 180, y: 400)];
+}
+
+Future<void> until(bool Function() done) async {
+  for (var i = 0; i < 200; i++) {
+    if (done()) return;
+    await Future<void>.delayed(const Duration(milliseconds: 10));
+  }
+  fail('condition not reached within two seconds');
 }
 
 void main() {
@@ -287,5 +302,269 @@ void main() {
     expect(viewport.requests, requests);
     viewport.resume(map);
     viewport.dispose();
+  });
+
+  test(
+    'continuous camera movement loads and renders during five seconds',
+    () async {
+      final map = ViewMap()..zoom = 9;
+      var active = 0, peak = 0;
+      final viewport = MarineViewport(
+        apiBaseUrl: 'https://marine.example',
+        clientFactory: () => MockClient((_) async {
+          active++;
+          peak = peak < active ? active : peak;
+          await Future<void>.delayed(const Duration(milliseconds: 45));
+          active--;
+          return http.Response(
+            jsonEncode({
+              'type': 'FeatureCollection',
+              'features': [harbour('moving-port')],
+            }),
+            200,
+          );
+        }),
+      );
+      addTearDown(viewport.dispose);
+      final end = DateTime.now().add(const Duration(seconds: 5));
+      var sawRenderedWhileMoving = false;
+      while (DateTime.now().isBefore(end)) {
+        if (DateTime.now().isAfter(
+          end.subtract(const Duration(milliseconds: 2500)),
+        )) {
+          map.longitude = 10;
+        }
+        map.bearing += 2;
+        viewport.schedule(map, cameraChanged: true);
+        if (DateTime.now().isBefore(end.subtract(const Duration(seconds: 1))) &&
+            map.style.data['nowave-harbours']?.contains('moving-port') ==
+                true) {
+          sawRenderedWhileMoving = true;
+        }
+        await Future<void>.delayed(const Duration(milliseconds: 40));
+      }
+      await until(() => (viewport.metrics['active'] as int) == 0);
+      expect(sawRenderedWhileMoving, isTrue);
+      expect(viewport.requests, 18);
+      expect(viewport.metrics['cache_entries'], 9);
+      expect(peak, lessThanOrEqualTo(2));
+      expect(map.cameraReads, inInclusiveRange(1, 35));
+      expect(viewport.cancelled, 0);
+    },
+  );
+
+  test('useful late response survives rotation and stale response is discarded on pan', () async {
+    final map = ViewMap()..zoom = 9;
+    final pending = <Completer<http.Response>>[];
+    var active = 0, peak = 0;
+    final viewport = MarineViewport(
+      apiBaseUrl: 'https://marine.example',
+      clientFactory: () => MockClient((request) async {
+        active++;
+        peak = peak < active ? active : peak;
+        final response = pending.length < 2
+            ? (() {
+                final completer = Completer<http.Response>();
+                pending.add(completer);
+                return completer.future;
+              })()
+            : Future.value(
+                http.Response(
+                  jsonEncode({
+                    'type': 'FeatureCollection',
+                    'features': [
+                      harbour(map.longitude < 20 ? 'useful' : 'new'),
+                    ],
+                  }),
+                  200,
+                ),
+              );
+        final result = await response;
+        active--;
+        return result;
+      }),
+    );
+    addTearDown(viewport.dispose);
+    final first = viewport.synchronize(map);
+    await until(() => viewport.requests >= 2);
+    map.bearing = 90;
+    final rotated = viewport.synchronize(map);
+    expect(viewport.cancelled, 0);
+    for (final completer in pending) {
+      completer.complete(
+        http.Response(
+          jsonEncode({
+            'type': 'FeatureCollection',
+            'features': [harbour('useful')],
+          }),
+          200,
+        ),
+      );
+    }
+    await Future.wait([first, rotated]);
+    expect(
+      viewport.features('harbours').map((f) => f['id']),
+      contains('useful'),
+    );
+    expect(peak, lessThanOrEqualTo(2));
+
+    // A new slow request becomes useless after a significant geographic pan.
+    map.longitude = 30;
+    final moved = viewport.synchronize(map);
+    await moved;
+    expect(
+      viewport.features('harbours').map((f) => f['id']),
+      isNot(contains('useful')),
+    );
+    expect(viewport.features('harbours').map((f) => f['id']), contains('new'));
+  });
+
+  test(
+    'pan cancels obsolete flights and rejects their late responses',
+    () async {
+      final map = ViewMap()..zoom = 9;
+      final old = <Completer<http.Response>>[];
+      final viewport = MarineViewport(
+        apiBaseUrl: 'https://marine.example',
+        clientFactory: () => MockClient((_) async {
+          if (old.length < 2) {
+            final completer = Completer<http.Response>();
+            old.add(completer);
+            return completer.future;
+          }
+          return http.Response(
+            jsonEncode({
+              'type': 'FeatureCollection',
+              'features': [harbour('new-area')],
+            }),
+            200,
+          );
+        }),
+      );
+      addTearDown(viewport.dispose);
+      final first = viewport.synchronize(map);
+      await until(() => old.length == 2);
+      map.longitude = 30;
+      final second = viewport.synchronize(map);
+      await until(() => viewport.cancelled == 2);
+      for (final response in old) {
+        response.complete(
+          http.Response(
+            jsonEncode({
+              'type': 'FeatureCollection',
+              'features': [harbour('obsolete')],
+            }),
+            200,
+          ),
+        );
+      }
+      await Future.wait([first, second]);
+      expect(
+        viewport.features('harbours').map((f) => f['id']),
+        isNot(contains('obsolete')),
+      );
+      expect(
+        viewport.features('harbours').map((f) => f['id']),
+        contains('new-area'),
+      );
+      expect(viewport.metrics['cache_entries'], 9);
+    },
+  );
+
+  test('pause, resume, style reload and dispose reject late data', () async {
+    final map = ViewMap()..zoom = 9;
+    final pending = Completer<http.Response>();
+    var firstCall = true;
+    final viewport = MarineViewport(
+      apiBaseUrl: 'https://marine.example',
+      clientFactory: () => MockClient((_) async {
+        if (firstCall) {
+          firstCall = false;
+          return pending.future;
+        }
+        return http.Response(
+          jsonEncode({
+            'type': 'FeatureCollection',
+            'features': [harbour('resumed')],
+          }),
+          200,
+        );
+      }),
+    );
+    final loading = viewport.synchronize(map);
+    await until(() => viewport.requests >= 2);
+    viewport.pause();
+    expect(viewport.cancelled, 1);
+    pending.complete(
+      http.Response(
+        jsonEncode({
+          'type': 'FeatureCollection',
+          'features': [harbour('late-paused')],
+        }),
+        200,
+      ),
+    );
+    await loading;
+    expect(
+      viewport.features('harbours').map((f) => f['id']),
+      isNot(contains('late-paused')),
+    );
+    final beforeResume = viewport.requests;
+    viewport.resume(map);
+    await until(
+      () =>
+          viewport.requests > beforeResume &&
+          (viewport.metrics['cache_entries'] as int) == 9,
+    );
+    expect(
+      viewport.features('harbours').map((f) => f['id']),
+      contains('resumed'),
+    );
+    viewport.styleLoaded();
+    map.style.data.clear();
+    await viewport.synchronize(map);
+    expect(map.style.data['nowave-harbours'], contains('resumed'));
+    viewport.dispose();
+    final requests = viewport.requests;
+    await viewport.synchronize(map);
+    expect(viewport.requests, requests);
+    expect(viewport.metrics['active'], 0);
+  });
+
+  test('503 and timeout retry after backoff without caching a false empty snapshot', () async {
+    final map = ViewMap();
+    var clock = DateTime.utc(2026, 10, 22);
+    var attempts = 0;
+    final viewport = MarineViewport(
+      apiBaseUrl: 'https://marine.example',
+      now: () => clock,
+      clientFactory: () => MockClient((_) async {
+        attempts++;
+        if (attempts <= 9) return http.Response('{}', 503);
+        if (attempts <= 18) throw TimeoutException('network timeout');
+        return http.Response(
+          jsonEncode({
+            'type': 'FeatureCollection',
+            'features': [harbour('recovered')],
+          }),
+          200,
+        );
+      }),
+    );
+    addTearDown(viewport.dispose);
+    await viewport.synchronize(map);
+    expect(viewport.metrics['cache_entries'], 0);
+    expect(viewport.errors, 9);
+    clock = clock.add(const Duration(seconds: 16));
+    await viewport.synchronize(map);
+    expect(viewport.metrics['cache_entries'], 0);
+    expect(viewport.errors, 18);
+    clock = clock.add(const Duration(seconds: 16));
+    await viewport.synchronize(map);
+    expect(viewport.metrics['cache_entries'], 9);
+    expect(
+      viewport.features('harbours').map((f) => f['id']),
+      contains('recovered'),
+    );
   });
 }

@@ -153,7 +153,15 @@ class MarineViewport {
   final _retainedSizes = <String, int>{};
   final _retainedPoints = <String, Map<String, dynamic>>{};
   Timer? _timer;
+  Timer? _retryTimer;
+  Future<void>? _drain;
+  Future<void>? _rendering;
+  bool _renderAgain = false;
+  bool _pendingCamera = false;
+  MapboxMap? _currentMap;
+  double _currentZoom = 0;
   int _revision = 0;
+  int _renderRevision = 0;
   int _bytes = 0;
   bool _busy = false, _again = false, _disposed = false, _paused = false;
   final _failureReasons = <String, String>{};
@@ -183,21 +191,27 @@ class MarineViewport {
     'underwater-hazards': HydrographyLayer.hazardSourceId,
   };
 
-  void styleLoaded() => _renderedData.clear();
+  void styleLoaded() {
+    _renderRevision++;
+    _renderedData.clear();
+  }
 
   void schedule(MapboxMap map, {bool cameraChanged = false}) {
     if (_disposed || _paused) return;
-    if (cameraChanged) {
-      _revision++;
-      for (final entry in _active.entries) {
-        _cancel(entry.key, entry.value);
-      }
+    // Start immediately, then coalesce frames into one update every 200 ms.
+    // A change of bearing or pitch does not invalidate geographic requests.
+    if (_timer == null) {
+      unawaited(synchronize(map));
+      _timer = Timer(const Duration(milliseconds: 200), () {
+        _timer = null;
+        if (_pendingCamera && !_disposed && !_paused) {
+          _pendingCamera = false;
+          schedule(map);
+        }
+      });
+    } else {
+      _pendingCamera = true;
     }
-    _timer?.cancel();
-    _timer = Timer(
-      const Duration(milliseconds: 200),
-      () => unawaited(synchronize(map)),
-    );
   }
 
   void resume(MapboxMap? map) {
@@ -209,7 +223,12 @@ class MarineViewport {
     _paused = true;
     _again = false;
     _revision++;
+    _renderRevision++;
     _timer?.cancel();
+    _timer = null;
+    _retryTimer?.cancel();
+    _retryTimer = null;
+    _pendingCamera = false;
     _wanted.clear();
     for (final entry in _active.entries) {
       _cancel(entry.key, entry.value);
@@ -251,6 +270,9 @@ class MarineViewport {
         ),
       );
       _visibleBounds = bounds;
+      _currentMap = map;
+      _currentZoom = zoom;
+      _renderRevision++;
       _wanted.clear();
       for (final family in sources.keys) {
         final threshold = family == 'harbours'
@@ -288,6 +310,10 @@ class MarineViewport {
       // Successful degraded responses otherwise accumulate stale keys on pan.
       _failures.removeWhere((key, _) => !_wanted.containsKey(key));
       _failureReasons.removeWhere((key, _) => !_wanted.containsKey(key));
+      hits += _wanted.keys.where((key) {
+        final cached = _cache[key];
+        return cached != null && cached.expires.isAfter(_now());
+      }).length;
       for (final entry in _active.entries) {
         if (!_wanted.containsKey(entry.key)) {
           _cancel(entry.key, entry.value);
@@ -323,36 +349,17 @@ class MarineViewport {
       }
       if (zoom < MarineZoom.harbours) selection.reset();
       // Draw cached data immediately, even while the network is unavailable.
-      await _render(map, zoom, revision);
-      final queue = _wanted.entries.toList();
-      var cursor = 0;
-      Future<void> worker() async {
-        while (cursor < queue.length && !_disposed && revision == _revision) {
-          final entry = queue[cursor++];
-          final cached = _cache[entry.key];
-          if (cached != null && cached.expires.isAfter(_now())) {
-            hits++;
-            continue;
-          }
-          if (_failures[entry.key]?.isAfter(_now()) ?? false) continue;
-          await _fetch(entry.key, entry.value.$1, entry.value.$2, revision);
-        }
-      }
-
-      await Future.wait([worker(), worker()]);
-      if (!_disposed && revision == _revision) {
-        await _render(map, zoom, revision);
-        if (kDebugMode) {
-          debugPrint(
-            'NW220_VIEWPORT ${jsonEncode({
-              ...metrics,
-              'zoom': zoom,
-              'lon': lon,
-              'lat': lat,
-              'bounds': [bounds.southwest.coordinates.toJson(), bounds.northeast.coordinates.toJson()],
-            })}',
-          );
-        }
+      await _renderCurrent();
+      if (kDebugMode) {
+        debugPrint(
+          'NW220_VIEWPORT ${jsonEncode({
+            ...metrics,
+            'zoom': zoom,
+            'lon': lon,
+            'lat': lat,
+            'bounds': [bounds.southwest.coordinates.toJson(), bounds.northeast.coordinates.toJson()],
+          })}',
+        );
       }
     } catch (e) {
       if (kDebugMode) {
@@ -362,25 +369,104 @@ class MarineViewport {
       _busy = false;
       if (_again && !_disposed && !_paused) {
         _again = false;
-        schedule(map);
+        unawaited(synchronize(map));
+      }
+    }
+    if (_disposed || _paused || revision != _revision) return;
+    _drain ??= _drainWanted();
+    try {
+      await _drain;
+    } catch (e) {
+      if (kDebugMode) debugPrint('NW220_VIEWPORT drain: ${e.runtimeType}');
+    }
+  }
+
+  Future<void> _renderCurrent() {
+    final active = _rendering;
+    if (active != null) {
+      _renderAgain = true;
+      return active;
+    }
+    final result = Completer<void>();
+    _rendering = result.future;
+    unawaited(
+      _runRender().then(
+        (_) {
+          _rendering = null;
+          result.complete();
+        },
+        onError: (Object error, StackTrace stack) {
+          _rendering = null;
+          if (kDebugMode) debugPrint('NW220_VIEWPORT render: $error');
+          result.completeError(error, stack);
+        },
+      ),
+    );
+    return result.future;
+  }
+
+  Future<void> _runRender() async {
+    do {
+      _renderAgain = false;
+      final map = _currentMap;
+      if (map != null && !_disposed && !_paused) {
+        await _render(map, _currentZoom, _renderRevision);
+      }
+    } while (_renderAgain && !_disposed && !_paused);
+  }
+
+  bool get _hasPending => _wanted.entries.any((entry) {
+    if (_active.containsKey(entry.key)) return false;
+    final cached = _cache[entry.key];
+    if (cached != null && cached.expires.isAfter(_now())) return false;
+    return !(_failures[entry.key]?.isAfter(_now()) ?? false);
+  });
+
+  Future<void> _drainWanted() async {
+    Future<void> worker() async {
+      while (!_disposed && !_paused) {
+        MapEntry<String, (String, MarineCell)>? next;
+        for (final entry in _wanted.entries) {
+          if (_active.containsKey(entry.key)) continue;
+          final cached = _cache[entry.key];
+          if (cached != null && cached.expires.isAfter(_now())) continue;
+          if (_failures[entry.key]?.isAfter(_now()) ?? false) continue;
+          next = entry;
+          break;
+        }
+        if (next == null) return;
+        await _fetch(next.key, next.value.$1, next.value.$2);
+        if (!_disposed && !_paused) await _renderCurrent();
+      }
+    }
+
+    try {
+      await Future.wait([worker(), worker()]);
+    } finally {
+      _drain = null;
+      if (!_disposed && !_paused && _hasPending) {
+        _drain = _drainWanted();
+        unawaited(
+          _drain!.catchError((Object error) {
+            if (kDebugMode) debugPrint('NW220_VIEWPORT drain: $error');
+          }),
+        );
       } else if (!_disposed &&
           !_paused &&
           _failures.keys.any(_wanted.containsKey)) {
-        _timer?.cancel();
-        _timer = Timer(
-          const Duration(seconds: 16),
-          () => unawaited(synchronize(map)),
-        );
+        _retryTimer?.cancel();
+        _retryTimer = Timer(const Duration(seconds: 16), () {
+          _retryTimer = null;
+          final map = _currentMap;
+          if (map != null && !_disposed && !_paused) {
+            unawaited(synchronize(map));
+          }
+        });
       }
     }
   }
 
-  Future<void> _fetch(
-    String key,
-    String family,
-    MarineCell cell,
-    int revision,
-  ) async {
+  Future<void> _fetch(String key, String family, MarineCell cell) async {
     final client = _clientFactory();
     _active[key] = client;
     final watch = Stopwatch()..start();
@@ -409,7 +495,10 @@ class MarineViewport {
       var features = (data['features'] as List)
           .map((f) => Map<String, dynamic>.from(f as Map))
           .toList();
-      if (_disposed || revision != _revision || !_wanted.containsKey(key)) {
+      if (_disposed ||
+          _paused ||
+          _cancelledFlights.contains(key) ||
+          !_wanted.containsKey(key)) {
         return;
       }
       final previous = _cache[key];
@@ -461,7 +550,10 @@ class MarineViewport {
         );
       }
     } catch (e) {
-      if (!_disposed && revision == _revision) {
+      if (!_disposed &&
+          !_paused &&
+          !_cancelledFlights.contains(key) &&
+          _wanted.containsKey(key)) {
         errors++;
         _failureReasons[key] = statusCode != null && statusCode != 200
             ? 'HTTP $statusCode'
@@ -589,17 +681,20 @@ class MarineViewport {
               ),
             ),
         ]);
-        if (_disposed || revision != _revision) return;
+        if (_disposed || revision != _renderRevision) return;
         data = selection.select(data, pixels, zoom, size.width, size.height);
       }
-      if (_disposed || revision != _revision) return;
+      if (_disposed || revision != _renderRevision) return;
       final encoded = jsonEncode({
         'type': 'FeatureCollection',
         'features': data,
       });
       if (_renderedData[entry.value] != encoded &&
-          await map.style.styleSourceExists(entry.value)) {
+          await map.style.styleSourceExists(entry.value) &&
+          !_disposed &&
+          revision == _renderRevision) {
         await map.style.setStyleSourceProperty(entry.value, 'data', encoded);
+        if (_disposed || revision != _renderRevision) return;
         _renderedData[entry.value] = encoded;
       }
     }

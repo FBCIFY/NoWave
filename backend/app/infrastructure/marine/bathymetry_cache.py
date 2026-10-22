@@ -15,7 +15,7 @@ logger = logging.getLogger(__name__)
 
 
 class BathymetryTileCache:
-    VERSION = "coast-feather-2"
+    VERSION = "marine-palette-3"
     TTL = 86400
     MAX_MEMORY = 32 * 1024 * 1024
     MAX_DISK = 128 * 1024 * 1024
