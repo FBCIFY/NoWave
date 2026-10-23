@@ -363,7 +363,7 @@ def test_success_commits_revision_only_after_public_validation(sandbox, previous
         "https://api.no-wave.fr/api/v1/map/seamarks/12/2115/1503.pbf",
         "https://api.no-wave.fr/api/v1/map/soundings/12/2115/1503.pbf",
         "https://api.no-wave.fr/api/v1/map/bathymetry/12/2115/1503.png",
-        "https://api.no-wave.fr/api/v1/map/seafloor/gebco-2026-v1/6/57/25.webp",
+        "https://api.no-wave.fr/api/v1/map/seafloor/gebco-2026-v2/6/57/25.webp",
     }
     assert all(e["marker"] == (OLD if previous else None) for e in public)
 
@@ -380,7 +380,7 @@ def test_transient_public_failure_retries_before_committing(sandbox):
     "seamarks/12/2115/1503.pbf",
     "soundings/12/2115/1503.pbf",
     "bathymetry/12/2115/1503.png",
-    "seafloor/gebco-2026-v1/6/57/25.webp",
+    "seafloor/gebco-2026-v2/6/57/25.webp",
 ])
 def test_marine_public_failure_rolls_back_before_publishing_revision(sandbox, tile):
     result = sandbox.run(FAIL_MARINE_TILE=tile)

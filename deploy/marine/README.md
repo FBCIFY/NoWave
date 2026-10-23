@@ -1,11 +1,11 @@
 # GEBCO worldwide visual background
 
-`gebco-2026-v1.tar.gz` contains the complete XYZ Web Mercator pyramid Z0–Z6
+`gebco-2026-v2.tar.gz` contains the complete XYZ Web Mercator pyramid Z0–Z6
 (5,461 WebP tiles, 256 px) and its provenance manifest. It is a versioned visual
 asset, checked into the release so builds, cold starts and map movement never
 depend on the availability of GEBCO's public services. The web image verifies
 the archive checksum before extracting it. Nginx serves it directly at
-`/api/v1/map/seafloor/gebco-2026-v1/{z}/{x}/{y}.webp`, with a one-year cache
+`/api/v1/map/seafloor/gebco-2026-v2/{z}/{x}/{y}.webp`, with a one-year cache
 lifetime. It does not use the API render pool, SQLite, OSM or the WMS providers.
 
 The client requests a coarse parent before the Z6 overview, keeps tiles on disk,
@@ -24,7 +24,10 @@ This overview samples every eighth native cell (2 arc-minutes, approximately
 3.7 km north–south). It provides coarse relief worldwide, not port-scale
 detail. Z6 overzoom enlarges the same overview; it creates no finer data.
 Positive elevations and TID-classified land (including dry land below sea level)
-remain transparent; the coarsely sampled shoreline
+remain transparent. The entire bilinear sampling footprint must be confirmed ocean,
+so uncertain coastal pixels are excluded rather than washing land blue at port
+zoom. A one-pixel halo makes this conservative mask continuous across tile edges.
+The coarsely sampled shoreline
 can differ from the basemap shoreline. Pixels use the NoWave palette and WebP
 RGB compression. They never supply soundings, numerical depth labels or
 contours. Regional detail and numerical marine data retain their own sources.
@@ -43,9 +46,9 @@ Pillow; no new production dependency). From the repository root:
 ```sh
 python backend/tools/prepare_gebco_background.py \
   /tmp/gebco-2026-stride8.dods /tmp/gebco-2026-tid-stride8.dods \
-  deploy/marine/gebco-2026-v1.tar.gz --download
+  deploy/marine/gebco-2026-v2.tar.gz --download
 cd deploy/marine
-sha256sum gebco-2026-v1.tar.gz > gebco-2026-v1.tar.gz.sha256
+sha256sum gebco-2026-v2.tar.gz > gebco-2026-v2.tar.gz.sha256
 ```
 
 The preparation tool verifies the exact subset SHA-256 before rendering. The
@@ -57,3 +60,6 @@ palette change requires a new path version to preserve HTTP/mobile caches.
 Run `backend/tests/unit/test_gebco_background.py` and the mobile controller
 tests. Production promotion also checks a real static tile near Japan; rollback
 verification remains compatible with the previous, pre-GEBCO web image.
+
+The original `gebco-2026-v1.tar.gz` is retained for compatibility with early
+client builds and keeps its immutable URLs. New clients use v2.

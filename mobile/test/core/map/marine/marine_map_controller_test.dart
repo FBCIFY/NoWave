@@ -83,7 +83,7 @@ void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
   const local = 'http://127.0.0.1:8004/api/v1/map/bathymetry/{z}/{x}/{y}.png';
   const global =
-      'http://127.0.0.1:8004/api/v1/map/seafloor/gebco-2026-v1/{z}/{x}/{y}.webp';
+      'http://127.0.0.1:8004/api/v1/map/seafloor/gebco-2026-v2/{z}/{x}/{y}.webp';
 
   test(
     'raster local unique, opaque aux zooms utiles, overzoom et reload',
@@ -160,7 +160,7 @@ void main() {
       await MarineMapController(apiBaseUrl: 'https://marine.test/prefix/')
           .install(map);
       expect(map.style.sources[MarineMapController.globalSourceId]!['tiles'], [
-        'https://marine.test/prefix/api/v1/map/seafloor/gebco-2026-v1/{z}/{x}/{y}.webp',
+        'https://marine.test/prefix/api/v1/map/seafloor/gebco-2026-v2/{z}/{x}/{y}.webp',
       ]);
       expect(
         map.style.sources[MarineMapController.bathymetrySourceId]!['tiles'],

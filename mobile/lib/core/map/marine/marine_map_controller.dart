@@ -67,7 +67,7 @@ class MarineMapController {
     final globalUrl =
         _globalTilesUrl ??
         ApiConfig.tileTemplate(
-          'seafloor/gebco-2026-v1',
+          'seafloor/gebco-2026-v2',
           extension: 'webp',
           baseUrl: apiBaseUrl,
         );

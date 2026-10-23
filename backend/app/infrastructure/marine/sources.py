@@ -9,7 +9,7 @@ SOURCES = [
         "url": "https://doi.org/10.5285/4f68d5c7-45eb-f999-e063-7086abc036fa",
         "license": "Public domain; GEBCO conditions of use",
         "license_url": "https://www.gebco.net/data-products/gridded-bathymetry/terms-of-use",
-        "limitations": "Worldwide visual backdrop sampled every eighth native 15 arc-second cell. Coarse coast and seabed overview, overzoomed above Z6. Heterogeneous measured and interpolated sources; not a uniform survey resolution. No depth labels or contours derived. Regional detail remains separate. Not for navigation or safety at sea.",
+        "limitations": "Worldwide visual backdrop sampled every eighth native 15 arc-second cell. Coarse seabed overview, overzoomed above Z6. Uncertain coastal sampling footprints remain transparent to avoid washing land blue. Heterogeneous measured and interpolated sources; not a uniform survey resolution. No depth labels or contours derived. Regional detail remains separate. Not for navigation or safety at sea.",
     },
     {
         "id": "openwaters-harbours",

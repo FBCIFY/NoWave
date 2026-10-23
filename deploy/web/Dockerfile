@@ -6,8 +6,8 @@ COPY web/ ./
 RUN npm run build
 COPY deploy/marine/ /marine-input/
 WORKDIR /marine-input
-RUN sha256sum -c gebco-2026-v1.tar.gz.sha256 \
-    && mkdir /marine && tar -xzf gebco-2026-v1.tar.gz -C /marine
+RUN sha256sum -c gebco-*.tar.gz.sha256 && mkdir /marine \
+    && for bundle in gebco-*.tar.gz; do tar -xzf "$bundle" -C /marine; done
 
 FROM nginx:1.30.6-alpine@sha256:47928bf67eb62a1863cb08d9ecb52d3e704304ba614eaee17884204677702951
 ARG NOWAVE_VERSION=development

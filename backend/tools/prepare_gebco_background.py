@@ -17,9 +17,9 @@ import tarfile
 import urllib.request
 
 import numpy as np
-from PIL import Image
+from PIL import Image, ImageFilter
 
-VERSION = "gebco-2026-v1"
+VERSION = "gebco-2026-v2"
 MAX_ZOOM = 6
 SIZE = 256
 SHAPE = (5400, 10800)
@@ -55,23 +55,24 @@ def load_grid(path, expected_hash=SOURCE_SHA256, dtype=">i4"):
     return np.memmap(path, dtype=dtype, mode="r", offset=start + 8, shape=SHAPE)
 
 
-def sample_tile(grid, tid, z, x, y):
+def sample_tile(grid, tid, z, x, y, *, padding=0):
     """Bilinear global pixel lattice, longitude wrap, pixel-centred source.
 
     Interpolate ocean values separately so positive land cannot become a
     fictitious coastal depth. Alpha retains the sampled ocean fraction.
     """
     world = SIZE * (1 << z)
-    lon = ((x * SIZE + np.arange(SIZE) + .5) / world) * 360 - 180
+    pixels = np.arange(-padding, SIZE + padding) + .5
+    lon = ((x * SIZE + pixels) / world) * 360 - 180
     lat = np.degrees(np.arctan(np.sinh(
-        np.pi * (1 - 2 * (y * SIZE + np.arange(SIZE) + .5) / world)
+        np.pi * (1 - 2 * (y * SIZE + pixels) / world)
     )))
     # Native grid centres start half a 15 arc-second cell inside the bounds.
     gx = (lon + 180 - 1 / 480) * 30
     gy = np.clip((lat + 90 - 1 / 480) * 30, 0, grid.shape[0] - 1)
     ix, iy = np.floor(gx).astype(int), np.floor(gy).astype(int)
     fx, fy = gx - ix, gy - iy
-    covered = np.zeros((SIZE, SIZE), dtype=np.float64)
+    covered = np.zeros((len(pixels), len(pixels)), dtype=np.float64)
     depth = np.zeros_like(covered)
     for dy in (0, 1):
         for dx in (0, 1):
@@ -91,11 +92,20 @@ def sample_tile(grid, tid, z, x, y):
     return depth, covered
 
 
-def colour_tile(depth, covered):
+def colour_tile(depth, covered, *, padding=0):
     # Quantized visual colours and transparent land. The WebP compression
     # affects display RGB only: these pixels never supply numerical depths.
     index = np.clip(np.rint(depth / 11000 * 254), 0, 254).astype(np.uint8) + 1
-    index[covered < .5] = 0
+    # A coarse raster is heavily overzoomed at ports. Bilinear sampling of a
+    # partly covered coastal texel otherwise washes adjacent land blue. Keep
+    # only fully ocean-supported texels and their full resampling footprint.
+    # This removes uncertain coastal display coverage; it never invents water
+    # geometry or a depth. Regional detail can fill these transparent gaps.
+    ocean = Image.fromarray(np.where(covered > 1 - 1e-9, 255, 0).astype(np.uint8))
+    ocean = np.array(ocean.filter(ImageFilter.MinFilter(3)))
+    index[ocean == 0] = 0
+    if padding:
+        index = index[padding:-padding, padding:-padding]
     image = Image.fromarray(index, "P")
     palette = np.zeros((256, 3), dtype=np.uint8)
     for channel in range(3):
@@ -128,6 +138,7 @@ def build(source, classification, output, max_zoom=MAX_ZOOM):
         "sample_arc_minutes": 2, "maxzoom": max_zoom, "tile_size": SIZE,
         "tile_count": sum(4 ** z for z in range(max_zoom + 1)), "format": "webp",
         "usage": "Visual overview only; not for navigation. No depth labels or contours derived.",
+        "coast_policy": "Fully ocean-supported samples with one-texel bilinear safety footprint; uncertain coastal pixels stay transparent",
         "attribution": "GEBCO Bathymetric Compilation Group 2026 (2026); sampled and coloured by NoWave",
         "license": "https://www.gebco.net/data-products/gridded-bathymetry/terms-of-use",
     }
@@ -140,8 +151,8 @@ def build(source, classification, output, max_zoom=MAX_ZOOM):
         for z in range(max_zoom + 1):
             for x in range(1 << z):
                 for y in range(1 << z):
-                    depth, covered = sample_tile(grid, tid, z, x, y)
-                    add_file(archive, f"{VERSION}/{z}/{x}/{y}.webp", colour_tile(depth, covered))
+                    depth, covered = sample_tile(grid, tid, z, x, y, padding=1)
+                    add_file(archive, f"{VERSION}/{z}/{x}/{y}.webp", colour_tile(depth, covered, padding=1))
             print(f"Prepared GEBCO zoom {z}", flush=True)
     temporary.replace(output)
 

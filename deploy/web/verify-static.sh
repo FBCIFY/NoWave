@@ -10,7 +10,7 @@ until wget -q -T 1 -O /dev/null http://127.0.0.1:8080/health; do
     [ "$attempt" -lt 30 ] || exit 1
     sleep 0.1
 done
-tile=gebco-2026-v1/6/57/25.webp
+tile=gebco-2026-v2/6/57/25.webp
 wget -S -T 3 --header='Host: api.no-wave.fr' \
     -O /tmp/gebco.webp "http://127.0.0.1:8080/api/v1/map/seafloor/$tile" \
     2>/tmp/gebco-headers

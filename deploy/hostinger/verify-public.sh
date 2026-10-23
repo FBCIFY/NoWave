@@ -23,7 +23,7 @@ for attempt in {1..12}; do
     # New releases require the worldwide static base too. Rollback may restore
     # a pre-GEBCO image, so that validation explicitly omits this new feature.
     if [[ "$with_gebco" == --with-gebco ]]; then
-      tiles+=(seafloor/gebco-2026-v1/6/57/25.webp)
+      tiles+=(seafloor/gebco-2026-v2/6/57/25.webp)
     fi
     for tile in "${tiles[@]}"; do
       if ! curl --fail --silent --show-error --max-time 20 \
