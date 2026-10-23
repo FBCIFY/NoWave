@@ -120,13 +120,16 @@ def test_west_mask_failure_keeps_central_raster_200_without_daily_caching(
         assert db.execute("SELECT COUNT(*) FROM tiles").fetchone()[0] == 0
 
 
-def test_central_mask_failure_still_returns_503(coastal_pipeline):
+def test_central_mask_failure_leaves_only_global_base_temporarily(coastal_pipeline):
     state = coastal_pipeline
     state.failed = {CENTRE}
     with TestClient(app) as client:
         response = client.get(URL)
-    assert response.status_code == 503
-    assert "cache-control" not in response.headers
+    assert response.status_code == 200
+    assert response.headers['cache-control'] == 'public, max-age=15, must-revalidate'
+    assert response.headers['x-nowave-marine-status'] == 'unavailable'
+    with Image.open(BytesIO(response.content)) as image:
+        assert image.convert('RGBA').getchannel('A').getbbox() is None
     assert state.calls == {CENTRE: 1}
     assert not state.cache._memory
 
@@ -165,8 +168,12 @@ def test_api_does_not_translate_neighbour_cancellation_into_200_or_503(
     monkeypatch.setattr(state.coast, "get_mask", get_mask)
 
     async def scenario():
+        async def connected():
+            return False
         with pytest.raises(asyncio.CancelledError):
-            await get_bathymetry_tile(CENTRE.z, CENTRE.x, CENTRE.y)
+            await get_bathymetry_tile(
+                CENTRE.z, CENTRE.x, CENTRE.y, SimpleNamespace(is_disconnected=connected)
+            )
         assert not state.cache._memory
         await state.cache.close()
 

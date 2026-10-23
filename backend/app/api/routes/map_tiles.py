@@ -1,4 +1,6 @@
 import asyncio
+import logging
+import time
 from contextlib import suppress
 from typing import Annotated
 from uuid import UUID
@@ -21,7 +23,9 @@ from app.infrastructure.marine.bathymetry_cache import UncachedBathymetryTile
 from app.infrastructure.marine.visual_water import crop_context, render_visual_water
 from app.infrastructure.adapters.emodnet_bathymetry import (
     BathymetryUnavailable,
+    empty_bathymetry_tile,
     fetch_bathymetry_tile,
+    has_bathymetry_coverage,
 )
 from app.infrastructure.repositories.postgresql_map_tile_repository import (
     PostgreSQLMapTileRepository,
@@ -225,6 +229,7 @@ async def get_bathymetry_tile(
     z: Annotated[int, Path(ge=0, le=14)],
     x: Annotated[int, Path(ge=0)],
     y: Annotated[int, Path(ge=0)],
+    request: Request,
 ) -> Response:
     """Return one visual bathymetry tile in Web Mercator."""
 
@@ -236,13 +241,49 @@ async def get_bathymetry_tile(
             detail="Tile coordinates must be within the selected zoom level.",
         )
 
+    if not has_bathymetry_coverage(z, x, y):
+        # Old clients and direct requests must never enqueue WMS/coastline work
+        # beyond the same published bounds used by the native raster source.
+        return Response(
+            content=empty_bathymetry_tile(),
+            media_type="image/png",
+            headers={
+                "Cache-Control": "public, max-age=86400",
+                "X-NoWave-Marine-Status": "outside-coverage",
+            },
+        )
+
+    work = asyncio.create_task(
+        get_bathymetry_cache(_render_bathymetry_tile).get(Tile(z, x, y))
+    )
     try:
-        tile = await get_bathymetry_cache(_render_bathymetry_tile).get(Tile(z, x, y))
+        while not work.done():
+            if await request.is_disconnected():
+                raise HTTPException(status_code=499, detail="Tile request cancelled.")
+            await asyncio.wait({work}, timeout=0.1)
+        tile = await work
     except (BathymetryUnavailable, ProviderUnavailable, OSError, ValueError) as error:
-        raise HTTPException(
-            status_code=503,
-            detail="Bathymetry temporarily unavailable.",
-        ) from error
+        logging.getLogger("uvicorn.error.bathymetry").warning(
+            "Bathymetry tile=%s/%s/%s failed error=%s detail=%s",
+            z, x, y, type(error).__name__, error,
+        )
+        # Raster 503s cause native tile retries while the supplier is already
+        # overloaded. A short-lived transparent overlay leaves GEBCO visible.
+        # Never put this fallback into the normal daily raster cache.
+        return Response(
+            content=empty_bathymetry_tile(),
+            media_type="image/png",
+            headers={
+                "Cache-Control": "public, max-age=15, must-revalidate",
+                "X-NoWave-Marine-Status": "unavailable",
+                "X-NoWave-Raster-Usage": "visual-only; global-fallback",
+            },
+        )
+    finally:
+        if not work.done():
+            work.cancel()
+            with suppress(asyncio.CancelledError):
+                await work
 
     return Response(
         content=tile,
@@ -263,6 +304,13 @@ async def _render_bathymetry_tile(tile: Tile) -> bytes:
     raw = await run_in_threadpool(fetch_bathymetry_tile, tile.z, tile.x, tile.y, True)
     if not await run_in_threadpool(has_raster_data, raw):
         return await run_in_threadpool(crop_context, raw)
+    mask_started = time.monotonic()
     context = await get_coastline_mask().get_context(tile, raw)
+    mask_done = time.monotonic()
     content = await run_in_threadpool(render_visual_water, raw, context.mask)
+    logging.getLogger("uvicorn.error.bathymetry").info(
+        "Bathymetry tile=%s/%s/%s mask_ms=%.1f visual_ms=%.1f complete=%s",
+        tile.z, tile.x, tile.y, (mask_done - mask_started) * 1000,
+        (time.monotonic() - mask_done) * 1000, context.complete,
+    )
     return content if context.complete else UncachedBathymetryTile(content)

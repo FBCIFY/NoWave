@@ -53,28 +53,23 @@ Future<void> _slide(
 void main() {
   for (final side in ['left', 'right']) {
     testWidgets(
-      'bord $side : glisser vers le bas zoome, vers le haut dézoome',
+      'bord $side : glisser vers le bas dézoome, vers le haut zoome, 70 % plus vite',
       (tester) async {
         final map = await _openMap(tester);
         final edge = find.byKey(ValueKey('edge-zoom-$side'));
 
         // La portion occupée par le menu de droite sert à ses commandes.
-        await _slide(tester, edge, MapEdgeZoom.pixelsPerZoom, fromTop: true);
+        await _slide(tester, edge, 150, fromTop: true);
         // Le seuil de glissé de Flutter mange les premiers pixels.
-        expect(map.cameras.last.zoom!.toDouble(), closeTo(11, .2));
+        expect(map.cameras.last.zoom!.toDouble(), closeTo(8.3, .2));
         expect(
           map.cameras.map((camera) => camera.center),
           everyElement(isNull),
         );
 
         map.cameras.clear();
-        await _slide(
-          tester,
-          edge,
-          -2 * MapEdgeZoom.pixelsPerZoom,
-          fromTop: true,
-        );
-        expect(map.cameras.last.zoom!.toDouble(), closeTo(8, .2));
+        await _slide(tester, edge, -150, fromTop: true);
+        expect(map.cameras.last.zoom!.toDouble(), closeTo(11.7, .2));
       },
     );
   }

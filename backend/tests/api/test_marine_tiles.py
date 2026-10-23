@@ -80,6 +80,7 @@ def test_source_licenses_are_public_and_include_every_integrated_dataset():
     data = response.json()
     assert "not for navigation" in data["usage"]
     assert {s["id"] for s in data["sources"]} == {
+        "gebco-2026-background",
         "shom",
         "noaa",
         "osm",

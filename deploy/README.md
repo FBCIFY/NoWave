@@ -86,10 +86,10 @@ de base répond 503. Le journal JSON du serveur web expose `status`,
 `upstream_status`, `limit_req_status` et `limit_conn_status` pour distinguer
 ces cas lors d'une recette de zooms répétés. Comparer aussi la révision de
 `/version` avec la révision livrée avant d'attribuer un incident à ce réglage.
-Les sept familles XYZ marines ont un budget distinct de **40 requêtes/s/IP**,
-avec une rafale bornée à 128 et mise en attente au-delà de 16. La limite générale
+Les sept familles XYZ marines ont un budget distinct de **120 requêtes/s/IP**,
+avec une rafale bornée à 256 et mise en attente au-delà de 64. La limite générale
 reste à 10/s pour profil, publication et métadonnées ; les MVT de signalements
-restent à 30/s. Les flux marins ont un plafond séparé de **64 requêtes
+restent à 30/s. Les flux marins ont un plafond séparé de **256 requêtes
 simultanées/IP** : un écran de neuf tuiles sur sept sources ne doit pas saturer
 le plafond de 30 connexions/IP des autres routes. Le cache
 marin persistant réduit les appels fournisseurs mais ne réduit pas le nombre
@@ -102,6 +102,18 @@ versionné avec le rendu côtier ; toute modification de couleurs ou de masque
 doit changer cette version et celle de l'URL mobile. Les demandes simultanées
 de la même tuile partagent un seul rendu. Au maximum huit rendus occupent les
 workers, les autres attendent de façon asynchrone (file bornée à 128 tuiles).
+L'attente d'un worker est limitée à huit secondes et une réponse bathymétrique
+à 24 secondes, avant les 30 secondes de Nginx. Une réponse expirée ne libère pas
+prématurément le worker synchrone : son rendu reste partagé jusqu'à sa fin.
+SQLite utilise une connexion réutilisée et sérialisée hors de la boucle
+événementielle, avec deux secondes d'attente et un index d'expiration.
+Les logs exposent l'opération et le code SQLite en cas d'erreur, puis les temps
+de lecture, file, téléchargement, recoloration et masque/rendu côtier.
+EMODnet utilise six secondes d'inactivité et deux secondes de connexion ; une
+seule nouvelle tentative est permise sur erreur de connexion ou 502/504 sans
+`Retry-After`. Les 429, 503 et lectures expirées ne sont pas retentés.
+L'API dispose de 1,5 vCPU et 768 Mio au maximum, et de 384 requêtes entrantes
+simultanées. Ces plafonds ne réservent pas les ressources du VPS partagé.
 Un échec n'est jamais enregistré comme un océan vide et aucun masque côtier
 n'est contourné. Le cache disque natif mobile réutilise ces PNG publics selon
 leur durée HTTP, sans modifier le cache des sondes numériques.
@@ -109,12 +121,37 @@ leur durée HTTP, sans modifier le cache des sondes numériques.
 Pour reproduire sans charge publique, utiliser `backend/tools/probe_marine_rate_limits.py`
 avec un binaire Nginx local. Ce scénario ne contacte que le loopback et un
 fournisseur synthétique, après préchauffage du vrai cache `MarineHTTP`.
-Le probe inclut deux écrans de 63 tuiles simultanées avec des réponses lentes
+Le probe inclut deux écrans de 63 tuiles, puis trois écrans superposés
+(189 requêtes simultanées) avec des réponses lentes
 et vérifie l'accès au profil pendant leur chargement.
 Les résultats locaux ne prouvent pas l'origine d'un 429 distant : vérifier
 `limit_req_status` et `upstream_status` dans les logs de production. Les 429/503
 amont conservent le backoff `Retry-After` du transport marin ; aucune boucle de
 retries ni préchargement de zones n'est ajouté.
+
+La table de recoloration est initialisée une seule fois, même si huit tuiles
+arrivent ensemble au démarrage. Le cache LRU seul ne sérialise pas ses défauts.
+
+Le fond mondial GEBCO 2026 est précalculé dans l'image web : 5 461 tuiles Z0–Z6,
+environ 5 Mo compressés, servies directement par Nginx avec un budget distinct
+et un an de cache. Il apparaît du globe aux zooms détaillés, sous EMODnet, sans
+attendre l'API ni un fournisseur. EMODnet est limité à son emprise annoncée et
+ses requêtes sont différées de 600 ms. Le fond GEBCO reste une vue d'ensemble
+échantillonnée à deux minutes d'arc, sans sondes ni courbes dérivées ; les
+détails régionaux gardent leurs sources. Voir [la provenance et la régénération](marine/README.md).
+
+Le cache HTTP des fournisseurs exécute également ses lectures, nettoyages et
+écritures SQLite dans un worker sérialisé, avec un index d'expiration. Une
+table volumineuse ne doit pas bloquer la boucle de l'API pendant son nettoyage.
+La rétention OSM d'au moins sept jours et le refus d'un cache plein sont conservés.
+
+Le timer `nowave-build-cache.timer` borne chaque jour le cache BuildKit récupérable à 4 Go
+(avec un plancher de conservation de 2 Go), sous le verrou de déploiement.
+`ci-deploy.sh` applique aussi cette rétention après une livraison réussie.
+Le cache de build est partagé avec LabelScan et entièrement régénérable ; les
+images de retour arrière, conteneurs, volumes et sauvegardes sont conservés.
+Les couches partagées avec les images conservées restent comptées dans
+`docker system df` : le total affiché peut dépasser le plafond du cache récupérable.
 
 Le service `photo-cleanup` partage le code de l'API et tourne toutes les cinq
 minutes ; ses logs indiquent les suppressions et les pannes sans exposer les

@@ -69,9 +69,9 @@ services:
         ipv4_address: 172.30.72.4
       egress:
     tmpfs: ['/tmp:rw,noexec,nosuid,size=32m']
-    mem_limit: 384m
-    cpus: 0.75
-    pids_limit: 120
+    mem_limit: 768m
+    cpus: 1.5
+    pids_limit: 160
     depends_on:
       database: {condition: service_healthy}
   notifications:

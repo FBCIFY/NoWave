@@ -1,14 +1,25 @@
 import time
+import logging
+from email.utils import parsedate_to_datetime
 from functools import lru_cache
 from io import BytesIO
+from threading import Lock
 
 import httpx
 from PIL import Image, ImageFilter, ImageChops
 
+from app.domain.marine_tile import Tile
 from app.infrastructure.marine.visual_water import PADDING
 
 
 EMODNET_WMS_URL = "https://ows.emodnet-bathymetry.eu/wms"
+# emodnet:mean_multicolour GetCapabilities, verified 2026-10-23.
+# This is the layer's advertised envelope, including its Caribbean coverage.
+EMODNET_RASTER_BOUNDS = (-73.125, 5.625, 45.0, 90.0)
+logger = logging.getLogger("uvicorn.error.bathymetry")
+_LUT_LOCK = Lock()
+_BACKOFF_LOCK = Lock()
+_cooldown_until = 0.0
 
 # Échantillons RGB dans l'ordre de la légende GetLegendGraphic de
 # mean_multicolour (Multi Colour non-linear), relevés hors des graduations.
@@ -53,17 +64,19 @@ _NOWAVE_RAMP = (
 # Demi-circonférence du monde en Web Mercator EPSG:3857.
 _WEB_MERCATOR_HALF_WORLD = 20037508.342789244
 
-# Une requête initiale + deux nouvelles tentatives.
-_RETRY_DELAYS = (0.25, 0.75)
+# One short retry for connection failures or a transient gateway error only.
+# Never amplify a slow supplier, rate limit, or Retry-After response.
+_RETRY_DELAYS = (0.25,)
+_REQUEST_BUDGET = 14.0
 
 # Erreurs temporaires pour lesquelles une nouvelle tentative a du sens.
-_RETRYABLE_STATUS_CODES = {429, 502, 503, 504}
+_RETRYABLE_STATUS_CODES = {502, 504}
 
 # On réutilise les connexions mais on force HTTP/1.1.
 _client = httpx.Client(
     http2=False,
     follow_redirects=True,
-    timeout=httpx.Timeout(10.0, connect=3.0),
+    timeout=httpx.Timeout(6.0, connect=2.0, pool=1.0),
     limits=httpx.Limits(
         max_connections=8,
         max_keepalive_connections=4,
@@ -76,6 +89,21 @@ _client = httpx.Client(
 
 class BathymetryUnavailable(RuntimeError):
     """EMODnet n'a pas pu fournir la tuile demandée."""
+
+
+def has_bathymetry_coverage(z: int, x: int, y: int) -> bool:
+    west, south, east, north = Tile(z, x, y).bounds
+    w, s, e, n = EMODNET_RASTER_BOUNDS
+    # Boundary tiles intersecting coverage are useful; merely touching it is not.
+    return west < e and east > w and south < n and north > s
+
+
+@lru_cache(maxsize=2)
+def empty_bathymetry_tile(padded: bool = False) -> bytes:
+    size = 256 + 2 * PADDING if padded else 256
+    output = BytesIO()
+    Image.new("RGBA", (size, size), (0, 0, 0, 0)).save(output, format="PNG")
+    return output.getvalue()
 
 
 @lru_cache(maxsize=1)
@@ -140,7 +168,12 @@ def recolor_bathymetry_png(content: bytes, *, associated_alpha: bool = False) ->
             # edges. Undo that association BEFORE the nonlinear colour LUT;
             # otherwise opacity is misread as a dark bathymetric colour.
             rgba = Image.frombytes("RGBa", rgba.size, rgba.tobytes()).convert("RGBA")
-        recolored = rgba.convert("RGB").filter(_blue_color_lut())
+        # functools.lru_cache permits concurrent misses. Eight cold tiles
+        # previously rebuilt the expensive Python LUT eight times under the
+        # GIL, stalling both the worker queue and first viewport for seconds.
+        with _LUT_LOCK:
+            lut = _blue_color_lut()
+        recolored = rgba.convert("RGB").filter(lut)
         recolored.putalpha(rgba.getchannel("A"))
         # Adoucissement visuel subpixel, sans mélanger le noir/blanc des
         # pixels sans données à la côte. L'alpha source reste strictement
@@ -180,14 +213,24 @@ def web_mercator_tile_bbox(
 def _request_tile(params: dict[str, str]) -> httpx.Response:
     """Interroge EMODnet avec quelques retries sur erreurs temporaires."""
 
+    global _cooldown_until
+    with _BACKOFF_LOCK:
+        if time.monotonic() < _cooldown_until:
+            raise BathymetryUnavailable("EMODnet cooling down")
     attempts = len(_RETRY_DELAYS) + 1
     last_error: Exception | None = None
+    started = time.monotonic()
 
     for attempt in range(attempts):
         try:
+            remaining = _REQUEST_BUDGET - (time.monotonic() - started)
+            if remaining <= 0:
+                break
             response = _client.get(
                 EMODNET_WMS_URL,
                 params=params,
+                timeout=httpx.Timeout(min(6.0, remaining / 2),
+                                      connect=min(2.0, remaining / 4), pool=1.0),
             )
 
             if response.status_code in _RETRYABLE_STATUS_CODES:
@@ -198,24 +241,47 @@ def _request_tile(params: dict[str, str]) -> httpx.Response:
                 )
 
             response.raise_for_status()
+            logger.info("Bathymetry fetch_ms=%.1f attempts=%d status=%d",
+                        (time.monotonic() - started) * 1000, attempt + 1, response.status_code)
             return response
 
         except httpx.HTTPError as error:
             last_error = error
 
-            retryable = isinstance(error, httpx.TransportError)
+            retryable = isinstance(error, httpx.ConnectError)
 
             if isinstance(error, httpx.HTTPStatusError):
                 retryable = (
                     error.response.status_code
                     in _RETRYABLE_STATUS_CODES
-                )
+                ) and "retry-after" not in error.response.headers
 
             if not retryable or attempt >= len(_RETRY_DELAYS):
                 break
 
             time.sleep(_RETRY_DELAYS[attempt])
 
+    status = (last_error.response.status_code
+              if isinstance(last_error, httpx.HTTPStatusError) else None)
+    # This client is shared by all raster workers. A slow/rate-limited WMS
+    # must not receive another attempt for each new tile crossed by a pan.
+    if isinstance(last_error, httpx.TransportError) or (status is not None and (
+        status == 429 or status >= 500
+    )):
+        delay = 5.0 if status is None else 30.0
+        if isinstance(last_error, httpx.HTTPStatusError):
+            value = last_error.response.headers.get("retry-after", "")
+            try:
+                delay = max(delay, float(value))
+            except ValueError:
+                try:
+                    delay = max(delay, parsedate_to_datetime(value).timestamp() - time.time())
+                except (ValueError, TypeError, OverflowError):
+                    pass
+        with _BACKOFF_LOCK:
+            _cooldown_until = max(_cooldown_until, time.monotonic() + delay)
+    logger.warning("Bathymetry fetch failed fetch_ms=%.1f error=%s status=%s",
+                   (time.monotonic() - started) * 1000, type(last_error).__name__, status)
     raise BathymetryUnavailable(
         "EMODnet bathymetry service unavailable"
     ) from last_error
@@ -230,6 +296,8 @@ def fetch_bathymetry_tile(
 ) -> bytes:
     """Récupère une tuile PNG et garde le résultat recoloré en cache."""
 
+    if not has_bathymetry_coverage(z, x, y):
+        return empty_bathymetry_tile(padded)
     bbox = web_mercator_tile_bbox(z, x, y)
     # A finite context for visual coastal continuity, at the unchanged sample
     # pitch. This remains one WMS request, not one request per neighbour.
@@ -268,6 +336,7 @@ def fetch_bathymetry_tile(
             f"{content_type or 'unknown'}"
         )
 
+    render_started = time.monotonic()
     recolored = recolor_bathymetry_png(response.content, associated_alpha=True)
     with Image.open(BytesIO(recolored)) as image:
         if image.size != (256 + 2 * padding, 256 + 2 * padding):
@@ -277,6 +346,7 @@ def fetch_bathymetry_tile(
             rgba = rgba.crop((padding, padding, padding + 256, padding + 256))
         output = BytesIO()
         rgba.save(output, format="PNG")
+        logger.info("Bathymetry raster_ms=%.1f", (time.monotonic() - render_started) * 1000)
         return output.getvalue()
 
 

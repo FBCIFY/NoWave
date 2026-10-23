@@ -4,6 +4,10 @@ COPY web/package.json web/package-lock.json ./
 RUN npm ci
 COPY web/ ./
 RUN npm run build
+COPY deploy/marine/ /marine-input/
+WORKDIR /marine-input
+RUN sha256sum -c gebco-*.tar.gz.sha256 && mkdir /marine \
+    && for bundle in gebco-*.tar.gz; do tar -xzf "$bundle" -C /marine; done
 
 FROM nginx:1.30.6-alpine@sha256:47928bf67eb62a1863cb08d9ecb52d3e704304ba614eaee17884204677702951
 ARG NOWAVE_VERSION=development
@@ -12,6 +16,7 @@ RUN apk upgrade --no-cache
 COPY deploy/web/nginx.conf /etc/nginx/nginx.conf
 RUN nginx -t
 COPY --from=build /web/dist/ /usr/share/nginx/html/
+COPY --from=build /marine/ /usr/share/nginx/marine/
 RUN printf '{"service":"nowave-web","version":"%s"}\n' "$NOWAVE_VERSION" > /usr/share/nginx/html/version.json
 USER 101:101
 EXPOSE 8080

@@ -11,3 +11,7 @@ cd "$source_root"
 
 bash deploy/hostinger/build-and-audit.sh "$revision"
 bash deploy/hostinger/deploy.sh "$revision"
+# Retention is maintenance, never a reason to roll back a healthy release.
+if ! bash deploy/hostinger/prune-build-cache.sh; then
+  echo 'Build cache retention failed; inspect disk usage.' >&2
+fi

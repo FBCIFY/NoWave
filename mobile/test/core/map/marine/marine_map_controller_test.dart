@@ -82,18 +82,23 @@ class MarineStyle extends Fake implements StyleManager {
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
   const local = 'http://127.0.0.1:8004/api/v1/map/bathymetry/{z}/{x}/{y}.png';
+  const global =
+      'http://127.0.0.1:8004/api/v1/map/seafloor/gebco-2026-v2/{z}/{x}/{y}.webp';
 
   test(
     'raster local unique, opaque aux zooms utiles, overzoom et reload',
     () async {
       final map = MarineMap();
-      final marine = MarineMapController(bathymetryTilesUrl: local);
+      final marine = MarineMapController(
+        bathymetryTilesUrl: local,
+        globalSeafloorTilesUrl: global,
+      );
       await marine.install(map);
       await marine.install(map);
-      expect(map.style.sources.length, 1);
-      expect(map.style.layers.length, 1);
-      final source = map.style.sources.values.single;
-      final layer = map.style.layers.values.single;
+      expect(map.style.sources.length, 2);
+      expect(map.style.layers.length, 2);
+      final source = map.style.sources[MarineMapController.bathymetrySourceId]!;
+      final layer = map.style.layers[MarineMapController.bathymetryLayerId]!;
       expect(map.style.config['colorLand'], LandColors.color('#C4AD80'));
       expect(map.style.config['colorGreenspace'], LandColors.color('#627545'));
       expect(map.style.config['colorWater'], '#002D51');
@@ -101,6 +106,23 @@ void main() {
       expect(map.style.config['showPointOfInterestLabels'], false);
       expect(source['tiles'], ['$local?v=marine-visual-7']);
       expect(source['maxzoom'], 14);
+      expect(source['minzoom'], 5);
+      expect(source['bounds'], [-73.125, 5.625, 45, 85.051129]);
+      expect(source['tile-network-requests-delay'], .6);
+      final base = map.style.sources[MarineMapController.globalSourceId]!;
+      expect(base['tiles'], [global]);
+      expect(base['minzoom'], 0);
+      expect(base['maxzoom'], 6);
+      expect(base['prefetch-zoom-delta'], 4);
+      expect(base['tile-network-requests-delay'], 0);
+      expect(base['volatile'], false);
+      expect(base['bounds'], isNull);
+      expect(base['attribution'], contains('GEBCO 2026'));
+      final baseLayer = map.style.layers[MarineMapController.globalLayerId]!;
+      expect(baseLayer['minzoom'], isNull);
+      expect(baseLayer['maxzoom'], isNull);
+      expect(baseLayer['slot'], 'middle');
+      expect(baseLayer['paint']['raster-opacity'], 1);
       expect(
         source['attribution'],
         contains(
@@ -123,10 +145,29 @@ void main() {
       map.style.sources.clear();
       map.style.layers.clear();
       await marine.install(map);
-      expect(map.style.sources.values.single['tiles'], [
-        '$local?v=marine-visual-7',
+      expect(
+        map.style.sources[MarineMapController.bathymetrySourceId]!['tiles'],
+        ['$local?v=marine-visual-7'],
+      );
+      expect(map.style.layers.length, 2);
+    },
+  );
+
+  test(
+    'fond mondial et détails utilisent la même base avec son préfixe',
+    () async {
+      final map = MarineMap();
+      await MarineMapController(apiBaseUrl: 'https://marine.test/prefix/')
+          .install(map);
+      expect(map.style.sources[MarineMapController.globalSourceId]!['tiles'], [
+        'https://marine.test/prefix/api/v1/map/seafloor/gebco-2026-v2/{z}/{x}/{y}.webp',
       ]);
-      expect(map.style.layers.length, 1);
+      expect(
+        map.style.sources[MarineMapController.bathymetrySourceId]!['tiles'],
+        [
+          'https://marine.test/prefix/api/v1/map/bathymetry/{z}/{x}/{y}.png?v=marine-visual-7',
+        ],
+      );
     },
   );
 
@@ -139,26 +180,36 @@ void main() {
 
   test('version du masque sans perdre les paramètres existants', () async {
     final map = MarineMap();
-    await MarineMapController(bathymetryTilesUrl: '$local?region=europe')
-        .install(map);
-    expect(map.style.sources.values.single['tiles'], [
-      '$local?region=europe&v=marine-visual-7',
-    ]);
+    await MarineMapController(
+      bathymetryTilesUrl: '$local?region=europe',
+      globalSeafloorTilesUrl: global,
+    ).install(map);
+    expect(
+      map.style.sources[MarineMapController.bathymetrySourceId]!['tiles'],
+      ['$local?region=europe&v=marine-visual-7'],
+    );
   });
 
   test('installation réessayable après une erreur du style', () async {
     final map = MarineMap()..style.reject = true;
-    final marine = MarineMapController(bathymetryTilesUrl: local);
+    final marine = MarineMapController(
+      bathymetryTilesUrl: local,
+      globalSeafloorTilesUrl: global,
+    );
     await expectLater(marine.install(map), throwsA(isA<PlatformException>()));
     map.style.reject = false;
     await marine.install(map);
-    expect(map.style.layers.length, 1);
+    expect(map.style.layers.length, 2);
   });
 
   test('raster en fond, isobathes et chiffres au-dessus', () async {
     final map = MarineMap();
-    await MarineMapController(bathymetryTilesUrl: local).install(map);
+    await MarineMapController(
+      bathymetryTilesUrl: local,
+      globalSeafloorTilesUrl: global,
+    ).install(map);
     expect(map.style.layers.keys.toList(), [
+      MarineMapController.globalLayerId,
       MarineMapController.bathymetryLayerId,
     ]);
     for (final layer in HydrographyLayer.layers().whereType<LineLayer>().where(

@@ -121,7 +121,7 @@ def test_bathymetry_tile_rejects_coordinates_outside_zoom():
     assert response.status_code == 422
 
 
-def test_bathymetry_tile_returns_503_when_provider_is_unavailable(
+def test_bathymetry_outage_preserves_global_base_without_native_retry_storm(
     monkeypatch,
 ):
     from app.infrastructure.adapters.emodnet_bathymetry import (
@@ -140,10 +140,17 @@ def test_bathymetry_tile_returns_503_when_provider_is_unavailable(
         "/api/v1/map/bathymetry/8/131/94.png"
     )
 
-    assert response.status_code == 503
+    assert response.status_code == 200
+    assert response.headers['cache-control'] == 'public, max-age=15, must-revalidate'
+    assert response.headers['x-nowave-marine-status'] == 'unavailable'
+    from io import BytesIO
+    from PIL import Image
+    with Image.open(BytesIO(response.content)) as image:
+        assert image.size == (256, 256)
+        assert image.convert('RGBA').getchannel('A').getbbox() is None
 
 
-def test_coastline_failure_returns_503_instead_of_unmasked_png(monkeypatch):
+def test_coastline_failure_keeps_global_base_instead_of_unmasked_png(monkeypatch):
     from app.domain.marine import ProviderUnavailable
 
     class Coast:
@@ -154,7 +161,8 @@ def test_coastline_failure_returns_503_instead_of_unmasked_png(monkeypatch):
     monkeypatch.setattr('app.api.routes.map_tiles.get_coastline_mask', lambda: Coast())
     monkeypatch.setattr('app.api.routes.map_tiles.has_raster_data', lambda raw: True)
     response = TestClient(app).get('/api/v1/map/bathymetry/6/33/23.png')
-    assert response.status_code == 503
+    assert response.status_code == 200
+    assert response.headers['x-nowave-marine-status'] == 'unavailable'
     assert response.content != b'raw'
 
 
@@ -211,3 +219,79 @@ def test_visual_continuity_keeps_original_coverage_and_shares_warm_requests(monk
     assert image.getpixel((114, 114)) == (40, 140, 160, 255)
     coverage = base64.b64decode(image.info['NoWave.SourceCoverage'])
     assert coverage[114 * 256 + 114] == 0
+
+
+
+def test_raster_fallback_never_poison_daily_cache_and_recovers(monkeypatch):
+    from app.api.routes import map_tiles
+    from app.domain.marine import ProviderUnavailable
+    calls = []
+    async def render(tile):
+        calls.append(tile)
+        if len(calls) == 1:
+            raise ProviderUnavailable('supplier temporarily down')
+        return b'recovered masked raster'
+    monkeypatch.setattr(map_tiles, '_render_bathymetry_tile', render)
+    with TestClient(app) as client:
+        fallback = client.get('/api/v1/map/bathymetry/8/131/94.png')
+        recovered = client.get('/api/v1/map/bathymetry/8/131/94.png')
+        cached = client.get('/api/v1/map/bathymetry/8/131/94.png')
+    assert fallback.headers['x-nowave-marine-status'] == 'unavailable'
+    assert recovered.content == cached.content == b'recovered masked raster'
+    assert recovered.headers['cache-control'] == 'public, max-age=86400'
+    assert 'x-nowave-marine-status' not in recovered.headers
+    assert len(calls) == 2
+
+
+def test_raster_disconnect_cancels_waiter_instead_of_finishing_obsolete_request(monkeypatch):
+    import asyncio
+    from types import SimpleNamespace
+    from fastapi import HTTPException
+    from app.api.routes import map_tiles
+    async def scenario():
+        started, cancelled = asyncio.Event(), asyncio.Event()
+        async def load(tile):
+            started.set()
+            try:
+                await asyncio.Event().wait()
+            finally:
+                cancelled.set()
+        async def disconnected():
+            await started.wait()
+            return True
+        monkeypatch.setattr(map_tiles, 'get_bathymetry_cache',
+                            lambda render: SimpleNamespace(get=load))
+        with pytest.raises(HTTPException) as error:
+            await map_tiles.get_bathymetry_tile(
+                8, 131, 94, SimpleNamespace(is_disconnected=disconnected)
+            )
+        assert error.value.status_code == 499
+        assert cancelled.is_set()
+    asyncio.run(scenario())
+
+
+@pytest.mark.parametrize('zoom', [5, 6, 8, 10, 12, 14])
+@pytest.mark.parametrize('lon,lat', [
+    (139, 35), (-122, 37), (151, -33), (-45, -20), (0, 0),
+])
+def test_external_raster_requests_skip_all_provider_cache_and_coastline_work(
+    monkeypatch, zoom, lon, lat
+):
+    import math
+    from io import BytesIO
+    from PIL import Image
+    from app.api.routes import map_tiles
+    def forbidden(*args, **kwargs):
+        raise AssertionError('Outside-coverage requests must not start marine work')
+    for name in ['get_bathymetry_cache', 'fetch_bathymetry_tile', 'get_coastline_mask']:
+        monkeypatch.setattr(map_tiles, name, forbidden)
+    n = 1 << zoom
+    x = math.floor((lon + 180) / 360 * n)
+    y = math.floor((1 - math.asinh(math.tan(math.radians(lat))) / math.pi) / 2 * n)
+    response = TestClient(app).get(f'/api/v1/map/bathymetry/{zoom}/{x}/{y}.png')
+    assert response.status_code == 200
+    assert response.headers['x-nowave-marine-status'] == 'outside-coverage'
+    assert response.headers['cache-control'] == 'public, max-age=86400'
+    with Image.open(BytesIO(response.content)) as image:
+        assert image.size == (256, 256)
+        assert image.convert('RGBA').getchannel('A').getbbox() is None

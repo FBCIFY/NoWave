@@ -64,6 +64,8 @@ void main() {
       await install();
       await install();
       final expected = {
+        'nowave-global-seafloor':
+            'seafloor/gebco-2026-v2/{z}/{x}/{y}.webp?tenant=eu',
         'nowave-bathymetry':
             'bathymetry/{z}/{x}/{y}.png?tenant=eu&v=marine-visual-7',
         'nowave-depth-contours': 'depth-contours/{z}/{x}/{y}.pbf?tenant=eu&v=3',
@@ -145,6 +147,7 @@ void main() {
         await BuoyLayer().addTo(map);
         await ReportTiles(getIdToken: () async => 'unit-token').addTo(map);
         final routes = {
+          'nowave-global-seafloor': 'seafloor/gebco-2026-v2/{z}/{x}/{y}.webp',
           'nowave-bathymetry': 'bathymetry/{z}/{x}/{y}.png?v=marine-visual-7',
           'nowave-depth-contours': 'depth-contours/{z}/{x}/{y}.pbf?v=3',
           'nowave-soundings': 'soundings/{z}/{x}/{y}.pbf?v=depths-4',

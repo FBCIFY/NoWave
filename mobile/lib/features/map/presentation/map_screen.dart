@@ -1037,7 +1037,8 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
 
     // La bathymétrie est facultative : son indisponibilité ne doit
     // pas masquer le fond de carte Mapbox.
-    if (event.sourceId == MarineMapController.bathymetrySourceId) {
+    if (event.sourceId == MarineMapController.bathymetrySourceId ||
+        event.sourceId == MarineMapController.globalSourceId) {
       return;
     }
 
@@ -3427,6 +3428,7 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
                   _sonarReady = false;
                   unawaited(_alertHaloPulse.stop());
                   setState(() => _mapboxMap = map);
+                  unawaited(MapConfig.configureNetwork(map));
                   _pinchPanEnabled = null;
                   _globeRotationLocked = false;
                   unawaited(MapConfig.hideDefaultOrnaments(map));

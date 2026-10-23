@@ -43,6 +43,15 @@ for component in api web postgres tunnel; do
     --severity UNKNOWN,LOW,MEDIUM,HIGH,CRITICAL --exit-code 1 --no-progress \
     --skip-version-check --format json --output "/reports/$component.json"
   rm -f -- "$work_dir/$component.tar"
+  if [[ "$component" == web ]]; then
+    # A generic API regex must never capture the static worldwide overview.
+    # No network is available: this check fails if a tile touches the API.
+    docker run --rm --network none --read-only --cap-drop ALL \
+      --security-opt no-new-privileges:true \
+      --tmpfs /tmp:rw,noexec,nosuid,uid=101,gid=101,size=32m \
+      -v "$PWD/deploy/web/verify-static.sh:/verify-static.sh:ro" \
+      --entrypoint sh "nowave-web:$revision" /verify-static.sh
+  fi
 done
 docker run --rm -v "$PWD/deploy:/workspace:ro" "$scanner" config \
   --severity UNKNOWN,LOW,MEDIUM,HIGH,CRITICAL --exit-code 1 --skip-version-check /workspace

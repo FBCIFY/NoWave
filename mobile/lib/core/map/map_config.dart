@@ -14,6 +14,18 @@ class MapConfig {
 
   static String styleUrl = 'mapbox://styles/mapbox/standard';
 
+  /// All native tile sources share this budget. Leave room below the API's
+  /// 30-connection limit for the two GeoJSON requests and business requests.
+  static const maxRequestsPerHost = 12;
+
+  static Future<void> configureNetwork(MapboxMap map) async {
+    try {
+      await map.httpService.setMaxRequestsPerHost(maxRequestsPerHost);
+    } catch (error) {
+      debugPrint('Limite réseau Mapbox indisponible : $error');
+    }
+  }
+
   static Future<void> prepareStyle() async {
     try {
       styleUrl = await GlobeStyle.prepare();

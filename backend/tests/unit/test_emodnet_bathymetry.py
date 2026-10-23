@@ -1,4 +1,6 @@
 from io import BytesIO
+from concurrent.futures import ThreadPoolExecutor
+from threading import Barrier
 
 import httpx
 import pytest
@@ -11,6 +13,45 @@ from app.infrastructure.adapters.emodnet_bathymetry import (
     recolor_bathymetry_png,
     web_mercator_tile_bbox,
 )
+
+
+@pytest.fixture(autouse=True)
+def reset_supplier_cooldown(monkeypatch):
+    monkeypatch.setattr(bathymetry, '_cooldown_until', 0.0)
+
+
+@pytest.mark.parametrize("status,retry_after,expected", [
+    (429, False, 1), (503, False, 1), (502, True, 1),
+    (502, False, 2), (504, False, 2), (400, False, 1),
+])
+def test_retry_policy_does_not_amplify_rate_limits_or_cooldowns(monkeypatch, status, retry_after, expected):
+    calls = []
+
+    def respond(request):
+        calls.append(request)
+        return httpx.Response(status, headers={"Retry-After": "30"} if retry_after else {})
+
+    with httpx.Client(transport=httpx.MockTransport(respond)) as client:
+        monkeypatch.setattr(bathymetry, "_client", client)
+        monkeypatch.setattr(bathymetry.time, "sleep", lambda _: None)
+        with pytest.raises(BathymetryUnavailable):
+            bathymetry._request_tile({})
+    assert len(calls) == expected
+    assert calls[0].extensions["timeout"]["read"] <= 6
+
+
+def test_slow_supplier_read_timeout_is_not_retried(monkeypatch):
+    calls = []
+
+    def respond(request):
+        calls.append(request)
+        raise httpx.ReadTimeout("slow", request=request)
+
+    with httpx.Client(transport=httpx.MockTransport(respond)) as client:
+        monkeypatch.setattr(bathymetry, "_client", client)
+        with pytest.raises(BathymetryUnavailable):
+            bathymetry._request_tile({})
+    assert len(calls) == 1
 
 
 def test_world_tile_bbox():
@@ -145,6 +186,24 @@ def test_recolor_is_deterministic_across_lut_rebuilds():
     assert recolor_bathymetry_png(content) == first
 
 
+def test_first_viewport_constructs_color_table_once_across_eight_workers():
+    source = png_bytes(Image.new("RGBA", (280, 280), (0, 0, 62, 255)))
+    ready = Barrier(8)
+
+    def recolor(_):
+        ready.wait(timeout=5)
+        return recolor_bathymetry_png(source)
+
+    bathymetry._blue_color_lut.cache_clear()
+    try:
+        with ThreadPoolExecutor(max_workers=8) as pool:
+            results = list(pool.map(recolor, range(8)))
+        assert all(result == results[0] for result in results)
+        assert bathymetry._blue_color_lut.cache_info().misses == 1
+    finally:
+        bathymetry._blue_color_lut.cache_clear()
+
+
 @pytest.mark.parametrize("content", [b"not a PNG", b"\x89PNG\r\n\x1a\ntruncated"])
 def test_recolor_rejects_invalid_png(content):
     with pytest.raises(BathymetryUnavailable, match="Invalid EMODnet PNG"):
@@ -272,3 +331,61 @@ def test_bilinear_associated_rgb_is_not_mistaken_for_a_dark_depth(alpha):
     # so the tolerance follows that numeric bound, not an exact colour match.
     rounding_bound = 2 * ((255 + alpha - 1) // alpha)
     assert all(abs(a-b) <= rounding_bound for a,b in zip(fixed.getpixel((8,8))[:3], reference.getpixel((8,8))[:3]))
+
+
+@pytest.mark.parametrize('failure', [429, 503, 'timeout'])
+def test_supplier_outage_stops_new_tiles_then_resumes(monkeypatch, failure):
+    calls = []
+    clock = [100.0]
+    def respond(request):
+        calls.append(request)
+        if len(calls) > 1:
+            return httpx.Response(200, content=b'png')
+        if failure == 'timeout':
+            raise httpx.ReadTimeout('slow supplier', request=request)
+        return httpx.Response(failure, headers={'Retry-After': '60'})
+    monkeypatch.setattr(bathymetry.time, 'monotonic', lambda: clock[0])
+    with httpx.Client(transport=httpx.MockTransport(respond)) as client:
+        monkeypatch.setattr(bathymetry, '_client', client)
+        with pytest.raises(BathymetryUnavailable):
+            bathymetry._request_tile({'bbox': 'first'})
+        for i in range(50):
+            with pytest.raises(BathymetryUnavailable, match='cooling down'):
+                bathymetry._request_tile({'bbox': str(i)})
+        assert len(calls) == 1
+        clock[0] += 6 if failure == 'timeout' else 61
+        assert bathymetry._request_tile({'bbox': 'new view'}).status_code == 200
+        assert len(calls) == 2
+
+
+@pytest.mark.parametrize('z,x,y,covered', [
+    (8, 226, 101, False),  # Japan
+    (8, 41, 99, False),    # California
+    (8, 235, 152, False),  # Australia
+    (8, 96, 142, False),   # South Atlantic
+    (8, 128, 128, False),  # Equator
+    (8, 132, 94, True),    # Mediterranean
+    (8, 83, 117, True),    # Caribbean portion of the published WMS bounds
+    (6, 18, 20, False),    # Tile east edge merely touches the western limit
+    (6, 19, 20, True),     # First tile inside the western limit
+    (5, 20, 10, False),    # Tile west edge merely touches the eastern limit
+    (5, 19, 10, True),     # Last tile inside the eastern limit
+])
+def test_raster_coverage_matches_published_wms_envelope(z, x, y, covered):
+    assert bathymetry.has_bathymetry_coverage(z, x, y) is covered
+
+
+@pytest.mark.parametrize('padded,size', [(False, 256), (True, 280)])
+def test_direct_raster_call_outside_coverage_never_contacts_wms(monkeypatch, padded, size):
+    def forbidden(*args, **kwargs):
+        raise AssertionError('No WMS or recoloring outside EMODnet coverage')
+    monkeypatch.setattr(bathymetry, '_request_tile', forbidden)
+    monkeypatch.setattr(bathymetry, 'recolor_bathymetry_png', forbidden)
+    fetch_bathymetry_tile.cache_clear()
+    try:
+        content = fetch_bathymetry_tile(8, 226, 101, padded)
+        with Image.open(BytesIO(content)) as image:
+            assert image.size == (size, size)
+            assert image.convert('RGBA').getchannel('A').getbbox() is None
+    finally:
+        fetch_bathymetry_tile.cache_clear()
