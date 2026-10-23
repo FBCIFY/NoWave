@@ -165,6 +165,34 @@ class _Snapshot {
   final bool complete;
 }
 
+/// Feature maps belong to read-only snapshots. Keep exact object references,
+/// never an ID/hash signature: a replacement geometry must be encoded again.
+class _EncodedCollection {
+  _EncodedCollection(this.features, this.json);
+  final List<Map<String, dynamic>> features;
+  final String json;
+
+  bool matches(List<Map<String, dynamic>> next) {
+    if (features.length != next.length) return false;
+    for (var i = 0; i < next.length; i++) {
+      final a = features[i], b = next[i];
+      if (identical(a, b)) continue;
+      // Harbour placement adds a fresh properties wrapper. Compare every key,
+      // including selection_order, while geometry identity remains exact.
+      if (a.length != b.length) return false;
+      for (final key in a.keys) {
+        if (!b.containsKey(key)) return false;
+        if (key == 'properties' && a[key] is Map && b[key] is Map) {
+          if (!mapEquals(a[key] as Map, b[key] as Map)) return false;
+        } else if (a[key] != b[key]) {
+          return false;
+        }
+      }
+    }
+    return true;
+  }
+}
+
 /// Public data only: two in-flight requests, at most nine cells per family,
 /// 64 cached snapshots / 12 MiB encoded data. No Firebase headers or credentials.
 /// Displayed geometry remains pinned until complete replacement coverage arrives;
@@ -187,6 +215,9 @@ class MarineViewport {
   final http.Client Function() _clientFactory;
   final _cache = <String, _Snapshot>{};
   final _renderedData = <String, String>{};
+  // One most recent encoding per source (five), sharing snapshot geometry.
+  final _encodedCollections = <String, _EncodedCollection>{};
+  int _encodings = 0;
   final selection = HarbourSelection();
   final _active = <String, http.Client>{};
   final _cancelledFlights = <String>{};
@@ -227,6 +258,7 @@ class MarineViewport {
     'cache_encoded_bytes': _bytes,
     'retained_encoded_bytes': _retainedBytes,
     'active': _active.length,
+    'encodings': _encodings,
     'busy': _busy,
     'latency_ms': List<int>.of(_latencies),
     'selected_harbours': selection.order.keys.toList(),
@@ -308,6 +340,7 @@ class MarineViewport {
   void dispose() {
     _disposed = true;
     pause();
+    _encodedCollections.clear();
   }
 
   Future<void> synchronize(MapboxMap map, {CameraState? cameraState}) {
@@ -713,6 +746,7 @@ class MarineViewport {
         : e >= sw.lng || w <= ne.lng;
   }
 
+  /// Read-only snapshot features. Callers must not mutate the maps/geometries.
   List<Map<String, dynamic>> features(String family) {
     final span = MapPerformance.begin();
     final all = <String, Map<String, dynamic>>{};
@@ -849,12 +883,18 @@ class MarineViewport {
         }
       }
       if (_disposed || revision != _renderRevision) return;
-      final encodeSpan = MapPerformance.begin();
-      final encoded = jsonEncode({
-        'type': 'FeatureCollection',
-        'features': data,
-      });
-      MapPerformance.finish('encode_us', encodeSpan);
+      final previous = _encodedCollections[entry.value];
+      final String encoded;
+      if (previous != null && previous.matches(data)) {
+        encoded = previous.json;
+        MapPerformance.count('encode_reused');
+      } else {
+        final encodeSpan = MapPerformance.begin();
+        encoded = jsonEncode({'type': 'FeatureCollection', 'features': data});
+        _encodings++;
+        MapPerformance.finish('encode_us', encodeSpan);
+        _encodedCollections[entry.value] = _EncodedCollection(data, encoded);
+      }
       if (_renderedData[entry.value] != encoded &&
           await map.style.styleSourceExists(entry.value) &&
           !_disposed &&
