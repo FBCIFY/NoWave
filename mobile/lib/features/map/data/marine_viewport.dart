@@ -90,7 +90,11 @@ class HarbourSelection {
       final r = rank(fa).compareTo(rank(fb));
       return r != 0 ? r : ia.compareTo(ib);
     });
-    final occupied = <ScreenCoordinate>[];
+    // Bucket only the collision search. Keep the original floating-point
+    // predicate and priority order, including exact spacing boundaries.
+    final occupied = <(int, int), List<ScreenCoordinate>>{};
+    // For small inputs a short list is cheaper than nine bucket lookups.
+    final linear = features.length < 128 ? <ScreenCoordinate>[] : null;
     final selected = <Map<String, dynamic>>[];
     // 24 logical px PNG at max icon size 1.12 plus six px padding.
     for (final i in indexes) {
@@ -106,13 +110,34 @@ class HarbourSelection {
           p.y > height + spacing) {
         continue;
       }
-      if (occupied.any(
-        (q) => (q.x - p.x).abs() < spacing && (q.y - p.y).abs() < spacing,
-      )) {
+      final x = (p.x / spacing).floor(), y = (p.y / spacing).floor();
+      var collision =
+          linear?.any(
+            (q) => (q.x - p.x).abs() < spacing && (q.y - p.y).abs() < spacing,
+          ) ??
+          false;
+      if (linear == null) {
+        for (var dx = -1; dx <= 1 && !collision; dx++) {
+          for (var dy = -1; dy <= 1 && !collision; dy++) {
+            collision =
+                occupied[(x + dx, y + dy)]?.any(
+                  (q) =>
+                      (q.x - p.x).abs() < spacing &&
+                      (q.y - p.y).abs() < spacing,
+                ) ??
+                false;
+          }
+        }
+      }
+      if (collision) {
         continue;
       }
       order.putIfAbsent(id, () => _sequence++);
-      occupied.add(p);
+      if (linear == null) {
+        occupied.putIfAbsent((x, y), () => []).add(p);
+      } else {
+        linear.add(p);
+      }
       selected.add({
         ...f,
         'properties': {...f['properties'] as Map, 'selection_order': order[id]},
