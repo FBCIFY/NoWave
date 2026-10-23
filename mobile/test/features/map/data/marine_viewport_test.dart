@@ -1076,7 +1076,7 @@ void main() {
     expect(viewport.metrics['active'], 0);
   });
 
-  test('503 and timeout retry after backoff without caching a false empty snapshot', () async {
+  test('429, 503 and timeout retry after backoff without caching a false empty snapshot', () async {
     final map = ViewMap();
     var clock = DateTime.utc(2026, 10, 22);
     var attempts = 0;
@@ -1086,8 +1086,9 @@ void main() {
       now: () => clock,
       clientFactory: () => MockClient((_) async {
         attempts++;
-        if (attempts <= 9) return http.Response('{}', 503);
-        if (attempts <= 18) throw TimeoutException('network timeout');
+        if (attempts <= 9) return http.Response('{}', 429);
+        if (attempts <= 18) return http.Response('{}', 503);
+        if (attempts <= 27) throw TimeoutException('network timeout');
         return http.Response(
           jsonEncode({
             'type': 'FeatureCollection',
@@ -1101,10 +1102,17 @@ void main() {
     await viewport.synchronize(map);
     expect(viewport.metrics['cache_entries'], 0);
     expect(viewport.errors, 9);
+    // Events inside backoff must not start a retry storm.
+    await viewport.synchronize(map);
+    expect(attempts, 9);
     clock = clock.add(const Duration(seconds: 16));
     await viewport.synchronize(map);
     expect(viewport.metrics['cache_entries'], 0);
     expect(viewport.errors, 18);
+    clock = clock.add(const Duration(seconds: 16));
+    await viewport.synchronize(map);
+    expect(viewport.metrics['cache_entries'], 0);
+    expect(viewport.errors, 27);
     clock = clock.add(const Duration(seconds: 16));
     await viewport.synchronize(map);
     expect(viewport.metrics['cache_entries'], 9);

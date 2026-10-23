@@ -8,7 +8,7 @@ import '../../../support/harbour_selection_reference.dart';
 import 'marine_viewport_test.dart' show harbour;
 
 void main() {
-  for (final count in [10, 100, 1000]) {
+  for (final count in [10, 100, 127, 128, 1000]) {
     test(
       'grid equals reference across rotation, pitch and visibility: $count ports',
       () {
@@ -64,7 +64,7 @@ void main() {
     'exact spacing, neighbouring buckets, negative positions and stacked ports',
     () {
       const s = 24 * 1.12 + 6;
-      final features = [for (var i = 0; i < 16; i++) harbour('$i')];
+      final features = [for (var i = 0; i < 144; i++) harbour('$i')];
       final actual = HarbourSelection(),
           reference = ReferenceHarbourSelection();
       final pixels = [
@@ -87,6 +87,8 @@ void main() {
           (0.0, double.negativeInfinity),
         ])
           ScreenCoordinate(x: x, y: y),
+        // Keep the bucket path active, with invisible filler candidates.
+        for (var i = 0; i < 128; i++) ScreenCoordinate(x: -100, y: -100),
       ];
       for (var step = 0; step < 4; step++) {
         expect(

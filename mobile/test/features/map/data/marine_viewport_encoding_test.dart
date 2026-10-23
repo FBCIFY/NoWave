@@ -6,6 +6,7 @@ import 'package:blueway/features/map/data/marine_viewport.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
+import 'package:mapbox_maps_flutter/mapbox_maps_flutter.dart';
 
 import 'marine_viewport_test.dart' show ViewMap, ViewStyle, harbour, until;
 
@@ -14,6 +15,9 @@ class CountingStyle extends ViewStyle {
   bool fail = false;
   Completer<void>? gate;
   int active = 0, maxActive = 0;
+  bool available = true;
+  @override
+  Future<bool> styleSourceExists(String id) async => available;
   @override
   Future<void> setStyleSourceProperty(
     String id,
@@ -37,8 +41,16 @@ class CountingStyle extends ViewStyle {
 }
 
 class EncodingMap extends ViewMap {
+  final _style = CountingStyle();
   @override
-  final CountingStyle style = CountingStyle();
+  CountingStyle get style => _style;
+  bool visible = true;
+  @override
+  Future<List<ScreenCoordinate?>> pixelsForCoordinates(
+    List<Point> points,
+  ) async => [
+    for (final _ in points) ScreenCoordinate(x: visible ? 180 : -100, y: 400),
+  ];
 }
 
 MarineViewport viewport(ViewMap map) => MarineViewport(
@@ -67,6 +79,44 @@ MarineViewport viewport(ViewMap map) => MarineViewport(
 );
 
 void main() {
+  test(
+    'harbour visibility and selection order invalidate the encoding',
+    () async {
+      final map = EncodingMap()..zoom = 13;
+      final view = viewport(map);
+      addTearDown(view.dispose);
+      await view.synchronize(map);
+      final source = MarineViewport.sources['harbours']!;
+      final before = jsonDecode(map.style.data[source]!)['features'] as List;
+      expect(before, hasLength(1));
+      map.visible = false;
+      await view.synchronize(map);
+      expect(jsonDecode(map.style.data[source]!)['features'], isEmpty);
+      map.visible = true;
+      await view.synchronize(map);
+      final after = jsonDecode(map.style.data[source]!)['features'] as List;
+      expect(after.single['id'], before.single['id']);
+      expect(
+        after.single['properties']['selection_order'],
+        greaterThan(before.single['properties']['selection_order'] as int),
+      );
+    },
+  );
+
+  test('source installation after a missed publication reuses encoding and retries', () async {
+    final map = EncodingMap()..zoom = 4;
+    final view = viewport(map);
+    addTearDown(view.dispose);
+    map.style.available = false;
+    await view.synchronize(map);
+    expect(map.style.writes, 0);
+    final encodings = view.metrics['encodings'];
+    map.style.available = true;
+    await view.synchronize(map);
+    expect(map.style.writes, 5);
+    expect(view.metrics['encodings'], encodings);
+  });
+
   test('warm data reuses exact encodings, style reload still republishes all five sources', () async {
     final map = EncodingMap()..zoom = 13;
     final view = viewport(map);
