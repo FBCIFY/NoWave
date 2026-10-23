@@ -1,7 +1,7 @@
 /* Canvas adaptation of Flutter ReportCategoryGlyph, rendered once per style. */
 window.NoWaveMarkerIcons = {
   install(map) {
-    const colors={marine_animal:'#06B6D4',obstruction:'#F97316',pollution:'#7C3AED'};
+    const colors={marine_animal:'#06B6D4',obstruction:'#F97316',pollution:'#7C3AED',unknown:'#64748B'};
     for (const [kind,color] of Object.entries(colors)) {
       const canvas=document.createElement('canvas');canvas.width=96;canvas.height=112;
       const c=canvas.getContext('2d');if(!c)return false;
@@ -26,10 +26,11 @@ window.NoWaveMarkerIcons = {
         c.beginPath();c.moveTo(12,3);c.lineTo(22,21);c.lineTo(2,21);c.closePath();c.stroke();
         c.beginPath();c.moveTo(12,9);c.lineTo(12,14);c.stroke();
         c.beginPath();c.arc(12,18,.9,0,Math.PI*2);c.fill();
-      } else {
+      } else if(kind==='pollution') {
         c.beginPath();c.moveTo(12,2);c.bezierCurveTo(9,7,5,12,5,15);
         c.arc(12,15,7,Math.PI,0,true);c.bezierCurveTo(19,12,15,7,12,2);c.stroke();
       }
+      if(kind==='unknown') { c.beginPath();c.arc(12,12,5,0,Math.PI*2);c.stroke(); }
       c.restore();map.addImage(`report-${kind}`,c.getImageData(0,0,96,112),{pixelRatio:2});
     }
     return true;

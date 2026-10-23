@@ -63,7 +63,7 @@ jobs:
           done
 
       - name: Test admin cartography
-        run: node --test backend/tests/web/test_map_style.cjs
+        run: node --test backend/tests/web/*.cjs
 
       - name: Validate production Nginx configuration
         run: |
@@ -129,6 +129,28 @@ jobs:
         run: docker compose up -d --build --wait --wait-timeout 120 database
       - name: Migrations, schema, repositories and readiness
         run: python -m pytest backend/tests/database -q --junitxml=test-results/database.xml
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: backend/tests/browser/package-lock.json
+      - name: Install admin browser tests
+        run: |
+          npm ci --prefix backend/tests/browser --ignore-scripts
+          npm audit --prefix backend/tests/browser --audit-level=low
+          cd backend/tests/browser
+          npx playwright install --with-deps chromium
+      - name: Admin browser journeys with isolated PostGIS
+        env:
+          PYTHON: python
+        run: npm test --prefix backend/tests/browser -- admin.spec.cjs
+      - name: Publish admin browser evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: admin-browser-test-results
+          path: backend/tests/browser/test-results/
+          retention-days: 14
       - name: Database logs
         if: always()
         run: |
