@@ -1,6 +1,8 @@
 import asyncio
 import sqlite3
 import time
+from concurrent.futures import ThreadPoolExecutor
+from threading import Event, Thread
 
 import pytest
 
@@ -11,6 +13,79 @@ from app.infrastructure.marine.bathymetry_cache import BathymetryTileCache
 
 
 TILE = Tile(8, 131, 94)
+
+
+def test_parallel_disk_operations_preserve_every_tile_and_report_no_errors(tmp_path):
+    async def scenario():
+        path = tmp_path / "parallel.sqlite3"
+        cache = BathymetryTileCache(None, path)
+        with ThreadPoolExecutor(max_workers=24) as pool:
+            list(pool.map(lambda i: cache._write(str(i), time.time() + 60, b"png"), range(128)))
+            rows = list(pool.map(lambda i: cache._read(str(i)), range(128)))
+        assert all(row and row[1] == b"png" for row in rows)
+        assert cache.metrics["disk_errors"] == 0
+        await cache.close()
+        assert cache._connection is None
+
+    asyncio.run(scenario())
+
+
+def test_external_sqlite_writer_longer_than_old_timeout_is_tolerated(tmp_path):
+    async def scenario():
+        path = tmp_path / "locked.sqlite3"
+        cache = BathymetryTileCache(None, path)
+        cache._write("initial", time.time() + 60, b"initial")
+        locked = Event()
+
+        def hold_writer():
+            with sqlite3.connect(path) as db:
+                db.execute("BEGIN IMMEDIATE")
+                locked.set()
+                time.sleep(.25)  # Original 100ms timeout would lose this write.
+
+        thread = Thread(target=hold_writer)
+        thread.start()
+        assert locked.wait(2)
+        await cache._disk(cache._write, "new", time.time() + 60, b"saved")
+        thread.join()
+        assert cache._read("new")[1] == b"saved"
+        assert cache.metrics["disk_errors"] == 0
+        await cache.close()
+
+    asyncio.run(scenario())
+
+
+def test_response_deadline_keeps_inflight_render_and_worker_bound(tmp_path):
+    async def scenario():
+        release = asyncio.Event()
+        started = asyncio.Event()
+        calls = 0
+
+        async def render(tile):
+            nonlocal calls
+            calls += 1
+            started.set()
+            await release.wait()
+            return b"png"
+
+        cache = BathymetryTileCache(render, tmp_path / "deadline.sqlite3", concurrency=1)
+        cache.RESPONSE_TIMEOUT = .05
+        cache.QUEUE_TIMEOUT = .02
+        first = asyncio.create_task(cache.get(TILE))
+        await started.wait()
+        with pytest.raises(ProviderUnavailable, match="response deadline"):
+            await first
+        with pytest.raises(ProviderUnavailable, match="queue deadline"):
+            await cache.get(Tile(8, 132, 94))
+        duplicate = asyncio.create_task(cache.get(TILE))
+        await asyncio.sleep(0)
+        release.set()
+        assert await duplicate == b"png"
+        assert calls == 1
+        assert cache.metrics["shared"] == 1
+        await cache.close()
+
+    asyncio.run(scenario())
 
 
 def test_cold_duplicate_requests_share_one_render_and_survive_a_cancel(tmp_path):
@@ -206,7 +281,7 @@ def test_cache_disk_and_memory_stay_bounded(tmp_path):
     asyncio.run(scenario())
 
 
-def test_unwritable_optional_cache_keeps_a_valid_render(tmp_path):
+def test_unwritable_optional_cache_keeps_a_valid_render(tmp_path, caplog):
     async def scenario():
         forbidden = tmp_path / "not-a-directory"
         forbidden.write_text("preserved")
@@ -221,6 +296,8 @@ def test_unwritable_optional_cache_keeps_a_valid_render(tmp_path):
         await cache.close()
 
     asyncio.run(scenario())
+    assert "disk cache read failed:" in caplog.text
+    assert "sqlite=none" in caplog.text
 
 
 def test_queue_is_bounded_and_shutdown_cancels_waiters(tmp_path):

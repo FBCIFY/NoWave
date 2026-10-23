@@ -161,7 +161,8 @@ class Sandbox:
                                 'source_root="' + str(self.source) + '"')
             (self.source / "deploy/hostinger" / file.name).write_text(text)
         (self.source / "deploy/hostinger/bootstrap.py").write_text("# No host provisioning in tests.\n")
-        for name in ("nowave-backup.service", "nowave-backup.timer"):
+        for name in ("nowave-backup.service", "nowave-backup.timer",
+                     "nowave-build-cache.service", "nowave-build-cache.timer"):
             shutil.copyfile(ROOT / "deploy/hostinger" / name, self.source / "deploy/hostinger" / name)
         (self.source / "deploy/compose.yaml").write_text("new-compose\n")
         (self.source / "deploy/tunnel.yaml").write_text("new-tunnel\n")

@@ -13,6 +13,40 @@ from app.infrastructure.adapters.emodnet_bathymetry import (
 )
 
 
+@pytest.mark.parametrize("status,retry_after,expected", [
+    (429, False, 1), (503, False, 1), (502, True, 1),
+    (502, False, 2), (504, False, 2), (400, False, 1),
+])
+def test_retry_policy_does_not_amplify_rate_limits_or_cooldowns(monkeypatch, status, retry_after, expected):
+    calls = []
+
+    def respond(request):
+        calls.append(request)
+        return httpx.Response(status, headers={"Retry-After": "30"} if retry_after else {})
+
+    with httpx.Client(transport=httpx.MockTransport(respond)) as client:
+        monkeypatch.setattr(bathymetry, "_client", client)
+        monkeypatch.setattr(bathymetry.time, "sleep", lambda _: None)
+        with pytest.raises(BathymetryUnavailable):
+            bathymetry._request_tile({})
+    assert len(calls) == expected
+    assert calls[0].extensions["timeout"]["read"] <= 6
+
+
+def test_slow_supplier_read_timeout_is_not_retried(monkeypatch):
+    calls = []
+
+    def respond(request):
+        calls.append(request)
+        raise httpx.ReadTimeout("slow", request=request)
+
+    with httpx.Client(transport=httpx.MockTransport(respond)) as client:
+        monkeypatch.setattr(bathymetry, "_client", client)
+        with pytest.raises(BathymetryUnavailable):
+            bathymetry._request_tile({})
+    assert len(calls) == 1
+
+
 def test_world_tile_bbox():
     min_x, min_y, max_x, max_y = web_mercator_tile_bbox(
         0,

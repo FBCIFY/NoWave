@@ -1,4 +1,6 @@
 import asyncio
+import logging
+import time
 from contextlib import suppress
 from typing import Annotated
 from uuid import UUID
@@ -263,6 +265,13 @@ async def _render_bathymetry_tile(tile: Tile) -> bytes:
     raw = await run_in_threadpool(fetch_bathymetry_tile, tile.z, tile.x, tile.y, True)
     if not await run_in_threadpool(has_raster_data, raw):
         return await run_in_threadpool(crop_context, raw)
+    mask_started = time.monotonic()
     context = await get_coastline_mask().get_context(tile, raw)
+    mask_done = time.monotonic()
     content = await run_in_threadpool(render_visual_water, raw, context.mask)
+    logging.getLogger("uvicorn.error.bathymetry").info(
+        "Bathymetry tile=%s/%s/%s mask_ms=%.1f visual_ms=%.1f complete=%s",
+        tile.z, tile.x, tile.y, (mask_done - mask_started) * 1000,
+        (time.monotonic() - mask_done) * 1000, context.complete,
+    )
     return content if context.complete else UncachedBathymetryTile(content)

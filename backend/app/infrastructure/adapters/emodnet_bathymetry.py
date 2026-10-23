@@ -1,4 +1,5 @@
 import time
+import logging
 from functools import lru_cache
 from io import BytesIO
 
@@ -9,6 +10,7 @@ from app.infrastructure.marine.visual_water import PADDING
 
 
 EMODNET_WMS_URL = "https://ows.emodnet-bathymetry.eu/wms"
+logger = logging.getLogger("uvicorn.error.bathymetry")
 
 # Échantillons RGB dans l'ordre de la légende GetLegendGraphic de
 # mean_multicolour (Multi Colour non-linear), relevés hors des graduations.
@@ -53,17 +55,19 @@ _NOWAVE_RAMP = (
 # Demi-circonférence du monde en Web Mercator EPSG:3857.
 _WEB_MERCATOR_HALF_WORLD = 20037508.342789244
 
-# Une requête initiale + deux nouvelles tentatives.
-_RETRY_DELAYS = (0.25, 0.75)
+# One short retry for connection failures or a transient gateway error only.
+# Never amplify a slow supplier, rate limit, or Retry-After response.
+_RETRY_DELAYS = (0.25,)
+_REQUEST_BUDGET = 14.0
 
 # Erreurs temporaires pour lesquelles une nouvelle tentative a du sens.
-_RETRYABLE_STATUS_CODES = {429, 502, 503, 504}
+_RETRYABLE_STATUS_CODES = {502, 504}
 
 # On réutilise les connexions mais on force HTTP/1.1.
 _client = httpx.Client(
     http2=False,
     follow_redirects=True,
-    timeout=httpx.Timeout(10.0, connect=3.0),
+    timeout=httpx.Timeout(6.0, connect=2.0, pool=1.0),
     limits=httpx.Limits(
         max_connections=8,
         max_keepalive_connections=4,
@@ -182,12 +186,18 @@ def _request_tile(params: dict[str, str]) -> httpx.Response:
 
     attempts = len(_RETRY_DELAYS) + 1
     last_error: Exception | None = None
+    started = time.monotonic()
 
     for attempt in range(attempts):
         try:
+            remaining = _REQUEST_BUDGET - (time.monotonic() - started)
+            if remaining <= 0:
+                break
             response = _client.get(
                 EMODNET_WMS_URL,
                 params=params,
+                timeout=httpx.Timeout(min(6.0, remaining / 2),
+                                      connect=min(2.0, remaining / 4), pool=1.0),
             )
 
             if response.status_code in _RETRYABLE_STATUS_CODES:
@@ -198,24 +208,28 @@ def _request_tile(params: dict[str, str]) -> httpx.Response:
                 )
 
             response.raise_for_status()
+            logger.info("Bathymetry fetch_ms=%.1f attempts=%d status=%d",
+                        (time.monotonic() - started) * 1000, attempt + 1, response.status_code)
             return response
 
         except httpx.HTTPError as error:
             last_error = error
 
-            retryable = isinstance(error, httpx.TransportError)
+            retryable = isinstance(error, httpx.ConnectError)
 
             if isinstance(error, httpx.HTTPStatusError):
                 retryable = (
                     error.response.status_code
                     in _RETRYABLE_STATUS_CODES
-                )
+                ) and "retry-after" not in error.response.headers
 
             if not retryable or attempt >= len(_RETRY_DELAYS):
                 break
 
             time.sleep(_RETRY_DELAYS[attempt])
 
+    logger.warning("Bathymetry fetch failed fetch_ms=%.1f error=%s",
+                   (time.monotonic() - started) * 1000, type(last_error).__name__)
     raise BathymetryUnavailable(
         "EMODnet bathymetry service unavailable"
     ) from last_error
@@ -268,6 +282,7 @@ def fetch_bathymetry_tile(
             f"{content_type or 'unknown'}"
         )
 
+    render_started = time.monotonic()
     recolored = recolor_bathymetry_png(response.content, associated_alpha=True)
     with Image.open(BytesIO(recolored)) as image:
         if image.size != (256 + 2 * padding, 256 + 2 * padding):
@@ -277,6 +292,7 @@ def fetch_bathymetry_tile(
             rgba = rgba.crop((padding, padding, padding + 256, padding + 256))
         output = BytesIO()
         rgba.save(output, format="PNG")
+        logger.info("Bathymetry raster_ms=%.1f", (time.monotonic() - render_started) * 1000)
         return output.getvalue()
 
 

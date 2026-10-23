@@ -54,6 +54,7 @@ def probe(nginx, config):
             return await cache.get("https://fixture.invalid" + path, ttl=300)
 
         viewport_paths = tile_paths(40, 9)
+        overlapping_paths = tile_paths(60, 27)
 
         class Backend(BaseHTTPRequestHandler):
             def log_message(self, *args):
@@ -65,7 +66,7 @@ def probe(nginx, config):
                         else b"{}")
                 # One real viewport can request 9 tiles across 7 sources at
                 # once. Keep those streams open to expose connection limits.
-                if self.path in viewport_paths:
+                if self.path in viewport_paths or self.path in overlapping_paths:
                     time.sleep(2)
                 self.send_response(200)
                 self.send_header("Content-Type", "application/octet-stream")
@@ -118,6 +119,7 @@ def probe(nginx, config):
             ("geojson_viewport", snapshot_paths(9)),
             ("full_viewport", viewport_paths),
             ("repeat_viewport", viewport_paths),
+            ("three_overlapping_viewports", overlapping_paths),
         ]
         # Warm the real durable cache before any proxy measurement, including
         # every navigation path. Nginx must not consume the profile budget even
@@ -147,7 +149,7 @@ def probe(nginx, config):
             cases = []
             for name, paths in scenarios:
                 started = time.monotonic()
-                with ThreadPoolExecutor(max_workers=64) as pool:
+                with ThreadPoolExecutor(max_workers=192) as pool:
                     pending = [pool.submit(request, path) for path in paths]
                     # Profile requests must succeed while marine requests are
                     # still open, rather than only after the tiles complete.

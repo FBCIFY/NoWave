@@ -137,6 +137,11 @@ install -m 0644 "$source_root/deploy/hostinger/nowave-backup.service" /etc/syste
 install -m 0644 "$source_root/deploy/hostinger/nowave-backup.timer" /etc/systemd/system/nowave-backup.timer
 systemctl daemon-reload
 systemctl enable --now nowave-backup.timer
+install -m 0700 "$source_root/deploy/hostinger/prune-build-cache.sh" "$root/config/prune-build-cache.sh"
+install -m 0644 "$source_root/deploy/hostinger/nowave-build-cache.service" /etc/systemd/system/nowave-build-cache.service
+install -m 0644 "$source_root/deploy/hostinger/nowave-build-cache.timer" /etc/systemd/system/nowave-build-cache.timer
+systemctl daemon-reload
+systemctl enable --now nowave-build-cache.timer
 printf '%s\n' "$revision" > "$root/current-revision.tmp"
 mv "$root/current-revision.tmp" "$root/current-revision"
 trap - ERR INT TERM
