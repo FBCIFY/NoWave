@@ -28,7 +28,7 @@ class MarinePalette {
     'showPointOfInterestLabels': false,
     'showTransitLabels': false,
     'showAdminBoundaries': false,
-    'show3dObjects': true,
+    'show3dObjects': false,
   };
 
   /// Only surface colours: water, labels, boundaries and symbols are excluded.

@@ -104,10 +104,10 @@ void main() {
   });
 
   testWidgets(
-    'le badge Z suit les événements caméra sans remplacer les coordonnées',
+    'les changements de zoom n’affichent pas de badge et gardent les coordonnées',
     (tester) async {
       await tester.pumpWidget(const MaterialApp(home: MapScreen()));
-      expect(find.text('Z 0.7'), findsOneWidget);
+      expect(find.text('Z 0.7'), findsNothing);
       final map = tester.widget<MapWidget>(find.byType(MapWidget));
       expect(map.mapOptions?.constrainMode, ConstrainMode.NONE);
       expect(map.isOpaque, false);
@@ -132,7 +132,7 @@ void main() {
           }),
         );
         await tester.pump();
-        expect(find.text('Z ${zoom.toStringAsFixed(1)}'), findsOneWidget);
+        expect(find.text('Z ${zoom.toStringAsFixed(1)}'), findsNothing);
         expect(find.text('Position indisponible'), findsOneWidget);
       }
       await tester.pumpWidget(const SizedBox.shrink());
