@@ -241,6 +241,10 @@ async def get_bathymetry_tile(
     try:
         tile = await get_bathymetry_cache(_render_bathymetry_tile).get(Tile(z, x, y))
     except (BathymetryUnavailable, ProviderUnavailable, OSError, ValueError) as error:
+        logging.getLogger("uvicorn.error.bathymetry").warning(
+            "Bathymetry tile=%s/%s/%s failed error=%s detail=%s",
+            z, x, y, type(error).__name__, error,
+        )
         raise HTTPException(
             status_code=503,
             detail="Bathymetry temporarily unavailable.",

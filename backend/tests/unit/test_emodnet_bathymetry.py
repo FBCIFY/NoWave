@@ -1,4 +1,6 @@
 from io import BytesIO
+from concurrent.futures import ThreadPoolExecutor
+from threading import Barrier
 
 import httpx
 import pytest
@@ -177,6 +179,24 @@ def test_recolor_is_deterministic_across_lut_rebuilds():
     bathymetry._blue_color_lut.cache_clear()
 
     assert recolor_bathymetry_png(content) == first
+
+
+def test_first_viewport_constructs_color_table_once_across_eight_workers():
+    source = png_bytes(Image.new("RGBA", (280, 280), (0, 0, 62, 255)))
+    ready = Barrier(8)
+
+    def recolor(_):
+        ready.wait(timeout=5)
+        return recolor_bathymetry_png(source)
+
+    bathymetry._blue_color_lut.cache_clear()
+    try:
+        with ThreadPoolExecutor(max_workers=8) as pool:
+            results = list(pool.map(recolor, range(8)))
+        assert all(result == results[0] for result in results)
+        assert bathymetry._blue_color_lut.cache_info().misses == 1
+    finally:
+        bathymetry._blue_color_lut.cache_clear()
 
 
 @pytest.mark.parametrize("content", [b"not a PNG", b"\x89PNG\r\n\x1a\ntruncated"])

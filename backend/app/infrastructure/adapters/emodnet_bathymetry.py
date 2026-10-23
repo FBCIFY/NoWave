@@ -2,6 +2,7 @@ import time
 import logging
 from functools import lru_cache
 from io import BytesIO
+from threading import Lock
 
 import httpx
 from PIL import Image, ImageFilter, ImageChops
@@ -11,6 +12,7 @@ from app.infrastructure.marine.visual_water import PADDING
 
 EMODNET_WMS_URL = "https://ows.emodnet-bathymetry.eu/wms"
 logger = logging.getLogger("uvicorn.error.bathymetry")
+_LUT_LOCK = Lock()
 
 # Échantillons RGB dans l'ordre de la légende GetLegendGraphic de
 # mean_multicolour (Multi Colour non-linear), relevés hors des graduations.
@@ -144,7 +146,12 @@ def recolor_bathymetry_png(content: bytes, *, associated_alpha: bool = False) ->
             # edges. Undo that association BEFORE the nonlinear colour LUT;
             # otherwise opacity is misread as a dark bathymetric colour.
             rgba = Image.frombytes("RGBa", rgba.size, rgba.tobytes()).convert("RGBA")
-        recolored = rgba.convert("RGB").filter(_blue_color_lut())
+        # functools.lru_cache permits concurrent misses. Eight cold tiles
+        # previously rebuilt the expensive Python LUT eight times under the
+        # GIL, stalling both the worker queue and first viewport for seconds.
+        with _LUT_LOCK:
+            lut = _blue_color_lut()
+        recolored = rgba.convert("RGB").filter(lut)
         recolored.putalpha(rgba.getchannel("A"))
         # Adoucissement visuel subpixel, sans mélanger le noir/blanc des
         # pixels sans données à la côte. L'alpha source reste strictement

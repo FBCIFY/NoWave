@@ -129,11 +129,16 @@ Les résultats locaux ne prouvent pas l'origine d'un 429 distant : vérifier
 amont conservent le backoff `Retry-After` du transport marin ; aucune boucle de
 retries ni préchargement de zones n'est ajouté.
 
-Le timer `nowave-build-cache.timer` borne chaque jour le cache BuildKit à 4 Go
+La table de recoloration est initialisée une seule fois, même si huit tuiles
+arrivent ensemble au démarrage. Le cache LRU seul ne sérialise pas ses défauts.
+
+Le timer `nowave-build-cache.timer` borne chaque jour le cache BuildKit récupérable à 4 Go
 (avec un plancher de conservation de 2 Go), sous le verrou de déploiement.
 `ci-deploy.sh` applique aussi cette rétention après une livraison réussie.
 Le cache de build est partagé avec LabelScan et entièrement régénérable ; les
 images de retour arrière, conteneurs, volumes et sauvegardes sont conservés.
+Les couches partagées avec les images conservées restent comptées dans
+`docker system df` : le total affiché peut dépasser le plafond du cache récupérable.
 
 Le service `photo-cleanup` partage le code de l'API et tourne toutes les cinq
 minutes ; ses logs indiquent les suppressions et les pannes sans exposer les
