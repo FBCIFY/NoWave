@@ -2,6 +2,8 @@ from contextlib import asynccontextmanager
 
 import psycopg
 from fastapi import FastAPI
+from fastapi.staticfiles import StaticFiles
+from pathlib import Path
 from fastapi.exceptions import RequestValidationError
 from starlette.exceptions import HTTPException as StarletteHTTPException
 from app.config.production import configure_production, is_production
@@ -103,6 +105,7 @@ for error_type in (
 app.include_router(health_router)
 app.include_router(api_router)
 app.include_router(admin_pages_router)
+app.mount('/admin-static', StaticFiles(directory=Path(__file__).parent / 'web' / 'static'), name='admin-static')
 register_web_error_handlers(app)
 
 app.add_exception_handler(

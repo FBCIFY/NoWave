@@ -100,7 +100,8 @@ def test_login_page_sets_csrf_cookie_and_field(client, web_session):
     assert response.status_code == 200
     assert response.headers["cache-control"] == "no-store"
     assert f'name="csrf_token" value="{token}"' in response.text
-    assert "<script" not in response.text
+    assert '<script src="/admin-static/login.js" defer>' in response.text
+    assert "<script>" not in response.text
 
     header = cookie_header(response, CSRF_COOKIE)
     for flag in ("HttpOnly", "Secure", "SameSite=strict", "Path=/"):
@@ -249,7 +250,8 @@ def test_home_shows_active_admin(client, web_session):
 
     assert response.status_code == 200
     assert response.headers["cache-control"] == "no-store"
-    assert "Bonjour admin" in response.text
+    assert "Centre de surveillance maritime" in response.text
+    assert "admin" in response.text
     assert 'action="/admin/logout"' in response.text
     token = session_csrf_token("session-cookie")
     assert f'name="csrf_token" value="{token}"' in response.text

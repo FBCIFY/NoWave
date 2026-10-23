@@ -1,8 +1,9 @@
 from dataclasses import dataclass
 from uuid import UUID
+import os
 
 from fastapi import APIRouter, Depends, Form, Query, Request
-from fastapi.responses import RedirectResponse
+from fastapi.responses import RedirectResponse, JSONResponse
 
 from app.application.services.admin_reads import AdminReadService
 from app.application.services.admin_web_session import (
@@ -61,6 +62,10 @@ router = APIRouter(
 )
 
 
+def get_admin_read_service() -> AdminReadService:
+    return AdminReadService(admin_read_repository=PostgreSQLAdminReadRepository())
+
+
 def render_admin_page(
     request: Request,
     context: AdminContext,
@@ -91,7 +96,8 @@ def login_page(
     response = render(
         request,
         "admin/login.html",
-        {"error": error, "email": email, "csrf_token": token},
+        {"error": error, "email": email, "csrf_token": token,
+         "mapbox_token": os.getenv("MAPBOX_PUBLIC_TOKEN", "")},
         status_code=status_code,
     )
     set_csrf_cookie(response, token)
@@ -188,8 +194,92 @@ def show_home(
     request: Request,
     context: AdminContext = Depends(get_admin_context),
 ):
-    # Placeholder until the moderation pages of NW-127.
-    return render_admin_page(request, context, "admin/home.html")
+    return render_admin_page(request, context, "admin/home.html", {
+        "mapbox_token": os.getenv("MAPBOX_PUBLIC_TOKEN", ""),
+    })
+
+
+@router.get('/data/reports')
+def map_reports(
+    west: float = Query(ge=-180, le=180), south: float = Query(ge=-90, le=90),
+    east: float = Query(ge=-180, le=180), north: float = Query(ge=-90, le=90),
+    context: AdminContext = Depends(get_admin_context),
+):
+    del context
+    if west >= east or south >= north:
+        return JSONResponse({"error": "Emprise invalide"}, status_code=422,
+                            headers={"Cache-Control": "no-store"})
+    try:
+        rows, truncated = PostgreSQLAdminReadRepository().map_reports(west, south, east, north)
+    except DEPENDENCY_ERRORS:
+        raise WebServiceUnavailable() from None
+    return JSONResponse({"type": "FeatureCollection", "features": [
+        {"type": "Feature", "geometry": {"type": "Point", "coordinates": [row[1], row[2]]},
+         "properties": {"id": str(row[0]), "category": row[3], "status": row[4]}}
+        for row in rows], "truncated": truncated}, headers={"Cache-Control": "no-store"})
+
+
+@router.get('/data/reports/{target_id}')
+def map_report_detail(target_id: UUID, context: AdminContext = Depends(get_admin_context),
+                      service: AdminReadService = Depends(get_admin_read_service)):
+    del context
+    from app.api.routes.admin import admin_report_detail_response
+    try:
+        item = service.get_report(target_id)
+        result = admin_report_detail_response(item)
+    except ReportNotFoundError:
+        return JSONResponse({"error": "Signalement introuvable"}, status_code=404,
+                            headers={"Cache-Control": "no-store"})
+    except DEPENDENCY_ERRORS:
+        raise WebServiceUnavailable() from None
+    return JSONResponse(result.model_dump(mode='json'), headers={"Cache-Control": "no-store"})
+
+
+@router.get('/data/users')
+def map_users(page: int = Query(default=1, ge=1, le=MAX_PAGE),
+              status: str = Query(default=''),
+              search: str = Query(default='', max_length=80),
+              context: AdminContext = Depends(get_admin_context),
+              service: AdminReadService = Depends(get_admin_read_service)):
+    del context
+    from app.domain.user import UserStatus
+    from app.api.schemas.admin import AdminUserResponse
+    try:
+        status_filter = UserStatus(status) if status else None
+    except ValueError:
+        return JSONResponse({"error": "Statut invalide"}, status_code=422,
+                            headers={"Cache-Control": "no-store"})
+    try:
+        if search.strip():
+            rows, total = PostgreSQLAdminReadRepository().search_users(page, status_filter, search.strip())
+            items = [dict(id=str(row[0]), username=row[1], email=row[2], role=row[3],
+                          status=row[4], created_at=row[5].isoformat(),
+                          updated_at=row[6].isoformat(), reports_count=row[7]) for row in rows]
+            pages = (total + 19) // 20
+        else:
+            result = service.list_users(page=page, limit=20, status=status_filter)
+            items = [AdminUserResponse.model_validate(item).model_dump(mode='json')
+                     for item in result.items]
+            total, pages = result.total, result.pages
+    except DEPENDENCY_ERRORS:
+        raise WebServiceUnavailable() from None
+    return JSONResponse({"items": items, "page": page,
+                         "pages": pages, "total": total},
+                        headers={"Cache-Control": "no-store"})
+
+
+@router.get('/data/users/{user_id}/reports')
+def map_user_reports(user_id: UUID, page: int = Query(default=1, ge=1, le=MAX_PAGE),
+                     context: AdminContext = Depends(get_admin_context)):
+    del context
+    try:
+        rows = PostgreSQLAdminReadRepository().user_reports(user_id, page)
+    except DEPENDENCY_ERRORS:
+        raise WebServiceUnavailable() from None
+    return JSONResponse({"items": [{"id": str(row[0]), "category": row[1],
+                                     "status": row[2], "observed_at": row[3].isoformat()}
+                                    for row in rows], "page": page},
+                        headers={"Cache-Control": "no-store"})
 
 
 # NW-127 moderation pages
@@ -229,12 +319,6 @@ ADMIN_ACTIONS = {
         service_method="reactivate_user",
     ),
 }
-
-
-def get_admin_read_service() -> AdminReadService:
-    return AdminReadService(
-        admin_read_repository=PostgreSQLAdminReadRepository(),
-    )
 
 
 def get_moderation_service() -> ModerationService:
