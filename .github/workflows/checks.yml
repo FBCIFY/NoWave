@@ -43,6 +43,34 @@ jobs:
       - name: Summary
         if: always()
         run: echo "Python checks — ${{ job.status }}. Test report available in workflow artifacts." >> "$GITHUB_STEP_SUMMARY"
+  admin-web:
+    name: Admin Web
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+
+      - name: Check admin JavaScript syntax
+        run: |
+          set -euo pipefail
+          for file in backend/app/web/static/{login,surveillance,maritime-style,marker-icons,cluster-interaction}.js
+          do
+            node --check "$file"
+          done
+
+      - name: Test admin cartography
+        run: node --test backend/tests/web/test_map_style.cjs
+
+      - name: Validate production Nginx configuration
+        run: |
+          docker run --rm \
+            -v "$PWD/deploy/web/nginx.conf:/etc/nginx/nginx.conf:ro" \
+            nginx:1.30.6-alpine@sha256:47928bf67eb62a1863cb08d9ecb52d3e704304ba614eaee17884204677702951 nginx -t
+
   flutter:
     name: Flutter
     runs-on: ubuntu-24.04
@@ -171,6 +199,6 @@ jobs:
 
   production:
     name: Production
-    needs: [python, flutter, postgis, web]
+    needs: [python, flutter, postgis, web, admin-web]
     uses: ./.github/workflows/production.yml
     secrets: inherit

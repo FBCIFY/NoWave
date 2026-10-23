@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import UTC, datetime
 from uuid import UUID
 
 from app.application.ports.admin_read_repository import (
@@ -39,6 +39,68 @@ EFFECTIVE_REPORT_STATUS = """
 class PostgreSQLAdminReadRepository(
     AdminReadRepository
 ):
+    def search_users(self, page: int, status: UserStatus | None, search: str):
+        query = """
+            SELECT u.id, u.username, u.email, u.role, u.status,
+                   u.created_at, u.updated_at,
+                   (SELECT count(*) FROM nowave.reports r WHERE r.author_id = u.id)
+            FROM nowave.users u
+            WHERE (%(status)s::text IS NULL OR u.status = %(status)s)
+              AND (u.username ILIKE %(search)s OR u.email ILIKE %(search)s
+                   OR u.id::text = %(exact)s)
+            ORDER BY u.created_at DESC, u.id DESC
+            LIMIT 20 OFFSET %(offset)s
+        """
+        count = """
+            SELECT count(*) FROM nowave.users u
+            WHERE (%(status)s::text IS NULL OR u.status = %(status)s)
+              AND (u.username ILIKE %(search)s OR u.email ILIKE %(search)s
+                   OR u.id::text = %(exact)s)
+        """
+        escaped = search.replace('\\', '\\\\').replace('%', '\\%').replace('_', '\\_')
+        params = {"status": status.value if status else None,
+                  "search": f"%{escaped}%", "exact": search,
+                  "offset": (page - 1) * 20}
+        with database_connection() as connection:
+            with connection.cursor() as cursor:
+                cursor.execute(count, params)
+                total = cursor.fetchone()[0]
+                cursor.execute(query, params)
+                rows = cursor.fetchall()
+        return rows, total
+
+    def user_reports(self, user_id: UUID, page: int):
+        query = f"""
+            SELECT r.id, r.category, {EFFECTIVE_REPORT_STATUS}, r.observed_at
+            FROM nowave.reports r WHERE r.author_id = %(user_id)s
+            ORDER BY r.observed_at DESC, r.id DESC LIMIT 20 OFFSET %(offset)s
+        """
+        with database_connection() as connection:
+            with connection.cursor() as cursor:
+                cursor.execute(query, {"user_id": user_id, "offset": (page - 1) * 20,
+                                       "now": datetime.now(UTC)})
+                return cursor.fetchall()
+
+    def map_reports(self, west: float, south: float, east: float, north: float, limit: int = 1000):
+        """Bounded administrative map read. Extra row signals truncation."""
+        query = f"""
+            SELECT r.id, ST_X(r.final_position::geometry),
+                   ST_Y(r.final_position::geometry), r.category,
+                   {EFFECTIVE_REPORT_STATUS}
+            FROM nowave.reports AS r
+            WHERE r.final_position && ST_MakeEnvelope(
+                %(west)s, %(south)s, %(east)s, %(north)s, 4326)::geography
+            ORDER BY r.observed_at DESC, r.id DESC
+            LIMIT %(limit)s
+        """
+        with database_connection() as connection:
+            with connection.cursor() as cursor:
+                cursor.execute(query, {"west": west, "south": south,
+                    "east": east, "north": north, "now": datetime.now(UTC),
+                    "limit": limit + 1})
+                rows = cursor.fetchall()
+        return rows[:limit], len(rows) > limit
+
     def list_reports(
         self,
         page: int,
