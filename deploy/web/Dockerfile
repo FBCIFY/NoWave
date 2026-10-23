@@ -5,7 +5,8 @@ RUN npm ci
 COPY web/ ./
 RUN npm run build
 COPY deploy/marine/ /marine-input/
-RUN cd /marine-input && sha256sum -c gebco-2026-v1.tar.gz.sha256 \
+WORKDIR /marine-input
+RUN sha256sum -c gebco-2026-v1.tar.gz.sha256 \
     && mkdir /marine && tar -xzf gebco-2026-v1.tar.gz -C /marine
 
 FROM nginx:1.30.6-alpine@sha256:47928bf67eb62a1863cb08d9ecb52d3e704304ba614eaee17884204677702951
