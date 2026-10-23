@@ -59,7 +59,6 @@ export 'map_focus_controller.dart';
 import 'widgets/map_notice_banner.dart';
 import 'widgets/map_action_rail.dart';
 import 'widgets/map_scale_bar.dart';
-import 'widgets/map_zoom_badge.dart';
 import '../data/hydrography_layer.dart';
 import 'widgets/report_marker.dart';
 
@@ -3554,11 +3553,6 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
                             position: gpsLabel,
                           ),
                         ),
-                      ),
-                      const SizedBox(height: 6),
-                      Align(
-                        alignment: Alignment.centerLeft,
-                        child: MapZoomBadge(zoom: _displayedZoom),
                       ),
                       AnimatedSwitcher(
                         duration: const Duration(milliseconds: 220),
