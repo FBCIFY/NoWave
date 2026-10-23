@@ -211,7 +211,12 @@ class _Session {
   }
 
   Future<void> deleteAction(WidgetTester tester) async {
-    if (!suspended) await openProfile(tester);
+    if (!suspended) {
+      await openProfile(tester);
+      await tester.ensureVisible(find.text('Gestion du compte'));
+      await tester.tap(find.text('Gestion du compte'));
+      await tester.pumpAndSettle();
+    }
     await tester.ensureVisible(find.text('Supprimer mon compte'));
     await tester.tap(find.text('Supprimer mon compte'));
     await tester.pumpAndSettle();
@@ -235,9 +240,9 @@ void main() {
       await tester.tap(find.text('Créer le bateau'));
       await tester.pumpAndSettle();
       expect(f.boat!['name'], 'Integration');
-      await tester.pageBack();
-      await tester.pumpAndSettle();
       await tester.tap(find.byTooltip('Retour'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byTooltip('Fermer'));
       await tester.pumpAndSettle();
       await tapMapAction(tester, 'Mes alertes');
       await tester.pumpAndSettle();
@@ -298,6 +303,9 @@ void main() {
       final f = _Session();
       await f.mount(tester);
       await f.openProfile(tester);
+      await tester.ensureVisible(find.text('Gestion du compte'));
+      await tester.tap(find.text('Gestion du compte'));
+      await tester.pumpAndSettle();
       await tester.ensureVisible(find.text('Supprimer mon compte'));
       await tester.tap(find.text('Supprimer mon compte'));
       // Avant la frame suivante : le callback de l'ancien accueil est encore attaché.

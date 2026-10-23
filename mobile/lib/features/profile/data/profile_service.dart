@@ -74,6 +74,31 @@ class ProfileService {
     return _decodeProfile(response);
   }
 
+  /// Les deux champs peuvent être effacés explicitement avec null.
+  Future<UserProfile> updatePersonalInformation({
+    required DateTime? dateOfBirth,
+    required String? nationality,
+  }) async {
+    final token = await _getIdToken();
+    final date = dateOfBirth == null
+        ? null
+        : '${dateOfBirth.year.toString().padLeft(4, '0')}-'
+              '${dateOfBirth.month.toString().padLeft(2, '0')}-'
+              '${dateOfBirth.day.toString().padLeft(2, '0')}';
+    final response = await _apiService.patch(
+      _profilePath,
+      headers: {
+        'Authorization': 'Bearer $token',
+        'Content-Type': 'application/json',
+      },
+      body: jsonEncode({
+        'date_of_birth': date,
+        'nationality': nationality?.trim().toUpperCase(),
+      }),
+    );
+    return _decodeProfile(response);
+  }
+
   /// N'envoie que les préférences non nulles (PATCH partiel).
   Future<UserProfile> updatePreferences({
     bool? showUserName,

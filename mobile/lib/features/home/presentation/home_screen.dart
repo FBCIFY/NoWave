@@ -18,6 +18,7 @@ import '../../map/presentation/map_intro_controller.dart';
 import '../../map/presentation/map_screen.dart';
 import '../../profile/data/profile_service.dart';
 import '../../profile/domain/user_profile.dart';
+import '../../profile/presentation/profile_panel.dart';
 import '../../profile/presentation/profile_screen.dart';
 import '../../reports/data/manual_report_service.dart';
 import '../../reports/data/report_detail_service.dart';
@@ -26,6 +27,7 @@ import '../../reports/domain/report_detail.dart';
 /// Accueil après connexion : la carte, avec un bouton qui ouvre le profil.
 class HomeScreen extends StatefulWidget {
   final ProfileService? profileService;
+  final ValueChanged<UserProfile>? onProfileUpdated;
   final Future<void> Function()? onDeleteAccount;
   final UserProfile? profile;
   final AlertService? alertService;
@@ -44,6 +46,7 @@ class HomeScreen extends StatefulWidget {
   const HomeScreen({
     super.key,
     this.profileService,
+    this.onProfileUpdated,
     this.onDeleteAccount,
     this.alertService,
     this.pushController,
@@ -73,6 +76,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   /// où il a pu changer.
   final ValueNotifier<String?> _boatFlag = ValueNotifier(null);
   int _boatFlagRequest = 0;
+  final _profileOpen = ValueNotifier(false);
 
   @override
   void initState() {
@@ -156,6 +160,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     widget.intro?.removeListener(_handleIntro);
     _mapFocusController.dispose();
     _boatFlag.dispose();
+    _profileOpen.dispose();
     super.dispose();
   }
 
@@ -318,6 +323,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       reportDetailService: widget.reportDetailService,
       onUserInactive: widget.onUserInactive,
       boatFlag: _boatFlag,
+      hideActions: _profileOpen,
       // La caméra renvoie la photo et le point estimé, que la carte fait
       // confirmer avant publication.
       onOpenCamera: positionEstimateService == null
@@ -336,11 +342,14 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
               widget.onUpdatePreferences == null
           ? null
           : () {
+              if (_profileOpen.value) return;
+              _profileOpen.value = true;
               Navigator.of(context)
                   .push(
-                    MaterialPageRoute<void>(
-                      builder: (_) => ProfileScreen(
+                    profilePanelRoute<void>(
+                      (_) => ProfileScreen(
                         profile: widget.profile!,
+                        onProfileUpdated: widget.onProfileUpdated,
                         profileService: widget.profileService,
                         onDeleteAccount: widget.onDeleteAccount,
                         onSignOut: widget.onSignOut!,
@@ -350,7 +359,11 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                       ),
                     ),
                   )
-                  .then((_) => _loadBoatFlag());
+                  .whenComplete(() {
+                    if (!mounted) return;
+                    _profileOpen.value = false;
+                    _loadBoatFlag();
+                  });
             },
     );
 

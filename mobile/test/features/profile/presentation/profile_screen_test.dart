@@ -1,4 +1,9 @@
 import 'dart:async';
+import 'dart:convert';
+
+import 'package:http/http.dart' as http;
+
+import '../data/boat_service_test.dart' show boatJson;
 
 import '../support/account_deletion_fixture.dart';
 
@@ -63,6 +68,56 @@ void main() {
     await tester.pumpAndSettle();
   }
 
+  testWidgets(
+    'précharge le bateau et partage la requête jusqu’à sa réouverture',
+    (tester) async {
+      await tester.binding.setSurfaceSize(const Size(430, 932));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+      final f = AccountFixture();
+      addTearDown(f.dispose);
+      final response = Completer<http.Response>();
+      f.respondDevice = (_) => response.future;
+      await tester.pumpWidget(
+        MaterialApp(
+          home: ProfileScreen(
+            profile: profile,
+            profileService: f.profiles,
+            onSignOut: () async {},
+            onUpdatePreferences: unusedUpdate,
+            notificationPermissions: FakeNotificationPermissionService(),
+          ),
+        ),
+      );
+      await tester.pump();
+      expect(
+        f.requests.where((request) => request.url.path.endsWith('/boat')),
+        hasLength(1),
+      );
+      await tester.tap(find.text('Mon bateau'));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 200));
+      expect(find.byType(CircularProgressIndicator), findsOneWidget);
+      expect(find.byType(LinearProgressIndicator), findsNothing);
+      expect(
+        f.requests.where((request) => request.url.path.endsWith('/boat')),
+        hasLength(1),
+      );
+      response.complete(http.Response(jsonEncode(boatJson), 200));
+      await tester.pumpAndSettle();
+      expect(find.text('Aurore'), findsOneWidget);
+      await tester.tap(find.byTooltip('Retour'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Mon bateau'));
+      await tester.pumpAndSettle();
+      expect(find.text('Aurore'), findsOneWidget);
+      expect(find.byType(CircularProgressIndicator), findsNothing);
+      expect(
+        f.requests.where((request) => request.url.path.endsWith('/boat')),
+        hasLength(1),
+      );
+    },
+  );
+
   testWidgets('profil ouvre le bateau et le parcours de suppression', (
     tester,
   ) async {
@@ -89,7 +144,9 @@ void main() {
     await tester.tap(find.text('Mon bateau'));
     await tester.pumpAndSettle();
     expect(find.byType(BoatScreen), findsOneWidget);
-    await tester.pageBack();
+    await tester.tap(find.byTooltip('Retour'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Gestion du compte'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('Supprimer mon compte'));
     await tester.pumpAndSettle();
@@ -118,8 +175,11 @@ void main() {
     );
 
     expect(find.text('John'), findsOneWidget);
-    expect(find.text('Utilisateur'), findsOneWidget);
-    expect(find.text('Actif'), findsOneWidget);
+    expect(find.text('Utilisateur'), findsNothing);
+    expect(find.text('Rôle'), findsNothing);
+    expect(find.text('Actif'), findsNothing);
+    expect(find.text('Statut'), findsNothing);
+    expect(find.text('Supprimer mon compte'), findsNothing);
 
     final switches = tester.widgetList<Switch>(find.byType(Switch));
     expect(switches, hasLength(3));

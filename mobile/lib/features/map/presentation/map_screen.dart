@@ -75,6 +75,9 @@ enum _MapOrientationMode { free, north, heading }
 class MapScreen extends StatefulWidget {
   final VoidCallback? onOpenProfile;
 
+  /// Masque les commandes pendant une consultation au-dessus de la carte.
+  final ValueListenable<bool>? hideActions;
+
   /// Historique des alertes : le bouton « Mes alertes » l'ouvre en bas de
   /// la carte. Absent, le bouton n'est pas affiché.
   final AlertService? alertService;
@@ -104,6 +107,7 @@ class MapScreen extends StatefulWidget {
   const MapScreen({
     super.key,
     this.onOpenProfile,
+    this.hideActions,
     this.alertService,
     this.focusController,
     this.orientationService,
@@ -3338,72 +3342,81 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
       resizeToAvoidBottomInset: false,
       floatingActionButtonLocation: FloatingActionButtonLocation.centerFloat,
       floatingActionButtonAnimator: FloatingActionButtonAnimator.noAnimation,
-      floatingActionButton: MapActionRailTransition(
-        visible: !_reportComposerOpen && !panelOpen,
-        child: MapActionRail(
-          actions: [
-            MapRailAction(
-              id: 'create-report',
-              label: 'Créer un signalement',
-              onPressed: _mapError == null ? _openReportComposer : null,
-              icon: const Icon(Icons.add, size: 30),
-            ),
-            MapRailAction(
-              id: 'navigation',
-              label: _navigationAction,
-              onPressed:
-                  _isLocating ||
-                      _navigationBusy ||
-                      _mapboxMap == null ||
-                      _mapError != null
-                  ? null
-                  : () => unawaited(_navigateUser()),
-              icon: Semantics(
-                label: _navigationLabel,
-                value: _isLocating || _navigationBusy ? 'Localisation…' : null,
-                child: ValueListenableBuilder<double>(
-                  valueListenable: _cameraTurns,
-                  builder: (context, cameraTurns, _) =>
-                      ValueListenableBuilder<double>(
-                        valueListenable: _compassTurns,
-                        builder: (context, compassTurns, _) => _NavigationGlyph(
-                          mode: _isFollowing
-                              ? _orientationMode
-                              : _MapOrientationMode.free,
-                          headingTurns: compassTurns - cameraTurns,
-                          northTurns: -cameraTurns,
-                          reduceMotion: _reduceMotion,
-                          busy: _isLocating || _navigationBusy,
+      floatingActionButton: ValueListenableBuilder<bool>(
+        valueListenable:
+            widget.hideActions ?? const AlwaysStoppedAnimation(false),
+        builder: (context, hidden, child) =>
+            hidden ? const SizedBox.shrink() : child!,
+        child: MapActionRailTransition(
+          visible: !_reportComposerOpen && !panelOpen,
+          child: MapActionRail(
+            actions: [
+              MapRailAction(
+                id: 'create-report',
+                label: 'Créer un signalement',
+                onPressed: _mapError == null ? _openReportComposer : null,
+                icon: const Icon(Icons.add, size: 30),
+              ),
+              MapRailAction(
+                id: 'navigation',
+                label: _navigationAction,
+                onPressed:
+                    _isLocating ||
+                        _navigationBusy ||
+                        _mapboxMap == null ||
+                        _mapError != null
+                    ? null
+                    : () => unawaited(_navigateUser()),
+                icon: Semantics(
+                  label: _navigationLabel,
+                  value: _isLocating || _navigationBusy
+                      ? 'Localisation…'
+                      : null,
+                  child: ValueListenableBuilder<double>(
+                    valueListenable: _cameraTurns,
+                    builder: (context, cameraTurns, _) =>
+                        ValueListenableBuilder<double>(
+                          valueListenable: _compassTurns,
+                          builder: (context, compassTurns, _) =>
+                              _NavigationGlyph(
+                                mode: _isFollowing
+                                    ? _orientationMode
+                                    : _MapOrientationMode.free,
+                                headingTurns: compassTurns - cameraTurns,
+                                northTurns: -cameraTurns,
+                                reduceMotion: _reduceMotion,
+                                busy: _isLocating || _navigationBusy,
+                              ),
                         ),
-                      ),
+                  ),
                 ),
               ),
-            ),
-            if (widget.onOpenCamera != null)
-              MapRailAction(
-                id: 'camera',
-                label: 'Signaler avec une photo',
-                onPressed: _mapError == null
-                    ? () => unawaited(_openCamera())
-                    : null,
-                icon: const Icon(Icons.photo_camera_outlined),
-              ),
-            if (widget.alertService != null &&
-                widget.reportDetailService != null)
-              MapRailAction(
-                id: 'alerts',
-                label: 'Mes alertes',
-                onPressed: _openAlerts,
-                icon: const Icon(Icons.notifications_outlined),
-              ),
-            if (widget.onOpenProfile != null)
-              MapRailAction(
-                id: 'profile',
-                label: 'Mon profil',
-                onPressed: widget.onOpenProfile,
-                icon: const Icon(Icons.person_outline),
-              ),
-          ],
+              if (widget.onOpenCamera != null)
+                MapRailAction(
+                  id: 'camera',
+                  label: 'Signaler avec une photo',
+                  onPressed: _mapError == null
+                      ? () => unawaited(_openCamera())
+                      : null,
+                  icon: const Icon(Icons.photo_camera_outlined),
+                ),
+              if (widget.alertService != null &&
+                  widget.reportDetailService != null)
+                MapRailAction(
+                  id: 'alerts',
+                  label: 'Mes alertes',
+                  onPressed: _openAlerts,
+                  icon: const Icon(Icons.notifications_outlined),
+                ),
+              if (widget.onOpenProfile != null)
+                MapRailAction(
+                  id: 'profile',
+                  label: 'Mon profil',
+                  onPressed: widget.onOpenProfile,
+                  icon: const Icon(Icons.person_outline),
+                ),
+            ],
+          ),
         ),
       ),
       body: Stack(
