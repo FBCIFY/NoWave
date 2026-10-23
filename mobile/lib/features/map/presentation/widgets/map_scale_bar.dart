@@ -7,9 +7,9 @@ import 'package:flutter/material.dart';
 /// dépend l'échelle.
 typedef MapScaleCamera = ({double zoom, double latitude});
 
-/// Règle de distance en bas à droite, comme sur les cartes marines : en
-/// milles nautiques, et en pieds sous 0,1 NM. La règle native de Mapbox ne
-/// connaît que les kilomètres et les miles terrestres.
+/// Règle de distance du coin en bas à droite, comme sur les cartes marines :
+/// en milles nautiques, et en pieds sous 0,1 NM. La règle native de Mapbox
+/// ne connaît que les kilomètres et les miles terrestres.
 class MapScaleBar extends StatelessWidget {
   const MapScaleBar({super.key, required this.camera});
 
@@ -87,7 +87,6 @@ class MapScaleBar extends StatelessWidget {
         excludeSemantics: true,
         child: Column(
           mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.end,
           children: [
             Text(
               scale.label,

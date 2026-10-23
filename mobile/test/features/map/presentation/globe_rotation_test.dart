@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:blueway/features/map/presentation/map_screen.dart';
+import 'package:blueway/features/map/presentation/widgets/map_heading_tape.dart';
 import 'package:flutter/material.dart' hide Size;
 import 'package:geolocator/geolocator.dart' as geo;
 import 'package:flutter_test/flutter_test.dart';
@@ -199,7 +200,7 @@ void main() {
       final map = await open(tester);
       await zoomOut(tester, map, zoom: .7);
       final gesture = await tester.startGesture(
-        tester.getCenter(find.textContaining('Lat.')),
+        tester.getCenter(find.byKey(MapHeadingTape.positionKey)),
       );
       final count = map.cameras.length;
       await tester.pump(const Duration(seconds: 1));

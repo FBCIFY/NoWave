@@ -71,7 +71,7 @@ void main() {
     expect(initial.zoom, 14);
     expect(initial.pitch, GlobePitchController.defaultPitch);
     expect(gps.positions.hasListener, true);
-    expect(find.textContaining('Lat.'), findsOneWidget);
+    expect(find.textContaining('″N'), findsOneWidget);
     gps.positions.add(focusPosition(latitude: 43.30));
     await tester.pumpAndSettle();
     expect(

@@ -48,8 +48,10 @@ import '../data/marine_debug.dart';
 import '../data/report_layer_controller.dart';
 import '../data/report_tiles.dart';
 import 'widgets/map_edge_zoom.dart';
+import 'widgets/map_heading_tape.dart';
 import 'widgets/globe_stars.dart';
 import 'map_alert_camera.dart';
+import 'map_corners.dart';
 import 'map_focus_controller.dart';
 import 'map_intro_controller.dart';
 import 'report_marker.dart' as badges;
@@ -690,6 +692,15 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
       onResume: _resumeMapUpdates,
     );
     _startReportTilesTokenRenewal();
+    // Le réseau de Mapbox est global au natif : un hot restart ou une carte
+    // précédente a pu le laisser coupé, alors que le contrôleur part connecté.
+    unawaited(
+      OfflineSwitch.shared.setMapboxStackConnected(true).catchError((
+        Object error,
+      ) {
+        debugPrint('Réseau de Mapbox non rebranché : $error');
+      }),
+    );
     _reportLayer.status.addListener(_handleReportLayerStatus);
     WidgetsBinding.instance.addObserver(this);
     _headingSubscription =
@@ -907,38 +918,53 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
     }
   }
 
-  /// Hauteur réservée au « i » de Mapbox sous le logo.
-  static const _attributionHeight = 24.0;
+  /// Actions de la barre du bas, pour la largeur des coins libres.
+  int get _railActionCount => widget.onOpenCamera != null ? 3 : 2;
+
+  /// Démoday : logo et « i » de Mapbox masqués. À remettre à true ensuite,
+  /// les conditions de Mapbox demandent qu'ils restent visibles.
+  static const _showMapboxOrnaments = false;
 
   Future<void> _positionMapOrnaments(
     MapboxMap map, {
     required bool editing,
   }) async {
     try {
-      final bottom = MediaQuery.viewPaddingOf(context).bottom + 4;
+      if (!_showMapboxOrnaments) {
+        await Future.wait([
+          map.logo.updateSettings(LogoSettings(enabled: false)),
+          map.attribution.updateSettings(AttributionSettings(enabled: false)),
+        ]);
+        return;
+      }
+      // En bas, le « i » est centré dans le coin gauche, sur l'axe de la
+      // barre d'actions, le logo juste au-dessus.
+      final corner = MapCorners.ornaments(
+        screenWidth: MediaQuery.sizeOf(context).width,
+        viewPaddingBottom: MediaQuery.viewPaddingOf(context).bottom,
+        actions: _railActionCount,
+        ios: Theme.of(context).platform == TargetPlatform.iOS,
+      );
       await Future.wait([
         map.logo.updateSettings(
-          LogoSettings(
-            position: editing
-                ? OrnamentPosition.TOP_LEFT
-                : OrnamentPosition.BOTTOM_LEFT,
-            marginLeft: 16,
-            marginTop: editing ? 64 : 4,
-            // En bas, le « i » passe sous le logo, loin du bouton +.
-            marginBottom: bottom + _attributionHeight,
-          ),
+          editing
+              ? LogoSettings(
+                  position: OrnamentPosition.TOP_LEFT,
+                  marginLeft: 16,
+                  marginTop: 64,
+                )
+              : corner.logo,
         ),
-        // Le « i » obligatoire suit le logo, loin des boutons de droite.
+        // Pendant un signalement, le « i » obligatoire suit le logo en haut.
         map.attribution.updateSettings(
-          AttributionSettings(
-            position: editing
-                ? OrnamentPosition.TOP_LEFT
-                : OrnamentPosition.BOTTOM_LEFT,
-            marginLeft: editing ? 106 : 16,
-            marginTop: editing ? 64 : 4,
-            marginBottom: bottom,
-            iconColor: 0x99FFFFFF,
-          ),
+          editing
+              ? AttributionSettings(
+                  position: OrnamentPosition.TOP_LEFT,
+                  marginLeft: 106,
+                  marginTop: 64,
+                  iconColor: 0x99FFFFFF,
+                )
+              : corner.attribution,
         ),
       ]);
     } catch (_) {
@@ -3302,8 +3328,9 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
         : _locationError ??
               (_position == null
                   ? 'Position indisponible'
-                  : 'Lat. ${formatDms(_position!.latitude, isLatitude: true)}\n'
-                        'Lon. ${formatDms(_position!.longitude, isLatitude: false)}');
+                  : '${formatDmsCompact(_position!.latitude, isLatitude: true)}'
+                        '   '
+                        '${formatDmsCompact(_position!.longitude, isLatitude: false)}');
 
     // Pendant un signalement, le retour arrière est géré par
     // ReportComposerSheet : il passe par la même confirmation que la croix.
@@ -3511,40 +3538,27 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
               child: SafeArea(
                 bottom: false,
                 child: Padding(
-                  padding: const EdgeInsets.all(16),
+                  padding: const EdgeInsets.fromLTRB(16, 2, 16, 16),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
+                      Center(
+                        // Le cap se redessine seul, sans reconstruire la carte.
+                        child: ValueListenableBuilder<double>(
+                          valueListenable: _compassTurns,
+                          builder: (context, compassTurns, _) => MapHeadingTape(
+                            // Même cap que le « N » du bouton de navigation.
+                            heading: _deviceHeading == null
+                                ? null
+                                : compassTurns * 360,
+                            position: gpsLabel,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 6),
                       Align(
                         alignment: Alignment.centerLeft,
-                        child: Column(
-                          mainAxisSize: MainAxisSize.min,
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Container(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 12,
-                                vertical: 9,
-                              ),
-                              decoration: BoxDecoration(
-                                color: const Color(0xFFF6F8FA)
-                                    .withValues(alpha: 0.72),
-                                borderRadius: BorderRadius.circular(14),
-                              ),
-                              child: Text(
-                                gpsLabel,
-                                maxLines: 2,
-                                overflow: TextOverflow.ellipsis,
-                                style: const TextStyle(
-                                  color: Color(0xFF243243),
-                                  fontSize: 12,
-                                ),
-                              ),
-                            ),
-                            const SizedBox(height: 4),
-                            MapZoomBadge(zoom: _displayedZoom),
-                          ],
-                        ),
+                        child: MapZoomBadge(zoom: _displayedZoom),
                       ),
                       AnimatedSwitcher(
                         duration: const Duration(milliseconds: 220),
@@ -3583,10 +3597,18 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
               ),
             ),
           if (!_reportComposerOpen && !panelOpen)
+            // Centrée dans le coin droit, sur l'axe de la barre d'actions.
             Positioned(
-              right: 16,
-              bottom: mediaQuery.viewPadding.bottom + 76,
-              child: MapScaleBar(camera: _scaleCamera),
+              right: 0,
+              width: MapCorners.cornerWidth(
+                mediaQuery.size.width,
+                _railActionCount,
+              ),
+              bottom:
+                  MapCorners.railAxis(mediaQuery.viewPadding.bottom) -
+                  MapActionRail.height / 2,
+              height: MapActionRail.height,
+              child: Center(child: MapScaleBar(camera: _scaleCamera)),
             ),
           if (panelOpen && !_reportComposerOpen)
             Positioned(
