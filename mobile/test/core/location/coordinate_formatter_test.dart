@@ -17,4 +17,11 @@ void main() {
   test('reporte l’arrondi sur le degré suivant', () {
     expect(formatDms(12.999999, isLatitude: false), '13° 0′ 0″ E');
   });
+
+  test('compas : format serré, longitude sur trois chiffres', () {
+    expect(formatDmsCompact(43.4467, isLatitude: true), '43°26′48″N');
+    expect(formatDmsCompact(6.7878, isLatitude: false), '006°47′16″E');
+    expect(formatDmsCompact(-4.49, isLatitude: false), '004°29′24″W');
+    expect(formatDmsCompact(-0.5, isLatitude: true), '00°30′00″S');
+  });
 }

@@ -83,6 +83,20 @@ class MapActionRail extends StatefulWidget {
   final List<MapRailAction> actions;
   final String initialActionId;
 
+  static const height = 56.0;
+
+  /// Trois emplacements dès deux actions : la sélection reste au centre.
+  static double widthFor(int actions) =>
+      (actions == 1 ? 1 : 3) * _MapActionRailState._step + 16;
+
+  /// Fond translucide de la barre, repris par les pastilles de la carte.
+  static Color background(BuildContext context) => const Color(0xFF0D2238)
+      .withValues(
+        alpha: Theme.of(context).platform == TargetPlatform.iOS ? 0.38 : 0.44,
+      );
+
+  static const border = Color(0x25FFFFFF);
+
   @override
   State<MapActionRail> createState() => _MapActionRailState();
 }
@@ -149,9 +163,7 @@ class _MapActionRailState extends State<MapActionRail>
   Widget build(BuildContext context) {
     if (widget.actions.isEmpty) return const SizedBox.shrink();
     final count = widget.actions.length;
-    final slots = count == 1 ? 1 : 3;
-    final width = slots * _step + 16;
-    final ios = Theme.of(context).platform == TargetPlatform.iOS;
+    final width = MapActionRail.widthFor(count);
     return Semantics(
       label: 'Commandes de la carte',
       hint: 'Glisser horizontalement pour les alertes et le profil',
@@ -173,15 +185,14 @@ class _MapActionRailState extends State<MapActionRail>
         },
         child: SizedBox(
           width: width,
-          height: 56,
+          height: MapActionRail.height,
           child: ClipRRect(
             borderRadius: BorderRadius.circular(28),
             child: DecoratedBox(
               decoration: BoxDecoration(
-                color: const Color(0xFF0D2238)
-                    .withValues(alpha: ios ? 0.38 : 0.44),
+                color: MapActionRail.background(context),
                 borderRadius: BorderRadius.circular(28),
-                border: Border.all(color: const Color(0x25FFFFFF)),
+                border: Border.all(color: MapActionRail.border),
               ),
               child: AnimatedBuilder(
                 animation: _position,
