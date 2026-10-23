@@ -2,15 +2,12 @@ import asyncio
 import logging
 import time
 from contextlib import suppress
-from functools import lru_cache
-from io import BytesIO
 from typing import Annotated
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Path, Query, Request, Response
 from fastapi.responses import JSONResponse
 from starlette.concurrency import run_in_threadpool
-from PIL import Image
 
 from app.api.dependencies.auth import get_current_identity
 from app.application.services.map_query import MapQueryService
@@ -26,7 +23,9 @@ from app.infrastructure.marine.bathymetry_cache import UncachedBathymetryTile
 from app.infrastructure.marine.visual_water import crop_context, render_visual_water
 from app.infrastructure.adapters.emodnet_bathymetry import (
     BathymetryUnavailable,
+    empty_bathymetry_tile,
     fetch_bathymetry_tile,
+    has_bathymetry_coverage,
 )
 from app.infrastructure.repositories.postgresql_map_tile_repository import (
     PostgreSQLMapTileRepository,
@@ -242,6 +241,18 @@ async def get_bathymetry_tile(
             detail="Tile coordinates must be within the selected zoom level.",
         )
 
+    if not has_bathymetry_coverage(z, x, y):
+        # Old clients and direct requests must never enqueue WMS/coastline work
+        # beyond the same published bounds used by the native raster source.
+        return Response(
+            content=empty_bathymetry_tile(),
+            media_type="image/png",
+            headers={
+                "Cache-Control": "public, max-age=86400",
+                "X-NoWave-Marine-Status": "outside-coverage",
+            },
+        )
+
     work = asyncio.create_task(
         get_bathymetry_cache(_render_bathymetry_tile).get(Tile(z, x, y))
     )
@@ -260,7 +271,7 @@ async def get_bathymetry_tile(
         # overloaded. A short-lived transparent overlay leaves GEBCO visible.
         # Never put this fallback into the normal daily raster cache.
         return Response(
-            content=_unavailable_raster(),
+            content=empty_bathymetry_tile(),
             media_type="image/png",
             headers={
                 "Cache-Control": "public, max-age=15, must-revalidate",
@@ -287,13 +298,6 @@ async def get_bathymetry_tile(
             "Link": '</api/v1/map/marine-sources>; rel="describedby"',
         },
     )
-
-
-@lru_cache(maxsize=1)
-def _unavailable_raster() -> bytes:
-    output = BytesIO()
-    Image.new("RGBA", (256, 256), (0, 0, 0, 0)).save(output, format="PNG")
-    return output.getvalue()
 
 
 async def _render_bathymetry_tile(tile: Tile) -> bytes:

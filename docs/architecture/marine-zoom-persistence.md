@@ -181,3 +181,21 @@ distinct ; les requêtes métier disposent ainsi d'une marge sous la limite de
 trente connexions du proxy. Ce plafond ne constitue pas une limite de débit
 en requêtes par seconde : les délais de gestes et protections du serveur restent
 actifs.
+
+
+## Limitation géographique du raster EMODnet
+
+La source native `nowave-bathymetry` utilise les `bounds` publiées pour
+`emodnet:mean_multicolour` : ouest −73,125°, sud 5,625°, est 45°, nord 90°,
+avec la latitude nord ramenée à 85,051129° pour Web Mercator. Le SDK ne demande
+pas de tuiles entièrement extérieures à cette emprise. Elle inclut les Caraïbes
+publiées par ce WMS ; il s'agit d'une enveloppe, pas d'une garantie de données
+sur chaque pixel intérieur. Source : [GetCapabilities EMODnet](https://ows.emodnet-bathymetry.eu/wms?service=WMS&version=1.3.0&request=GetCapabilities),
+vérifié le 23 octobre 2026.
+
+La route PNG et l'adaptateur WMS vérifient aussi cette intersection. Une ancienne
+application ou un appel direct hors emprise reçoit une tuile transparente
+`outside-coverage`, sans accès au cache des rendus, sans appel EMODnet et sans
+masque côtier. Les tuiles à cheval sur la frontière restent éligibles ; une tuile
+qui touche seulement le bord est extérieure. Ce contrôle ne modifie pas les
+requêtes du fond mondial GEBCO, qui utilise une source distincte.

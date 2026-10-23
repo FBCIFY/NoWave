@@ -268,3 +268,30 @@ def test_raster_disconnect_cancels_waiter_instead_of_finishing_obsolete_request(
         assert error.value.status_code == 499
         assert cancelled.is_set()
     asyncio.run(scenario())
+
+
+@pytest.mark.parametrize('zoom', [5, 6, 8, 10, 12, 14])
+@pytest.mark.parametrize('lon,lat', [
+    (139, 35), (-122, 37), (151, -33), (-45, -20), (0, 0),
+])
+def test_external_raster_requests_skip_all_provider_cache_and_coastline_work(
+    monkeypatch, zoom, lon, lat
+):
+    import math
+    from io import BytesIO
+    from PIL import Image
+    from app.api.routes import map_tiles
+    def forbidden(*args, **kwargs):
+        raise AssertionError('Outside-coverage requests must not start marine work')
+    for name in ['get_bathymetry_cache', 'fetch_bathymetry_tile', 'get_coastline_mask']:
+        monkeypatch.setattr(map_tiles, name, forbidden)
+    n = 1 << zoom
+    x = math.floor((lon + 180) / 360 * n)
+    y = math.floor((1 - math.asinh(math.tan(math.radians(lat))) / math.pi) / 2 * n)
+    response = TestClient(app).get(f'/api/v1/map/bathymetry/{zoom}/{x}/{y}.png')
+    assert response.status_code == 200
+    assert response.headers['x-nowave-marine-status'] == 'outside-coverage'
+    assert response.headers['cache-control'] == 'public, max-age=86400'
+    with Image.open(BytesIO(response.content)) as image:
+        assert image.size == (256, 256)
+        assert image.convert('RGBA').getchannel('A').getbbox() is None

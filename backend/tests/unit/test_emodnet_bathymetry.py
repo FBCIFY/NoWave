@@ -356,3 +356,36 @@ def test_supplier_outage_stops_new_tiles_then_resumes(monkeypatch, failure):
         clock[0] += 6 if failure == 'timeout' else 61
         assert bathymetry._request_tile({'bbox': 'new view'}).status_code == 200
         assert len(calls) == 2
+
+
+@pytest.mark.parametrize('z,x,y,covered', [
+    (8, 226, 101, False),  # Japan
+    (8, 41, 99, False),    # California
+    (8, 235, 152, False),  # Australia
+    (8, 96, 142, False),   # South Atlantic
+    (8, 128, 128, False),  # Equator
+    (8, 132, 94, True),    # Mediterranean
+    (8, 83, 117, True),    # Caribbean portion of the published WMS bounds
+    (6, 18, 20, False),    # Tile east edge merely touches the western limit
+    (6, 19, 20, True),     # First tile inside the western limit
+    (5, 20, 10, False),    # Tile west edge merely touches the eastern limit
+    (5, 19, 10, True),     # Last tile inside the eastern limit
+])
+def test_raster_coverage_matches_published_wms_envelope(z, x, y, covered):
+    assert bathymetry.has_bathymetry_coverage(z, x, y) is covered
+
+
+@pytest.mark.parametrize('padded,size', [(False, 256), (True, 280)])
+def test_direct_raster_call_outside_coverage_never_contacts_wms(monkeypatch, padded, size):
+    def forbidden(*args, **kwargs):
+        raise AssertionError('No WMS or recoloring outside EMODnet coverage')
+    monkeypatch.setattr(bathymetry, '_request_tile', forbidden)
+    monkeypatch.setattr(bathymetry, 'recolor_bathymetry_png', forbidden)
+    fetch_bathymetry_tile.cache_clear()
+    try:
+        content = fetch_bathymetry_tile(8, 226, 101, padded)
+        with Image.open(BytesIO(content)) as image:
+            assert image.size == (size, size)
+            assert image.convert('RGBA').getchannel('A').getbbox() is None
+    finally:
+        fetch_bathymetry_tile.cache_clear()

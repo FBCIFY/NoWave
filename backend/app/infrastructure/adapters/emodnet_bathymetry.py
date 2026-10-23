@@ -8,10 +8,14 @@ from threading import Lock
 import httpx
 from PIL import Image, ImageFilter, ImageChops
 
+from app.domain.marine_tile import Tile
 from app.infrastructure.marine.visual_water import PADDING
 
 
 EMODNET_WMS_URL = "https://ows.emodnet-bathymetry.eu/wms"
+# emodnet:mean_multicolour GetCapabilities, verified 2026-10-23.
+# This is the layer's advertised envelope, including its Caribbean coverage.
+EMODNET_RASTER_BOUNDS = (-73.125, 5.625, 45.0, 90.0)
 logger = logging.getLogger("uvicorn.error.bathymetry")
 _LUT_LOCK = Lock()
 _BACKOFF_LOCK = Lock()
@@ -85,6 +89,21 @@ _client = httpx.Client(
 
 class BathymetryUnavailable(RuntimeError):
     """EMODnet n'a pas pu fournir la tuile demandée."""
+
+
+def has_bathymetry_coverage(z: int, x: int, y: int) -> bool:
+    west, south, east, north = Tile(z, x, y).bounds
+    w, s, e, n = EMODNET_RASTER_BOUNDS
+    # Boundary tiles intersecting coverage are useful; merely touching it is not.
+    return west < e and east > w and south < n and north > s
+
+
+@lru_cache(maxsize=2)
+def empty_bathymetry_tile(padded: bool = False) -> bytes:
+    size = 256 + 2 * PADDING if padded else 256
+    output = BytesIO()
+    Image.new("RGBA", (size, size), (0, 0, 0, 0)).save(output, format="PNG")
+    return output.getvalue()
 
 
 @lru_cache(maxsize=1)
@@ -277,6 +296,8 @@ def fetch_bathymetry_tile(
 ) -> bytes:
     """Récupère une tuile PNG et garde le résultat recoloré en cache."""
 
+    if not has_bathymetry_coverage(z, x, y):
+        return empty_bathymetry_tile(padded)
     bbox = web_mercator_tile_bbox(z, x, y)
     # A finite context for visual coastal continuity, at the unchanged sample
     # pitch. This remains one WMS request, not one request per neighbour.

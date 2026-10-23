@@ -28,6 +28,10 @@ class MarineMapController {
   static const String globalSourceId = 'nowave-global-seafloor';
   static const String globalLayerId = 'nowave-global-seafloor-raster';
 
+  /// Published mean_multicolour envelope, clipped to Web Mercator latitude.
+  /// Native source bounds prevent requests for wholly external XYZ tiles.
+  static const emodnetRasterBounds = [-73.125, 5.625, 45.0, 85.051129];
+
   /// Fond marin sans données, dans la même palette que le raster.
   static const String deepWaterColor = MarinePalette.water;
 
@@ -117,7 +121,7 @@ class MarineMapController {
           minzoom: 5,
           maxzoom: 14,
           // Provider-advertised coverage: avoid blank requests elsewhere.
-          bounds: [-73.125, 5.625, 45, 85.051129],
+          bounds: emodnetRasterBounds,
           attribution:
               '<a href="https://emodnet.ec.europa.eu/en/bathymetry">'
               'Couleurs interpolées localement pour l’affichage, sans mesure ajoutée. '
