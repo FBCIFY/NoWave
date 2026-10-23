@@ -180,6 +180,9 @@ class MarineViewport {
   bool _renderAgain = false;
   bool _pendingCamera = false;
   MapboxMap? _currentMap;
+  MapboxMap? _scheduledMap;
+  CameraState? _nextCamera;
+  int _cameraGeneration = 0;
   double _currentZoom = 0;
   int _revision = 0;
   int _renderRevision = 0;
@@ -217,17 +220,29 @@ class MarineViewport {
     _renderedData.clear();
   }
 
-  void schedule(MapboxMap map, {bool cameraChanged = false}) {
+  void schedule(
+    MapboxMap map, {
+    bool cameraChanged = false,
+    CameraState? cameraState,
+  }) {
+    if (_disposed || _paused) return;
+    _scheduledMap = map;
+    _nextCamera = cameraState;
+    _cameraGeneration++;
+    _scheduleLatest(map);
+  }
+
+  void _scheduleLatest(MapboxMap map) {
     if (_disposed || _paused) return;
     // Start immediately, then coalesce frames into one update every 200 ms.
     // A change of bearing or pitch does not invalidate geographic requests.
     if (_timer == null) {
-      unawaited(synchronize(map));
+      unawaited(_synchronize(map));
       _timer = Timer(const Duration(milliseconds: 200), () {
         _timer = null;
         if (_pendingCamera && !_disposed && !_paused) {
           _pendingCamera = false;
-          schedule(map);
+          _scheduleLatest(_scheduledMap ?? map);
         }
       });
     } else {
@@ -250,6 +265,8 @@ class MarineViewport {
     _retryTimer?.cancel();
     _retryTimer = null;
     _pendingCamera = false;
+    _nextCamera = null;
+    _cameraGeneration++;
     _wanted.clear();
     for (final entry in _active.entries) {
       _cancel(entry.key, entry.value);
@@ -268,8 +285,17 @@ class MarineViewport {
     pause();
   }
 
-  Future<void> synchronize(MapboxMap map) async {
+  Future<void> synchronize(MapboxMap map, {CameraState? cameraState}) {
+    if (_disposed || _paused) return Future<void>.value();
+    _scheduledMap = map;
+    _nextCamera = cameraState;
+    _cameraGeneration++;
+    return _synchronize(map);
+  }
+
+  Future<void> _synchronize(MapboxMap requestedMap) async {
     if (_disposed || _paused) return;
+    final map = _scheduledMap ?? requestedMap;
     if (_busy) {
       _again = true;
       return;
@@ -277,10 +303,24 @@ class MarineViewport {
     _busy = true;
     final revision = _revision;
     try {
-      MapPerformance.count('viewport_camera_reads');
-      final cameraSpan = MapPerformance.begin();
-      final camera = await map.getCameraState();
-      MapPerformance.finish('camera_read_us', cameraSpan);
+      var cameraGeneration = _cameraGeneration;
+      var camera = _nextCamera;
+      if (camera == null) {
+        MapPerformance.count('viewport_camera_reads');
+        final cameraSpan = MapPerformance.begin();
+        camera = await map.getCameraState();
+        MapPerformance.finish('camera_read_us', cameraSpan);
+        // A native read started before an event must not overwrite that event.
+        if (cameraGeneration != _cameraGeneration) {
+          final latest = _nextCamera;
+          if (latest == null || _scheduledMap != map) {
+            _again = true;
+            return;
+          }
+          camera = latest;
+          cameraGeneration = _cameraGeneration;
+        }
+      }
       if (_disposed || revision != _revision) return;
       final lon = camera.center.coordinates.lng.toDouble();
       final lat = camera.center.coordinates.lat.toDouble();
@@ -292,9 +332,15 @@ class MarineViewport {
           zoom: zoom,
           bearing: camera.bearing,
           pitch: camera.pitch,
+          padding: camera.padding,
         ),
       );
       MapPerformance.finish('bounds_us', boundsSpan);
+      if (_disposed || _paused || revision != _revision) return;
+      if (cameraGeneration != _cameraGeneration || _scheduledMap != map) {
+        _again = true;
+        return;
+      }
       _visibleBounds = bounds;
       _currentMap = map;
       _currentZoom = zoom;
@@ -399,7 +445,7 @@ class MarineViewport {
       _busy = false;
       if (_again && !_disposed && !_paused) {
         _again = false;
-        unawaited(synchronize(map));
+        unawaited(_synchronize(_scheduledMap ?? map));
       }
     }
     if (_disposed || _paused || revision != _revision) return;

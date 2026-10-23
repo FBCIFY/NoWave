@@ -819,7 +819,13 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
     }
     _reportMapRevision++;
     final map = _mapboxMap;
-    if (map != null) _marineViewport.schedule(map, cameraChanged: true);
+    if (map != null) {
+      _marineViewport.schedule(
+        map,
+        cameraChanged: true,
+        cameraState: event.cameraState,
+      );
+    }
     if (map != null) {
       unawaited(_globePresentation.synchronize(map, event.cameraState.zoom));
     }
