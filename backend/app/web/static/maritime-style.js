@@ -11,7 +11,7 @@ window.NoWaveMaritimeStyle = {
           (layer.type === 'fill' && layer['source-layer'] !== 'water')) {
         map.setLayoutProperty(layer.id, 'visibility', 'none');
       }
-      if (layer.type === 'background') map.setPaintProperty(layer.id, 'background-color', '#c8bc9f');
+      if (layer.type === 'background') map.setPaintProperty(layer.id, 'background-color', '#354b60');
       if (layer.type === 'fill' && layer['source-layer'] === 'water') {
         map.setPaintProperty(layer.id, 'fill-color', '#002D51');
         map.setPaintProperty(layer.id, 'fill-outline-color', 'rgba(0,0,0,0)');
@@ -23,12 +23,12 @@ window.NoWaveMaritimeStyle = {
     });
     if (!map.getLayer('nowave-landcover')) map.addLayer({
       id:'nowave-landcover',type:'fill',source:'nowave-landcover','source-layer':'landcover',
-      paint:{'fill-color':['match',['get','class'],'wood','#48634c','scrub','#748469',
-        'grass','#8b9978','crop','#a6ad8d','snow','#ECEDE5','rgba(0,0,0,0)']},
+      paint:{'fill-color':['match',['get','class'],'wood','#344f58','scrub','#48616b',
+        'grass','#566e79','crop','#657b87','snow','#c7d5df','rgba(0,0,0,0)']},
     },firstWater?.id);
     if (!map.getLayer('nowave-land-relief')) map.addLayer({
       id:'nowave-land-relief',type:'fill',source:'nowave-landcover','source-layer':'hillshade',
-      paint:{'fill-color':['match',['get','class'],'shadow','#766344','highlight','#E2CCA0','rgba(0,0,0,0)'],
+      paint:{'fill-color':['match',['get','class'],'shadow','#263d52','highlight','#91a9bb','rgba(0,0,0,0)'],
         'fill-opacity':0.4},
     },firstWater?.id);
     if (!map.getSource('nowave-seafloor')) map.addSource('nowave-seafloor', {

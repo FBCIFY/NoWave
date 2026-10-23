@@ -273,12 +273,12 @@ def map_user_reports(user_id: UUID, page: int = Query(default=1, ge=1, le=MAX_PA
                      context: AdminContext = Depends(get_admin_context)):
     del context
     try:
-        rows = PostgreSQLAdminReadRepository().user_reports(user_id, page)
+        rows, has_more = PostgreSQLAdminReadRepository().user_reports(user_id, page)
     except DEPENDENCY_ERRORS:
         raise WebServiceUnavailable() from None
     return JSONResponse({"items": [{"id": str(row[0]), "category": row[1],
                                      "status": row[2], "observed_at": row[3].isoformat()}
-                                    for row in rows], "page": page},
+                                    for row in rows], "page": page, "has_more": has_more},
                         headers={"Cache-Control": "no-store"})
 
 

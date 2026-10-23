@@ -70,19 +70,23 @@ class PostgreSQLAdminReadRepository(
         return rows, total
 
     def user_reports(self, user_id: UUID, page: int):
+        """One bounded page and a lookahead, without a separate count query."""
+        offset = page_offset(page, 20)
         query = f"""
             SELECT r.id, r.category, {EFFECTIVE_REPORT_STATUS}, r.observed_at
             FROM nowave.reports r WHERE r.author_id = %(user_id)s
-            ORDER BY r.observed_at DESC, r.id DESC LIMIT 20 OFFSET %(offset)s
+            ORDER BY r.observed_at DESC, r.id DESC LIMIT 21 OFFSET %(offset)s
         """
         with database_connection() as connection:
             with connection.cursor() as cursor:
-                cursor.execute(query, {"user_id": user_id, "offset": (page - 1) * 20,
+                cursor.execute(query, {"user_id": user_id, "offset": offset,
                                        "now": datetime.now(UTC)})
-                return cursor.fetchall()
+                rows = cursor.fetchall()
+        return rows[:20], len(rows) > 20
 
     def map_reports(self, west: float, south: float, east: float, north: float, limit: int = 1000):
         """Bounded administrative map read. Extra row signals truncation."""
+        limit = max(1, min(limit, 1000))
         query = f"""
             SELECT r.id, ST_X(r.final_position::geometry),
                    ST_Y(r.final_position::geometry), r.category,

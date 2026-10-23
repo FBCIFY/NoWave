@@ -2,6 +2,7 @@ from datetime import UTC, datetime, timedelta
 from uuid import uuid4
 
 import psycopg
+import pytest
 from psycopg import sql
 from psycopg.conninfo import make_conninfo
 
@@ -450,3 +451,62 @@ def test_admin_reads_work_with_runtime_role(
             admin.execute(
                 sql.SQL("DROP ROLE {}").format(role)
             )
+
+
+@pytest.mark.parametrize('count', [0, 1, 20, 21, 40, 41])
+def test_user_reports_pagination_with_real_sql(dsn, monkeypatch, count):
+    """Unique authors isolate cases; tied dates exercise the UUID tie-breaker."""
+    from tests.database.conftest import insert
+    now = datetime.now(UTC)
+    author = uuid4()
+    expected = sorted([uuid4() for _ in range(count)], reverse=True)
+    with psycopg.connect(dsn) as conn:
+        insert(conn, 'users', id=author, firebase_uid=str(author), username=str(author),
+               email=f'{author}@nowave.test', role='user', status='active', created_at=now, updated_at=now)
+        for id in expected:
+            insert(conn, 'reports', id=id, author_id=author, client_report_id=uuid4(),
+                   category='marine_animal', positioning_mode='manual',
+                   final_position='SRID=4326;POINT(-31.5 42.25)', observed_at=now,
+                   created_at=now, updated_at=now, expires_at=now + timedelta(hours=24), status='active')
+    repo = repository_for_test(dsn, monkeypatch)
+    seen = []
+    for page in range(1, max(1, (count + 19) // 20) + 1):
+        rows, more = repo.user_reports(author, page)
+        assert len(rows) <= 20
+        assert more == (count > page * 20)
+        seen.extend(row[0] for row in rows)
+    assert seen == expected
+    assert repo.user_reports(author, 99) == ([], False)
+
+
+@pytest.mark.parametrize('count', [999, 1000, 1001])
+def test_map_boundaries_and_stable_order_with_real_postgis(dsn, monkeypatch, count):
+    """Each case uses a distinct tiny viewport; real geometries exercise the filter."""
+    lon = -110 + (count - 999) * 2
+    now = datetime.now(UTC)
+    ids = sorted([uuid4() for _ in range(count)], reverse=True)
+    from tests.database.conftest import insert
+    author = uuid4()
+    with psycopg.connect(dsn) as conn:
+        insert(conn, 'users', id=author, firebase_uid=str(author), username=str(author),
+               email=f'{author}@nowave.test', role='user', status='active', created_at=now, updated_at=now)
+        with conn.cursor() as cursor:
+            cursor.executemany('''
+                INSERT INTO nowave.reports
+                    (id, author_id, client_report_id, category, positioning_mode, final_position,
+                     observed_at, created_at, updated_at, expires_at, status)
+                VALUES (%s, %s, %s, 'obstruction', 'manual',
+                        ST_SetSRID(ST_MakePoint(%s, 12.25), 4326)::geography,
+                        %s, %s, %s, %s, 'active')
+            ''', [(id, author, uuid4(), lon, now, now, now, now + timedelta(hours=24)) for id in ids])
+    repo = repository_for_test(dsn, monkeypatch)
+    rows, truncated = repo.map_reports(lon - .01, 12.24, lon + .01, 12.26)
+    assert len(rows) == min(count, 1000)
+    assert truncated == (count > 1000)
+    assert [r[0] for r in rows] == ids[:1000]
+    assert all(r[1:4] == (float(lon), 12.25, 'obstruction') for r in rows)
+    assert repo.map_reports(lon - .01, 12.24, lon + .01, 12.26) == (rows, truncated)
+    # Callers cannot bypass the MVP ceiling, even outside the web route.
+    assert repo.map_reports(lon - .01, 12.24, lon + .01, 12.26, limit=5000) == (rows, truncated)
+    zoomed, _ = repo.map_reports(lon + .001, 12.251, lon + .002, 12.252)
+    assert zoomed == []
