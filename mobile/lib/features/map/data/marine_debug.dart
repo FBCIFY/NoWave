@@ -89,6 +89,7 @@ abstract final class MarineDebug {
           }
           final sources = <String, Object?>{};
           for (final id in [
+            'nowave-global-seafloor',
             'nowave-bathymetry',
             ...MarineViewport.sources.values,
           ]) {

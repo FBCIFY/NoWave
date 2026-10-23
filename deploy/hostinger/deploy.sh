@@ -131,7 +131,7 @@ bash "$source_root/deploy/hostinger/verify.sh" http://127.0.0.1:18080 "$revision
 tunnel_activation_started=true
 install -m 0600 "$source_root/deploy/tunnel.yaml" "$root/config/tunnel.yaml"
 "${compose[@]}" -f "$root/config/tunnel.yaml" up -d --wait --wait-timeout 120 tunnel
-bash "$source_root/deploy/hostinger/verify-public.sh" "$revision"
+bash "$source_root/deploy/hostinger/verify-public.sh" "$revision" --with-gebco
 install -m 0700 "$source_root/deploy/hostinger/backup.sh" "$root/config/backup.sh"
 install -m 0644 "$source_root/deploy/hostinger/nowave-backup.service" /etc/systemd/system/nowave-backup.service
 install -m 0644 "$source_root/deploy/hostinger/nowave-backup.timer" /etc/systemd/system/nowave-backup.timer

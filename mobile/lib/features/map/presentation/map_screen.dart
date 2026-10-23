@@ -1037,7 +1037,8 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
 
     // La bathymétrie est facultative : son indisponibilité ne doit
     // pas masquer le fond de carte Mapbox.
-    if (event.sourceId == MarineMapController.bathymetrySourceId) {
+    if (event.sourceId == MarineMapController.bathymetrySourceId ||
+        event.sourceId == MarineMapController.globalSourceId) {
       return;
     }
 

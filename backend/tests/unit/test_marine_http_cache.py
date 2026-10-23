@@ -7,6 +7,7 @@ from pathlib import Path
 import sqlite3
 import subprocess
 import sys
+import threading
 
 import httpx
 import pytest
@@ -116,6 +117,47 @@ asyncio.run(run())
 
     assert process() == {"cache_hits": 0, "network_requests": 1}
     assert process() == {"cache_hits": 1, "network_requests": 0}
+
+
+def test_slow_disk_does_not_block_api_loop_and_expiry_is_indexed(tmp_path):
+    entered = threading.Event()
+    release = threading.Event()
+    loop_thread = threading.get_ident()
+
+    async def run():
+        client = MarineHTTP(tmp_path / "cache.sqlite3", httpx.MockTransport(
+            lambda request: httpx.Response(200, content=b"cached")))
+        original = client._read_cache
+
+        def slow_read(key):
+            assert threading.get_ident() != loop_thread
+            entered.set()
+            assert release.wait(3)
+            return original(key)
+
+        client._read_cache = slow_read
+        work = asyncio.create_task(client.get("https://provider.test/tile"))
+        try:
+            # This coroutine must run while SQLite's worker is still blocked.
+            # Running the old synchronous disk operations here would stall it.
+            async with asyncio.timeout(2):
+                while not entered.is_set():
+                    await asyncio.sleep(.001)
+            assert not work.done()
+            release.set()
+            assert await work == b"cached"
+            assert await client.get("https://provider.test/tile") == b"cached"
+            assert client.metrics == {"network_requests": 1, "cache_hits": 1}
+            plan = client._db().execute(
+                "EXPLAIN QUERY PLAN DELETE FROM responses WHERE expires<=0"
+            ).fetchall()
+            assert any("responses_expiry" in row[-1] for row in plan)
+        finally:
+            release.set()
+            await work
+            await client.close()
+
+    asyncio.run(run())
 
 
 @pytest.mark.parametrize("osm,max_age,expected_ttl", [

@@ -132,6 +132,19 @@ retries ni préchargement de zones n'est ajouté.
 La table de recoloration est initialisée une seule fois, même si huit tuiles
 arrivent ensemble au démarrage. Le cache LRU seul ne sérialise pas ses défauts.
 
+Le fond mondial GEBCO 2026 est précalculé dans l'image web : 5 461 tuiles Z0–Z6,
+environ 5 Mo compressés, servies directement par Nginx avec un budget distinct
+et un an de cache. Il apparaît du globe aux zooms détaillés, sous EMODnet, sans
+attendre l'API ni un fournisseur. EMODnet est limité à son emprise annoncée et
+ses requêtes sont différées de 600 ms. Le fond GEBCO reste une vue d'ensemble
+échantillonnée à deux minutes d'arc, sans sondes ni courbes dérivées ; les
+détails régionaux gardent leurs sources. Voir [la provenance et la régénération](marine/README.md).
+
+Le cache HTTP des fournisseurs exécute également ses lectures, nettoyages et
+écritures SQLite dans un worker sérialisé, avec un index d'expiration. Une
+table volumineuse ne doit pas bloquer la boucle de l'API pendant son nettoyage.
+La rétention OSM d'au moins sept jours et le refus d'un cache plein sont conservés.
+
 Le timer `nowave-build-cache.timer` borne chaque jour le cache BuildKit récupérable à 4 Go
 (avec un plancher de conservation de 2 Go), sous le verrou de déploiement.
 `ci-deploy.sh` applique aussi cette rétention après une livraison réussie.

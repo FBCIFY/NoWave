@@ -12,6 +12,7 @@ import sqlite3
 import time
 from pathlib import Path
 from email.utils import parsedate_to_datetime
+from threading import Lock
 
 import httpx
 import mapbox_vector_tile
@@ -41,6 +42,8 @@ class MarineHTTP:
         self._semaphore = asyncio.Semaphore(8 if persistent_cache else 4)
         self._flights = [asyncio.Lock() for _ in range(64)]
         self._database = None
+        self._disk_gate = asyncio.Lock()
+        self._db_lock = Lock()
         self._backoff: dict[str, float] = {}
         self._ign_gate = asyncio.Lock()
         self._ign_next_request = 0.0
@@ -49,18 +52,57 @@ class MarineHTTP:
     def _db(self):
         if self._database is None:
             self.path.parent.mkdir(parents=True, exist_ok=True)
-            self._database = sqlite3.connect(self.path)
-            self._database.execute("PRAGMA journal_mode=WAL")
-            self._database.execute(
-                "CREATE TABLE IF NOT EXISTS responses (key TEXT PRIMARY KEY, expires REAL NOT NULL, body BLOB NOT NULL)"
-            )
+            connection = sqlite3.connect(self.path, check_same_thread=False)
+            try:
+                connection.execute("PRAGMA journal_mode=WAL")
+                connection.execute(
+                    "CREATE TABLE IF NOT EXISTS responses (key TEXT PRIMARY KEY, expires REAL NOT NULL, body BLOB NOT NULL)"
+                )
+                connection.execute(
+                    "CREATE INDEX IF NOT EXISTS responses_expiry ON responses(expires)"
+                )
+            except BaseException:
+                connection.close()
+                raise
+            self._database = connection
         return self._database
 
-    async def close(self):
-        await self._client.aclose()
+    def _read_cache(self, key):
+        return self._db().execute(
+            "SELECT expires, body FROM responses WHERE key=?", (key,)
+        ).fetchone()
+
+    def _cache_used(self, now):
+        db = self._db()
+        with db:
+            db.execute("DELETE FROM responses WHERE expires <= ?", (now,))
+        return db.execute(
+            "SELECT COALESCE(SUM(length(body)),0) FROM responses"
+        ).fetchone()[0]
+
+    def _store_cache(self, key, expires, content):
+        db = self._db()
+        with db:
+            db.execute("INSERT OR REPLACE INTO responses VALUES (?,?,?)", (key, expires, content))
+
+    def _disk_operation(self, operation, args):
+        # A cancelled caller cannot release this lock while its worker still
+        # uses the connection. No SQLite operation runs on the API event loop.
+        with self._db_lock:
+            return operation(*args)
+
+    async def _disk(self, operation, *args):
+        async with self._disk_gate:
+            return await asyncio.to_thread(self._disk_operation, operation, args)
+
+    def _close_cache(self):
         if self._database is not None:
             self._database.close()
             self._database = None
+
+    async def close(self):
+        await self._client.aclose()
+        await self._disk(self._close_cache)
 
     async def get(
         self, url: str, *, params=None, ttl=21600, osm=False, vector_tile=False
@@ -75,27 +117,16 @@ class MarineHTTP:
             try:
                 # Numeric NOAA soundings use this existing client without any
                 # database or second cache. Other providers retain their policy.
-                db = self._db() if self.persistent_cache else None
                 now = time.time()
-                row = (
-                    db.execute(
-                        "SELECT expires, body FROM responses WHERE key=?", (key,)
-                    ).fetchone()
-                    if db is not None
-                    else None
-                )
+                row = await self._disk(self._read_cache, key) if self.persistent_cache else None
                 if row and row[0] > now:
                     self.metrics["cache_hits"] += 1
                     return row[1]
                 host = request.url.host
                 if self._backoff.get(host, 0) > now:
                     raise ProviderUnavailable("Upstream cooling down")
-                if db is not None:
-                    db.execute("DELETE FROM responses WHERE expires <= ?", (now,))
-                    used = db.execute(
-                        "SELECT COALESCE(SUM(length(body)),0) FROM responses"
-                    ).fetchone()[0]
-                    db.commit()
+                if self.persistent_cache:
+                    used = await self._disk(self._cache_used, now)
                     if used + self.MAX_BODY > self.MAX_CACHE:
                         raise ProviderUnavailable("Marine HTTP cache is full")
                 async with self._semaphore:
@@ -165,12 +196,8 @@ class MarineHTTP:
                         raise ProviderUnavailable(
                             "Upstream did not return a feature collection"
                         )
-                if db is not None:
-                    db.execute(
-                        "INSERT OR REPLACE INTO responses VALUES (?,?,?)",
-                        (key, now + ttl, content),
-                    )
-                    db.commit()
+                if self.persistent_cache:
+                    await self._disk(self._store_cache, key, now + ttl, content)
                 return content
             except (
                 httpx.HTTPError,
