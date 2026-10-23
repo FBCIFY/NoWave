@@ -156,3 +156,28 @@ application `lib/main.dart`, avec requêtes natives de rendu et captures ADB.
 compte, signalements, permissions ni stockage applicatif. Les preuves restent
 locales dans `test-results/NW-220/`, ignoré par Git. Une compilation seule ou une
 fixture n'est jamais présentée comme validation Android réelle.
+
+
+## Reprise du raster pendant les déplacements rapides
+
+Les détails bathymétriques constituent une superposition visuelle au fond mondial
+GEBCO. Si le fournisseur ou le masque côtier est indisponible, leur route PNG
+renvoie une tuile transparente, marquée `X-NoWave-Marine-Status: unavailable`,
+avec un cache HTTP de 15 secondes. Le fond mondial reste visible. Cette réponse
+ne rejoint jamais le cache de rendus normaux de 24 heures ; les sondes, courbes
+et objets GeoJSON/MVT conservent leur contrat d'erreur existant.
+
+Les appels WMS partagent un délai de reprise après une panne : 5 secondes pour
+une erreur réseau, 30 secondes pour une limitation ou erreur serveur, prolongées
+par `Retry-After` le cas échéant. Les demandes HTTP abandonnées sont détectées ;
+un rendu encore en file est supprimé lorsque tous ses demandeurs sont partis.
+Un rendu déjà commencé conserve son emplacement jusqu'à sa fin, afin de ne pas
+multiplier les workers synchrones. Les demandes partagées encore utiles et les
+tuiles déjà calculées restent réutilisables.
+
+Le service HTTP natif Mapbox est limité à douze requêtes simultanées par hôte,
+toutes sources confondues. Les deux requêtes GeoJSON Dart gardent leur budget
+distinct ; les requêtes métier disposent ainsi d'une marge sous la limite de
+trente connexions du proxy. Ce plafond ne constitue pas une limite de débit
+en requêtes par seconde : les délais de gestes et protections du serveur restent
+actifs.

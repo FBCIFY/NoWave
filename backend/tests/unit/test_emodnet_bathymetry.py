@@ -15,6 +15,11 @@ from app.infrastructure.adapters.emodnet_bathymetry import (
 )
 
 
+@pytest.fixture(autouse=True)
+def reset_supplier_cooldown(monkeypatch):
+    monkeypatch.setattr(bathymetry, '_cooldown_until', 0.0)
+
+
 @pytest.mark.parametrize("status,retry_after,expected", [
     (429, False, 1), (503, False, 1), (502, True, 1),
     (502, False, 2), (504, False, 2), (400, False, 1),
@@ -326,3 +331,28 @@ def test_bilinear_associated_rgb_is_not_mistaken_for_a_dark_depth(alpha):
     # so the tolerance follows that numeric bound, not an exact colour match.
     rounding_bound = 2 * ((255 + alpha - 1) // alpha)
     assert all(abs(a-b) <= rounding_bound for a,b in zip(fixed.getpixel((8,8))[:3], reference.getpixel((8,8))[:3]))
+
+
+@pytest.mark.parametrize('failure', [429, 503, 'timeout'])
+def test_supplier_outage_stops_new_tiles_then_resumes(monkeypatch, failure):
+    calls = []
+    clock = [100.0]
+    def respond(request):
+        calls.append(request)
+        if len(calls) > 1:
+            return httpx.Response(200, content=b'png')
+        if failure == 'timeout':
+            raise httpx.ReadTimeout('slow supplier', request=request)
+        return httpx.Response(failure, headers={'Retry-After': '60'})
+    monkeypatch.setattr(bathymetry.time, 'monotonic', lambda: clock[0])
+    with httpx.Client(transport=httpx.MockTransport(respond)) as client:
+        monkeypatch.setattr(bathymetry, '_client', client)
+        with pytest.raises(BathymetryUnavailable):
+            bathymetry._request_tile({'bbox': 'first'})
+        for i in range(50):
+            with pytest.raises(BathymetryUnavailable, match='cooling down'):
+                bathymetry._request_tile({'bbox': str(i)})
+        assert len(calls) == 1
+        clock[0] += 6 if failure == 'timeout' else 61
+        assert bathymetry._request_tile({'bbox': 'new view'}).status_code == 200
+        assert len(calls) == 2

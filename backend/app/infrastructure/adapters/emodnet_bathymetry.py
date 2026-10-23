@@ -1,5 +1,6 @@
 import time
 import logging
+from email.utils import parsedate_to_datetime
 from functools import lru_cache
 from io import BytesIO
 from threading import Lock
@@ -13,6 +14,8 @@ from app.infrastructure.marine.visual_water import PADDING
 EMODNET_WMS_URL = "https://ows.emodnet-bathymetry.eu/wms"
 logger = logging.getLogger("uvicorn.error.bathymetry")
 _LUT_LOCK = Lock()
+_BACKOFF_LOCK = Lock()
+_cooldown_until = 0.0
 
 # Échantillons RGB dans l'ordre de la légende GetLegendGraphic de
 # mean_multicolour (Multi Colour non-linear), relevés hors des graduations.
@@ -191,6 +194,10 @@ def web_mercator_tile_bbox(
 def _request_tile(params: dict[str, str]) -> httpx.Response:
     """Interroge EMODnet avec quelques retries sur erreurs temporaires."""
 
+    global _cooldown_until
+    with _BACKOFF_LOCK:
+        if time.monotonic() < _cooldown_until:
+            raise BathymetryUnavailable("EMODnet cooling down")
     attempts = len(_RETRY_DELAYS) + 1
     last_error: Exception | None = None
     started = time.monotonic()
@@ -235,8 +242,27 @@ def _request_tile(params: dict[str, str]) -> httpx.Response:
 
             time.sleep(_RETRY_DELAYS[attempt])
 
-    logger.warning("Bathymetry fetch failed fetch_ms=%.1f error=%s",
-                   (time.monotonic() - started) * 1000, type(last_error).__name__)
+    status = (last_error.response.status_code
+              if isinstance(last_error, httpx.HTTPStatusError) else None)
+    # This client is shared by all raster workers. A slow/rate-limited WMS
+    # must not receive another attempt for each new tile crossed by a pan.
+    if isinstance(last_error, httpx.TransportError) or (status is not None and (
+        status == 429 or status >= 500
+    )):
+        delay = 5.0 if status is None else 30.0
+        if isinstance(last_error, httpx.HTTPStatusError):
+            value = last_error.response.headers.get("retry-after", "")
+            try:
+                delay = max(delay, float(value))
+            except ValueError:
+                try:
+                    delay = max(delay, parsedate_to_datetime(value).timestamp() - time.time())
+                except (ValueError, TypeError, OverflowError):
+                    pass
+        with _BACKOFF_LOCK:
+            _cooldown_until = max(_cooldown_until, time.monotonic() + delay)
+    logger.warning("Bathymetry fetch failed fetch_ms=%.1f error=%s status=%s",
+                   (time.monotonic() - started) * 1000, type(last_error).__name__, status)
     raise BathymetryUnavailable(
         "EMODnet bathymetry service unavailable"
     ) from last_error

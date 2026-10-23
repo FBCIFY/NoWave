@@ -1,10 +1,45 @@
 import 'dart:convert';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:flutter/services.dart';
 import 'package:blueway/core/map/map_config.dart';
 import 'package:mapbox_maps_flutter/mapbox_maps_flutter.dart';
 
+class NetworkMap extends Fake implements MapboxMap {
+  @override
+  final MapboxHttpService httpService = MapboxHttpService(
+    binaryMessenger:
+        TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger,
+    channelSuffix: 888,
+  );
+}
+
 void main() {
+  TestWidgetsFlutterBinding.ensureInitialized();
+
+  test(
+    'native sources share a bounded HTTP budget without blocking map creation',
+    () async {
+      final messenger =
+          TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger;
+      const channel = MethodChannel('plugins.flutter.io.888');
+      final calls = <MethodCall>[];
+      messenger.setMockMethodCallHandler(channel, (call) async {
+        calls.add(call);
+        return null;
+      });
+      addTearDown(() => messenger.setMockMethodCallHandler(channel, null));
+      await MapConfig.configureNetwork(NetworkMap());
+      expect(calls.single.method, 'map#setMaxRequestsPerHost');
+      expect(calls.single.arguments, {'max': 12});
+      // A native configuration failure must not stop the map from opening.
+      messenger.setMockMethodCallHandler(channel, (_) async {
+        throw PlatformException(code: 'native-unavailable');
+      });
+      await expectLater(MapConfig.configureNetwork(NetworkMap()), completes);
+    },
+  );
+
   test('flèche 3D native orientée par Mapbox, taille en pixels écran', () {
     final settings = MapConfig.locationPuckSettings(arrow: true);
     final puck = settings.locationPuck?.locationPuck3D;

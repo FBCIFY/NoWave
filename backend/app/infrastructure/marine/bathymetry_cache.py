@@ -36,6 +36,8 @@ class BathymetryTileCache:
         self._memory = OrderedDict()
         self._bytes = 0
         self._pending = {}
+        self._waiters = {}
+        self._rendering = set()
         self._slots = asyncio.Semaphore(concurrency)
         self._disk_gate = asyncio.Lock()
         self._db_lock = Lock()
@@ -137,7 +139,9 @@ class BathymetryTileCache:
             task.add_done_callback(lambda done: self._finished(key, done))
         else:
             self.metrics["shared"] += 1
-        # One cancelled map request must not cancel a tile still used by others.
+        self._waiters[key] = self._waiters.get(key, 0) + 1
+        # Share useful work, but discard queued tiles once every caller leaves.
+        # Running synchronous renders keep their slot until they actually end.
         try:
             return await asyncio.wait_for(asyncio.shield(task), self.RESPONSE_TIMEOUT)
         except TimeoutError as error:
@@ -145,9 +149,18 @@ class BathymetryTileCache:
             # Later callers can share it; timeout must not spawn more workers.
             self.metrics["timeouts"] += 1
             raise ProviderUnavailable("Bathymetry response deadline exceeded") from error
+        finally:
+            remaining = self._waiters[key] - 1
+            if remaining:
+                self._waiters[key] = remaining
+            else:
+                self._waiters.pop(key)
+                if not task.done() and key not in self._rendering:
+                    task.cancel()
 
     def _finished(self, key, task):
-        self._pending.pop(key, None)
+        if self._pending.get(key) is task:
+            self._pending.pop(key, None)
         # Observe failures even if every HTTP caller has already disconnected.
         if not task.cancelled():
             task.exception()
@@ -168,10 +181,12 @@ class BathymetryTileCache:
             self.metrics["timeouts"] += 1
             raise ProviderUnavailable("Bathymetry render queue deadline exceeded") from error
         render_started = time.monotonic()
+        self._rendering.add(key)
         try:
             self.metrics["renders"] += 1
             content = await self.render(tile)
         finally:
+            self._rendering.discard(key)
             self._slots.release()
             logger.info("Bathymetry tile=%s disk_ms=%.1f queue_ms=%.1f render_ms=%.1f",
                         key, (read_done - started) * 1000,

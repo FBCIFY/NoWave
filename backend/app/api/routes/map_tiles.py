@@ -2,12 +2,15 @@ import asyncio
 import logging
 import time
 from contextlib import suppress
+from functools import lru_cache
+from io import BytesIO
 from typing import Annotated
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Path, Query, Request, Response
 from fastapi.responses import JSONResponse
 from starlette.concurrency import run_in_threadpool
+from PIL import Image
 
 from app.api.dependencies.auth import get_current_identity
 from app.application.services.map_query import MapQueryService
@@ -227,6 +230,7 @@ async def get_bathymetry_tile(
     z: Annotated[int, Path(ge=0, le=14)],
     x: Annotated[int, Path(ge=0)],
     y: Annotated[int, Path(ge=0)],
+    request: Request,
 ) -> Response:
     """Return one visual bathymetry tile in Web Mercator."""
 
@@ -238,17 +242,37 @@ async def get_bathymetry_tile(
             detail="Tile coordinates must be within the selected zoom level.",
         )
 
+    work = asyncio.create_task(
+        get_bathymetry_cache(_render_bathymetry_tile).get(Tile(z, x, y))
+    )
     try:
-        tile = await get_bathymetry_cache(_render_bathymetry_tile).get(Tile(z, x, y))
+        while not work.done():
+            if await request.is_disconnected():
+                raise HTTPException(status_code=499, detail="Tile request cancelled.")
+            await asyncio.wait({work}, timeout=0.1)
+        tile = await work
     except (BathymetryUnavailable, ProviderUnavailable, OSError, ValueError) as error:
         logging.getLogger("uvicorn.error.bathymetry").warning(
             "Bathymetry tile=%s/%s/%s failed error=%s detail=%s",
             z, x, y, type(error).__name__, error,
         )
-        raise HTTPException(
-            status_code=503,
-            detail="Bathymetry temporarily unavailable.",
-        ) from error
+        # Raster 503s cause native tile retries while the supplier is already
+        # overloaded. A short-lived transparent overlay leaves GEBCO visible.
+        # Never put this fallback into the normal daily raster cache.
+        return Response(
+            content=_unavailable_raster(),
+            media_type="image/png",
+            headers={
+                "Cache-Control": "public, max-age=15, must-revalidate",
+                "X-NoWave-Marine-Status": "unavailable",
+                "X-NoWave-Raster-Usage": "visual-only; global-fallback",
+            },
+        )
+    finally:
+        if not work.done():
+            work.cancel()
+            with suppress(asyncio.CancelledError):
+                await work
 
     return Response(
         content=tile,
@@ -263,6 +287,13 @@ async def get_bathymetry_tile(
             "Link": '</api/v1/map/marine-sources>; rel="describedby"',
         },
     )
+
+
+@lru_cache(maxsize=1)
+def _unavailable_raster() -> bytes:
+    output = BytesIO()
+    Image.new("RGBA", (256, 256), (0, 0, 0, 0)).save(output, format="PNG")
+    return output.getvalue()
 
 
 async def _render_bathymetry_tile(tile: Tile) -> bytes:

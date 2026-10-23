@@ -374,3 +374,33 @@ def test_incomplete_context_shares_cold_requests_but_retries_and_never_persists(
         await restarted.close()
 
     asyncio.run(scenario())
+
+
+
+def test_pan_discards_abandoned_queue_and_prioritizes_current_view(tmp_path):
+    async def scenario():
+        started, release = asyncio.Event(), asyncio.Event()
+        rendered = []
+        async def render(tile):
+            rendered.append(tile)
+            started.set()
+            await release.wait()
+            return b'png'
+        cache = BathymetryTileCache(render, tmp_path / 'pan.sqlite3', concurrency=1)
+        first = asyncio.create_task(cache.get(TILE))
+        await started.wait()
+        old_tiles = [Tile(8, x, 94) for x in range(20, 40)]
+        obsolete = [asyncio.create_task(cache.get(tile)) for tile in old_tiles]
+        await asyncio.sleep(.05)
+        for task in obsolete:
+            task.cancel()
+        await asyncio.gather(*obsolete, return_exceptions=True)
+        current_tile = Tile(8, 200, 94)
+        current = asyncio.create_task(cache.get(current_tile))
+        release.set()
+        assert await first == await current == b'png'
+        assert rendered == [TILE, current_tile]
+        assert not cache._waiters
+        assert not cache._rendering
+        await cache.close()
+    asyncio.run(scenario())
