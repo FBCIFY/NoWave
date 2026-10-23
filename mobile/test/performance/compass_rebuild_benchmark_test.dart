@@ -25,6 +25,7 @@ void main() {
       final previous = debugOnRebuildDirtyWidget;
       var mapBuilds = 0;
       var nativeWidgetBuilds = 0;
+      var glyphBuilds = 0;
       try {
         await tester.pumpWidget(
           MaterialApp(
@@ -39,6 +40,9 @@ void main() {
           previous?.call(element, builtOnce);
           if (element.widget is MapScreen) mapBuilds++;
           if (element.widget is mb.MapWidget) nativeWidgetBuilds++;
+          if (element.widget.runtimeType.toString() == '_NavigationGlyph') {
+            glyphBuilds++;
+          }
         };
         final costs = <int>[];
         for (var i = 0; i < 120; i++) {
@@ -57,7 +61,9 @@ void main() {
           headings.values.add(239);
           await tester.pump(const Duration(milliseconds: 20));
         }
-        expect(rotatingBuilds, greaterThan(0));
+        expect(rotatingBuilds, 0);
+        expect(rotatingNativeBuilds, 0);
+        expect(glyphBuilds, greaterThan(0));
         expect(mapBuilds, 0);
         expect(nativeWidgetBuilds, 0);
         costs.sort();
@@ -65,7 +71,7 @@ void main() {
         // des frames UI/raster sur téléphone ni un verdict d'optimisation.
         // ignore: avoid_print
         print(
-          'COMPASS_BENCHMARK ${jsonEncode({'samples': costs.length, 'simulated_hz': 50, 'rotating_map_builds': rotatingBuilds, 'rotating_map_widget_builds': rotatingNativeBuilds, 'stationary_map_builds': mapBuilds, 'pump_elapsed_median_us': costs[costs.length ~/ 2], 'pump_elapsed_p95_us': costs[(costs.length * 0.95).floor()]})}',
+          'COMPASS_BENCHMARK ${jsonEncode({'samples': costs.length, 'simulated_hz': 50, 'rotating_map_builds': rotatingBuilds, 'rotating_map_widget_builds': rotatingNativeBuilds, 'glyph_builds': glyphBuilds, 'stationary_map_builds': mapBuilds, 'pump_elapsed_median_us': costs[costs.length ~/ 2], 'pump_elapsed_p95_us': costs[(costs.length * 0.95).floor()]})}',
         );
       } finally {
         debugOnRebuildDirtyWidget = previous;

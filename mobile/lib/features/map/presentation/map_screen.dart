@@ -129,7 +129,7 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
   double? _deviceHeading;
   double _cameraBearing = 0;
   final _cameraTurns = ValueNotifier<double>(0);
-  double _compassTurns = 0;
+  final _compassTurns = ValueNotifier<double>(0);
   bool _isFollowing = false;
   final Set<int> _mapPointers = {};
   final Set<int> _cameraGesturePointers = {};
@@ -740,10 +740,10 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
 
   void _setCompassTurnsForHeading(double heading) {
     _aimHeadingCamera(heading);
-    final displayedHeading = (_compassTurns * 360) % 360;
+    final displayedHeading = (_compassTurns.value * 360) % 360;
     final change = (heading - displayedHeading + 540) % 360 - 180;
     if (change.abs() < 1) return;
-    setState(() => _compassTurns += change / 360);
+    _compassTurns.value += change / 360;
   }
 
   bool get _headingCameraActive =>
@@ -3259,6 +3259,7 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
     _displayedZoom.dispose();
     _scaleCamera.dispose();
     _cameraTurns.dispose();
+    _compassTurns.dispose();
     _reportPoint.dispose();
     _reportMarkerLifted.dispose();
     final subscription = _positionSubscription;
@@ -3335,15 +3336,19 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
                 value: _isLocating || _navigationBusy ? 'Localisation…' : null,
                 child: ValueListenableBuilder<double>(
                   valueListenable: _cameraTurns,
-                  builder: (context, cameraTurns, _) => _NavigationGlyph(
-                    mode: _isFollowing
-                        ? _orientationMode
-                        : _MapOrientationMode.free,
-                    headingTurns: _compassTurns - cameraTurns,
-                    northTurns: -cameraTurns,
-                    reduceMotion: _reduceMotion,
-                    busy: _isLocating || _navigationBusy,
-                  ),
+                  builder: (context, cameraTurns, _) =>
+                      ValueListenableBuilder<double>(
+                        valueListenable: _compassTurns,
+                        builder: (context, compassTurns, _) => _NavigationGlyph(
+                          mode: _isFollowing
+                              ? _orientationMode
+                              : _MapOrientationMode.free,
+                          headingTurns: compassTurns - cameraTurns,
+                          northTurns: -cameraTurns,
+                          reduceMotion: _reduceMotion,
+                          busy: _isLocating || _navigationBusy,
+                        ),
+                      ),
                 ),
               ),
             ),
