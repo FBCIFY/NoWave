@@ -10,6 +10,10 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:blueway/features/reports/data/manual_report_service.dart';
 import 'package:blueway/features/reports/data/report_detail_service.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:blueway/features/map/presentation/map_screen.dart';
+import 'package:blueway/features/map/presentation/widgets/map_action_rail.dart';
+import 'package:blueway/features/profile/presentation/profile_screen.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 
@@ -57,6 +61,92 @@ void main() {
     );
     await tester.pumpAndSettle();
   }
+
+  testWidgets(
+    'le profil et la suppression gardent la même carte à l’annulation',
+    (tester) async {
+      await tester.binding.setSurfaceSize(const Size(430, 932));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+      final f = AccountFixture();
+      addTearDown(f.dispose);
+      const channel = MethodChannel('flutter.baseflow.com/geolocator');
+      final messenger = tester.binding.defaultBinaryMessenger;
+      messenger.setMockMethodCallHandler(
+        channel,
+        (call) async =>
+            call.method == 'isLocationServiceEnabled' ? false : null,
+      );
+      addTearDown(() => messenger.setMockMethodCallHandler(channel, null));
+      f.respond = (request) async => http.Response(
+        jsonEncode({
+          'id': 'profile-a',
+          'username': 'Vadim',
+          'role': 'user',
+          'status': 'active',
+          'show_user_name': false,
+          'show_boat_info': false,
+          'notifications_enabled': false,
+          'created_at': '2026-10-01T00:00:00Z',
+          'updated_at': '2026-10-01T00:00:00Z',
+        }),
+        200,
+      );
+      await tester.pumpWidget(
+        MaterialApp(
+          home: ProfileGate(
+            authService: f.auth,
+            profileService: f.profiles,
+            reportService: _Reports(),
+            positionEstimateService: _Estimates(),
+            reportTiles: _Tiles(),
+            reportDetailService: _Details(),
+            deviceRegistration: f.registration,
+            devicePositionReporter: f.reporter,
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      final mapState = tester.state(find.byType(MapScreen));
+      expect(find.byType(MapActionRail), findsOneWidget);
+      tester.widget<MapScreen>(find.byType(MapScreen)).onOpenProfile!();
+      await tester.pumpAndSettle();
+      expect(find.byType(ProfileScreen), findsOneWidget);
+      expect(find.byType(MapActionRail), findsNothing);
+      await tester.tap(find.text('Gestion du compte'));
+      await tester.pumpAndSettle();
+      expect(find.text('Se déconnecter').hitTestable(), findsNothing);
+      expect(
+        find.text('Informations personnelles').hitTestable(),
+        findsNothing,
+      );
+      expect(find.byType(MapActionRail), findsNothing);
+      await tester.tap(find.text('Supprimer mon compte'));
+      await tester.pumpAndSettle();
+      expect(
+        tester
+            .widget<AccountDeletionScreen>(find.byType(AccountDeletionScreen))
+            .panel,
+        isTrue,
+      );
+      await tester.tap(find.text('Annuler'));
+      await tester.pumpAndSettle();
+      expect(find.text('Gestion du compte').hitTestable(), findsOneWidget);
+      expect(find.text('Supprimer mon compte'), findsOneWidget);
+      expect(
+        f.requests.where((request) => request.method == 'DELETE'),
+        isEmpty,
+      );
+      await tester.tap(find.byTooltip('Retour'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byTooltip('Fermer'));
+      await tester.pumpAndSettle();
+      expect(tester.state(find.byType(MapScreen)), same(mapState));
+      expect(find.byType(MapActionRail), findsOneWidget);
+      expect(tester.takeException(), isNull);
+      await tester.pumpWidget(const SizedBox.shrink());
+      await tester.pumpAndSettle();
+    },
+  );
 
   testWidgets(
     'compte suspendu : action de suppression, confirmation et annulation sans envoi',

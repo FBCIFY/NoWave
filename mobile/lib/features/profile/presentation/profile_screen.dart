@@ -1,13 +1,15 @@
-import 'boat_screen.dart';
-import '../data/profile_service.dart';
-
 import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 
 import '../../../app/theme.dart';
-import '../../auth/presentation/widgets/auth_layout.dart';
+import '../data/profile_service.dart';
+import '../data/boat_profile_loader.dart';
+import 'boat_screen.dart';
+import 'profile_panel.dart';
+import 'profile_fields.dart';
+import 'personal_information_screen.dart';
 import '../domain/user_profile.dart';
 import '../../../core/notifications/notification_permission.dart';
 
@@ -25,6 +27,7 @@ typedef UpdatePreferences = Future<UserProfile> Function({
 /// chaque retour dans l'app.
 class ProfileScreen extends StatefulWidget {
   final ProfileService? profileService;
+  final ValueChanged<UserProfile>? onProfileUpdated;
   final Future<void> Function()? onDeleteAccount;
   final UserProfile profile;
   final Future<void> Function() onSignOut;
@@ -34,6 +37,7 @@ class ProfileScreen extends StatefulWidget {
   const ProfileScreen({
     super.key,
     this.profileService,
+    this.onProfileUpdated,
     this.onDeleteAccount,
     required this.profile,
     required this.onSignOut,
@@ -47,6 +51,7 @@ class ProfileScreen extends StatefulWidget {
 
 class _ProfileScreenState extends State<ProfileScreen> {
   late UserProfile _profile;
+  BoatProfileLoader? _boatLoader;
   bool _isSaving = false;
   NotificationPermission? _permission;
   String? _buildLabel;
@@ -56,6 +61,17 @@ class _ProfileScreenState extends State<ProfileScreen> {
   void initState() {
     super.initState();
     _profile = widget.profile;
+    if (widget.profileService case final service?) {
+      _boatLoader = BoatProfileLoader(service);
+      // Une panne de préchargement ne bloque pas le profil ; le bateau
+      // proposera une nouvelle tentative à son ouverture.
+      unawaited(
+        _boatLoader!.load().then<void>(
+          (_) {},
+          onError: (Object _, StackTrace _) {},
+        ),
+      );
+    }
     unawaited(_loadPermission());
     unawaited(_loadBuildLabel());
     _lifecycleListener = AppLifecycleListener(
@@ -72,7 +88,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
         );
       }
     } catch (_) {
-      // Version information is optional on platforms without the plugin.
+      // La version reste facultative si le plugin est indisponible.
     }
   }
 
@@ -92,29 +108,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
     }
   }
 
-  String _formatDate(DateTime? date) {
-    if (date == null) return 'Non renseignée';
-    final day = date.day.toString().padLeft(2, '0');
-    final month = date.month.toString().padLeft(2, '0');
-    return '$day/$month/${date.year}';
-  }
-
-  String _roleLabel(String role) => switch (role) {
-    'user' => 'Utilisateur',
-    'admin' => 'Administrateur',
-    _ => role,
-  };
-
-  String _statusLabel(String status) => switch (status) {
-    'active' => 'Actif',
-    'suspended' => 'Suspendu',
-    _ => status,
-  };
-
   Future<void> _signOut() async {
     await widget.onSignOut();
-    if (!mounted) return;
-    Navigator.of(context).popUntil((route) => route.isFirst);
   }
 
   Future<void> _updatePreferences({
@@ -184,59 +179,222 @@ class _ProfileScreenState extends State<ProfileScreen> {
     }
   }
 
-  @override
-  Widget build(BuildContext context) {
-    return AuthLayout(
-      title: 'Mon profil',
-      showBackButton: true,
-      centerContent: false,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Row(
-            children: [
-              Container(
-                width: 72,
-                height: 72,
-                alignment: Alignment.center,
-                decoration: const BoxDecoration(
-                  shape: BoxShape.circle,
-                  gradient: LinearGradient(
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                    colors: [Color(0xFF3B82F6), AppColors.blue600],
+  Future<void> _openPersonalInformation() async {
+    final service = widget.profileService;
+    if (service == null) return;
+    final updated = await Navigator.of(context).push<UserProfile>(
+      profilePanelRoute(
+        (_) => PersonalInformationScreen(profile: _profile, service: service),
+      ),
+    );
+    if (!mounted || updated == null) return;
+    setState(() => _profile = updated);
+    widget.onProfileUpdated?.call(updated);
+  }
+
+  Future<void> _openAccountManagement() => Navigator.of(context).push<void>(
+    profilePanelRoute(
+      (context) => ProfilePanel(
+        title: 'Gestion du compte',
+        onBack: () => Navigator.of(context).pop(),
+        child: ListView(
+          padding: const EdgeInsets.all(24),
+          children: [
+            if (widget.onDeleteAccount != null)
+              ProfileGroup(
+                children: [
+                  _ProfileLink(
+                    icon: Icons.delete_outline,
+                    title: 'Supprimer mon compte',
+                    subtitle: 'Une confirmation vous sera demandée',
+                    destructive: true,
+                    onTap: widget.onDeleteAccount,
                   ),
-                ),
-                child: Text(
-                  _profile.username.isEmpty
-                      ? '?'
-                      : _profile.username.substring(0, 1).toUpperCase(),
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 30,
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
+                ],
               ),
-              const SizedBox(width: 16),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      _profile.username,
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 22,
-                        fontWeight: FontWeight.w700,
+            if (_buildLabel case final label?) ...[
+              const SizedBox(height: 32),
+              Text(
+                label,
+                textAlign: TextAlign.center,
+                style: const TextStyle(fontSize: 11, color: Color(0xFF526474)),
+              ),
+            ],
+          ],
+        ),
+      ),
+    ),
+  );
+
+  @override
+  Widget build(BuildContext context) => ProfilePanel(
+    title: 'Mon profil',
+    onClose: _isSaving ? null : () => Navigator.of(context).pop(),
+    child: LayoutBuilder(
+      builder: (context, constraints) => SingleChildScrollView(
+        padding: const EdgeInsets.fromLTRB(24, 16, 24, 16),
+        child: ConstrainedBox(
+          constraints: BoxConstraints(
+            minHeight: (constraints.maxHeight - 32).clamp(0, double.infinity),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Row(
+                    children: [
+                      CircleAvatar(
+                        radius: 32,
+                        backgroundColor: const Color(0xFFE0EDF1),
+                        foregroundColor: AppColors.text,
+                        child: Text(
+                          style: const TextStyle(
+                            fontSize: 28,
+                            fontWeight: FontWeight.w500,
+                          ),
+                          _profile.username.isEmpty
+                              ? '?'
+                              : _profile.username.characters.first
+                                    .toUpperCase(),
+                        ),
                       ),
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      'Votre compte NoWave',
-                      style: TextStyle(
-                        color: Colors.white.withValues(alpha: 0.45),
-                        fontSize: 12,
+                      const SizedBox(width: 14),
+                      Expanded(
+                        child: Text(
+                          _profile.username,
+                          style: const TextStyle(
+                            fontSize: 24,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 20),
+                  ProfileGroup(
+                    children: [
+                      _ProfileLink(
+                        icon: Icons.person_outline,
+                        title: 'Informations personnelles',
+                        subtitle: 'Date de naissance, nationalité',
+                        onTap: _isSaving || widget.profileService == null
+                            ? null
+                            : _openPersonalInformation,
+                      ),
+                      if (widget.profileService case final service?)
+                        _ProfileLink(
+                          icon: Icons.sailing_outlined,
+                          title: 'Mon bateau',
+                          onTap: _isSaving
+                              ? null
+                              : () => Navigator.of(context).push<void>(
+                                  profilePanelRoute(
+                                    (_) => BoatScreen(
+                                      profileService: service,
+                                      boatLoader: _boatLoader,
+                                    ),
+                                  ),
+                                ),
+                        ),
+                    ],
+                  ),
+                  const SizedBox(height: 24),
+                  ProfileGroup(
+                    children: [
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          Padding(
+                            padding: const EdgeInsets.fromLTRB(16, 0, 16, 0),
+                            child: _PreferenceSwitch(
+                              switchKey: const Key(
+                                'notificationsEnabledSwitch',
+                              ),
+                              label: 'Alertes à proximité',
+                              value: _profile.notificationsEnabled,
+                              onChanged: _isSaving ? null : _onAlertsChanged,
+                            ),
+                          ),
+                          const Padding(
+                            padding: EdgeInsets.fromLTRB(16, 0, 16, 12),
+                            child: Text(
+                              'GPS en arrière-plan pour les alertes. Peut consommer plus de batterie.',
+                              style: TextStyle(
+                                fontSize: 11,
+                                color: Color(0xFF526474),
+                              ),
+                            ),
+                          ),
+                          if (_permission case final permission?) ...[
+                            const SizedBox(height: 6),
+                            Padding(
+                              padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+                              child: _PermissionStatus(permission),
+                            ),
+                          ],
+                        ],
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 24),
+                  const Text(
+                    'Visibilité',
+                    style: TextStyle(fontSize: 12, color: Color(0xFF526474)),
+                  ),
+                  const SizedBox(height: 8),
+                  ProfileGroup(
+                    children: [
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 16),
+                        child: _PreferenceSwitch(
+                          switchKey: const Key('showUserNameSwitch'),
+                          label: 'Afficher le nom d’utilisateur',
+                          value: _profile.showUserName,
+                          onChanged: _isSaving
+                              ? null
+                              : (value) =>
+                                    _updatePreferences(showUserName: value),
+                        ),
+                      ),
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 16),
+                        child: _PreferenceSwitch(
+                          switchKey: const Key('showBoatInfoSwitch'),
+                          label: 'Afficher les informations du bateau',
+                          value: _profile.showBoatInfo,
+                          onChanged: _isSaving
+                              ? null
+                              : (value) =>
+                                    _updatePreferences(showBoatInfo: value),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 24),
+                  ProfileGroup(
+                    children: [
+                      _ProfileLink(
+                        icon: Icons.manage_accounts_outlined,
+                        title: 'Gestion du compte',
+                        onTap: _isSaving ? null : _openAccountManagement,
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+              Padding(
+                padding: const EdgeInsets.only(top: 20),
+                child: Column(
+                  children: [
+                    TextButton.icon(
+                      onPressed: _isSaving ? null : _signOut,
+                      icon: const Icon(Icons.logout, size: 18),
+                      label: const Text('Se déconnecter'),
+                      style: TextButton.styleFrom(
+                        foregroundColor: const Color(0xFFB91C1C),
                       ),
                     ),
                   ],
@@ -244,217 +402,48 @@ class _ProfileScreenState extends State<ProfileScreen> {
               ),
             ],
           ),
-          const SizedBox(height: 28),
-          const _SectionTitle('Informations du profil'),
-          const SizedBox(height: 10),
-          _ProfileCard(
-            child: Column(
-              children: [
-                Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Expanded(
-                      child: _ProfileDetail(
-                        label: 'Rôle',
-                        value: _roleLabel(_profile.role),
-                      ),
-                    ),
-                    const SizedBox(width: 16),
-                    Expanded(
-                      child: _ProfileDetail(
-                        label: 'Statut',
-                        value: _statusLabel(_profile.status),
-                      ),
-                    ),
-                  ],
-                ),
-                const _CardDivider(),
-                Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Expanded(
-                      child: _ProfileDetail(
-                        label: 'Date de naissance',
-                        value: _formatDate(_profile.dateOfBirth),
-                      ),
-                    ),
-                    const SizedBox(width: 16),
-                    Expanded(
-                      child: _ProfileDetail(
-                        label: 'Nationalité',
-                        value: _profile.nationality ?? 'Non renseignée',
-                      ),
-                    ),
-                  ],
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(height: 24),
-          if (widget.profileService case final service?) ...[
-            OutlinedButton.icon(
-              onPressed: _isSaving
-                  ? null
-                  : () => Navigator.of(context).push(
-                      MaterialPageRoute<void>(
-                        builder: (_) => BoatScreen(profileService: service),
-                      ),
-                    ),
-              icon: const Icon(Icons.sailing),
-              label: const Text('Mon bateau'),
-            ),
-            const SizedBox(height: 24),
-          ],
-          const _SectionTitle('Préférences'),
-          const SizedBox(height: 10),
-          _ProfileCard(
-            child: Column(
-              children: [
-                _PreferenceSwitch(
-                  switchKey: const Key('showUserNameSwitch'),
-                  label: 'Afficher le nom d’utilisateur',
-                  value: _profile.showUserName,
-                  onChanged: _isSaving
-                      ? null
-                      : (value) => _updatePreferences(showUserName: value),
-                ),
-                const _CardDivider(),
-                _PreferenceSwitch(
-                  switchKey: const Key('showBoatInfoSwitch'),
-                  label: 'Afficher les informations du bateau',
-                  value: _profile.showBoatInfo,
-                  onChanged: _isSaving
-                      ? null
-                      : (value) => _updatePreferences(showBoatInfo: value),
-                ),
-                const _CardDivider(),
-                _PreferenceSwitch(
-                  switchKey: const Key('notificationsEnabledSwitch'),
-                  label: 'Alertes à proximité',
-                  value: _profile.notificationsEnabled,
-                  onChanged: _isSaving ? null : _onAlertsChanged,
-                ),
-                const Padding(
-                  padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                  child: Text(
-                    'Activer les alertes maintient le suivi GPS en arrière-plan '
-                    'pour recevoir les signalements à proximité, selon les '
-                    'autorisations du téléphone. Cela peut augmenter la '
-                    'consommation de batterie. Désactiver les alertes arrête '
-                    'ce suivi en arrière-plan.',
-                  ),
-                ),
-                if (_permission case final permission?) ...[
-                  const SizedBox(height: 8),
-                  _PermissionStatus(permission),
-                ],
-              ],
-            ),
-          ),
-          const SizedBox(height: 28),
-          FilledButton.icon(
-            onPressed: _isSaving ? null : _signOut,
-            icon: const Icon(Icons.logout, size: 18),
-            label: const Text('Se déconnecter'),
-            style: FilledButton.styleFrom(
-              backgroundColor: const Color(0xFFB91C1C),
-              foregroundColor: Colors.white,
-              minimumSize: const Size.fromHeight(50),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(12),
-              ),
-            ),
-          ),
-          if (widget.onDeleteAccount != null)
-            TextButton(
-              onPressed: _isSaving ? null : widget.onDeleteAccount,
-              child: const Text('Supprimer mon compte'),
-            ),
-          if (_buildLabel case final label?) ...[
-            const SizedBox(height: 16),
-            Text(
-              label,
-              textAlign: TextAlign.center,
-              style: TextStyle(
-                color: Colors.white.withValues(alpha: .45),
-                fontSize: 12,
-              ),
-            ),
-          ],
-        ],
+        ),
       ),
-    );
-  }
+    ),
+  );
 }
 
-class _SectionTitle extends StatelessWidget {
+class _ProfileLink extends StatelessWidget {
+  const _ProfileLink({
+    required this.icon,
+    required this.title,
+    this.subtitle,
+    this.onTap,
+    this.destructive = false,
+  });
+  final IconData icon;
   final String title;
-  const _SectionTitle(this.title);
+  final String? subtitle;
+  final VoidCallback? onTap;
+  final bool destructive;
 
   @override
-  Widget build(BuildContext context) => Text(
-    title.toUpperCase(),
-    style: TextStyle(
-      color: Colors.white.withValues(alpha: 0.45),
-      fontSize: 11,
-      fontWeight: FontWeight.w700,
-      letterSpacing: 1,
+  Widget build(BuildContext context) => ListTile(
+    contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+    leading: Icon(
+      icon,
+      color: destructive ? const Color(0xFFB91C1C) : AppColors.text,
     ),
-  );
-}
-
-class _ProfileCard extends StatelessWidget {
-  final Widget child;
-  const _ProfileCard({required this.child});
-
-  @override
-  Widget build(BuildContext context) => Container(
-    padding: const EdgeInsets.all(16),
-    decoration: BoxDecoration(
-      color: Colors.white.withValues(alpha: 0.08),
-      borderRadius: BorderRadius.circular(14),
-      border: Border.all(color: Colors.white.withValues(alpha: 0.15)),
+    title: Text(
+      title,
+      style: TextStyle(
+        fontSize: 14,
+        color: destructive ? const Color(0xFFB91C1C) : AppColors.text,
+      ),
     ),
-    child: child,
-  );
-}
-
-class _CardDivider extends StatelessWidget {
-  const _CardDivider();
-
-  @override
-  Widget build(BuildContext context) => Padding(
-    padding: const EdgeInsets.symmetric(vertical: 14),
-    child: Divider(height: 1, color: Colors.white.withValues(alpha: 0.10)),
-  );
-}
-
-class _ProfileDetail extends StatelessWidget {
-  final String label;
-  final String value;
-  const _ProfileDetail({required this.label, required this.value});
-
-  @override
-  Widget build(BuildContext context) => Column(
-    crossAxisAlignment: CrossAxisAlignment.start,
-    children: [
-      Text(
-        label,
-        style: TextStyle(
-          color: Colors.white.withValues(alpha: 0.45),
-          fontSize: 11,
-        ),
-      ),
-      const SizedBox(height: 5),
-      Text(
-        value,
-        style: const TextStyle(
-          color: Colors.white,
-          fontSize: 14,
-          fontWeight: FontWeight.w500,
-        ),
-      ),
-    ],
+    subtitle: subtitle == null
+        ? null
+        : Text(
+            subtitle!,
+            style: const TextStyle(fontSize: 11, color: Color(0xFF526474)),
+          ),
+    trailing: const Icon(Icons.chevron_right, size: 20),
+    onTap: onTap,
   );
 }
 
@@ -478,7 +467,7 @@ class _PreferenceSwitch extends StatelessWidget {
         Expanded(
           child: Text(
             label,
-            style: const TextStyle(color: Colors.white, fontSize: 13),
+            style: const TextStyle(color: AppColors.text, fontSize: 13),
           ),
         ),
         const SizedBox(width: 12),
@@ -487,8 +476,8 @@ class _PreferenceSwitch extends StatelessWidget {
           value: value,
           onChanged: onChanged,
           activeTrackColor: AppColors.cyan500,
-          inactiveTrackColor: Colors.white.withValues(alpha: 0.12),
-          inactiveThumbColor: Colors.white.withValues(alpha: 0.7),
+          inactiveTrackColor: const Color(0xFFE1E7EA),
+          inactiveThumbColor: const Color(0xFF81909C),
         ),
       ],
     ),
@@ -514,10 +503,7 @@ class _PermissionStatus extends StatelessWidget {
       alignment: Alignment.centerLeft,
       child: Text(
         label,
-        style: TextStyle(
-          color: Colors.white.withValues(alpha: 0.55),
-          fontSize: 12,
-        ),
+        style: const TextStyle(color: Color(0xFF526474), fontSize: 12),
       ),
     );
   }

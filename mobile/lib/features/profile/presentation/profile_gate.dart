@@ -23,6 +23,7 @@ import '../data/account_deletion.dart';
 import '../data/profile_service.dart';
 import '../domain/user_profile.dart';
 import 'account_deletion_screen.dart';
+import 'profile_panel.dart';
 import 'profile_onboarding_screen.dart';
 import 'sign_out_dialog.dart';
 import 'suspended_account_screen.dart';
@@ -75,6 +76,7 @@ class _ProfileGateState extends State<ProfileGate> with WidgetsBindingObserver {
   MapIntroController? _intro;
   Future<void>? _signingOut;
   bool _accessRevoked = false;
+  bool _openingDeletion = false;
   bool _refreshingAccess = false;
   bool _deletingAccount = false;
   bool _deletionChecked = false;
@@ -109,12 +111,31 @@ class _ProfileGateState extends State<ProfileGate> with WidgetsBindingObserver {
     return widget.profileService.getCurrentProfile();
   }
 
-  Future<void> _openAccountDeletion() async {
+  Future<void> _openAccountDeletion({bool overMap = false}) async {
+    if (_openingDeletion) return;
     widget.pushController?.setReady(false);
-    Navigator.of(context).popUntil((route) => route.isFirst);
-
-    if (!mounted) return;
-    setState(() => _deletingAccount = true);
+    if (!overMap) {
+      Navigator.of(context).popUntil((route) => route.isFirst);
+      if (mounted) setState(() => _deletingAccount = true);
+      return;
+    }
+    _openingDeletion = true;
+    try {
+      await Navigator.of(context).push<void>(
+        profilePanelRoute(
+          (context) => AccountDeletionScreen(
+            panel: true,
+            deletion: _accountDeletion,
+            onCancel: () => Navigator.of(context).pop(),
+            onDone: () =>
+                Navigator.of(context).popUntil((route) => route.isFirst),
+          ),
+        ),
+      );
+    } finally {
+      _openingDeletion = false;
+      if (mounted) setState(() {});
+    }
   }
 
   @override
@@ -143,7 +164,7 @@ class _ProfileGateState extends State<ProfileGate> with WidgetsBindingObserver {
   }
 
   void _markAccessRevoked() {
-    if (!mounted || _deletingAccount) return;
+    if (!mounted || _deletingAccount || _openingDeletion) return;
 
     widget.pushController?.setReady(false);
     Navigator.of(context).popUntil((route) => route.isFirst);
@@ -154,14 +175,19 @@ class _ProfileGateState extends State<ProfileGate> with WidgetsBindingObserver {
   }
 
   Future<void> _refreshAccessStatus() async {
-    if (_refreshingAccess || _deletingAccount || !_deletionChecked) return;
+    if (_refreshingAccess ||
+        _deletingAccount ||
+        _openingDeletion ||
+        !_deletionChecked) {
+      return;
+    }
 
     _refreshingAccess = true;
 
     try {
       final profile = await widget.profileService.getCurrentProfile();
 
-      if (!mounted || _deletingAccount) return;
+      if (!mounted || _deletingAccount || _openingDeletion) return;
 
       setState(() {
         _accessRevoked = profile?.status == 'suspended';
@@ -277,6 +303,7 @@ class _ProfileGateState extends State<ProfileGate> with WidgetsBindingObserver {
       builder: (context, snapshot) {
         widget.pushController?.setReady(
           !_deletingAccount &&
+              !_openingDeletion &&
               !_accessRevoked &&
               (snapshot.connectionState == ConnectionState.done ||
                   snapshot.hasData) &&
@@ -385,7 +412,10 @@ class _ProfileGateState extends State<ProfileGate> with WidgetsBindingObserver {
           alertService: widget.alertService,
           pushController: widget.pushController,
           profileService: widget.profileService,
-          onDeleteAccount: _openAccountDeletion,
+          onProfileUpdated: (profile) {
+            if (mounted) setState(() => _latestProfile = profile);
+          },
+          onDeleteAccount: () => _openAccountDeletion(overMap: true),
           profile: profile,
           onUserInactive: () => unawaited(_refreshAccessStatus()),
           onSignOut: () => _signOut(resumeDevices: true),

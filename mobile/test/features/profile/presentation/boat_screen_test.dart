@@ -58,6 +58,30 @@ void main() {
     pending = null;
   });
 
+  testWidgets(
+    'enregistrer apparaît seulement pour une modification réelle du bateau',
+    (tester) async {
+      boat = boatJson;
+      await open(tester);
+      expect(find.text('Enregistrer'), findsNothing);
+      await tester.enterText(find.byType(TextFormField).first, 'Nouveau nom');
+      await tester.pumpAndSettle();
+      expect(find.text('Enregistrer'), findsOneWidget);
+      await tester.enterText(find.byType(TextFormField).first, 'Aurore');
+      await tester.enterText(find.byType(TextFormField).last, 'fr');
+      await tester.pumpAndSettle();
+      expect(find.text('Enregistrer'), findsNothing);
+      expect(requests.map((request) => request.method), ['GET']);
+      await tester.enterText(find.byType(TextFormField).last, 'BE');
+      await tester.pumpAndSettle();
+      expect(find.text('Enregistrer'), findsOneWidget);
+      await tester.tap(find.text('Enregistrer'));
+      await tester.pumpAndSettle();
+      expect(find.text('Enregistrer'), findsNothing);
+      expect(boat!['flag_country'], 'BE');
+    },
+  );
+
   testWidgets('absent, création, modification et suppression confirmée', (
     tester,
   ) async {
@@ -68,8 +92,9 @@ void main() {
     await tester.tap(find.text('Créer le bateau'));
     await tester.pumpAndSettle();
     expect(boat!['name'], 'Aurore');
-    expect(find.text('Enregistrer'), findsOneWidget);
+    expect(find.text('Enregistrer'), findsNothing);
     await tester.enterText(find.byType(TextFormField).first, 'Aurore II');
+    await tester.pump();
     await tester.tap(find.text('Enregistrer'));
     await tester.pumpAndSettle();
     expect(boat!['name'], 'Aurore II');
@@ -118,7 +143,7 @@ void main() {
       await tester.tap(find.text('Recharger le bateau'));
       await tester.pumpAndSettle();
       expect(find.text('Aurore'), findsOneWidget);
-      expect(find.text('Enregistrer'), findsOneWidget);
+      expect(find.text('Enregistrer'), findsNothing);
     },
   );
 
@@ -157,7 +182,7 @@ void main() {
       pending = null;
       await tester.tap(find.text('Recharger le bateau'));
       await tester.pumpAndSettle();
-      expect(find.text('Enregistrer'), findsOneWidget);
+      expect(find.text('Enregistrer'), findsNothing);
       expect(requests.where((r) => r.method == 'POST'), hasLength(1));
     },
   );

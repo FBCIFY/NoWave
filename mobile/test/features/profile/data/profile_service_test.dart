@@ -133,6 +133,32 @@ void main() {
     expect(profile.showUserName, isFalse);
   });
 
+  test('enregistre une date civile et normalise la nationalité sans modifier les préférences', () async {
+    final client = MockClient((request) async {
+      expect(request.method, 'PATCH');
+      expect(jsonDecode(request.body), {
+        'date_of_birth': '2000-01-02',
+        'nationality': 'BE',
+      });
+      return http.Response(
+        jsonEncode({
+          ...profileJson,
+          'date_of_birth': '2000-01-02',
+          'nationality': 'BE',
+        }),
+        200,
+      );
+    });
+    addTearDown(client.close);
+    final profile = await createService(client).updatePersonalInformation(
+      dateOfBirth: DateTime(2000, 1, 2),
+      nationality: ' be ',
+    );
+    expect(profile.dateOfBirth, DateTime(2000, 1, 2));
+    expect(profile.nationality, 'BE');
+    expect(profile.notificationsEnabled, isFalse);
+  });
+
   test('refuse une mise à jour sans préférence', () async {
     final client = MockClient((request) async {
       fail('Aucune requête ne doit être envoyée.');
