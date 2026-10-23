@@ -20,6 +20,7 @@ import '../../../core/map/globe_rotation_controller.dart';
 import '../../../core/map/globe_pitch_controller.dart';
 import '../../../core/map/heading_camera.dart';
 import '../../../core/map/map_config.dart';
+import '../../../core/map/map_performance.dart';
 import '../../../core/map/map_motion.dart';
 import '../../../core/map/marine/marine_map_controller.dart';
 import '../../../core/map/marine/marine_zoom.dart';
@@ -128,7 +129,7 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
   double? _deviceHeading;
   double _cameraBearing = 0;
   final _cameraTurns = ValueNotifier<double>(0);
-  double _compassTurns = 0;
+  final _compassTurns = ValueNotifier<double>(0);
   bool _isFollowing = false;
   final Set<int> _mapPointers = {};
   final Set<int> _cameraGesturePointers = {};
@@ -672,6 +673,7 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
   @override
   void initState() {
     super.initState();
+    MapPerformance.initialize();
     final lifecycle = WidgetsBinding.instance.lifecycleState;
     _appHidden = lifecycle != null && lifecycle != AppLifecycleState.resumed;
     widget.intro?.attach();
@@ -738,10 +740,10 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
 
   void _setCompassTurnsForHeading(double heading) {
     _aimHeadingCamera(heading);
-    final displayedHeading = (_compassTurns * 360) % 360;
+    final displayedHeading = (_compassTurns.value * 360) % 360;
     final change = (heading - displayedHeading + 540) % 360 - 180;
     if (change.abs() < 1) return;
-    setState(() => _compassTurns += change / 360);
+    _compassTurns.value += change / 360;
   }
 
   bool get _headingCameraActive =>
@@ -782,6 +784,7 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
   /// passe en orientation libre.
   void _handleMapCameraChange(CameraChangedEventData event) {
     if (!mounted || _hidden) return;
+    MapPerformance.count('camera_events');
     final wasRotating = _globeRotation.isRotating;
     final previousZoom = _cameraZoom;
     if (_userCameraMotion) _scheduleRotationAfterGesture();
@@ -816,7 +819,13 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
     }
     _reportMapRevision++;
     final map = _mapboxMap;
-    if (map != null) _marineViewport.schedule(map, cameraChanged: true);
+    if (map != null) {
+      _marineViewport.schedule(
+        map,
+        cameraChanged: true,
+        cameraState: event.cameraState,
+      );
+    }
     if (map != null) {
       unawaited(_globePresentation.synchronize(map, event.cameraState.zoom));
     }
@@ -3224,6 +3233,7 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
 
   @override
   void dispose() {
+    MapPerformance.detach();
     _marineViewport.dispose();
     unawaited(_alertHaloPulse.stop());
     widget.intro?.removeListener(_handleIntro);
@@ -3249,6 +3259,7 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
     _displayedZoom.dispose();
     _scaleCamera.dispose();
     _cameraTurns.dispose();
+    _compassTurns.dispose();
     _reportPoint.dispose();
     _reportMarkerLifted.dispose();
     final subscription = _positionSubscription;
@@ -3325,15 +3336,19 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
                 value: _isLocating || _navigationBusy ? 'Localisation…' : null,
                 child: ValueListenableBuilder<double>(
                   valueListenable: _cameraTurns,
-                  builder: (context, cameraTurns, _) => _NavigationGlyph(
-                    mode: _isFollowing
-                        ? _orientationMode
-                        : _MapOrientationMode.free,
-                    headingTurns: _compassTurns - cameraTurns,
-                    northTurns: -cameraTurns,
-                    reduceMotion: _reduceMotion,
-                    busy: _isLocating || _navigationBusy,
-                  ),
+                  builder: (context, cameraTurns, _) =>
+                      ValueListenableBuilder<double>(
+                        valueListenable: _compassTurns,
+                        builder: (context, compassTurns, _) => _NavigationGlyph(
+                          mode: _isFollowing
+                              ? _orientationMode
+                              : _MapOrientationMode.free,
+                          headingTurns: compassTurns - cameraTurns,
+                          northTurns: -cameraTurns,
+                          reduceMotion: _reduceMotion,
+                          busy: _isLocating || _navigationBusy,
+                        ),
+                      ),
                 ),
               ),
             ),
@@ -3395,13 +3410,20 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
                 // globe surfaces and atmospheric fog remain native Mapbox.
                 isOpaque: false,
                 textureView: true,
+                androidHostingMode: MapPerformance.hostingMode,
                 // The default HEIGHT_ONLY constraint locks latitude near
                 // the equator at the minimum zoom on tall phone screens.
                 mapOptions: MapOptions(
                   constrainMode: ConstrainMode.NONE,
                   pixelRatio: mediaQuery.devicePixelRatio,
                 ),
+                onRenderFrameFinishedListener: MapPerformance.enabled
+                    ? MapPerformance.nativeFrame
+                    : null,
                 onMapCreated: (map) {
+                  if (MapPerformance.enabled) {
+                    MapPerformance.nativeMapsCreated++;
+                  }
                   _sonarReady = false;
                   unawaited(_alertHaloPulse.stop());
                   setState(() => _mapboxMap = map);

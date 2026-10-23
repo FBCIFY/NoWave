@@ -8,6 +8,7 @@ import 'package:http/http.dart' as http;
 import 'package:mapbox_maps_flutter/mapbox_maps_flutter.dart';
 
 import '../../../core/api/api_config.dart';
+import '../../../core/map/map_performance.dart';
 import 'buoy_layer.dart';
 import 'harbour_layer.dart';
 import 'hydrography_layer.dart';
@@ -56,6 +57,7 @@ class HarbourSelection {
       reset();
       return [];
     }
+    final span = MapPerformance.begin();
     // A formerly selected port cannot keep priority after leaving the screen.
     const spacing = 24 * 1.12 + 6;
     final visibleIds = <String>{};
@@ -88,7 +90,11 @@ class HarbourSelection {
       final r = rank(fa).compareTo(rank(fb));
       return r != 0 ? r : ia.compareTo(ib);
     });
-    final occupied = <ScreenCoordinate>[];
+    // Bucket only the collision search. Keep the original floating-point
+    // predicate and priority order, including exact spacing boundaries.
+    final occupied = <(int, int), List<ScreenCoordinate>>{};
+    // For small inputs a short list is cheaper than nine bucket lookups.
+    final linear = features.length < 128 ? <ScreenCoordinate>[] : null;
     final selected = <Map<String, dynamic>>[];
     // 24 logical px PNG at max icon size 1.12 plus six px padding.
     for (final i in indexes) {
@@ -104,18 +110,40 @@ class HarbourSelection {
           p.y > height + spacing) {
         continue;
       }
-      if (occupied.any(
-        (q) => (q.x - p.x).abs() < spacing && (q.y - p.y).abs() < spacing,
-      )) {
+      final x = (p.x / spacing).floor(), y = (p.y / spacing).floor();
+      var collision =
+          linear?.any(
+            (q) => (q.x - p.x).abs() < spacing && (q.y - p.y).abs() < spacing,
+          ) ??
+          false;
+      if (linear == null) {
+        for (var dx = -1; dx <= 1 && !collision; dx++) {
+          for (var dy = -1; dy <= 1 && !collision; dy++) {
+            collision =
+                occupied[(x + dx, y + dy)]?.any(
+                  (q) =>
+                      (q.x - p.x).abs() < spacing &&
+                      (q.y - p.y).abs() < spacing,
+                ) ??
+                false;
+          }
+        }
+      }
+      if (collision) {
         continue;
       }
       order.putIfAbsent(id, () => _sequence++);
-      occupied.add(p);
+      if (linear == null) {
+        occupied.putIfAbsent((x, y), () => []).add(p);
+      } else {
+        linear.add(p);
+      }
       selected.add({
         ...f,
         'properties': {...f['properties'] as Map, 'selection_order': order[id]},
       });
     }
+    MapPerformance.finish('ports_us', span);
     return selected;
   }
 }
@@ -135,6 +163,34 @@ class _Snapshot {
   final int bytes;
   final DateTime expires;
   final bool complete;
+}
+
+/// Feature maps belong to read-only snapshots. Keep exact object references,
+/// never an ID/hash signature: a replacement geometry must be encoded again.
+class _EncodedCollection {
+  _EncodedCollection(this.features, this.json);
+  final List<Map<String, dynamic>> features;
+  final String json;
+
+  bool matches(List<Map<String, dynamic>> next) {
+    if (features.length != next.length) return false;
+    for (var i = 0; i < next.length; i++) {
+      final a = features[i], b = next[i];
+      if (identical(a, b)) continue;
+      // Harbour placement adds a fresh properties wrapper. Compare every key,
+      // including selection_order, while geometry identity remains exact.
+      if (a.length != b.length) return false;
+      for (final key in a.keys) {
+        if (!b.containsKey(key)) return false;
+        if (key == 'properties' && a[key] is Map && b[key] is Map) {
+          if (!mapEquals(a[key] as Map, b[key] as Map)) return false;
+        } else if (a[key] != b[key]) {
+          return false;
+        }
+      }
+    }
+    return true;
+  }
 }
 
 /// Public data only: two in-flight requests, at most nine cells per family,
@@ -159,6 +215,9 @@ class MarineViewport {
   final http.Client Function() _clientFactory;
   final _cache = <String, _Snapshot>{};
   final _renderedData = <String, String>{};
+  // One most recent encoding per source (five), sharing snapshot geometry.
+  final _encodedCollections = <String, _EncodedCollection>{};
+  int _encodings = 0;
   final selection = HarbourSelection();
   final _active = <String, http.Client>{};
   final _cancelledFlights = <String>{};
@@ -177,6 +236,9 @@ class MarineViewport {
   bool _renderAgain = false;
   bool _pendingCamera = false;
   MapboxMap? _currentMap;
+  MapboxMap? _scheduledMap;
+  CameraState? _nextCamera;
+  int _cameraGeneration = 0;
   double _currentZoom = 0;
   int _revision = 0;
   int _renderRevision = 0;
@@ -196,6 +258,7 @@ class MarineViewport {
     'cache_encoded_bytes': _bytes,
     'retained_encoded_bytes': _retainedBytes,
     'active': _active.length,
+    'encodings': _encodings,
     'busy': _busy,
     'latency_ms': List<int>.of(_latencies),
     'selected_harbours': selection.order.keys.toList(),
@@ -214,17 +277,29 @@ class MarineViewport {
     _renderedData.clear();
   }
 
-  void schedule(MapboxMap map, {bool cameraChanged = false}) {
+  void schedule(
+    MapboxMap map, {
+    bool cameraChanged = false,
+    CameraState? cameraState,
+  }) {
+    if (_disposed || _paused) return;
+    _scheduledMap = map;
+    _nextCamera = cameraState;
+    _cameraGeneration++;
+    _scheduleLatest(map);
+  }
+
+  void _scheduleLatest(MapboxMap map) {
     if (_disposed || _paused) return;
     // Start immediately, then coalesce frames into one update every 200 ms.
     // A change of bearing or pitch does not invalidate geographic requests.
     if (_timer == null) {
-      unawaited(synchronize(map));
+      unawaited(_synchronize(map));
       _timer = Timer(const Duration(milliseconds: 200), () {
         _timer = null;
         if (_pendingCamera && !_disposed && !_paused) {
           _pendingCamera = false;
-          schedule(map);
+          _scheduleLatest(_scheduledMap ?? map);
         }
       });
     } else {
@@ -247,6 +322,8 @@ class MarineViewport {
     _retryTimer?.cancel();
     _retryTimer = null;
     _pendingCamera = false;
+    _nextCamera = null;
+    _cameraGeneration++;
     _wanted.clear();
     for (final entry in _active.entries) {
       _cancel(entry.key, entry.value);
@@ -263,10 +340,20 @@ class MarineViewport {
   void dispose() {
     _disposed = true;
     pause();
+    _encodedCollections.clear();
   }
 
-  Future<void> synchronize(MapboxMap map) async {
+  Future<void> synchronize(MapboxMap map, {CameraState? cameraState}) {
+    if (_disposed || _paused) return Future<void>.value();
+    _scheduledMap = map;
+    _nextCamera = cameraState;
+    _cameraGeneration++;
+    return _synchronize(map);
+  }
+
+  Future<void> _synchronize(MapboxMap requestedMap) async {
     if (_disposed || _paused) return;
+    final map = _scheduledMap ?? requestedMap;
     if (_busy) {
       _again = true;
       return;
@@ -274,19 +361,44 @@ class MarineViewport {
     _busy = true;
     final revision = _revision;
     try {
-      final camera = await map.getCameraState();
+      var cameraGeneration = _cameraGeneration;
+      var camera = _nextCamera;
+      if (camera == null) {
+        MapPerformance.count('viewport_camera_reads');
+        final cameraSpan = MapPerformance.begin();
+        camera = await map.getCameraState();
+        MapPerformance.finish('camera_read_us', cameraSpan);
+        // A native read started before an event must not overwrite that event.
+        if (cameraGeneration != _cameraGeneration) {
+          final latest = _nextCamera;
+          if (latest == null || _scheduledMap != map) {
+            _again = true;
+            return;
+          }
+          camera = latest;
+          cameraGeneration = _cameraGeneration;
+        }
+      }
       if (_disposed || revision != _revision) return;
       final lon = camera.center.coordinates.lng.toDouble();
       final lat = camera.center.coordinates.lat.toDouble();
       final zoom = camera.zoom;
+      final boundsSpan = MapPerformance.begin();
       final bounds = await map.coordinateBoundsForCamera(
         CameraOptions(
           center: camera.center,
           zoom: zoom,
           bearing: camera.bearing,
           pitch: camera.pitch,
+          padding: camera.padding,
         ),
       );
+      MapPerformance.finish('bounds_us', boundsSpan);
+      if (_disposed || _paused || revision != _revision) return;
+      if (cameraGeneration != _cameraGeneration || _scheduledMap != map) {
+        _again = true;
+        return;
+      }
       _visibleBounds = bounds;
       _currentMap = map;
       _currentZoom = zoom;
@@ -391,7 +503,7 @@ class MarineViewport {
       _busy = false;
       if (_again && !_disposed && !_paused) {
         _again = false;
-        unawaited(synchronize(map));
+        unawaited(_synchronize(_scheduledMap ?? map));
       }
     }
     if (_disposed || _paused || revision != _revision) return;
@@ -510,6 +622,7 @@ class MarineViewport {
       if (response.bodyBytes.length > 4 * 1024 * 1024) {
         throw StateError('snapshot budget');
       }
+      final decodeSpan = MapPerformance.begin();
       final data = jsonDecode(response.body) as Map<String, dynamic>;
       if (data['type'] != 'FeatureCollection') {
         throw const FormatException('GeoJSON');
@@ -517,6 +630,7 @@ class MarineViewport {
       var features = (data['features'] as List)
           .map((f) => Map<String, dynamic>.from(f as Map))
           .toList();
+      MapPerformance.finish('decode_us', decodeSpan);
       if (_disposed ||
           _paused ||
           _cancelledFlights.contains(key) ||
@@ -632,7 +746,9 @@ class MarineViewport {
         : e >= sw.lng || w <= ne.lng;
   }
 
+  /// Read-only snapshot features. Callers must not mutate the maps/geometries.
   List<Map<String, dynamic>> features(String family) {
+    final span = MapPerformance.begin();
     final all = <String, Map<String, dynamic>>{};
     final target = _wanted.values
         .where((entry) => entry.$1 == family)
@@ -734,6 +850,7 @@ class MarineViewport {
         }
       }
     }
+    MapPerformance.finish('features_us', span);
     return all.values.toList();
   }
 
@@ -751,6 +868,7 @@ class MarineViewport {
         if (size.isEmpty || !size.width.isFinite || !size.height.isFinite) {
           data = [];
         } else {
+          final projectionSpan = MapPerformance.begin();
           final pixels = await map.pixelsForCoordinates([
             for (final f in data)
               Point(
@@ -759,20 +877,31 @@ class MarineViewport {
                 ),
               ),
           ]);
+          MapPerformance.finish('projection_us', projectionSpan);
           if (_disposed || revision != _renderRevision) return;
           data = selection.select(data, pixels, zoom, size.width, size.height);
         }
       }
       if (_disposed || revision != _renderRevision) return;
-      final encoded = jsonEncode({
-        'type': 'FeatureCollection',
-        'features': data,
-      });
+      final previous = _encodedCollections[entry.value];
+      final String encoded;
+      if (previous != null && previous.matches(data)) {
+        encoded = previous.json;
+        MapPerformance.count('encode_reused');
+      } else {
+        final encodeSpan = MapPerformance.begin();
+        encoded = jsonEncode({'type': 'FeatureCollection', 'features': data});
+        _encodings++;
+        MapPerformance.finish('encode_us', encodeSpan);
+        _encodedCollections[entry.value] = _EncodedCollection(data, encoded);
+      }
       if (_renderedData[entry.value] != encoded &&
           await map.style.styleSourceExists(entry.value) &&
           !_disposed &&
           revision == _renderRevision) {
+        final publishSpan = MapPerformance.begin();
         await map.style.setStyleSourceProperty(entry.value, 'data', encoded);
+        MapPerformance.finish('publish_us', publishSpan);
         if (_disposed || revision != _renderRevision) return;
         _renderedData[entry.value] = encoded;
       }

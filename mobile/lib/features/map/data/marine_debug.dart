@@ -5,6 +5,7 @@ import 'package:flutter/foundation.dart';
 import 'package:mapbox_maps_flutter/mapbox_maps_flutter.dart';
 
 import '../../../core/map/map_config.dart';
+import '../../../core/map/map_performance.dart';
 import 'marine_viewport.dart';
 
 /// VM-service-only diagnostics in the real application. No authentication,
@@ -20,7 +21,7 @@ abstract final class MarineDebug {
     required MarineViewport viewport,
     required Future<void> Function(CameraOptions) camera,
   }) {
-    if (!kDebugMode) return;
+    if (!kDebugMode && !MapPerformance.enabled) return;
     _map = map;
     _viewport = viewport;
     _camera = camera;
@@ -30,20 +31,28 @@ abstract final class MarineDebug {
       try {
         final map = _map!;
         final viewport = _viewport!;
-        if (args['action'] == 'camera') {
-          await _camera!(
-            CameraOptions(
-              center: Point(
-                coordinates: Position(
-                  double.parse(args['lon']!),
-                  double.parse(args['lat']!),
-                ),
+        if (args['action'] == 'camera' || args['action'] == 'animate') {
+          final options = CameraOptions(
+            center: Point(
+              coordinates: Position(
+                double.parse(args['lon']!),
+                double.parse(args['lat']!),
               ),
-              zoom: double.parse(args['zoom']!),
-              bearing: double.tryParse(args['bearing'] ?? '') ?? 0,
-              pitch: double.tryParse(args['pitch'] ?? '') ?? 0,
             ),
+            zoom: double.parse(args['zoom']!),
+            bearing: double.tryParse(args['bearing'] ?? '') ?? 0,
+            pitch: double.tryParse(args['pitch'] ?? '') ?? 0,
           );
+          if (args['action'] == 'animate') {
+            await map.easeTo(
+              options,
+              MapAnimationOptions(
+                duration: int.tryParse(args['duration'] ?? '') ?? 4000,
+              ),
+            );
+          } else {
+            await _camera!(options);
+          }
         } else if (args['action'] == 'reload') {
           await map.loadStyleURI(MapConfig.styleUrl);
         } else if (args['action'] == 'sync') {
