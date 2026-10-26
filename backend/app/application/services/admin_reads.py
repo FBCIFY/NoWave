@@ -79,12 +79,14 @@ class AdminReadService:
         self,
         page: int = 1,
         limit: int = DEFAULT_PAGE_LIMIT,
+        report_id: UUID | None = None,
     ) -> Page[ModerationActionData]:
         validate_page(page, limit)
 
         return self.admin_read_repository.list_moderation_actions(
             page=page,
             limit=limit,
+            report_id=report_id,
         )
 
     def _now(

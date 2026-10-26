@@ -1,0 +1,13 @@
+<header class="site-header admin-header">
+  <a class="wordmark" href="/admin" aria-label="NoWave, administration"><img src="/admin-static/nowave-icon.svg" width="48" height="24" alt=""><span class="admin-map-brand-text">NoWave</span></a>
+  <nav class="main-nav" aria-label="Navigation administration">
+    <a href="/admin"{% if request.url.path == '/admin' %} aria-current="page"{% endif %}>La carte</a>
+    <a href="/admin/users"{% if request.url.path == '/admin/users' %} aria-current="page"{% endif %}>Utilisateurs</a>
+    <a href="/admin/reports"{% if request.url.path.startswith('/admin/reports') or request.url.path.startswith('/admin/actions') %} aria-current="page"{% endif %}>Modération</a>
+    <a href="/admin/audit"{% if request.url.path == '/admin/audit' %} aria-current="page"{% endif %}>Audit</a>
+  </nav>
+  <form class="admin-map-logout" method="post" action="/admin/logout">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+    <button type="submit" aria-label="Déconnexion" title="Déconnexion"><span>Déconnexion</span><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M10 4H5v16h5m4-12 4 4-4 4m-5-4h13"/></svg></button>
+  </form>
+</header>

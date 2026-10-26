@@ -156,6 +156,20 @@ def test_list_users_passes_status_filter():
     ]
 
 
+@pytest.mark.parametrize("report_id", [None, uuid4()])
+def test_list_moderation_actions_passes_report_filter(report_id):
+    service, repository = create_service()
+
+    service.list_moderation_actions(page=2, limit=20, report_id=report_id)
+
+    assert repository.calls == [
+        (
+            "list_moderation_actions",
+            {"page": 2, "limit": 20, "report_id": report_id},
+        )
+    ]
+
+
 def test_get_report_returns_repository_report():
     report = object()
     service, repository = create_service(report)

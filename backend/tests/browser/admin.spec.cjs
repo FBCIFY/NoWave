@@ -4,13 +4,14 @@ const id=n=>`00000000-0000-0000-0000-${n.toString(16).padStart(12,'0')}`;
 async function mapDouble(page) {
   await page.route('**/admin-static/mapbox-gl.js',route=>route.fulfill({contentType:'application/javascript',body:`
     window.__maps=[];
-    window.mapboxgl={supported:()=>true,Map:class {
+    window.mapboxgl={supported:()=>true,AttributionControl:class {},Map:class {
       constructor(options){this.options=options;this.center={lng:options.center[0],lat:options.center[1]};this.zoom=options.zoom;this.events={};this.sources={};this.layers=[];this.images={};this.moves=[];this.touchZoomRotate={disableRotation(){}};window.__maps.push(this);setTimeout(()=>{this.emit('style.load');this.emit('load');},20);}
       on(name,layer,fn){(this.events[typeof layer==='string'?name+':'+layer:name]??=[]).push(fn||layer);}
       emit(name,event){for(const fn of this.events[name]||[])fn(event);}
       getCenter(){return this.center;}getZoom(){return this.zoom;}stop(){this.stopped=true;}
       easeTo(o){this.moves.push(o);if(o.center)this.center={lng:o.center[0],lat:o.center[1]};if(o.zoom)this.zoom=o.zoom;}
-      resize(){}setBearing(){}setFog(){}setLayoutProperty(){}setPaintProperty(){}
+      jumpTo(options){this.easeTo(options);}
+      addControl(){}resize(){}setBearing(){}setFog(){}setLayoutProperty(){}setPaintProperty(){}
       getStyle(){return {sources:{},layers:[{id:'water',type:'fill','source-layer':'water'},{id:'road',type:'line'}]};}
       getBounds(){return {getWest:()=>-70,getEast:()=>20,getSouth:()=>-20,getNorth:()=>60};}
       getSource(id){return this.sources[id];}getLayer(id){return this.layers.find(l=>l.id===id);}
@@ -50,12 +51,12 @@ test('login validates identity, refuses non-admin and uses secure cookies',async
   const cookie=(await context.cookies()).find(c=>c.name==='__Host-nowave_admin_session');expect(cookie).toMatchObject({httpOnly:true,secure:true,sameSite:'Strict',path:'/'});
 });
 
-test('rotation pauses on typing, resumes, manual stop and reduced motion win',async({page})=>{
+test('rotation pauses on typing and respects reduced motion without an extra control',async({page})=>{
   await mapDouble(page);await page.goto('/admin/login');await expect.poll(()=>page.evaluate(()=>window.__maps[0]?.moves.length)).toBeGreaterThan(0);
   await page.locator('#email').focus();const before=await page.evaluate(()=>window.__maps[0].moves.length);await page.waitForTimeout(1200);expect(await page.evaluate(()=>window.__maps[0].moves.length)).toBe(before);
   await page.locator('#password-toggle').focus();await expect.poll(()=>page.evaluate(()=>window.__maps[0].moves.length)).toBeGreaterThan(before);
-  await page.locator('#rotation-toggle').click();const stopped=await page.evaluate(()=>window.__maps[0].moves.length);await page.waitForTimeout(1200);expect(await page.evaluate(()=>window.__maps[0].moves.length)).toBe(stopped);
-  await page.emulateMedia({reducedMotion:'reduce'});await page.locator('#rotation-toggle').click();await page.waitForTimeout(1200);expect(await page.evaluate(()=>window.__maps[0].moves.length)).toBe(stopped);
+  await expect(page.locator('#rotation-toggle')).toHaveCount(0);
+  await page.emulateMedia({reducedMotion:'reduce'});const stopped=await page.evaluate(()=>window.__maps[0].moves.length);await page.waitForTimeout(1200);expect(await page.evaluate(()=>window.__maps[0].moves.length)).toBe(stopped);
   await page.emulateMedia({reducedMotion:'no-preference'});await expect.poll(()=>page.evaluate(()=>window.__maps[0].moves.length)).toBeGreaterThan(stopped);
 });
 
@@ -92,9 +93,9 @@ test('network failure retry, delayed old user, navigation lock and expired sessi
   await page.context().clearCookies();await page.getByRole('button',{name:'Afficher les signalements'}).click();await expect(page.locator('.user-reports')).toContainText('Session expirée');
 });
 
-test('Atlantic camera, clusters, selection, authorized/hidden/absent photo and panel close',async({page},info)=>{
+test('shared globe camera, clusters, selection, authorized/hidden/absent photo and panel close',async({page},info)=>{
   await login(page);await expect.poll(()=>page.evaluate(()=>window.__maps[0]?.sources.reports?.data.features.length)).toBeGreaterThan(0);
-  expect(await page.evaluate(()=>window.__maps[0].options)).toMatchObject({center:[-30,24],zoom:2.4,dragRotate:false,pitchWithRotate:false,maxPitch:0});
+  expect(await page.evaluate(()=>window.__maps[0].options)).toMatchObject({center:[-20,25],projection:'globe',dragRotate:false,pitchWithRotate:false,maxPitch:0});
   await page.screenshot({path:`test-results/${info.project.name}-surveillance.png`});
   await page.evaluate(()=>window.__maps[0].emit('click:clusters',{features:[{properties:{cluster_id:7},geometry:{coordinates:[-30,24]}}]}));expect(await page.evaluate(()=>window.__maps[0].zoom)).toBe(8);
   await page.evaluate(r=>window.__maps[0].emit('click:points',{features:[{properties:{id:r,category:'pollution'},geometry:{coordinates:[-30,24]}}]}),id(5020));await expect(page.locator('#report-detail img')).toBeVisible();await expect(page.locator('#report-detail img')).toHaveJSProperty('naturalWidth',100);
@@ -102,8 +103,8 @@ test('Atlantic camera, clusters, selection, authorized/hidden/absent photo and p
   await page.locator('#report-close').click();await expect(page.locator('#report-panel')).toBeHidden();
   await page.goto(`/admin?report=${id(5019)}`);await expect(page.locator('#report-detail')).toContainText('Photo masquée');await expect(page.locator('#report-detail img')).toHaveCount(0);
   const hidden=await (await page.request.get(`/admin/data/reports/${id(5019)}`)).json();expect(hidden.photo.url).toBeNull();
-  await page.goto(`/admin?report=${id(5018)}`);await expect(page.locator('#report-detail')).toContainText('Aucune photo');
-  await page.locator('#reset-map').click();expect(await page.evaluate(()=>window.__maps[0].center)).toEqual({lng:-30,lat:24});
+  await page.goto(`/admin?report=${id(5018)}`);await expect(page.locator('#report-detail')).toContainText('Synthetic report');await expect(page.locator('#report-detail img')).toHaveCount(0);await expect(page.locator('#report-detail').getByRole('link',{name:'Masquer la photo'})).toHaveCount(0);
+  await page.locator('#reset-map').click();expect(await page.evaluate(()=>window.__maps[0].center)).toEqual({lng:-20,lat:25});
 });
 
 test('no Mapbox token keeps login, lists and direct report operational without overflow',async({page},info)=>{

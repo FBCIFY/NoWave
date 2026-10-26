@@ -1,12 +1,16 @@
 {% extends 'admin/base.html' %}
+{% from 'admin/ui.html' import badge %}
 {% block title %}Utilisateurs{% endblock %}
 {% block content %}
-<h1>Utilisateurs</h1><p>Consultez les comptes et gérez leur suspension.</p>
-{% if result.items %}<div class="table-scroll"><table><caption>Comptes enregistrés</caption>
-<thead><tr><th scope="col">Utilisateur</th><th scope="col">Adresse e-mail</th><th scope="col">Rôle</th><th scope="col">Statut</th><th scope="col">Actions</th></tr></thead>
-<tbody>{% for item in result.items %}<tr><td>{{ item.username }}<small>{{ item.id }}</small></td><td>{{ item.email or 'Non renseignée' }}</td><td>{{ item.role.value }}</td><td>{{ item.status.value }}</td><td class="actions">
-<a href="{{ request.url_for('admin_action', collection='users', target_id=item.id, action_name='suspend').path }}">Suspendre</a>
-<a href="{{ request.url_for('admin_action', collection='users', target_id=item.id, action_name='reactivate').path }}">Réactiver</a>
-</td></tr>{% endfor %}</tbody></table></div>{% else %}<p class="empty">Aucun utilisateur sur cette page.</p>{% endif %}
-{% include 'admin/pagination.html' %}
+<div class="page-head"><h1>Utilisateurs</h1><a class="button" href="/admin?panel=users">Rechercher un utilisateur <span aria-hidden="true">↗</span></a></div>
+<section class="card table-card">
+  <div class="section-head"><h2>Comptes enregistrés</h2><span class="count-badge">{{ result.total }} au total</span></div>
+  {% if result.items %}<div class="table-scroll"><table class="users-table"><caption class="sr-only">Comptes enregistrés</caption>
+    <thead><tr><th scope="col">Utilisateur</th><th scope="col">Adresse e-mail</th><th scope="col">Rôle</th><th scope="col">Statut</th><th scope="col">Actions</th></tr></thead>
+    <tbody>{% for item in result.items %}<tr><td class="user-name">{{ item.username }}</td><td class="email-cell">{{ item.email or 'Non renseignée' }}</td><td>{{ badge(item.role.value) }}</td><td>{{ badge(item.status.value) }}</td><td class="table-action">
+      {% if item.status.value == 'suspended' %}<a href="{{ request.url_for('admin_action', collection='users', target_id=item.id, action_name='reactivate').path }}">Réactiver</a>{% else %}<a href="{{ request.url_for('admin_action', collection='users', target_id=item.id, action_name='suspend').path }}">Suspendre</a>{% endif %}
+    </td></tr>{% endfor %}</tbody>
+  </table></div>{% else %}<div class="empty"><h3>Aucun utilisateur</h3><p>Aucun compte à afficher sur cette page.</p></div>{% endif %}
+  {% include 'admin/pagination.html' %}
+</section>
 {% endblock %}

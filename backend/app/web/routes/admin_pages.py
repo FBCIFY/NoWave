@@ -405,11 +405,17 @@ def admin_reports(
 def admin_report(
     target_id: UUID,
     request: Request,
+    history_page: int = Query(default=1, ge=1, le=MAX_PAGE),
     context: AdminContext = Depends(get_admin_context),
     service: AdminReadService = Depends(get_admin_read_service),
 ):
     try:
         item = service.get_report(report_id=target_id)
+        history = service.list_moderation_actions(
+            page=history_page,
+            limit=DEFAULT_PAGE_LIMIT,
+            report_id=target_id,
+        )
     except ReportNotFoundError:
         return render_admin_error(
             request,
@@ -425,7 +431,7 @@ def admin_report(
         request,
         context,
         "admin/report.html",
-        {"item": item},
+        {"item": item, "history": history},
     )
 
 

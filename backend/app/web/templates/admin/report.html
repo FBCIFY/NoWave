@@ -1,101 +1,42 @@
 {% extends 'admin/base.html' %}
+{% from 'admin/ui.html' import badge, date_label %}
 {% block title %}Détail du signalement{% endblock %}
 {% block content %}
-<a href="{{ request.url_for('admin_reports').path }}">← Signalements</a>
-
-<h1>Détail du signalement</h1>
-<p class="identifier">{{ item.id }}</p>
-
-<section class="card">
-  <h2>Informations</h2>
-  <dl>
-    <dt>Catégorie</dt>
-    <dd>{{ item.category.value }}</dd>
-
-    <dt>Statut</dt>
-    <dd>{{ item.status.value }}</dd>
-
-    <dt>Version</dt>
-    <dd>{{ item.version }}</dd>
-
-    <dt>Description</dt>
-    <dd class="preserve">{{ item.description or 'Aucune description' }}</dd>
-
-    <dt>Mode de positionnement</dt>
-    <dd>{{ item.positioning_mode.value }}</dd>
-
-    <dt>Observé le</dt>
-    <dd>{{ item.observed_at }}</dd>
-
-    <dt>Expiration</dt>
-    <dd>{{ item.expires_at }}</dd>
-
-    <dt>Position</dt>
-    <dd>{{ item.longitude }}, {{ item.latitude }}</dd>
-
-    <dt>Retiré le</dt>
-    <dd>{{ item.removed_at or 'Non retiré' }}</dd>
-
-    <dt>Photo</dt>
-    <dd>
-      {% if item.photo_status %}
-        {{ item.photo_status.value }}
-        {% if item.photo_hidden_at %}
-          — masquée le {{ item.photo_hidden_at }}
-        {% endif %}
-      {% else %}
-        Aucune photo
-      {% endif %}
-    </dd>
+<a class="back-link" href="{{ request.url_for('admin_reports').path }}">← Signalements</a>
+<div class="page-head"><h1>Signalement</h1><a class="button" href="/admin?report={{ item.id }}">Voir sur la carte <span aria-hidden="true">↗</span></a></div>
+<section class="card report-summary" aria-label="Résumé du signalement">
+  <div class="badge-row">{{ badge(item.category.value) }}{{ badge(item.status.value) }}</div>
+  <p class="report-description preserve">{{ item.description or 'Aucune description' }}</p>
+  <dl class="summary-grid">
+    <div><dt>Auteur</dt><dd>{{ item.author_username or 'Utilisateur supprimé' }}</dd></div>
+    <div><dt>Observé le</dt><dd>{{ date_label(item.observed_at) }}</dd></div>
   </dl>
 </section>
-
-<section class="card">
-  <h2>Auteur</h2>
-  <dl>
-    <dt>Utilisateur</dt>
-    <dd>{{ item.author_username or 'Utilisateur supprimé' }}</dd>
-
-    <dt>E-mail</dt>
-    <dd>{{ item.author_email or 'Non disponible' }}</dd>
-
-    <dt>Statut</dt>
-    <dd>{{ item.author_status.value if item.author_status else 'Compte supprimé' }}</dd>
-  </dl>
-</section>
-
-<section class="card">
-  <h2>Bateau</h2>
-  {% if item.boat_name or item.boat_type %}
-    <dl>
-      <dt>Nom</dt>
-      <dd>{{ item.boat_name or 'Non renseigné' }}</dd>
-
-      <dt>Type</dt>
-      <dd>{{ item.boat_type.value if item.boat_type else 'Non renseigné' }}</dd>
-    </dl>
-  {% else %}
-    <p>Aucun bateau renseigné.</p>
-  {% endif %}
-</section>
-
-<section class="card">
+{% if history is defined %}
+<details class="card report-history" id="report-history"{% if history.page > 1 %} open{% endif %}>
+  <summary>Historique de modération <span class="count-badge">· {{ history.total }}</span></summary>
+  {% if history.items %}<ol>{% for entry in history.items %}<li>
+    <div class="history-meta">{{ badge(entry.action.value) }}<span>{{ date_label(entry.created_at) }}</span><span>{{ entry.admin_username or 'Utilisateur supprimé' }}</span></div>
+    <p class="history-reason preserve">{{ entry.reason }}</p>
+  </li>{% endfor %}</ol>
+  {% if history.pages > 1 %}<nav class="pagination" aria-label="Pages de l’historique">
+    {% if history.page > 1 %}<a href="?history_page={{ history.page - 1 }}#report-history">← Précédente</a>{% endif %}
+    <span>{{ history.page }} / {{ history.pages }}</span>
+    {% if history.page < history.pages %}<a href="?history_page={{ history.page + 1 }}#report-history">Suivante →</a>{% endif %}
+  </nav>{% endif %}
+  {% else %}<p class="history-empty">Aucune action de modération.</p>{% endif %}
+</details>
+{% else %}<a class="back-link" href="{{ request.url_for('admin_audit').path }}">Voir l’historique global de modération</a>{% endif %}
+<section class="card moderation-card">
   <h2>Modération</h2>
-  <p>Chaque action nécessite un motif et une confirmation.</p>
-
   <div class="actions">
-    <a href="{{ request.url_for('admin_action', collection='reports', target_id=item.id, action_name='remove').path }}">
-      Retirer le signalement
-    </a>
-
-    <a href="{{ request.url_for('admin_action', collection='reports', target_id=item.id, action_name='restore').path }}">
-      Restaurer le signalement
-    </a>
-
+    {% if item.status.value == 'removed' %}
+    <a class="button" href="{{ request.url_for('admin_action', collection='reports', target_id=item.id, action_name='restore').path }}">Restaurer le signalement</a>
+    {% else %}
+    <a class="button button-danger" href="{{ request.url_for('admin_action', collection='reports', target_id=item.id, action_name='remove').path }}">Retirer le signalement</a>
+    {% endif %}
     {% if item.photo_status and item.photo_status.value == 'uploaded' and not item.photo_hidden_at %}
-    <a href="{{ request.url_for('admin_action', collection='reports', target_id=item.id, action_name='hide-photo').path }}">
-      Masquer la photo
-    </a>
+    <a class="button" href="{{ request.url_for('admin_action', collection='reports', target_id=item.id, action_name='hide-photo').path }}">Masquer la photo</a>
     {% endif %}
   </div>
 </section>

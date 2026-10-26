@@ -1,141 +1,125 @@
 # NoWave · Web
 
-Landing page et parcours maritime illustré, indépendantes du mobile et de l’API.
-L’expérience explique la mission de l’application : partager une observation
-géolocalisée dans les catégories **Obstacle**, **Animal marin** et **Pollution**.
+Landing maritime sombre et épurée, avec la carte de l’administration et quatre
+illustrations 3D rafraîchies, ancrées sur le globe. Un geste de molette ou un
+balayage passe à une seule étape. Chaque vue se stabilise avant la suivante.
+Les trajets prennent le temps de reculer avant le déplacement, puis
+de rejoindre progressivement la côte. Les petites corrections durent environ
+une seconde ; les traversées océaniques prennent entre six et huit secondes.
 
-## Démarrage local
+## Tester localement
 
-Node.js 22.12+ (ou 24 LTS) et npm :
+Sur macOS, ouvrir **Tester la refonte.command**. Le lanceur démarre la landing
+et le backend de démonstration, choisit des ports libres et ouvre le navigateur.
 
-Sur macOS, double-cliquer sur **Lancer NoWave.command** dans ce dossier. Le script
-installe les dépendances si nécessaire, compile le site et ouvre
-http://127.0.0.1:4173. Garder le terminal ouvert ; `Ctrl+C` arrête le serveur.
-Si NoWave occupe déjà ce port, le script réutilise ce serveur. Un autre service
-sur ce port est conservé et une erreur explicite demande de choisir
-`NOWAVE_LOCAL_PORT`.
+- Landing : http://127.0.0.1:5173/
+- Carte consultable : http://127.0.0.1:5173/#carte
+- Alertes de proximité : http://127.0.0.1:5173/#alertes
+- Administration : http://127.0.0.1:5173/admin
+- Connexion de démonstration : **admin@nowave.test** / **preview-only**
 
-Depuis un terminal :
+Le serveur utilise des données synthétiques en mémoire, sans base réelle ni
+Firebase. La modération est désactivée dans cet aperçu. Aucun accès admin
+n’apparaît sur la landing. Sur HTTP local, des cookies d’aperçu distincts
+permettent la connexion dans Safari ; les contrôles de session et de CSRF
+restent actifs et les cookies de production restent sécurisés.
+
+Pour démarrer manuellement depuis la racine :
 
 ```sh
+PYTHONPATH=backend python backend/tests/browser/preview.py --port 8000
+# Dans un second terminal :
 cd web
 npm ci
-npm start
+npm run dev -- --port 5173
 ```
 
-Pour développer avec rechargement automatique :
+Node 22.12+ et les dépendances Python de test sont nécessaires.
+La carte utilise un jeton public Mapbox autorisé pour localhost :
+`MAPBOX_PUBLIC_TOKEN` ou `NOWAVE_MAPBOX_CONFIG` (JSON avec `MAPBOX_ACCESS_TOKEN`).
+Le lanceur peut retrouver la configuration du checkout principal.
+Les fonds GEBCO proviennent du bundle existant. Sans jeton, les illustrations
+et démonstrations restent consultables avec un bouton de réessai de la carte.
 
-```sh
-cd web
-npm ci
-npm run dev
-```
+Le proxy Vite transmet `/api`, `/admin` et `/admin-static` au backend local 8000.
+`NOWAVE_API_URL` permet de modifier cette destination.
+Les variables du lanceur `NOWAVE_PREVIEW_API_PORT`, `NOWAVE_PREVIEW_WEB_PORT`,
+`NOWAVE_PREVIEW_PYTHON` et `NOWAVE_PREVIEW_NO_OPEN` sont facultatives.
 
-Ouvrir http://127.0.0.1:5173. Le serveur écoute uniquement sur la boucle locale.
+## Parcours
 
-## Service Docker
+- Accueil avec phare 3D, puis animal marin, obstacle et pollution.
+  Le parcours part de Madère et relie les Açores, Singapour et les Fidji : les grands
+  déplacements reculent vers le globe avant de rejoindre la côte suivante.
+- Observations fictives compactes : catégorie, texte, auteur, heure.
+  La fiche donne le lieu et un historique de publication.
+- Création d’un exemple depuis « Signaler » : trois catégories, commentaire
+  facultatif et confirmation locale. Aucune requête de publication.
+- « Mes alertes » suit la dernière slide et reste accessible par `/#alertes`,
+  sans lien supplémentaire dans le header. Cette vue fixe masque le parcours ;
+  son retour retrouve la dernière étape, y compris après un rechargement.
+  Le rayon de 10 NM apparaît dans le sous-titre, à côté de l’activation.
+  Un sonar discret en arrière-plan illustre la proximité, sans bouton de test
+  ni carte de réglages. L’historique reste consultable quand les alertes sont
+  désactivées ; l’animation s’arrête alors.
+  Aucun appel à Notification ni demande de permission : cette démonstration
+  ne modifie ni préférence réelle ni historique personnel.
+- Onglet « La carte » en pleine page, accessible directement via `/#carte`.
+  Le panneau gauche affiche les observations actives les plus récentes,
+  provenant de `/api/v1/map/observations`, indépendamment de la zone visible.
+  La carte est décalée dans l’espace à droite du panneau. Les pages de 50
+  observations permettent de consulter l’ensemble du fil sans plafond de 1000.
+  Les filtres reprennent les trois items du formulaire du parcours ; la recherche
+  de lieux a été retirée. Les observations
+  expirées ou retirées sont exclues. Les champs absents restent masqués et
+  le pseudo apparaît uniquement avec le consentement de son auteur.
+  L’aperçu local fournit trois fixtures via ce même contrat ; aucun faux
+  signalement ne remplace une erreur API. Échap ferme la fiche ou la liste.
+  Le retour du navigateur retrouve la position du parcours.
+- Navigation par gestes, boutons ou flèches du clavier. Les animations
+  gardent une seule slide visible, suivent `prefers-reduced-motion` et se
+  reposent lorsque l’onglet est masqué.
 
-Depuis la racine, pour lancer le site seul sans la base ni ses variables :
+La carte publique et l’administration montent le même composant `map-view.js`,
+avec le même header transparent, le même panneau et les mêmes filtres.
+L’entrée `admin-map.js` ajoute uniquement les liens Utilisateurs, Modération,
+Audit et les actions protégées des fiches. Aucun panneau utilisateurs ni
+recherche de lieux n’est chargé dans la carte. Les crédits et le logo requis
+sont réunis au bas de la carte, toujours visibles ; les indications de
+démonstration sont regroupées au pied de page.
 
-```sh
-docker compose -f web/compose.yaml up --build -d
-```
+Les lectures publiques ne demandent aucune donnée administrative.
+`/api/v1/map/web-config` expose uniquement un jeton public valide, sans cache.
+Le moteur, le style maritime et les marqueurs réutilisent les fichiers
+`/admin-static/`. Le conteneur web autonome indique clairement l’absence de
+cartographie quand le backend n’est pas disponible.
 
-Ouvrir http://127.0.0.1:8080. `NOWAVE_WEB_PORT` permet de choisir un autre port.
-La composition principale du dépôt inclut également le service `web` :
+Le build produit les entrées publique et admin ainsi qu’un seul CSS partagé
+`/assets/nowave.css`. Le backend admin authentifie toujours la page et les
+lectures privées ; les actions gardent leurs pages de confirmation et leur CSRF.
+En développement, Vite transmet son contexte et sert l’entrée source. En
+production, le frontal doit servir les assets du même build que la page admin.
 
-```sh
-# Avec les variables habituelles du projet déjà configurées
-docker compose up --build -d web
-```
+## Illustrations
 
-Le Dockerfile compile les fichiers avec Node puis les sert via Nginx.
-`GET /health` retourne `{"status":"ok","service":"nowave-web"}`.
-Aucune dépendance envers l’API ni PostgreSQL pour cette landing page.
-
-## Expérience
-
-- Visite de 11 repères au défilement dans un même archipel : phare, épave, plastique,
-  Nautilus, message, conteneur, baleine, orque, observation, observatoire et glaces.
-  Le texte apparaît à côté du sujet sur ordinateur, sous le sujet sur mobile.
-  Le récapitulatif termine le parcours avec les trois catégories et les quatre
-  informations d’un signalement.
-- Navigation directe entre les étapes et retour en arrière au défilement.
-  Un geste de molette, de trackpad ou de toucher avance d’un seul repère. Chaque
-  transition dure 1,5 seconde et va jusqu’au cadrage final ; l’inertie du geste
-  ne déclenche pas une deuxième étape. Un nouveau geste pendant le déplacement
-  mémorise une étape suivante, exécutée après l’arrivée et une courte pause.
-  La caméra se déplace directement entre ses deux cadrages avec un départ et
-  une arrivée progressifs. Un relâchement de la barre de défilement
-  entre deux repères recale la visite sur le plus proche. Le défilement redevient
-  libre après le parcours. Aucune étiquette permanente ni fiche automatique.
-- Zoom sur un objet net avec la carte et les autres éléments toujours visibles,
-  légèrement floutés en arrière-plan pour dégager la lecture.
-- Le premier repère montre le vrai phare et son village dans l’archipel. Un masque
-  SVG adoucit le contour de la zone nette sans substituer une autre île.
-- L’iceberg est placé en pleine eau. Sa partie immergée se révèle progressivement
-  à l’approche pendant le parcours.
-- Exemples de signalement consultables directement : catégorie, observation,
-  heure et coordonnées fictives. Aucun formulaire ni étape de prévisualisation.
-  **Aucune requête à l’API, aucun signalement réel créé.**
-- Footer avec navigation vers le parcours, l’essentiel et le projet.
-  Aucun mode d’exploration libre, crédit affiché ou caractère de flèche dans l’interface.
-- Pas de stockage local ni d’ambiance sonore. La caméra s’arrête au repos,
-  lorsqu’un dialogue est ouvert et quand l’onglet est masqué.
-- Prise en compte automatique de `prefers-reduced-motion` : changements
-  de plans sans déplacement interpolé pour la visite guidée.
-- Polices hébergées dans le build ; aucun CDN, tracker ni cookie tiers.
-
-## Assets et contenu
-
-Les visuels originaux générés par l’outil intégré OpenAI `image_gen` sont dans
-`public/assets/`, au format WebP qualité 94, avec alpha et définition native
-conservés pour les assets actifs. Le fond remasterisé est livré en 1536 × 1024 ;
-les objets isolés disposent de 1254 à 1536 pixels de large. Le phare du parcours
-reprend directement l’îlot central de ce fond. Le premier asset de phare séparé
-reste archivé, sans être utilisé à l’écran.
-
-La composition riche en détails s’inspire du principe d’exploration de
-[Floor796](https://floor796.com/) ; aucun asset du site de référence n’est repris.
-Les scènes sont illustratives, les positions fictives, et les échelles non réalistes.
-Ce site n’est ni une carte de navigation ni un service d’alerte maritime.
-L’application mobile est présentée comme un projet en développement, sans faux
-bouton de téléchargement ni promesse de détection automatique.
-
-Les sources primaires sont regroupées dans `src/data.js` pour la documentation du contenu :
-
-- [OMI — conteneurs et objets perdus](https://www.imo.org/en/mediacentre/hottopics/pages/container-default.aspx)
-- [OMI — déchets marins](https://www.imo.org/en/mediacentre/hottopics/pages/marinelitter-default.aspx)
-- [NOAA — collisions avec la faune marine](https://www.fisheries.noaa.gov/national/endangered-species-conservation/vessel-strikes)
-- [US Coast Guard — International Ice Patrol](https://www.navcen.uscg.gov/international-ice-patrol-about-us)
-- [MITECO — interactions avec les orques, 2026](https://www.miteco.gob.es/es/prensa/ultimas-noticias/2026/marzo/-disminuyen-en-espana-las-interacciones-con-orcas--excepto-en-el.html)
-
-Les catégories correspondent à `ReportCategory` dans le mobile et l’API. La durée
-de validité de 24 heures décrite dans l’observatoire correspond au modèle actuel
-`backend/app/domain/report.py`. Les fiches pédagogiques ne remplacent pas les
-consignes officielles locales actualisées.
+Versions utilisées : `lighthouse-v3.png`, `whale-v3.png`,
+`container-v3.png`, `pollution-v3.png`.
+Les visuels adoptent les teintes de la carte, avec une vue plongeante pour
+la baleine et des contours d’eau transparents. Ils sont placés au large,
+près des côtes de chaque escale. Le phare est une illustration fictive.
 
 ## Vérification
 
 ```sh
-npm test
-npm run build
-npm run format:check
-docker compose config
+npm test --prefix web
+npm run build --prefix web
+npm run format:check --prefix web
+node --test backend/tests/web/*.cjs
+PYTHONPATH=backend python -m pytest backend/tests/api/test_map_web_config.py backend/tests/api/test_admin_web_pages.py backend/tests/api/test_admin_web.py
 ```
 
-Le build vérifie d’abord la présence des assets utilisés. Les tests couvrent les
-11 étapes, leur contenu et leurs catégories, la continuité du parcours dans les
-deux sens, les limites, l’amortissement indépendant de la fréquence d’affichage
-et le mode à mouvements réduits. Vérifier aussi dans le navigateur la vue
-d’ensemble, les 11 cadrages, le récapitulatif, les dialogues, la révélation de
-l’iceberg, les exemples, le footer, le clavier et l’affichage mobile.
-Les tests de gestes couvrent l’inertie longue, les petits mouvements cumulés,
-les inversions et un nouveau geste interrompant l’inertie du précédent.
-Le contrôle Docker de configuration ne nécessite pas de daemon. Pour vérifier
-le service réel, Docker doit être démarré :
-
-```sh
-docker compose up --build -d --wait
-curl --fail http://127.0.0.1:8080/health
-```
+Contrôler sur ordinateur et mobile le calage des trois étapes après l’accueil,
+les fiches, le formulaire, les alertes, la carte et son état indisponible.
+L’administration affiche les observations et leur auteur avec un historique
+réel filtré par signalement, y compris les actions sur la photo associée.
+La recette PostgreSQL isolée est décrite dans `backend/tests/browser/README.md`.

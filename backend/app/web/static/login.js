@@ -7,22 +7,16 @@
     password.type = password.type === 'password' ? 'text' : 'password';
     toggle.textContent = password.type === 'password' ? 'Afficher' : 'Masquer';
   });
-  const button = document.getElementById('rotation-toggle');
   const status = document.getElementById('globe-status');
   const reduced = matchMedia('(prefers-reduced-motion: reduce)');
-  let manual = false, focused = false, map = null, timer = null;
+  let focused = false, map = null, timer = null;
   function stop() { if (timer) clearTimeout(timer); timer = null; if (map) map.stop(); }
   function spin() {
-    if (!map || timer || manual || focused || reduced.matches) return;
+    if (!map || timer || focused || reduced.matches) return;
     const center = map.getCenter();
     map.easeTo({center: [center.lng - 0.15, center.lat], duration: 1100, easing: t => t});
     timer = setTimeout(() => { timer = null; spin(); }, 1100);
   }
-  button.addEventListener('click', () => {
-    manual = !manual; button.setAttribute('aria-pressed', String(manual));
-    button.textContent = manual ? 'Reprendre la rotation' : 'Arrêter la rotation';
-    if (manual) stop(); else spin();
-  });
   for (const input of [document.getElementById('email'), password]) {
     input.addEventListener('focus', () => { focused = true; stop(); });
     input.addEventListener('blur', () => { focused = [document.getElementById('email'), password].includes(document.activeElement); if (!focused) spin(); });

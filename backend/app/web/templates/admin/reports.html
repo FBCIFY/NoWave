@@ -1,10 +1,22 @@
 {% extends 'admin/base.html' %}
+{% from 'admin/ui.html' import badge, date_label %}
 {% block title %}Signalements{% endblock %}
 {% block content %}
-<h1>Signalements</h1><p>Consultez les signalements et ouvrez leur fiche pour les modérer.</p>
-{% if result.items %}<div class="table-scroll"><table><caption>Signalements enregistrés</caption>
-<thead><tr><th scope="col">Identifiant</th><th scope="col">Catégorie</th><th scope="col">Statut</th><th scope="col">Observation</th><th scope="col">Version</th></tr></thead>
-<tbody>{% for item in result.items %}<tr><td><a href="{{ request.url_for('admin_report', target_id=item.id).path }}">{{ item.id }}</a></td><td>{{ item.category.value }}</td><td>{{ item.status.value }}</td><td>{{ item.observed_at or 'Non renseignée' }}</td><td>{{ item.version if item.version is not none else '—' }}</td></tr>{% endfor %}</tbody>
-</table></div>{% else %}<p class="empty">Aucun signalement sur cette page.</p>{% endif %}
-{% include 'admin/pagination.html' %}
+<div class="page-head"><h1>Signalements</h1><a class="button" href="/admin">Voir la carte <span aria-hidden="true">↗</span></a></div>
+<section class="card table-card">
+  <div class="section-head"><h2>Observations</h2><span class="count-badge">{{ result.total }} au total</span></div>
+  {% if result.items %}
+  <div class="table-scroll"><table class="reports-table"><caption class="sr-only">Signalements enregistrés</caption>
+    <thead><tr><th scope="col">Catégorie</th><th scope="col">Observation</th><th scope="col">Auteur</th><th scope="col">Date</th><th scope="col">Statut</th></tr></thead>
+    <tbody>{% for item in result.items %}<tr>
+      <td>{{ badge(item.category.value) }}</td>
+      <td class="report-observation"><a href="{{ request.url_for('admin_report', target_id=item.id).path }}">{{ item.description|default('', true) or 'Voir le signalement' }}</a></td>
+      <td class="user-name">{{ item.author_username or 'Utilisateur supprimé' }}</td>
+      <td>{{ date_label(item.observed_at) }}</td>
+      <td>{{ badge(item.status.value) }}</td>
+    </tr>{% endfor %}</tbody>
+  </table></div>
+  {% else %}<div class="empty"><h3>Aucun signalement</h3></div>{% endif %}
+  {% include 'admin/pagination.html' %}
+</section>
 {% endblock %}

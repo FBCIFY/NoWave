@@ -124,6 +124,7 @@ def make_report_summary(**changes):
         "author_username": "navigateur",
         "photo_status": UploadStatus.UPLOADED,
         "photo_hidden_at": None,
+        "description": "Nappe visible",
     }
     values.update(changes)
 
@@ -378,6 +379,7 @@ def test_list_reports_contract(monkeypatch, admin):
             "author_username": "navigateur",
             "photo_status": "uploaded",
             "photo_hidden_at": None,
+            "description": "Nappe visible",
         }
     ]
 
@@ -396,6 +398,18 @@ def test_list_reports_rejects_unknown_status(monkeypatch, admin):
 
     assert response.status_code == 422
     assert repository.calls == []
+
+
+def test_list_reports_accepts_missing_description(monkeypatch, admin):
+    repository = FakeAdminReadRepository(
+        reports=[make_report_summary(description=None)],
+    )
+    setup_repository(monkeypatch, repository)
+
+    response = get("/api/v1/admin/reports")
+
+    assert response.status_code == 200
+    assert response.json()["items"][0]["description"] is None
 
 
 def test_report_detail_shows_expired_report_with_photo_url(

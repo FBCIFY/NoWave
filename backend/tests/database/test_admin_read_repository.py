@@ -111,6 +111,10 @@ def test_list_reports_uses_effective_status(
         ids["user"],
     )
     remove_report(connection, ids["manual"])
+    connection.execute(
+        "UPDATE nowave.reports SET description = %s WHERE id = %s",
+        ("Nappe visible au large", ids["report"]),
+    )
     connection.commit()
 
     repository = repository_for_test(dsn, monkeypatch)
@@ -149,6 +153,8 @@ def test_list_reports_uses_effective_status(
         str(ids["user"])
     )
     assert every_report[ids["manual"]].photo_status is None
+    assert every_report[ids["report"]].description == "Nappe visible au large"
+    assert every_report[ids["manual"]].description is None
 
     assert all(
         report.status == ReportStatus.ACTIVE
@@ -387,6 +393,80 @@ def test_list_moderation_actions_keeps_orphan_entries(
     assert orphan.admin_username is None
     assert orphan.target_report_id == ids["report"]
     assert orphan.reason == action.reason
+    history = repository.list_moderation_actions(
+        page=1, limit=20, report_id=ids["report"],
+    )
+    assert history.total == 1
+    assert history.items[0] == orphan
+
+
+def test_report_history_filters_report_and_photo_actions_before_pagination(
+    db,
+    dsn,
+    monkeypatch,
+):
+    from tests.database.conftest import insert
+
+    connection, ids = db
+    photo_action_id = uuid4()
+    other_report_action_id = uuid4()
+    now = datetime.now(UTC)
+    insert(
+        connection, "moderation_actions",
+        id=photo_action_id,
+        admin_user_id=ids["admin"],
+        target_photo_report_id=ids["report"],
+        action="hide_photo",
+        reason="Photo masquée après vérification",
+        created_at=now,
+    )
+    insert(
+        connection, "moderation_actions",
+        id=other_report_action_id,
+        admin_user_id=ids["admin"],
+        target_report_id=ids["manual"],
+        action="remove_report",
+        reason="Autre signalement",
+        created_at=now + timedelta(seconds=1),
+    )
+    insert(
+        connection, "moderation_actions",
+        id=uuid4(),
+        admin_user_id=ids["admin"],
+        target_user_id=ids["user"],
+        action="suspend_user",
+        reason="Action distincte sur le compte auteur",
+        created_at=now + timedelta(seconds=2),
+    )
+    connection.commit()
+    repository = repository_for_test(dsn, monkeypatch)
+
+    first = repository.list_moderation_actions(
+        page=1, limit=1, report_id=ids["report"],
+    )
+    second = repository.list_moderation_actions(
+        page=2, limit=1, report_id=ids["report"],
+    )
+    beyond = repository.list_moderation_actions(
+        page=3, limit=1, report_id=ids["report"],
+    )
+
+    assert first.total == second.total == beyond.total == 2
+    assert first.pages == 2
+    assert [item.id for item in first.items] == [photo_action_id]
+    assert [item.id for item in second.items] == [ids["audit"]]
+    assert beyond.items == []
+
+    other = repository.list_moderation_actions(
+        page=1, limit=20, report_id=ids["manual"],
+    )
+    assert other.total == 1
+    assert [item.id for item in other.items] == [other_report_action_id]
+    missing = repository.list_moderation_actions(
+        page=1, limit=20, report_id=uuid4(),
+    )
+    assert missing.total == 0
+    assert missing.items == []
 
 
 def test_admin_reads_work_with_runtime_role(
@@ -444,6 +524,11 @@ def test_admin_reads_work_with_runtime_role(
                 page=1,
                 limit=1,
             ).total >= 1
+            assert repository.list_moderation_actions(
+                page=1,
+                limit=1,
+                report_id=ids["report"],
+            ).total == 1
         finally:
             admin.execute(
                 sql.SQL("DROP OWNED BY {}").format(role)

@@ -1,5 +1,29 @@
 # Recette navigateur de l'administration
 
+## Aperçu visuel sans base de données
+
+Depuis la racine du dépôt, avec Python 3.12 et les dépendances du backend :
+
+```bash
+PYTHONPATH=backend python backend/tests/browser/preview.py --port 8000
+```
+
+Le serveur n’écoute que sur `127.0.0.1`. Dans un second terminal, lancer
+`npm run dev --prefix web`, puis ouvrir `http://127.0.0.1:5173/admin/login`.
+La connexion synthétique est `admin@nowave.test` / `preview-only`. Les listes,
+fiches, carte et audit utilisent des exemples en mémoire ; les changements métier
+sont désactivés. Aucun compte Firebase ni PostgreSQL n’est utilisé.
+
+Les tuiles GEBCO sont extraites temporairement depuis le dépôt puis supprimées à
+l’arrêt. Pour la carte Mapbox réelle, définir `MAPBOX_PUBLIC_TOKEN` ou
+`NOWAVE_MAPBOX_CONFIG` (JSON local contenant `MAPBOX_ACCESS_TOKEN` public `pk.*`).
+Sans jeton, les pages restent consultables et la landing affiche son repli.
+Les détails marins utilisent les mêmes routes publiques que l’application.
+Le processus refuse `NOWAVE_ENV=production` et n’est jamais importé par le serveur
+de production. Cet aperçu ne remplace pas les tests d’intégration ci-dessous.
+
+## Tests d’intégration avec PostgreSQL
+
 Les tests créent une base aléatoire dans PostgreSQL/PostGIS local et la suppriment à l'arrêt. Le serveur HTTPS n'écoute que sur `127.0.0.1:8765`. Ne jamais lui fournir une base distante. Les mots de passe figurant dans les tests sont des fixtures, sans compte Firebase correspondant.
 
 Depuis la racine du dépôt, avec Python 3.12 et les dépendances de `backend/requirements-test.txt` :

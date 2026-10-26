@@ -1,9 +1,17 @@
 {% extends 'admin/base.html' %}
+{% from 'admin/ui.html' import badge, date_label %}
 {% block title %}Audit de modération{% endblock %}
 {% block content %}
-<h1>Audit de modération</h1><p>Historique en lecture seule des actions administrateur.</p>
-{% if result.items %}<div class="table-scroll"><table><caption>Actions de modération</caption>
-<thead><tr><th scope="col">Date / identifiant</th><th scope="col">Administrateur</th><th scope="col">Action / cible</th><th scope="col">Motif</th><th scope="col">État précédent → suivant</th></tr></thead>
-<tbody>{% for item in result.items %}<tr><td>{{ item.created_at }}<small>{{ item.id }}</small></td><td>{{ item.admin_user_id or 'Utilisateur supprimé' }}</td><td>{{ item.action.value }}<small>{{ item.target_report_id or item.target_user_id or item.target_photo_report_id or 'Cible supprimée' }}</small></td><td class="preserve">{{ item.reason }}</td><td>{{ item.previous_status or '—' }} → {{ item.new_status or '—' }}</td></tr>{% endfor %}</tbody></table></div>{% else %}<p class="empty">Aucune action de modération sur cette page.</p>{% endif %}
-{% include 'admin/pagination.html' %}
+<div class="page-head"><h1>Audit de modération</h1></div>
+<section class="card table-card audit-card">
+  <div class="section-head"><h2>Actions de modération</h2><span class="count-badge">{{ result.total }} au total</span></div>
+  {% if result.items %}<div class="table-scroll"><table class="audit-table"><caption class="sr-only">Actions de modération</caption>
+    <colgroup><col class="audit-col-date"><col class="audit-col-action"><col class="audit-col-reason"><col class="audit-col-change"><col class="audit-col-target"></colgroup>
+    <thead><tr><th scope="col">Date</th><th scope="col">Action</th><th scope="col">Motif</th><th scope="col">Évolution</th><th scope="col">Cible</th></tr></thead>
+    <tbody>{% for item in result.items %}<tr><td class="audit-date">{% if item.created_at and item.created_at.strftime is defined %}<time datetime="{{ item.created_at.isoformat() }}"><span>{{ item.created_at.strftime('%d/%m/%Y') }}</span><small>{{ item.created_at.strftime('%H:%M %Z') }}</small></time>{% else %}{{ date_label(item.created_at) }}{% endif %}</td><td>{{ badge(item.action.value) }}</td><td class="preserve audit-reason">{{ item.reason }}</td><td class="audit-change"><div class="status-change">{{ badge(item.previous_status) }}<span aria-label="devient">→</span>{{ badge(item.new_status) }}</div></td><td class="audit-target">
+      {% if item.target_report_id or item.target_photo_report_id %}<a href="{{ request.url_for('admin_report', target_id=item.target_report_id or item.target_photo_report_id).path }}">Voir le signalement ↗</a>{% elif item.target_user_id %}<a href="{{ request.url_for('admin_users').path }}">Utilisateurs ↗</a>{% else %}<span class="count-badge">Cible supprimée</span>{% endif %}
+    </td></tr>{% endfor %}</tbody>
+  </table></div>{% else %}<div class="empty"><h3>Aucune action</h3><p>Les actions de modération apparaîtront ici.</p></div>{% endif %}
+  {% include 'admin/pagination.html' %}
+</section>
 {% endblock %}

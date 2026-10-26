@@ -138,7 +138,8 @@ class PostgreSQLAdminReadRepository(
                 r.author_id,
                 u.username,
                 rp.upload_status,
-                rp.hidden_at
+                rp.hidden_at,
+                r.description
 
             FROM nowave.reports AS r
 
@@ -191,6 +192,7 @@ class PostgreSQLAdminReadRepository(
                         else None
                     ),
                     photo_hidden_at=row[11],
+                    description=row[12],
                 )
                 for row in rows
             ],
@@ -377,13 +379,23 @@ class PostgreSQLAdminReadRepository(
         self,
         page: int,
         limit: int,
+        report_id: UUID | None = None,
     ) -> Page[ModerationActionData]:
-        count_query = """
-            SELECT count(*)
-            FROM nowave.moderation_actions
+        filters = """
+            WHERE (
+                %(report_id)s::uuid IS NULL
+                OR m.target_report_id = %(report_id)s
+                OR m.target_photo_report_id = %(report_id)s
+            )
         """
 
-        items_query = """
+        count_query = f"""
+            SELECT count(*)
+            FROM nowave.moderation_actions AS m
+            {filters}
+        """
+
+        items_query = f"""
             SELECT
                 m.id,
                 m.action,
@@ -402,6 +414,8 @@ class PostgreSQLAdminReadRepository(
             LEFT JOIN nowave.users AS a
                 ON a.id = m.admin_user_id
 
+            {filters}
+
             ORDER BY m.created_at DESC, m.id DESC
             LIMIT %(limit)s
             OFFSET %(offset)s
@@ -412,7 +426,7 @@ class PostgreSQLAdminReadRepository(
             items_query=items_query,
             page=page,
             limit=limit,
-            params={},
+            params={"report_id": report_id},
         )
 
         return Page(
