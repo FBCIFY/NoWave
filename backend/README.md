@@ -315,8 +315,11 @@ la cible a été supprimé reste listée avec un identifiant `null`.
 ### Administration web
 
 Les pages d'administration sont rendues par FastAPI avec Jinja, sur le même
-domaine que le site : `https://no-wave.fr/admin`. Elles n'utilisent pas de
-JavaScript, la CSP du site reste donc inchangée.
+domaine que le site : `https://no-wave.fr/admin`. Elles utilisent désormais également JavaScript et Mapbox GL JS 3.32.0,
+servis localement par `/admin-static/` : la politique CSP Nginx a été
+adaptée pour le worker `blob:`, les connexions Mapbox et les photos
+Scaleway sur les domaines autorisés. La connexion et la modération
+restent assurées par des pages Jinja et des formulaires serveur.
 
 | Route | Rôle |
 |---|---|
@@ -384,6 +387,51 @@ nginx route `/admin` vers l'API et limite les envois du formulaire de
 connexion à 10 par minute et par visiteur (rafale de 5), en plus de la limite
 générale.
 
+#### Surveillance maritime NW-244
+
+`GET /admin` présente une carte Mercator centrée sur l'Atlantique
+(`[-30, 24]`, zoom `2.4`), des clusters rouges et des marqueurs par
+catégorie (`marine_animal` cyan, `obstruction` orange, `pollution` violet).
+La sélection ouvre une fiche latérale avec l'auteur, les coordonnées,
+la photo autorisée et des liens vers les formulaires de modération.
+Un panneau utilisateurs offre recherche serveur, filtre et pagination.
+
+Le globe de connexion tourne lentement si Mapbox est disponible ;
+la rotation s'arrête lors de la saisie, peut être interrompue
+manuellement et respecte `prefers-reduced-motion`. Le fond GEBCO 2026
+est servi directement par Nginx sous
+`/api/v1/map/seafloor/gebco-2026-v2/` (tuiles natives Z0–Z6,
+disparition progressive jusqu'à Z8). Il ne s'agit pas d'une route FastAPI.
+
+Les quatre lectures JSON ci-dessous sont réservées à un
+administrateur actif via session navigateur ; elles renvoient
+`Cache-Control: no-store` et ne modifient aucune donnée :
+
+| Endpoint interne au navigateur | Usage |
+|---|---|
+| `GET /admin/data/reports?west=…&south=…&east=…&north=…` | GeoJSON de l'emprise et booléen `truncated` |
+| `GET /admin/data/reports/{target_id}` | Détail d'un signalement |
+| `GET /admin/data/users?page=1&status=…&search=…` | Recherche et filtre côté serveur, 20 utilisateurs par page |
+| `GET /admin/data/users/{user_id}/reports?page=1` | Signalements du compte, 20 par page, `has_more` |
+
+Le MVP affiche au maximum **1 000 signalements par emprise**.
+Le serveur vérifie la présence d'une ligne supplémentaire ; si
+`truncated=true`, l'interface annonce « Affichage partiel ».
+Clusters et compteurs décrivent uniquement les points chargés,
+et ne sont pas exhaustifs. Les panneaux annulent les requêtes
+obsolètes en cas de changement de sélection ou de recherche.
+
+`MAPBOX_PUBLIC_TOKEN` est un jeton **public** à limiter aux domaines
+de l'administration, configuré hors du dépôt dans le processus API.
+Sans lui, les formulaires et listes restent disponibles, mais pas
+les cartes. L'interface utilise des scripts locaux, sans
+`unsafe-eval` ni scripts distants.
+
+Voir [la documentation de l'interface](app/web/README.md) et
+[la recette Playwright](tests/browser/README.md). La CI PostGIS
+teste les parcours avec services externes simulés ; elle ne
+valide pas une authentification Firebase réelle, un stockage
+Scaleway réel ni le site effectivement déployé.
 ## Tests
 
 Depuis la racine, avec l’environnement virtuel activé :
