@@ -179,20 +179,30 @@ La branche `main` est la **référence des releases stables**, promues par Pull 
 
 Pour chaque livraison ou soutenance, noter la date, le SHA `dev`, le SHA annoncé par `/version`, le résultat du workflow GitHub Actions, la PR éventuelle `dev` vers `main` et les vérifications fonctionnelles réellement réalisées. Références : [parcours livraison](../docs/parcours/deploiement.md), [matrice de traçabilité](../docs/traceability-matrix.md), [CONTRIBUTING](../docs/CONTRIBUTING.md). Responsable : Brice (NW-57, NW-84).
 
-### Livraison contrôlée des correctifs cartographiques
+### Déclenchement automatique et contrôle des livraisons
 
-Le job de production est **désactivé par défaut**, y compris après un push sur
-`dev`. Pour autoriser délibérément une livraison, définir la variable
-GitHub Actions du dépôt `NOWAVE_PRODUCTION_DEPLOY_ENABLED=true`, seulement
-après revue du commit et préparation de la fenêtre de déploiement. La retirer
-ou la remettre à `false` après la livraison. Les validations des PR restent
-actives même lorsque cette variable est absente.
+Le workflow `.github/workflows/checks.yml` se déclenche à chaque push sur
+`dev`, y compris après la fusion d'une pull request documentaire. Une fois
+les contrôles CI réussis, il appelle `.github/workflows/production.yml` pour
+les audits de production. Si les audits réussissent, le job `deploy` est
+éligible au déploiement automatique de la révision validée sur le VPS :
+sa condition explicite exige un événement `push` sur `refs/heads/dev`.
+Une pull request ou un lancement manuel de la CI exécute les validations,
+mais ne satisfait pas cette condition de déploiement.
 
-Le workflow `.github/workflows/production.yml` vérifie cette variable avant
-de commencer le job de déploiement. Les règles de protection de l'environnement
-GitHub `production` (approbateurs, délais, restrictions de branches) doivent
-aussi être contrôlées dans les paramètres GitHub ; le code source ne permet pas
-d'établir leur configuration effective.
+**Attention :** le workflow actuel ne vérifie pas la variable
+`NOWAVE_PRODUCTION_DEPLOY_ENABLED`. Sa valeur, même définie à `false`,
+ne désactive donc **pas** le déploiement. Il ne faut pas la considérer comme
+un verrou opérationnel.
+
+Le job de déploiement cible l'environnement GitHub `production`.
+D'éventuelles approbations manuelles, restrictions de branches ou délais
+d'attente dépendent de sa configuration dans les paramètres GitHub, qui
+ne peut pas être confirmée à partir des seuls fichiers du dépôt.
+Les variables et secrets de déploiement doivent également être présents.
+**Avant toute fusion vers `dev`, considérer qu'une mise en production
+peut suivre automatiquement une CI réussie et vérifier les protections
+effectivement configurées.**
 
 La vérification publique `deploy/hostinger/verify-public.sh` sonde une fois
 par tentative trois tuiles marines représentatives près de Toulon :
