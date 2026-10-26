@@ -13,7 +13,7 @@ NoWave est un MVP de signalements participatifs pour la navigation de plaisance 
 | Base de données | PostgreSQL 17 / PostGIS | Signalements, géométrie, positions et historique d'alertes |
 | Photos | Scaleway Object Storage privé | JPEG validés, lecture via URL temporaire |
 | Administration | FastAPI / Jinja, sessions et CSRF | Modération et suivi administratif |
-| Site de présentation | `web/` (Node.js à la compilation, Nginx au service) | Présentation du projet, indépendante de l'API |
+| Site public | `web/` (Node.js à la compilation, Nginx au service) | Parcours maritime, observations et accès aux pages admin du backend |
 | Livraison | GitHub Actions, Docker, VPS Hostinger et Cloudflare | Tests, audits et déploiement après push validé sur `dev` |
 
 Les tuiles cartographiques **MVT** sont produites par le backend à partir de PostGIS, séparément du fond de carte rendu par Mapbox. Elles ne sont pas une base mondiale stockée sur le téléphone.
@@ -23,7 +23,7 @@ Les tuiles cartographiques **MVT** sont produites par le backend à partir de Po
 ```text
 backend/          API FastAPI, domaine, infrastructure et tests
 mobile/           Application Flutter et tests widget/unitaires
-web/              Site de présentation autonome
+web/              Site public et carte des observations
 deploy/           Docker, scripts VPS et documentation de déploiement
 docs/             Index documentaire, parcours, tests et traçabilité
 .github/workflows/  CI et validation de livraison
@@ -40,11 +40,31 @@ Depuis la racine :
 ```sh
 cp .env.example .env
 # Renseigner les variables et secrets nécessaires dans .env et les fichiers référencés.
-docker compose up --build -d database backend
+docker compose up --build -d --wait
 curl --fail http://127.0.0.1:8000/health
 ```
 
-Pour le mobile, suivre [mobile/README.md](mobile/README.md) : créer `mobile/.env.json` depuis l'exemple, puis `flutter run -d <device-id> --dart-define-from-file=.env.json`. Le site web peut être lancé indépendamment via [web/README.md](web/README.md).
+Le site est accessible sur **https://localhost:8443** et l’administration sur
+**https://localhost:8443/admin**. Le certificat local est créé automatiquement :
+accepter ce certificat à la première ouverture. L’adresse HTTP
+`http://localhost:8080` redirige vers HTTPS pour conserver les cookies admin
+`Secure` et `__Host-`, y compris dans Safari.
+
+Le Compose utilise les mêmes Dockerfiles web/API que le déploiement, avec un
+proxy et un certificat propres au local. Les migrations sont automatiques.
+Les secrets restent dans `.env` et le fichier Firebase local monté en lecture seule.
+Le volume existant `nowave-database` est conservé ; aucune donnée fictive ni
+compte de démonstration n’est créé. Utiliser un compte Firebase vérifié dont
+le profil possède le rôle `admin` dans cette base locale. Les observations
+affichées sont celles de cette base.
+
+Pour arrêter les services sans supprimer les données : `docker compose down`.
+Les ports sont configurables dans `.env` via `NOWAVE_WEB_PORT`,
+`NOWAVE_WEB_HTTPS_PORT`, `NOWAVE_API_PORT` et `NOWAVE_DB_PORT`.
+Le jeton `MAPBOX_PUBLIC_TOKEN` doit être public (`pk.*`) et autoriser localhost.
+Le Compose et les scripts de production restent séparés dans `deploy/`.
+
+Pour le mobile, suivre [mobile/README.md](mobile/README.md) : créer `mobile/.env.json` depuis l'exemple, puis `flutter run -d <device-id> --dart-define-from-file=.env.json`. Le site web peut aussi être lancé seul via [web/README.md](web/README.md).
 
 ## Routes et périmètre MVP
 

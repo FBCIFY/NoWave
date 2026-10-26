@@ -1,11 +1,39 @@
 services:
   web:
     build:
-      context: ./web
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: deploy/web/Dockerfile
     ports:
-      - "127.0.0.1:${NOWAVE_WEB_PORT:-8080}:80"
+      - "127.0.0.1:${NOWAVE_WEB_PORT:-8080}:8080"
+      - "127.0.0.1:${NOWAVE_WEB_HTTPS_PORT:-8443}:8443"
+    environment:
+      NOWAVE_WEB_HTTPS_PORT: ${NOWAVE_WEB_HTTPS_PORT:-8443}
+    entrypoint: ["/bin/sh", "/local/web-entrypoint.sh"]
+    tmpfs:
+      - /tmp:rw,nosuid,uid=101,gid=101,size=32m
+    volumes:
+      - ./deploy/local/web-entrypoint.sh:/local/web-entrypoint.sh:ro
+      - ./deploy/local/nginx.conf.template:/etc/nginx/local.conf.template:ro
+      - local_tls:/certificates:ro
+    depends_on:
+      backend:
+        condition: service_healthy
+      local-tls:
+        condition: service_completed_successfully
     restart: unless-stopped
+
+  local-tls:
+    build: &api-build
+      context: .
+      dockerfile: deploy/api/Dockerfile
+    image: nowave-api:local
+    user: "0:0"
+    command: [python, /local/create_tls.py]
+    volumes:
+      - ./deploy/local/create_tls.py:/local/create_tls.py:ro
+      - local_tls:/certificates
+    healthcheck:
+      disable: true
 
   database:
     build:
@@ -32,14 +60,14 @@ services:
       retries: 30
 
   backend:
-    build:
-      context: ./backend
-      dockerfile: Dockerfile
+    build: *api-build
+    image: nowave-api:local
 
     ports:
-      - "8000:8000"
+      - "127.0.0.1:${NOWAVE_API_PORT:-8000}:8000"
 
     environment: &backend-environment
+      NOWAVE_ENV: development
       DATABASE_URL: "postgresql://nowave:${NOWAVE_DB_PASSWORD}@database:5432/nowave"
       GOOGLE_CLOUD_PROJECT: ${GOOGLE_CLOUD_PROJECT:-blueway-dev}
       GOOGLE_APPLICATION_CREDENTIALS: /run/secrets/firebase_service_account
@@ -48,20 +76,20 @@ services:
       SCW_ACCESS_KEY: ${SCW_ACCESS_KEY:-}
       SCW_SECRET_KEY: ${SCW_SECRET_KEY:-}
       FIREBASE_WEB_API_KEY: ${FIREBASE_WEB_API_KEY:-}
+      MAPBOX_PUBLIC_TOKEN: ${MAPBOX_PUBLIC_TOKEN:-}
 
     secrets:
       - firebase_service_account
 
-    command: ["sh", "-c", "alembic -c alembic.ini upgrade head && exec uvicorn app.main:app --host 0.0.0.0 --port 8000"]
+    command: ["sh", "-c", "python -m alembic -c alembic.ini upgrade head && exec uvicorn app.main:app --host 0.0.0.0 --port 8000 --no-proxy-headers"]
 
     depends_on:
       database:
         condition: service_healthy
 
   photo-cleanup:
-    build:
-      context: ./backend
-      dockerfile: Dockerfile
+    build: *api-build
+    image: nowave-api:local
     profiles: [photos]
     environment: *backend-environment
     secrets:
@@ -73,9 +101,8 @@ services:
         condition: service_started
 
   notifications:
-    build:
-      context: ./backend
-      dockerfile: Dockerfile
+    build: *api-build
+    image: nowave-api:local
     profiles: [alerts]
     environment: *backend-environment
     secrets:
@@ -88,6 +115,7 @@ services:
         condition: service_started
 
 volumes:
+  local_tls:
   nowave_database:
     name: nowave-database
 

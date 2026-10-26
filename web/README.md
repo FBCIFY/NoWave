@@ -9,6 +9,26 @@ une seconde ; les traversées océaniques prennent entre six et huit secondes.
 
 ## Tester localement
 
+### Avec la base locale et les secrets de développement
+
+Depuis la racine du dépôt, renseigner `.env` à partir de `.env.example`, puis :
+
+```sh
+docker compose up --build -d --wait
+```
+
+Site : **https://localhost:8443**. Admin : **https://localhost:8443/admin**.
+Accepter le certificat local lors de la première ouverture. Le backend et le
+web utilisent le code de la branche, les mêmes Dockerfiles que le déploiement
+et une seule origine HTTPS. Les cookies admin restent sécurisés.
+Les migrations sont automatiques ; la base existante est conservée. Aucun compte
+ni signalement de démonstration n’est ajouté. La connexion demande un compte
+Firebase vérifié avec un profil `admin` dans cette base locale.
+`MAPBOX_PUBLIC_TOKEN` doit être renseigné et autorisé pour localhost.
+Les ports peuvent être changés dans `.env`.
+
+### Aperçu synthétique sans secrets
+
 Sur macOS, ouvrir **Tester la refonte.command**. Le lanceur démarre la landing
 et le backend de démonstration, choisit des ports libres et ouvre le navigateur.
 
