@@ -658,3 +658,15 @@ img {
     animation: none !important;
   }
 }
+
+.map-view__admin-photo {
+  display: grid;
+  gap: 8px;
+  margin-block: 16px;
+}
+.map-view__admin-photo img {
+  width: 100%;
+  max-height: 240px;
+  object-fit: contain;
+  border-radius: 8px;
+}

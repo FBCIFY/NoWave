@@ -11,7 +11,9 @@ async function moderationDetail({ report, container }) {
   detailRequest?.abort();
   const current = (detailRequest = new AbortController());
   container
-    .querySelectorAll(".map-view__admin-actions,.map-view__admin-status")
+    .querySelectorAll(
+      ".map-view__admin-actions,.map-view__admin-status,.map-view__admin-photo",
+    )
     .forEach((node) => node.remove());
   const note = document.createElement("p");
   note.className = "map-view__admin-status";
@@ -43,6 +45,24 @@ async function moderationDetail({ report, container }) {
       : data.author?.username;
     if (author)
       container.querySelector(".map-view__author").textContent = author;
+    if (data.photo?.url && !data.photo.hidden_at) {
+      const photo = document.createElement("a");
+      photo.className = "map-view__admin-photo";
+      photo.setAttribute("aria-label", "Ouvrir la photo");
+      photo.href = data.photo.url;
+      photo.target = "_blank";
+      photo.rel = "noopener noreferrer";
+      photo.referrerPolicy = "no-referrer";
+      const image = document.createElement("img");
+      image.src = data.photo.url;
+      image.alt = "Photographie du signalement";
+      image.referrerPolicy = "no-referrer";
+      image.addEventListener("error", () => image.remove(), { once: true });
+      const label = document.createElement("span");
+      label.textContent = "Ouvrir la photo";
+      photo.append(image, label);
+      container.append(photo);
+    }
     const actions = document.createElement("nav");
     actions.className = "map-view__admin-actions";
     actions.setAttribute("aria-label", "Modération du signalement");

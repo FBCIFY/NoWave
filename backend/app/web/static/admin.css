@@ -305,3 +305,7 @@ dd { margin: 0; }
 .badge svg { width: 17px; height: 17px; flex-shrink: 0; }
 .report-summary .badge-row { gap: 10px; }
 @media(max-width:750px) { .page-head--counted { gap: 12px; } .page-total { font-size: 50px; } .person { gap: 8px; } .person-avatar { width: 29px; height: 29px; border-radius: 9px; } }
+
+.user-filters { display: flex; align-items: center; flex-wrap: wrap; gap: 12px; margin-bottom: 20px; }
+.user-filters input[type=search] { flex: 1; min-width: 180px; }
+.users-table .table-action a { display: inline-block; margin: 4px 8px; }

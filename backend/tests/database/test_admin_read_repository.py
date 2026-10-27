@@ -595,3 +595,27 @@ def test_map_boundaries_and_stable_order_with_real_postgis(dsn, monkeypatch, cou
     assert repo.map_reports(lon - .01, 12.24, lon + .01, 12.26, limit=5000) == (rows, truncated)
     zoomed, _ = repo.map_reports(lon + .001, 12.251, lon + .002, 12.252)
     assert zoomed == []
+
+
+def test_user_search_preserves_status_and_custom_page_size(dsn, monkeypatch):
+    from tests.database.conftest import insert
+    prefix = "lookup_" + uuid4().hex[:12]
+    now = datetime.now(UTC)
+    ids = [uuid4() for _ in range(13)]
+    with psycopg.connect(dsn) as conn:
+        for index, user_id in enumerate(ids):
+            insert(conn, 'users', id=user_id, firebase_uid=str(user_id),
+                   username=f'{prefix}{index}', email=f'{prefix}{index}@nowave.test',
+                   role='user', status='suspended' if index < 11 else 'active',
+                   created_at=now, updated_at=now)
+    repo = repository_for_test(dsn, monkeypatch)
+    seen = []
+    for page, expected_count in [(1, 5), (2, 5), (3, 1)]:
+        rows, total = repo.search_users(page, UserStatus.SUSPENDED, prefix.upper(), limit=5)
+        assert total == 11
+        assert len(rows) == expected_count
+        seen.extend(row[0] for row in rows)
+    assert seen == sorted(ids[:11], reverse=True)
+    rows, total = repo.search_users(1, None, str(ids[12]))
+    assert total == 1 and rows[0][0] == ids[12]
+    assert repo.search_users(1, None, prefix + '%') == ([], 0)

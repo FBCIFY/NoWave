@@ -39,7 +39,7 @@ EFFECTIVE_REPORT_STATUS = """
 class PostgreSQLAdminReadRepository(
     AdminReadRepository
 ):
-    def search_users(self, page: int, status: UserStatus | None, search: str):
+    def search_users(self, page: int, status: UserStatus | None, search: str, limit: int = 20):
         query = """
             SELECT u.id, u.username, u.email, u.role, u.status,
                    u.created_at, u.updated_at,
@@ -49,7 +49,7 @@ class PostgreSQLAdminReadRepository(
               AND (u.username ILIKE %(search)s OR u.email ILIKE %(search)s
                    OR u.id::text = %(exact)s)
             ORDER BY u.created_at DESC, u.id DESC
-            LIMIT 20 OFFSET %(offset)s
+            LIMIT %(limit)s OFFSET %(offset)s
         """
         count = """
             SELECT count(*) FROM nowave.users u
@@ -60,7 +60,7 @@ class PostgreSQLAdminReadRepository(
         escaped = search.replace('\\', '\\\\').replace('%', '\\%').replace('_', '\\_')
         params = {"status": status.value if status else None,
                   "search": f"%{escaped}%", "exact": search,
-                  "offset": (page - 1) * 20}
+                  "offset": page_offset(page, limit), "limit": limit}
         with database_connection() as connection:
             with connection.cursor() as cursor:
                 cursor.execute(count, params)

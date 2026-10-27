@@ -12,6 +12,15 @@
     <div><dt>Observé le</dt><dd>{{ date_label(item.observed_at) }}</dd></div>
   </dl>
 </section>
+{% if photo_url %}
+<section class="card" aria-label="Photo du signalement">
+  <h2>Photo</h2>
+  <a aria-label="Ouvrir la photo" href="{{ photo_url }}" target="_blank" rel="noopener noreferrer" referrerpolicy="no-referrer">
+    <img class="photo" src="{{ photo_url }}" alt="Photographie du signalement" referrerpolicy="no-referrer">
+    Ouvrir la photo
+  </a>
+</section>
+{% endif %}
 {% if history is defined %}
 <details class="card report-history" id="report-history"{% if history.page > 1 %} open{% endif %}>
   <summary>Historique de modération <span class="count-badge">· {{ history.total }}</span></summary>

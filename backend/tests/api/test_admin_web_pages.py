@@ -206,6 +206,7 @@ def test_moderation_pages_require_admin_session(client, services):
     for path in (
         "/admin/reports",
         "/admin/users",
+        f"/admin/users/{USER_ID}/reports",
         "/admin/audit",
         f"/admin/reports/{REPORT_ID}",
     ):
@@ -525,3 +526,76 @@ def test_report_without_photo_does_not_offer_hide_action(client, services):
     assert response.status_code == 200
     assert "Masquer la photo" not in response.text
     assert "Retirer le signalement" in response.text
+
+
+@pytest.mark.parametrize("hidden,status,expected", [
+    (False, "uploaded", True), (True, "uploaded", False),
+    (False, "pending", False), (False, None, False),
+])
+def test_report_photo_consultation(client, services, monkeypatch, hidden, status, expected):
+    from app.domain.report_photo import UploadStatus
+    import app.api.routes.report_details as details
+    reads, _ = services
+    original = reads.get_report
+    def read(report_id, now=None):
+        item = original(report_id, now)
+        item.photo_status = UploadStatus(status) if status else None
+        item.photo_hidden_at = "2026-10-27" if hidden else None
+        return item
+    reads.get_report = read
+    calls = []
+    class Storage:
+        def create_read_url(self, **kwargs):
+            calls.append(kwargs)
+            return "https://s3.fr-par.scw.cloud/test/photo.jpg?signature=test"
+    monkeypatch.setattr(details, "get_photo_storage", lambda: Storage())
+    sign_in(client)
+    response = client.get(f"/admin/reports/{REPORT_ID}")
+    assert response.status_code == 200
+    assert ("Ouvrir la photo" in response.text) is expected
+    assert ('alt="Photographie du signalement"' in response.text) is expected
+    assert bool(calls) is expected
+    if expected:
+        assert calls[0]["object_key"] == "reports/photo.jpg"
+        assert calls[0]["expires_in"].total_seconds() == 300
+
+
+def test_users_search_and_filter_preserve_pagination(client, services, monkeypatch):
+    from datetime import UTC, datetime
+    from app.domain.user import UserStatus
+    from app.infrastructure.repositories.postgresql_admin_read_repository import PostgreSQLAdminReadRepository
+    calls = []
+    def search(self, page, status, query, limit=20):
+        calls.append((page, status, query, limit))
+        now = datetime.now(UTC)
+        return [(USER_ID, "navigateur", "navigateur@nowave.test", "user", "suspended", now, now, 2)], 41
+    monkeypatch.setattr(PostgreSQLAdminReadRepository, "search_users", search)
+    sign_in(client)
+    response = client.get("/admin/users?search=navigateur&status=suspended&page=2&limit=10")
+    assert response.status_code == 200
+    assert calls == [(2, UserStatus.SUSPENDED, "navigateur", 10)]
+    assert 'value="suspended" selected' in response.text
+    assert "search=navigateur&amp;status=suspended&amp;page=3&amp;limit=10" in response.text
+    assert f'/admin/users/{USER_ID}/reports' in response.text
+    assert "Réactiver" in response.text
+    assert client.get("/admin/users?search=&status=").status_code == 200
+    assert client.get("/admin/users?status=invalid").status_code == 422
+    assert client.get("/admin/users?search=" + "a" * 81).status_code == 422
+
+
+@pytest.mark.parametrize("page,has_more", [(1, True), (2, False)])
+def test_user_reports_page(client, services, monkeypatch, page, has_more):
+    from datetime import UTC, datetime
+    from app.infrastructure.repositories.postgresql_admin_read_repository import PostgreSQLAdminReadRepository
+    calls = []
+    def reports(self, user_id, requested_page):
+        calls.append((user_id, requested_page))
+        return [(REPORT_ID, "pollution", "active", datetime.now(UTC))], has_more
+    monkeypatch.setattr(PostgreSQLAdminReadRepository, "user_reports", reports)
+    sign_in(client)
+    response = client.get(f"/admin/users/{USER_ID}/reports?page={page}")
+    assert response.status_code == 200
+    assert calls == [(USER_ID, page)]
+    assert f'/admin/reports/{REPORT_ID}' in response.text
+    assert ('rel="next"' in response.text) is has_more
+    assert ('rel="prev"' in response.text) is (page > 1)

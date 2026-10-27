@@ -113,6 +113,10 @@ test('shared map selection restores its view and keeps authorized photo links pr
   await expect(page.locator('#map-report-search')).toHaveValue('Synthetic report 5/');
   expect(await page.evaluate(()=>({center:window.__maps[0].getCenter(),zoom:window.__maps[0].getZoom()}))).toEqual(before);
   await page.goto(`/admin?report=${id(5020)}`);await expect(page.locator('.map-view__detail')).toContainText('Synthetic report 5/20');await expect(page.getByRole('link',{name:'Masquer la photo',exact:true})).toBeVisible();
+  const photo=page.getByRole('link',{name:'Ouvrir la photo',exact:true});await expect(photo).toBeVisible();await expect(photo).toHaveAttribute('href','/__fixtures/photo.svg');
+  await expect.poll(()=>photo.locator('img').evaluate(img=>img.complete&&img.naturalWidth>0)).toBe(true);
+  await page.getByRole('link',{name:'Fiche et historique'}).click();await expect(page.getByRole('link',{name:'Ouvrir la photo'})).toBeVisible();
+  await page.goto(`/admin?report=${id(5020)}`);
   const visible=await(await page.request.get(`/admin/data/reports/${id(5020)}`)).json();expect(visible.photo.url).toBe('/__fixtures/photo.svg');
   await page.screenshot({path:`test-results/${info.project.name}-report.png`});
   await page.goto(`/admin?report=${id(5019)}`);await expect(page.locator('.map-view__detail')).toContainText('Synthetic report 5/19');await expect(page.getByRole('link',{name:'Masquer la photo',exact:true})).toHaveCount(0);
@@ -145,4 +149,21 @@ test('synthetic moderation enforces CSRF, reason and confirmation, then records 
   const hidden=await (await page.request.get(`/admin/data/reports/${photoId}`)).json();expect(hidden.photo.url).toBeNull();expect(hidden.photo.hidden_at).toBeTruthy();
   await page.goto('/admin/audit');await expect(page.locator('main')).toContainText('Synthetic browser audit');
   for(const action of ['suspend','reactivate']){await page.goto(`/admin/actions/users/${id(2)}/${action}`);await page.locator('#reason').fill('Synthetic user moderation');await page.locator('[name=confirmed]').check();await page.getByRole('button',{name:'Confirmer l’action'}).click();await expect(page.locator('main')).toContainText('confirmé la réussite');}
+});
+
+test('user search, status filters and user reports remain reachable',async({page})=>{
+  await login(page);await page.getByRole('link',{name:'Utilisateurs',exact:true}).click();
+  await page.getByLabel('Rechercher un compte').fill('user7@nowave.test');
+  await page.getByRole('button',{name:'Rechercher',exact:true}).click();
+  await expect(page.locator('.users-table tbody tr')).toHaveCount(1);
+  await page.getByRole('link',{name:'Voir les signalements',exact:true}).click();
+  await expect(page.locator('tbody tr')).toHaveCount(20);
+  await page.getByRole('link',{name:'Page suivante',exact:true}).click();
+  await expect(page.locator('tbody tr')).toHaveCount(20);
+  await page.locator('tbody a').first().click();await expect(page.locator('.report-summary')).toContainText('Synthetic report 7/');
+  await page.getByRole('link',{name:'← Retour',exact:true}).click();await expect(page).toHaveURL(url=>url.pathname===`/admin/users/${id(7)}/reports`&&url.searchParams.get("page")==="2");
+  await page.getByRole('link',{name:'← Utilisateurs',exact:true}).click();await expect(page.getByLabel('Rechercher un compte')).toHaveValue('user7@nowave.test');
+  await page.getByLabel('Statut',{exact:true}).selectOption('suspended');await page.getByRole('button',{name:'Rechercher',exact:true}).click();await expect(page.locator('main')).toContainText('Aucun utilisateur');
+  await page.getByLabel('Statut',{exact:true}).selectOption('');await page.getByRole('button',{name:'Rechercher',exact:true}).click();await expect(page.locator('.users-table tbody tr')).toHaveCount(1);
+  expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
 });

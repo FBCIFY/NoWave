@@ -1,10 +1,12 @@
+import os
 from dataclasses import dataclass
 from uuid import UUID
-import os
 
 from fastapi import APIRouter, Depends, Form, Query, Request
 from fastapi.responses import RedirectResponse, JSONResponse
 
+from app.api.routes.report_details import photo_read_url
+from app.application.ports.admin_read_repository import AdminUserData
 from app.application.services.admin_reads import AdminReadService
 from app.application.services.admin_web_session import (
     SESSION_DURATION,
@@ -24,7 +26,9 @@ from app.domain.pagination import (
     DEFAULT_PAGE_LIMIT,
     MAX_PAGE,
     MAX_PAGE_LIMIT,
+    Page,
 )
+from app.domain.user import UserRole, UserStatus
 from app.web.csrf import (
     check_login_csrf,
     delete_csrf_cookie,
@@ -411,6 +415,7 @@ def admin_report(
 ):
     try:
         item = service.get_report(report_id=target_id)
+        photo_url = photo_read_url(item)
         history = service.list_moderation_actions(
             page=history_page,
             limit=DEFAULT_PAGE_LIMIT,
@@ -431,7 +436,7 @@ def admin_report(
         request,
         context,
         "admin/report.html",
-        {"item": item, "history": history},
+        {"item": item, "history": history, "photo_url": photo_url},
     )
 
 
@@ -444,11 +449,31 @@ def admin_users(
         ge=1,
         le=MAX_PAGE_LIMIT,
     ),
+    user_status: str = Query(default="", alias="status"),
+    search: str = Query(default="", max_length=80),
     context: AdminContext = Depends(get_admin_context),
     service: AdminReadService = Depends(get_admin_read_service),
 ):
+    search = search.strip()
     try:
-        result = service.list_users(page=page, limit=limit)
+        status_filter = UserStatus(user_status) if user_status else None
+    except ValueError:
+        return render_admin_error(request, context, "Statut invalide",
+                                  "Choisissez un statut de compte valide.", 422)
+    try:
+        if search:
+            rows, total = PostgreSQLAdminReadRepository().search_users(
+                page, status_filter, search, limit=limit,
+            )
+            result = Page(
+                items=[AdminUserData(id=row[0], username=row[1], email=row[2],
+                                     role=UserRole(row[3]), status=UserStatus(row[4]),
+                                     created_at=row[5], updated_at=row[6], reports_count=row[7])
+                       for row in rows],
+                page=page, limit=limit, total=total,
+            )
+        else:
+            result = service.list_users(page=page, limit=limit, status=status_filter)
     except DEPENDENCY_ERRORS:
         raise WebServiceUnavailable() from None
 
@@ -460,8 +485,29 @@ def admin_users(
             "result": result,
             "page": page,
             "limit": limit,
+            "search": search,
+            "user_status": user_status,
+            "status_options": UserStatus,
         },
     )
+
+
+@router.get("/users/{user_id}/reports", name="admin_user_reports")
+def admin_user_reports(
+    user_id: UUID,
+    request: Request,
+    page: int = Query(default=1, ge=1, le=MAX_PAGE),
+    context: AdminContext = Depends(get_admin_context),
+):
+    try:
+        rows, has_more = PostgreSQLAdminReadRepository().user_reports(user_id, page)
+    except DEPENDENCY_ERRORS:
+        raise WebServiceUnavailable() from None
+    return render_admin_page(request, context, "admin/user-reports.html", {
+        "user_id": user_id, "page": page, "has_more": has_more,
+        "items": [dict(id=row[0], category=row[1], status=row[2], observed_at=row[3])
+                  for row in rows],
+    })
 
 
 @router.get("/audit", name="admin_audit")

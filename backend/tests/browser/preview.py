@@ -177,12 +177,12 @@ def configure_preview():
             return [(r.id, r.longitude, r.latitude, r.category.value, r.status.value)
                     for r in reports if west <= r.longitude <= east and south <= r.latitude <= north], False
 
-        def search_users(self, page, status, search):
+        def search_users(self, page, status, search, limit=20):
             found = [u for u in users if (status is None or u.status == status)
                      and search.casefold() in f"{u.username} {u.email}".casefold()]
             return [(u.id, u.username, u.email, u.role.value, u.status.value,
                      u.created_at, u.updated_at, u.reports_count)
-                    for u in make_page(found, page, 20).items], len(found)
+                    for u in make_page(found, page, limit).items], len(found)
 
         def user_reports(self, user_id, page):
             found = [r for r in reports if r.author_id == user_id]
