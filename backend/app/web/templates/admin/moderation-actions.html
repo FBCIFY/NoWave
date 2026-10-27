@@ -4,30 +4,21 @@
 {% block body_class %}admin-shell audit-page{% endblock %}
 {% block content %}
 <a class="back-link" data-nav-back href="/admin">← Retour</a>
-<div class="page-head audit-heading"><h1>Audit de modération</h1><span class="audit-total">{{ result.total }} action{{ 's' if result.total != 1 else '' }}</span></div>
-<section aria-label="Historique de modération">
+<div class="page-head page-head--counted list-heading"><h1>Audit de modération</h1><strong class="page-total" aria-label="{{ result.total }} actions au total">{{ result.total }}</strong></div>
+<section class="card table-card audit-card">
   {% if result.items %}
-  <ol class="audit-feed">
-    {% for item in result.items %}
-    <li class="audit-entry">
-      <div class="audit-entry-content">
-        <h2>{{ label(item.action.value) }}</h2>
-        {% if item.reason %}<p class="audit-entry-reason preserve">{{ item.reason }}</p>{% endif %}
-        <div class="audit-entry-meta">
-          {{ date_label(item.created_at) }}
-          <span aria-hidden="true">·</span>
-          <span>{{ item.admin_username or 'Administrateur supprimé' }}</span>
-        </div>
-      </div>
-      {% if item.target_report_id or item.target_photo_report_id %}
-      <a class="audit-entry-link" href="{{ request.url_for('admin_report', target_id=item.target_report_id or item.target_photo_report_id).path }}">Voir le signalement <span aria-hidden="true">→</span></a>
-      {% elif item.target_user_id %}
-      <a class="audit-entry-link" href="{{ request.url_for('admin_user_reports', user_id=item.target_user_id).path }}">Voir le compte <span aria-hidden="true">→</span></a>
-      {% endif %}
-    </li>
-    {% endfor %}
-  </ol>
-  {% else %}<p class="audit-empty">Aucune action de modération.</p>{% endif %}
+  <div class="table-scroll"><table class="audit-table">
+    <caption class="sr-only">Historique de modération</caption>
+    <colgroup><col class="audit-col-date"><col class="audit-col-action"><col class="audit-col-reason"><col class="audit-col-target"></colgroup>
+    <thead><tr><th scope="col">Date</th><th scope="col">Action</th><th scope="col">Motif</th><th scope="col"><span class="sr-only">Détail</span></th></tr></thead>
+    <tbody>{% for item in result.items %}<tr>
+      <td class="audit-date">{{ date_label(item.created_at) }}</td>
+      <td>{{ label(item.action.value) }}<span class="audit-author">{{ item.admin_username or 'Administrateur supprimé' }}</span></td>
+      <td class="preserve audit-reason">{{ item.reason or '—' }}</td>
+      <td class="audit-target">{% if item.target_report_id or item.target_photo_report_id %}<a href="{{ request.url_for('admin_report', target_id=item.target_report_id or item.target_photo_report_id).path }}">Voir le signalement</a>{% elif item.target_user_id %}<a href="{{ request.url_for('admin_user_reports', user_id=item.target_user_id).path }}">Voir le compte</a>{% else %}<span class="count-badge">Cible supprimée</span>{% endif %}</td>
+    </tr>{% endfor %}</tbody>
+  </table></div>
+  {% else %}<div class="empty"><h3>Aucune action</h3></div>{% endif %}
   {% if result.pages > 1 or page > 1 %}{% include 'admin/pagination.html' %}{% endif %}
 </section>
 {% endblock %}
