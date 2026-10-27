@@ -1,16 +1,18 @@
-{% extends 'admin/base.html' %}
-{% block title %}Surveillance maritime{% endblock %}
-{% block header %}{% endblock %}
-{% block content %}
-<div class="surveillance" data-token="{{ mapbox_token }}">
-  <div id="surveillance-map" role="application" aria-label="Carte des signalements maritimes"></div>
-  <header class="surveillance-header"><a class="brand" href="/admin">NoWave <small>Centre de surveillance maritime</small></a><nav aria-label="Administration"><a href="/admin/reports">Signalements</a><button id="users-open" type="button">Utilisateurs</button><a href="/admin/audit">Historique</a></nav><form method="post" action="/admin/logout"><input type="hidden" name="csrf_token" value="{{ csrf_token }}"><span>{{ admin.username }}</span><button type="submit">Déconnexion</button></form></header>
-  <button id="users-tab" type="button" aria-label="Ouvrir le panneau utilisateurs">›</button>
-  <div class="map-actions"><button id="zoom-in" type="button" aria-label="Zoom avant">+</button><button id="zoom-out" type="button" aria-label="Zoom arrière">−</button><button id="reset-map" type="button">Vue Atlantique</button></div>
-  <p id="map-status" class="map-status" role="status">Chargement de la carte…</p>
-  <aside id="users-panel" class="side-panel users-panel" aria-label="Utilisateurs" hidden><div class="panel-head"><h2>Utilisateurs</h2><button id="users-close" type="button" aria-label="Fermer">×</button></div><input id="user-search" type="search" placeholder="Rechercher un utilisateur" aria-label="Rechercher un utilisateur"><select id="user-status" aria-label="Filtrer par statut"><option value="">Tous les statuts</option><option value="active">Actif</option><option value="suspended">Suspendu</option></select><p id="users-count"></p><div id="users-list" role="list"></div><div class="pager"><button id="users-prev" type="button">Précédent</button><span id="users-page"></span><button id="users-next" type="button">Suivant</button></div><div id="user-detail"></div></aside>
-  <aside id="report-panel" class="side-panel report-panel" aria-label="Signalement sélectionné" hidden><div class="panel-head"><h2>Signalement</h2><button id="report-close" type="button" aria-label="Fermer">×</button></div><div id="report-detail" role="status"></div></aside>
-  <section class="report-access" aria-label="Accès aux signalements"><a href="/admin/reports">Parcourir tous les signalements →</a></section>
-</div>
-<script src="/admin-static/mapbox-gl.js" defer></script><script src="/admin-static/maritime-style.js" defer></script><script src="/admin-static/marker-icons.js" defer></script><script src="/admin-static/cluster-interaction.js" defer></script><script src="/admin-static/surveillance.js" defer></script>
-{% endblock %}
+{% set dev = request.headers.get('x-nowave-web-dev') == '1' %}
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="robots" content="noindex,nofollow"><meta name="theme-color" content="#070f1b">
+  <title>Surveillance maritime · NoWave</title>
+  <link rel="icon" href="/admin-static/favicon.svg">
+  {% if dev %}<link rel="stylesheet" href="/src/style.css"><link rel="stylesheet" href="/src/map-view.css">{% else %}<link rel="stylesheet" href="/assets/nowave.css">{% endif %}
+  <link rel="stylesheet" href="/admin-static/admin-header.css">
+</head>
+<body class="map-page admin-map-page">
+  <a class="skip-link" href="#carte">Aller aux observations</a>
+  {% include 'admin/navigation.html' %}
+  <main><section id="carte" class="map-view" aria-label="Carte des observations maritimes"></section></main>
+  <script type="module" src="{{ '/admin-map.js' if dev else '/assets/admin-map.js' }}"></script>
+  <script defer src="/admin-static/admin-navigation.js"></script>
+</body>
+</html>

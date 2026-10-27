@@ -6,6 +6,7 @@ export function createStepGesture({ threshold = 28, quietMs = 200 } = {}) {
   let total = 0;
   let lastMagnitude = 0;
   let triggeredAt = -Infinity;
+  let reverseTotal = 0;
   return {
     push(delta, at) {
       if (!Number.isFinite(delta)) return 0;
@@ -19,10 +20,22 @@ export function createStepGesture({ threshold = 28, quietMs = 200 } = {}) {
       if (at - lastAt > quietMs || freshImpulse) {
         consumed = false;
         total = 0;
+        reverseTotal = 0;
       }
       lastAt = at;
       lastMagnitude = magnitude;
-      if (consumed) return 0;
+      if (consumed) {
+        if (Math.sign(delta) === Math.sign(total)) {
+          reverseTotal = 0;
+          return 0;
+        }
+        reverseTotal += delta;
+        if (Math.abs(reverseTotal) < threshold * 1.4) return 0;
+        consumed = false;
+        delta = reverseTotal;
+        total = 0;
+        reverseTotal = 0;
+      }
       if (Math.sign(delta) !== Math.sign(total)) total = 0;
       total += delta;
       if (Math.abs(total) < threshold) return 0;

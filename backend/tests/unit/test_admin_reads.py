@@ -156,6 +156,20 @@ def test_list_users_passes_status_filter():
     ]
 
 
+@pytest.mark.parametrize("report_id", [None, uuid4()])
+def test_list_moderation_actions_passes_report_filter(report_id):
+    service, repository = create_service()
+
+    service.list_moderation_actions(page=2, limit=20, report_id=report_id)
+
+    assert repository.calls == [
+        (
+            "list_moderation_actions",
+            {"page": 2, "limit": 20, "report_id": report_id},
+        )
+    ]
+
+
 def test_get_report_returns_repository_report():
     report = object()
     service, repository = create_service(report)
@@ -178,3 +192,37 @@ def test_get_missing_report_raises_not_found():
 
     with pytest.raises(ReportNotFoundError):
         service.get_report(uuid4(), now=NOW)
+
+
+def test_report_search_reaches_repository_with_status_and_pagination():
+    service, repository = create_service()
+    service.list_reports(page=2, limit=10, status=ReportStatus.REMOVED,
+                         now=NOW, search=" bouée ")
+    assert repository.calls == [("list_reports", {
+        "page": 2, "limit": 10, "status": ReportStatus.REMOVED,
+        "now": NOW, "search": "bouée",
+    })]
+
+
+def test_report_search_escapes_wildcards_for_count_and_items(monkeypatch):
+    from app.infrastructure.repositories.postgresql_admin_read_repository import PostgreSQLAdminReadRepository
+
+    captured = {}
+
+    def read_page(self, **kwargs):
+        captured.update(kwargs)
+        return 0, []
+
+    monkeypatch.setattr(PostgreSQLAdminReadRepository, "_read_page", read_page)
+    result = PostgreSQLAdminReadRepository().list_reports(
+        page=2, limit=10, status=ReportStatus.ACTIVE, now=NOW, search="50%_",
+    )
+    assert result.total == 0
+    assert captured["params"]["search"] == r"%50\%\_%"
+    assert captured["params"]["exact_search"] == "50%_"
+    assert captured["params"]["status"] == "active"
+    for query in (captured["count_query"], captured["items_query"]):
+        assert "r.description ILIKE %(search)s" in query
+        assert "author.username ILIKE %(search)s" in query
+        assert "r.id::text = %(exact_search)s" in query
+        assert "50%_" not in query

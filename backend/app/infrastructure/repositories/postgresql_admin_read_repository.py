@@ -39,7 +39,7 @@ EFFECTIVE_REPORT_STATUS = """
 class PostgreSQLAdminReadRepository(
     AdminReadRepository
 ):
-    def search_users(self, page: int, status: UserStatus | None, search: str):
+    def search_users(self, page: int, status: UserStatus | None, search: str, limit: int = 20):
         query = """
             SELECT u.id, u.username, u.email, u.role, u.status,
                    u.created_at, u.updated_at,
@@ -49,7 +49,7 @@ class PostgreSQLAdminReadRepository(
               AND (u.username ILIKE %(search)s OR u.email ILIKE %(search)s
                    OR u.id::text = %(exact)s)
             ORDER BY u.created_at DESC, u.id DESC
-            LIMIT 20 OFFSET %(offset)s
+            LIMIT %(limit)s OFFSET %(offset)s
         """
         count = """
             SELECT count(*) FROM nowave.users u
@@ -60,7 +60,7 @@ class PostgreSQLAdminReadRepository(
         escaped = search.replace('\\', '\\\\').replace('%', '\\%').replace('_', '\\_')
         params = {"status": status.value if status else None,
                   "search": f"%{escaped}%", "exact": search,
-                  "offset": (page - 1) * 20}
+                  "offset": page_offset(page, limit), "limit": limit}
         with database_connection() as connection:
             with connection.cursor() as cursor:
                 cursor.execute(count, params)
@@ -73,8 +73,11 @@ class PostgreSQLAdminReadRepository(
         """One bounded page and a lookahead, without a separate count query."""
         offset = page_offset(page, 20)
         query = f"""
-            SELECT r.id, r.category, {EFFECTIVE_REPORT_STATUS}, r.observed_at
-            FROM nowave.reports r WHERE r.author_id = %(user_id)s
+            SELECT r.id, r.category, {EFFECTIVE_REPORT_STATUS}, r.observed_at,
+                   r.description, u.username
+            FROM nowave.reports r
+            LEFT JOIN nowave.users u ON u.id = r.author_id
+            WHERE r.author_id = %(user_id)s
             ORDER BY r.observed_at DESC, r.id DESC LIMIT 21 OFFSET %(offset)s
         """
         with database_connection() as connection:
@@ -111,6 +114,7 @@ class PostgreSQLAdminReadRepository(
         limit: int,
         status: ReportStatus | None,
         now: datetime,
+        search: str = "",
     ) -> Page[AdminReportSummaryData]:
         filters = f"""
             WHERE (
@@ -118,6 +122,18 @@ class PostgreSQLAdminReadRepository(
                 OR ({EFFECTIVE_REPORT_STATUS}) = %(status)s
             )
         """
+
+        if search:
+            filters += """
+                AND (r.description ILIKE %(search)s
+                     OR r.id::text = %(exact_search)s
+                     OR EXISTS (
+                         SELECT 1 FROM nowave.users AS author
+                         WHERE author.id = r.author_id
+                           AND author.username ILIKE %(search)s
+                     ))
+            """
+        escaped_search = search.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
 
         count_query = f"""
             SELECT count(*)
@@ -138,7 +154,8 @@ class PostgreSQLAdminReadRepository(
                 r.author_id,
                 u.username,
                 rp.upload_status,
-                rp.hidden_at
+                rp.hidden_at,
+                r.description
 
             FROM nowave.reports AS r
 
@@ -167,6 +184,8 @@ class PostgreSQLAdminReadRepository(
                     else None
                 ),
                 "now": now,
+                "search": f"%{escaped_search}%",
+                "exact_search": search,
             },
         )
 
@@ -191,6 +210,7 @@ class PostgreSQLAdminReadRepository(
                         else None
                     ),
                     photo_hidden_at=row[11],
+                    description=row[12],
                 )
                 for row in rows
             ],
@@ -377,13 +397,23 @@ class PostgreSQLAdminReadRepository(
         self,
         page: int,
         limit: int,
+        report_id: UUID | None = None,
     ) -> Page[ModerationActionData]:
-        count_query = """
-            SELECT count(*)
-            FROM nowave.moderation_actions
+        filters = """
+            WHERE (
+                %(report_id)s::uuid IS NULL
+                OR m.target_report_id = %(report_id)s
+                OR m.target_photo_report_id = %(report_id)s
+            )
         """
 
-        items_query = """
+        count_query = f"""
+            SELECT count(*)
+            FROM nowave.moderation_actions AS m
+            {filters}
+        """
+
+        items_query = f"""
             SELECT
                 m.id,
                 m.action,
@@ -402,6 +432,8 @@ class PostgreSQLAdminReadRepository(
             LEFT JOIN nowave.users AS a
                 ON a.id = m.admin_user_id
 
+            {filters}
+
             ORDER BY m.created_at DESC, m.id DESC
             LIMIT %(limit)s
             OFFSET %(offset)s
@@ -412,7 +444,7 @@ class PostgreSQLAdminReadRepository(
             items_query=items_query,
             page=page,
             limit=limit,
-            params={},
+            params={"report_id": report_id},
         )
 
         return Page(

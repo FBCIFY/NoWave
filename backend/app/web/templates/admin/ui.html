@@ -1,0 +1,14 @@
+{% macro label(value) -%}
+  {{ {'marine_animal': 'Animal marin', 'obstruction': 'Obstacle', 'objet': 'Objet', 'pollution': 'Pollution', 'active': 'Actif', 'expired': 'Expiré', 'removed': 'Retiré', 'suspended': 'Suspendu', 'admin': 'Administrateur', 'user': 'Navigateur', 'uploaded': 'Disponible', 'pending': 'En attente', 'hidden': 'Masquée', 'visible': 'Visible', 'remove_report': 'Signalement retiré', 'restore_report': 'Signalement restauré', 'hide_photo': 'Photo masquée', 'suspend_user': 'Compte suspendu', 'reactivate_user': 'Compte réactivé'}.get(value, value or '—') }}
+{%- endmacro %}
+{% macro category_symbol(value) -%}
+<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">{% if value == 'marine_animal' %}<path d="M3 13c3-5 7-7 11-4l3 3 4-1-1 4-3-1c-4 4-9 4-13 1l-2 1 1-3Z"/><path d="m10 8 2-3 2 4"/>{% elif value in ['obstruction', 'objet'] %}<path d="m12 3 10 18H2L12 3Z"/><path d="M12 9v5m0 3h.01"/>{% else %}<path d="M12 3c-2 4-7 8-7 12a7 7 0 0 0 14 0c0-4-5-8-7-12Z"/>{% endif %}</svg>
+{%- endmacro %}
+{% macro identity(name) -%}<span class="person"><span class="person-avatar" aria-hidden="true">{{ (name or '?')[:1]|upper }}</span><span>{{ name or 'Utilisateur supprimé' }}</span></span>{%- endmacro %}
+{% macro badge(value) -%}
+  <span class="badge badge-{{ value }}">{% if value in ['marine_animal', 'obstruction', 'objet', 'pollution'] %}{{ category_symbol(value) }}{% endif %}{{ label(value) }}</span>
+{%- endmacro %}
+
+{% macro date_label(value) -%}
+  {% if value and value.strftime is defined %}<time datetime="{{ value.isoformat() }}">{{ value.strftime('%d/%m/%Y · %H:%M %Z') }}</time>{% else %}{{ value or 'Non renseignée' }}{% endif %}
+{%- endmacro %}

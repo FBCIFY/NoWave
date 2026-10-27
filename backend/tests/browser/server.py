@@ -36,13 +36,13 @@ def main():
         os.environ['DATABASE_URL'] = dsn
         token_config = os.getenv('NOWAVE_MAPBOX_CONFIG')
         os.environ['MAPBOX_PUBLIC_TOKEN'] = (json.loads(Path(token_config).expanduser().read_text())['MAPBOX_ACCESS_TOKEN']
-                                             if token_config else 'public-fixture-token')
+                                             if token_config else 'pk.browser_fixture.token')
         os.environ.pop('DATABASE_URL_FILE', None)
         os.environ.pop('NOWAVE_ENV', None)
         now = datetime.now(UTC)
         with psycopg.connect(dsn) as conn:
             for index in range(1, 29):
-                count = {2: 0, 3: 1, 4: 20, 5: 21, 6: 40, 7: 41}.get(index, 0)
+                count = {2: 0, 3: 1, 4: 49, 5: 50, 6: 51, 7: 101}.get(index, 0)
                 username = 'Admin Test' if index == 1 else f'User {index:02d}'
                 insert(conn, 'users', id=UUID(int=index), firebase_uid=f'browser-{index}', username=username,
                        email=f'user{index}@nowave.test', role='admin' if index == 1 else 'user',
@@ -116,6 +116,8 @@ def main():
 
         with tempfile.TemporaryDirectory(prefix='nw244-https-') as folder:
             from fastapi.staticfiles import StaticFiles
+            assets = Path(__file__).resolve().parents[3] / 'web/dist/assets'
+            app.mount('/assets', StaticFiles(directory=assets))
             marine = Path(folder) / 'marine'
             marine.mkdir()
             with tarfile.open(Path(__file__).resolve().parents[3] / 'deploy/marine/gebco-2026-v2.tar.gz') as archive:

@@ -8,7 +8,9 @@ from app.dependencies.admin_web_session import get_admin_web_session
 from app.domain.errors import (
     InvalidSessionError,
     PhotoNotFoundError,
+    ReportNotFoundError,
 )
+from app.domain.pagination import MAX_PAGE
 from app.domain.user import User, UserRole
 from app.main import app
 from app.web.csrf import CSRF_COOKIE, session_csrf_token
@@ -59,6 +61,8 @@ class FakeAdminReadService:
                     status=enum_value("active"),
                     observed_at="2026-10-13 10:00",
                     version=4,
+                    description="Bouée dérivante",
+                    author_username="navigateur",
                 )
             ],
             page=page,
@@ -83,6 +87,9 @@ class FakeAdminReadService:
             removed_at=None,
             photo_status=enum_value("uploaded"),
             photo_hidden_at=None,
+            photo_object_key="reports/photo.jpg",
+            author_id=USER_ID,
+            author_deleted=False,
             author_username="navigateur",
             author_email="navigateur@nowave.test",
             author_status=enum_value("active"),
@@ -108,14 +115,15 @@ class FakeAdminReadService:
             total=1,
         )
 
-    def list_moderation_actions(self, page=1, limit=20):
-        self.calls.append(("list_moderation_actions", page, limit))
+    def list_moderation_actions(self, page=1, limit=20, report_id=None):
+        self.calls.append(("list_moderation_actions", page, limit, report_id))
         return SimpleNamespace(
             items=[
                 SimpleNamespace(
                     id=ACTION_ID,
                     created_at="2026-10-13 11:00",
                     admin_user_id=ADMIN.id,
+                    admin_username=ADMIN.username,
                     action=enum_value("remove_report"),
                     target_report_id=REPORT_ID,
                     target_user_id=None,
@@ -198,6 +206,7 @@ def test_moderation_pages_require_admin_session(client, services):
     for path in (
         "/admin/reports",
         "/admin/users",
+        f"/admin/users/{USER_ID}/reports",
         "/admin/audit",
         f"/admin/reports/{REPORT_ID}",
     ):
@@ -216,8 +225,12 @@ def test_reports_page_renders_paginated_results(client, services):
     assert response.status_code == 200
     assert "Signalements" in response.text
     assert str(REPORT_ID) in response.text
+    assert "Bouée dérivante" in response.text
+    assert "navigateur" in response.text
     assert "Page 2 sur 3" in response.text
     assert "41 résultat(s)" in response.text
+    assert 'href="/#carte"' not in response.text
+    assert 'aria-current="page"' in response.text
     assert reads.calls == [("list_reports", 2, 20)]
 
 
@@ -229,10 +242,84 @@ def test_report_detail_renders_real_read_contract(client, services):
 
     assert response.status_code == 200
     assert "Bouée dérivante" in response.text
-    assert "5.9, 43.1" in response.text
-    assert "NoWave Test" in response.text
+    assert "navigateur" in response.text
+    assert "navigateur@nowave.test" not in response.text
+    assert "Mode de positionnement" not in response.text
+    assert "<dt>Version</dt>" not in response.text
+    assert "Historique de modération" in response.text
+    assert "Signalement invalide" in response.text
+    assert ADMIN.username in response.text
     assert "Masquer la photo" in response.text
-    assert reads.calls == [("get_report", REPORT_ID)]
+    assert reads.calls == [
+        ("get_report", REPORT_ID),
+        ("list_moderation_actions", 1, 20, REPORT_ID),
+    ]
+
+
+def test_report_history_paginates_only_the_selected_report(client, services):
+    reads, _ = services
+    sign_in(client)
+    original_history = reads.list_moderation_actions
+
+    def paginated_history(**kwargs):
+        result = original_history(**kwargs)
+        result.pages = 3
+        result.total = 41
+        return result
+
+    reads.list_moderation_actions = paginated_history
+
+    response = client.get(f"/admin/reports/{REPORT_ID}?history_page=2")
+
+    assert response.status_code == 200
+    assert 'id="report-history" open' in response.text
+    assert '?history_page=1#report-history' in response.text
+    assert '?history_page=3#report-history' in response.text
+    assert reads.calls == [
+        ("get_report", REPORT_ID),
+        ("list_moderation_actions", 2, 20, REPORT_ID),
+    ]
+
+
+@pytest.mark.parametrize("page", [0, -1, MAX_PAGE + 1, "invalid"])
+def test_report_history_rejects_invalid_page(client, services, page):
+    reads, _ = services
+    sign_in(client)
+
+    response = client.get(f"/admin/reports/{REPORT_ID}?history_page={page}")
+
+    assert response.status_code == 422
+    assert reads.calls == []
+
+
+def test_missing_report_does_not_load_history(client, services):
+    reads, _ = services
+    sign_in(client)
+
+    def missing_report(**kwargs):
+        raise ReportNotFoundError("not found")
+
+    reads.get_report = missing_report
+
+    response = client.get(f"/admin/reports/{REPORT_ID}")
+
+    assert response.status_code == 404
+    assert "Signalement introuvable" in response.text
+    assert reads.calls == []
+
+
+def test_report_without_moderation_history_is_explicit(client, services):
+    reads, _ = services
+    sign_in(client)
+    reads.list_moderation_actions = lambda **kwargs: SimpleNamespace(
+        items=[], page=1, limit=20, pages=0, total=0,
+    )
+
+    response = client.get(f"/admin/reports/{REPORT_ID}")
+
+    assert response.status_code == 200
+    assert "Aucune action de modération." in response.text
+    assert "Signalement invalide" not in response.text
 
 
 def test_users_page_renders_accounts(client, services):
@@ -244,7 +331,7 @@ def test_users_page_renders_accounts(client, services):
     assert response.status_code == 200
     assert "navigateur@nowave.test" in response.text
     assert "Suspendre" in response.text
-    assert "Réactiver" in response.text
+    assert "Réactiver" not in response.text
     assert reads.calls == [("list_users", 1, 20)]
 
 
@@ -257,8 +344,8 @@ def test_audit_page_is_read_only_history(client, services):
     assert response.status_code == 200
     assert "Audit de modération" in response.text
     assert "Signalement invalide" in response.text
-    assert "remove_report" in response.text
-    assert reads.calls == [("list_moderation_actions", 1, 20)]
+    assert "Signalement retiré" in response.text
+    assert reads.calls == [("list_moderation_actions", 1, 20, None)]
 
 
 @pytest.mark.parametrize(
@@ -437,5 +524,114 @@ def test_report_without_photo_does_not_offer_hide_action(client, services):
     response = client.get(f"/admin/reports/{REPORT_ID}")
 
     assert response.status_code == 200
-    assert "Aucune photo" in response.text
     assert "Masquer la photo" not in response.text
+    assert "Retirer le signalement" in response.text
+
+
+@pytest.mark.parametrize("hidden,status,expected", [
+    (False, "uploaded", True), (True, "uploaded", False),
+    (False, "pending", False), (False, None, False),
+])
+def test_report_photo_consultation(client, services, monkeypatch, hidden, status, expected):
+    from app.domain.report_photo import UploadStatus
+    import app.api.routes.report_details as details
+    reads, _ = services
+    original = reads.get_report
+    def read(report_id, now=None):
+        item = original(report_id, now)
+        item.photo_status = UploadStatus(status) if status else None
+        item.photo_hidden_at = "2026-10-27" if hidden else None
+        return item
+    reads.get_report = read
+    calls = []
+    class Storage:
+        def create_read_url(self, **kwargs):
+            calls.append(kwargs)
+            return "https://s3.fr-par.scw.cloud/test/photo.jpg?signature=test"
+    monkeypatch.setattr(details, "get_photo_storage", lambda: Storage())
+    sign_in(client)
+    response = client.get(f"/admin/reports/{REPORT_ID}")
+    assert response.status_code == 200
+    assert ("Ouvrir la photo" in response.text) is expected
+    assert ('alt="Photographie du signalement"' in response.text) is expected
+    assert bool(calls) is expected
+    if expected:
+        assert calls[0]["object_key"] == "reports/photo.jpg"
+        assert calls[0]["expires_in"].total_seconds() == 300
+
+
+def test_users_search_and_filter_preserve_pagination(client, services, monkeypatch):
+    from datetime import UTC, datetime
+    from app.domain.user import UserStatus
+    from app.infrastructure.repositories.postgresql_admin_read_repository import PostgreSQLAdminReadRepository
+    calls = []
+    def search(self, page, status, query, limit=20):
+        calls.append((page, status, query, limit))
+        now = datetime.now(UTC)
+        return [(USER_ID, "navigateur", "navigateur@nowave.test", "user", "suspended", now, now, 2)], 41
+    monkeypatch.setattr(PostgreSQLAdminReadRepository, "search_users", search)
+    sign_in(client)
+    response = client.get("/admin/users?search=navigateur&status=suspended&page=2&limit=10")
+    assert response.status_code == 200
+    assert calls == [(2, UserStatus.SUSPENDED, "navigateur", 10)]
+    assert 'value="suspended" aria-label="Comptes suspendus" aria-pressed="true"' in response.text
+    assert "search=navigateur&amp;status=suspended&amp;page=3&amp;limit=10" in response.text
+    assert f'/admin/users/{USER_ID}/reports' in response.text
+    assert "Réactiver" in response.text
+    assert client.get("/admin/users?search=&status=").status_code == 200
+    assert client.get("/admin/users?status=invalid").status_code == 422
+    assert client.get("/admin/users?search=" + "a" * 81).status_code == 422
+
+
+@pytest.mark.parametrize("page,has_more", [(1, True), (2, False)])
+def test_user_reports_page(client, services, monkeypatch, page, has_more):
+    from datetime import UTC, datetime
+    from app.infrastructure.repositories.postgresql_admin_read_repository import PostgreSQLAdminReadRepository
+    calls = []
+    def reports(self, user_id, requested_page):
+        calls.append((user_id, requested_page))
+        return [(REPORT_ID, "pollution", "active", datetime.now(UTC), "Débris près du port", "Alex")], has_more
+    monkeypatch.setattr(PostgreSQLAdminReadRepository, "user_reports", reports)
+    sign_in(client)
+    response = client.get(f"/admin/users/{USER_ID}/reports?page={page}")
+    assert response.status_code == 200
+    assert calls == [(USER_ID, page)]
+    assert f'/admin/reports/{REPORT_ID}' in response.text
+    assert 'Signalements de Alex' in response.text
+    assert 'Débris près du port' in response.text
+    assert f'>{REPORT_ID}</a>' not in response.text
+    assert f'<p class="identifier">{USER_ID}</p>' not in response.text
+    assert ('rel="next"' in response.text) is has_more
+    assert ('rel="prev"' in response.text) is (page > 1)
+
+
+@pytest.mark.parametrize("status", ["", "active", "removed", "expired"])
+def test_reports_search_and_status_preserve_pagination(client, services, monkeypatch, status):
+    from app.domain.report import ReportStatus
+
+    reads, _ = services
+    original = reads.list_reports
+    calls = []
+
+    def filtered_reports(**kwargs):
+        calls.append(kwargs)
+        return original(page=kwargs["page"], limit=kwargs["limit"])
+
+    monkeypatch.setattr(reads, "list_reports", filtered_reports)
+    sign_in(client)
+    response = client.get(
+        "/admin/reports",
+        params={"search": " bouée ", "status": status, "page": 2, "limit": 10},
+    )
+    assert response.status_code == 200
+    assert calls == [{"page": 2, "limit": 10,
+                      "status": ReportStatus(status) if status else None,
+                      "search": "bouée"}]
+    assert 'value="bouée"' in response.text
+    assert 'status=' + status + '&amp;page=3&amp;limit=10' in response.text
+    assert 'value="' + status + '" aria-label=' in response.text
+    assert 'aria-pressed="true"' in response.text
+    calls.clear()
+    assert client.get("/admin/reports?status=invalid").status_code == 422
+    assert client.get("/admin/reports", params={"search": "a" * 81}).status_code == 422
+    assert not calls

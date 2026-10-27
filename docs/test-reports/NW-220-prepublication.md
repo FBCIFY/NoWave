@@ -338,7 +338,7 @@ fluidité/mémoire en release non démontrée**, aucun résultat de ce type n'es
 | Chevauchement exact de plusieurs pictogrammes | Limite de lisibilité au même pixel | Les enregistrements prioritaires restent rendus ; appui long pour accès. Aucune promesse de lecture séparée à coordonnées exactement identiques |
 | Comparaison performance release / dev | Profil comparatif non réalisé | Mémoire et HWUI mesurés en debug ; **validation performance partielle** |
 | Deux premiers tests Compose en échec WSL | Outil indisponible dans PATH | Résolu par les vrais outils isolés ; **974 tests finaux réussis** |
-| Jeton public Mapbox affiché dans une sortie de diagnostic de processus | Erreur de manipulation pendant l'analyse | Signalé dans la conversation ; aucune copie du jeton dans le diff ou les nouveaux fichiers de revue. `.env.json` non modifié, aucune publication |
+| Jeton public Mapbox affiché dans une sortie de diagnostic de processus | Erreur de manipulation pendant l'analyse | Aucune copie du jeton dans le diff ou les nouveaux fichiers de revue. `.env.json` non modifié, aucune publication |
 
 Le diagnostic fournisseur est conservé dans
 openwaters-outage-probe.json (`test-results/NW-220/openwaters-outage-probe.json`, preuve locale non versionnée).

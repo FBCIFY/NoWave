@@ -1,0 +1,19 @@
+.chart-search { position: relative; width: 350px; max-width: 100%; color: #e5eff1; font: inherit; z-index: 8; }
+.chart-search * { box-sizing: border-box; }
+.chart-search__form { display: flex; margin: 0; padding: 3px 4px 3px 14px; min-height: 46px; border: 1px solid #67838f66; border-radius: 13px; background: #123443f5; box-shadow: 0 8px 26px #00142120; }
+.chart-search .chart-search__form input { appearance: none; min-width: 0; width: 100%; margin: 0; padding: 8px 0; border: 0; border-radius: 0; outline: none; box-shadow: none; background: transparent; color: #e5eff1; font: inherit; font-size: 13px; }
+.chart-search__form input::placeholder { color: #aec4cd; opacity: 1; }
+.chart-search__form:focus-within { border-color: #a4d2d7; box-shadow: 0 0 0 2px #a4d2d71a; }
+.chart-search .chart-search__form button { display: grid; place-items: center; flex-shrink: 0; width: 40px; min-height: 40px; padding: 0; margin: 0; border: 0; border-radius: 9px; color: #c9dce3; background: transparent; cursor: pointer; }
+.chart-search__form button:hover { background: #ffffff0a; }
+.chart-search__form svg { width: 20px; height: 20px; }
+.chart-search__results { position: absolute; top: calc(100% + 8px); left: 0; right: 0; max-height: 290px; overflow: auto; overscroll-behavior: contain; border: 1px solid #67838f66; border-radius: 13px; background: #123443; box-shadow: 0 16px 40px #00142155; }
+.chart-search [hidden] { display: none !important; }
+.chart-search__results ul { list-style: none; margin: 0; padding: 5px; }
+.chart-search__results li { padding: 12px 10px; border-radius: 8px; cursor: pointer; font-size: 12px; line-height: 1.5; }
+.chart-search__results li + li { border-top: 1px solid #ffffff0a; }
+.chart-search__results li:hover, .chart-search__results li[aria-selected="true"] { background: #ffffff0b; }
+.chart-search__results p { padding: 10px 14px; margin: 0; color: #b4cbd4; font-size: 12px; }
+.chart-search__results p:empty { display: none; }
+.chart-search__results small { display: block; padding: 5px 14px 9px; color: #91aeb9; font-size: 9px; text-align: right; }
+@media (max-width: 600px) { .chart-search { width: 100%; } .chart-search .chart-search__form input { font-size: 16px; } .chart-search__results { max-height: min(290px, 45svh); } }

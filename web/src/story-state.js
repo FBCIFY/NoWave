@@ -16,11 +16,32 @@ journey.forEach((_, i) => {
   storyStops.push(start + segment * 0.84);
 });
 
+// A deliberate scroll advances to a readable stop; tiny trackpad drift returns
+// to the current one. Fast scrolling may still skip several stops.
+export function settledStep(progress, originStep) {
+  const origin = clamp(originStep, 0, storyStops.length - 1);
+  const nearest = storyStops.reduce(
+    (best, stop, index) =>
+      Math.abs(stop - progress) < Math.abs(storyStops[best] - progress)
+        ? index
+        : best,
+    0,
+  );
+  const delta = progress - storyStops[origin];
+  if (Math.abs(delta) < 0.025) return origin;
+  return clamp(
+    delta > 0 ? Math.max(origin + 1, nearest) : Math.min(origin - 1, nearest),
+    0,
+    storyStops.length - 1,
+  );
+}
+
 // Zero velocity and acceleration at both ends prevent abrupt camera arrivals.
 export const easeCamera = (t) =>
   clamp(t * t * t * (t * (t * 6 - 15) + 10), 0, 1);
 export function getTransitionState(from, to, phase, reducedMotion = false) {
-  const eased = easeCamera(clamp(phase, 0, 1));
+  const position = clamp(phase, 0, 1);
+  const eased = easeCamera(position);
   const blend = reducedMotion ? Number(eased >= 0.5) : eased;
   const step = blend < 0.5 ? from : to;
   const opacity =
@@ -29,7 +50,14 @@ export function getTransitionState(from, to, phase, reducedMotion = false) {
       : blend < 0.5
         ? 1 - easeCamera(Math.min(1, blend / 0.48))
         : easeCamera(Math.max(0, (blend - 0.52) / 0.48));
-  return { from, to, blend, step, opacity };
+  return {
+    from,
+    to,
+    blend,
+    step,
+    opacity,
+    phase: reducedMotion ? blend : position,
+  };
 }
 export function getStoryState(progress, reducedMotion = false) {
   const position = clamp(progress, 0, 1);
@@ -48,4 +76,15 @@ export function followProgress(current, target, elapsedMs) {
     current +
     (target - current) * (1 - Math.exp(-Math.min(elapsedMs, 64) / 85));
   return Math.abs(next - target) < 0.00001 ? target : next;
+}
+
+// Retarget a moving camera to the nearest stop in the new scroll direction.
+export function stepInDirection(progress, direction) {
+  if (direction < 0)
+    return Math.max(
+      0,
+      storyStops.findLastIndex((stop) => stop < progress - 0.0001),
+    );
+  const next = storyStops.findIndex((stop) => stop > progress + 0.0001);
+  return next < 0 ? storyStops.length - 1 : next;
 }

@@ -72,6 +72,7 @@ class AdminReportSummaryResponse(BaseModel):
     author_username: str | None
     photo_status: UploadStatus | None
     photo_hidden_at: datetime | None
+    description: str | None
 
 
 class AdminReportAuthorResponse(BaseModel):

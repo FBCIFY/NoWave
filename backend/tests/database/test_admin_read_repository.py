@@ -111,6 +111,10 @@ def test_list_reports_uses_effective_status(
         ids["user"],
     )
     remove_report(connection, ids["manual"])
+    connection.execute(
+        "UPDATE nowave.reports SET description = %s WHERE id = %s",
+        ("Nappe visible au large", ids["report"]),
+    )
     connection.commit()
 
     repository = repository_for_test(dsn, monkeypatch)
@@ -149,6 +153,8 @@ def test_list_reports_uses_effective_status(
         str(ids["user"])
     )
     assert every_report[ids["manual"]].photo_status is None
+    assert every_report[ids["report"]].description == "Nappe visible au large"
+    assert every_report[ids["manual"]].description is None
 
     assert all(
         report.status == ReportStatus.ACTIVE
@@ -387,6 +393,80 @@ def test_list_moderation_actions_keeps_orphan_entries(
     assert orphan.admin_username is None
     assert orphan.target_report_id == ids["report"]
     assert orphan.reason == action.reason
+    history = repository.list_moderation_actions(
+        page=1, limit=20, report_id=ids["report"],
+    )
+    assert history.total == 1
+    assert history.items[0] == orphan
+
+
+def test_report_history_filters_report_and_photo_actions_before_pagination(
+    db,
+    dsn,
+    monkeypatch,
+):
+    from tests.database.conftest import insert
+
+    connection, ids = db
+    photo_action_id = uuid4()
+    other_report_action_id = uuid4()
+    now = datetime.now(UTC)
+    insert(
+        connection, "moderation_actions",
+        id=photo_action_id,
+        admin_user_id=ids["admin"],
+        target_photo_report_id=ids["report"],
+        action="hide_photo",
+        reason="Photo masquée après vérification",
+        created_at=now,
+    )
+    insert(
+        connection, "moderation_actions",
+        id=other_report_action_id,
+        admin_user_id=ids["admin"],
+        target_report_id=ids["manual"],
+        action="remove_report",
+        reason="Autre signalement",
+        created_at=now + timedelta(seconds=1),
+    )
+    insert(
+        connection, "moderation_actions",
+        id=uuid4(),
+        admin_user_id=ids["admin"],
+        target_user_id=ids["user"],
+        action="suspend_user",
+        reason="Action distincte sur le compte auteur",
+        created_at=now + timedelta(seconds=2),
+    )
+    connection.commit()
+    repository = repository_for_test(dsn, monkeypatch)
+
+    first = repository.list_moderation_actions(
+        page=1, limit=1, report_id=ids["report"],
+    )
+    second = repository.list_moderation_actions(
+        page=2, limit=1, report_id=ids["report"],
+    )
+    beyond = repository.list_moderation_actions(
+        page=3, limit=1, report_id=ids["report"],
+    )
+
+    assert first.total == second.total == beyond.total == 2
+    assert first.pages == 2
+    assert [item.id for item in first.items] == [photo_action_id]
+    assert [item.id for item in second.items] == [ids["audit"]]
+    assert beyond.items == []
+
+    other = repository.list_moderation_actions(
+        page=1, limit=20, report_id=ids["manual"],
+    )
+    assert other.total == 1
+    assert [item.id for item in other.items] == [other_report_action_id]
+    missing = repository.list_moderation_actions(
+        page=1, limit=20, report_id=uuid4(),
+    )
+    assert missing.total == 0
+    assert missing.items == []
 
 
 def test_admin_reads_work_with_runtime_role(
@@ -444,6 +524,11 @@ def test_admin_reads_work_with_runtime_role(
                 page=1,
                 limit=1,
             ).total >= 1
+            assert repository.list_moderation_actions(
+                page=1,
+                limit=1,
+                report_id=ids["report"],
+            ).total == 1
         finally:
             admin.execute(
                 sql.SQL("DROP OWNED BY {}").format(role)
@@ -510,3 +595,27 @@ def test_map_boundaries_and_stable_order_with_real_postgis(dsn, monkeypatch, cou
     assert repo.map_reports(lon - .01, 12.24, lon + .01, 12.26, limit=5000) == (rows, truncated)
     zoomed, _ = repo.map_reports(lon + .001, 12.251, lon + .002, 12.252)
     assert zoomed == []
+
+
+def test_user_search_preserves_status_and_custom_page_size(dsn, monkeypatch):
+    from tests.database.conftest import insert
+    prefix = "lookup_" + uuid4().hex[:12]
+    now = datetime.now(UTC)
+    ids = [uuid4() for _ in range(13)]
+    with psycopg.connect(dsn) as conn:
+        for index, user_id in enumerate(ids):
+            insert(conn, 'users', id=user_id, firebase_uid=str(user_id),
+                   username=f'{prefix}{index}', email=f'{prefix}{index}@nowave.test',
+                   role='user', status='suspended' if index < 11 else 'active',
+                   created_at=now, updated_at=now)
+    repo = repository_for_test(dsn, monkeypatch)
+    seen = []
+    for page, expected_count in [(1, 5), (2, 5), (3, 1)]:
+        rows, total = repo.search_users(page, UserStatus.SUSPENDED, prefix.upper(), limit=5)
+        assert total == 11
+        assert len(rows) == expected_count
+        seen.extend(row[0] for row in rows)
+    assert seen == sorted(ids[:11], reverse=True)
+    rows, total = repo.search_users(1, None, str(ids[12]))
+    assert total == 1 and rows[0][0] == ids[12]
+    assert repo.search_users(1, None, prefix + '%') == ([], 0)

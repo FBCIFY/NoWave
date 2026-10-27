@@ -33,6 +33,7 @@ class AdminReportSummaryData:
 
     photo_status: UploadStatus | None
     photo_hidden_at: datetime | None
+    description: str | None = None
 
 
 @dataclass(frozen=True)
@@ -88,6 +89,7 @@ class AdminReadRepository(ABC):
         limit: int,
         status: ReportStatus | None,
         now: datetime,
+        search: str = "",
     ) -> Page[AdminReportSummaryData]:
         pass
 
@@ -113,5 +115,6 @@ class AdminReadRepository(ABC):
         self,
         page: int,
         limit: int,
+        report_id: UUID | None = None,
     ) -> Page[ModerationActionData]:
         pass
