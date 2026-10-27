@@ -298,6 +298,42 @@ GEBCO disponible pendant la panne, PNG réellement hors couverture = 200.
 Ces résultats ne remplacent pas la recette visuelle à 60° et la mesure mémoire
 sur le téléphone, à effectuer avec l'IPA locale.
 
+### Bilan de l'essai iPhone — 27 octobre 2026
+
+La version **1.0.0, build 2026102701**, compilée en release avec une signature
+de développement, a été installée puis lancée sur l'iPhone connecté. Elle utilise
+le code du commit `8beda9a6aed35bf9057510c5cf2ba75bc731adc0` et le serveur marin
+local `http://Brices-MacBook-Air.local:8014/`. Les requêtes du téléphone vers
+le fond GEBCO ont été constatées avec HTTP 200. L'utilisateur a testé le zoom et
+le déplacement et a indiqué : « ça a l'air bien ». Ce retour constitue une
+validation visuelle utilisateur positive, sans mesure instrumentée du rendu.
+
+Sur le dernier segment de logs analysé après l'essai :
+
+| Observation | Résultat |
+| --- | --- |
+| Réponses HTTP | 873 : 726 HTTP 200, 145 HTTP 304, deux HTTP 503 |
+| HTTP 429 | Aucun dans ce segment |
+| Échecs 503 | Deux cellules `soundings` Z14 : `8339/6086` et `8337/6084` |
+| Cause enregistrée à proximité des échecs | Deux `TimeoutError` du fournisseur `emodnet-dtm-2024` |
+| Reprise des deux cellules en échec | Aucun HTTP 200 ultérieur pour ces mêmes XYZ dans les logs disponibles |
+| Fabrication raster côté serveur, amont inclus | 175 mesures ; p95 2,19 s, maximum 3,62 s |
+| Attente dans la file raster serveur | p95 0 ms, maximum 849 ms |
+| Répétitions | Jusqu'à quatre réponses pour certains XYZ dans le segment ; cela ne suffit pas à établir une boucle de téléchargement |
+
+Ces statistiques portent sur le segment collecté, pas sur une chronologie
+exhaustive de chaque geste. Les logs ne permettent pas de confirmer le nombre
+exact de requêtes simultanées, les images affichées pendant les deux erreurs,
+la continuité à 60° ni la consommation de mémoire Dart/GPU. La reprise doit être
+vérifiée en maintenant une tuile en échec dans le viewport jusqu'au nouvel essai ;
+une tuile devenue inutile après déplacement peut légitimement ne pas être retentée.
+La correction et les tests automatisés de ces comportements sont présents,
+mais ces limites ne sont pas présentées comme une recette native complète.
+
+La surveillance temporaire a été supprimée à la clôture de l'essai. Aucun
+déploiement en production, aucune fusion et aucune migration de base n'ont été
+effectués pour cette validation locale.
+
 
 ## Limitation géographique du raster EMODnet
 
