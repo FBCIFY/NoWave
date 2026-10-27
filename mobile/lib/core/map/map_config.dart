@@ -14,9 +14,9 @@ class MapConfig {
 
   static String styleUrl = 'mapbox://styles/mapbox/standard';
 
-  /// All native tile sources share this budget. Leave room below the API's
-  /// 30-connection limit for the two GeoJSON requests and business requests.
-  static const maxRequestsPerHost = 12;
+  /// Process-wide native budget per host, shared by raster and basemap sources.
+  /// The two Dart GeoJSON workers have their own independent request budget.
+  static const maxRequestsPerHost = 2;
 
   static Future<void> configureNetwork(MapboxMap map) async {
     try {

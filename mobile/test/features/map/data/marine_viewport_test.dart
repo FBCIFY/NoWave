@@ -9,12 +9,12 @@ import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 import 'package:mapbox_maps_flutter/mapbox_maps_flutter.dart';
 
-Map<String, dynamic> harbour(String id) => {
+Map<String, dynamic> harbour(String id, {double longitude = 5.93}) => {
   'type': 'Feature',
   'id': id,
   'geometry': {
     'type': 'Point',
-    'coordinates': [5.93, 43.08],
+    'coordinates': [longitude, 43.08],
   },
   'properties': {'name': 'Port $id', 'category': 'harbour'},
 };
@@ -56,8 +56,11 @@ class ViewMap extends Fake implements MapboxMap {
   Future<CoordinateBounds> coordinateBoundsForCamera(
     CameraOptions options,
   ) async => CoordinateBounds(
-    southwest: Point(coordinates: Position(longitude - .13, 43)),
-    northeast: Point(coordinates: Position(longitude + .13, 43.2)),
+    // These lifecycle/cache fixtures intentionally exercise one visible cell
+    // plus its eight neighbours at every resolution. Wide/pitched coverage is
+    // tested independently with bounds spanning many real XYZ cells.
+    southwest: Point(coordinates: Position(longitude - .0000001, 43.0799999)),
+    northeast: Point(coordinates: Position(longitude + .0000001, 43.0800001)),
     infiniteBounds: false,
   );
   @override
@@ -648,7 +651,16 @@ void main() {
               return http.Response('{}', 503);
             }
             final degraded = z13 && (mode == 'degraded' || mode == 'partial');
-            final data = map.longitude > 20 || !(hazard || sounding)
+            final parts = request.url.pathSegments;
+            final requestedCell = MarineCell(
+              int.parse(parts[5]),
+              int.parse(parts[6]),
+              int.parse(parts[7].split('.').first),
+            );
+            final data =
+                map.longitude > 20 ||
+                    !(hazard || sounding) ||
+                    !requestedCell.contains(5.93, 43.08)
                 ? []
                 : degraded
                 ? [
@@ -699,6 +711,7 @@ void main() {
       addTearDown(viewport.dispose);
       List<String> drawn(String source) =>
           (jsonDecode(map.style.data[source]!)['features'] as List)
+              .where((f) => f['properties']['nw_render_role'] != 'outline')
               .map((f) => f['id'].toString())
               .toList();
       void oldPresent() {
@@ -822,7 +835,10 @@ void main() {
       addTearDown(viewport.dispose);
       await viewport.synchronize(map);
       expect(
-        viewport.features('underwater-hazards').single['id'],
+        viewport
+            .features('underwater-hazards')
+            .where((f) => f['properties']['nw_render_role'] != 'outline')
+            .single['id'],
         'large-polygon',
       );
       expect(viewport.metrics['cache_entries'] as int, lessThanOrEqualTo(64));
@@ -833,7 +849,10 @@ void main() {
       map.zoom = 13;
       await viewport.synchronize(map);
       expect(
-        viewport.features('underwater-hazards').single['id'],
+        viewport
+            .features('underwater-hazards')
+            .where((f) => f['properties']['nw_render_role'] != 'outline')
+            .single['id'],
         'large-polygon',
       );
       expect(viewport.metrics['cache_entries'] as int, lessThanOrEqualTo(64));
@@ -841,7 +860,10 @@ void main() {
         viewport.metrics['cache_encoded_bytes'] as int,
         lessThanOrEqualTo(12 * 1024 * 1024),
       );
-      expect(viewport.errors, greaterThan(0));
+      // A cache refusal is observable separately from transport errors and
+      // must not provoke another download every retry interval.
+      expect(viewport.metrics['budget_deferred'], greaterThan(0));
+      expect(viewport.errors, 0);
     },
   );
 
@@ -916,7 +938,10 @@ void main() {
                   jsonEncode({
                     'type': 'FeatureCollection',
                     'features': [
-                      harbour(map.longitude < 20 ? 'useful' : 'new'),
+                      harbour(
+                        map.longitude < 20 ? 'useful' : 'new',
+                        longitude: map.longitude,
+                      ),
                     ],
                   }),
                   200,
@@ -979,7 +1004,7 @@ void main() {
           return http.Response(
             jsonEncode({
               'type': 'FeatureCollection',
-              'features': [harbour('new-area')],
+              'features': [harbour('new-area', longitude: map.longitude)],
             }),
             200,
           );

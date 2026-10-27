@@ -121,7 +121,7 @@ def test_bathymetry_tile_rejects_coordinates_outside_zoom():
     assert response.status_code == 422
 
 
-def test_bathymetry_outage_preserves_global_base_without_native_retry_storm(
+def test_bathymetry_outage_is_non_cacheable_503_not_a_transparent_success(
     monkeypatch,
 ):
     from app.infrastructure.adapters.emodnet_bathymetry import (
@@ -140,14 +140,12 @@ def test_bathymetry_outage_preserves_global_base_without_native_retry_storm(
         "/api/v1/map/bathymetry/8/131/94.png"
     )
 
-    assert response.status_code == 200
-    assert response.headers['cache-control'] == 'public, max-age=15, must-revalidate'
+    assert response.status_code == 503
+    assert response.headers['cache-control'] == 'no-store'
     assert response.headers['x-nowave-marine-status'] == 'unavailable'
-    from io import BytesIO
-    from PIL import Image
-    with Image.open(BytesIO(response.content)) as image:
-        assert image.size == (256, 256)
-        assert image.convert('RGBA').getchannel('A').getbbox() is None
+    assert response.headers['retry-after'] == '15'
+    assert response.json()['error']['code'] == 'http_503'
+    assert response.headers['content-type'] == 'application/json'
 
 
 def test_coastline_failure_keeps_global_base_instead_of_unmasked_png(monkeypatch):
@@ -161,7 +159,8 @@ def test_coastline_failure_keeps_global_base_instead_of_unmasked_png(monkeypatch
     monkeypatch.setattr('app.api.routes.map_tiles.get_coastline_mask', lambda: Coast())
     monkeypatch.setattr('app.api.routes.map_tiles.has_raster_data', lambda raw: True)
     response = TestClient(app).get('/api/v1/map/bathymetry/6/33/23.png')
-    assert response.status_code == 200
+    assert response.status_code == 503
+    assert response.headers['cache-control'] == 'no-store'
     assert response.headers['x-nowave-marine-status'] == 'unavailable'
     assert response.content != b'raw'
 
@@ -237,6 +236,8 @@ def test_raster_fallback_never_poison_daily_cache_and_recovers(monkeypatch):
         recovered = client.get('/api/v1/map/bathymetry/8/131/94.png')
         cached = client.get('/api/v1/map/bathymetry/8/131/94.png')
     assert fallback.headers['x-nowave-marine-status'] == 'unavailable'
+    assert fallback.status_code == 503
+    assert fallback.headers['cache-control'] == 'no-store'
     assert recovered.content == cached.content == b'recovered masked raster'
     assert recovered.headers['cache-control'] == 'public, max-age=86400'
     assert 'x-nowave-marine-status' not in recovered.headers

@@ -212,9 +212,18 @@ class HydrographyLayer {
       slot: LayerSlot.TOP,
       minZoom: MarineZoom.marksPreload,
       filter: [
-        '!=',
-        ['geometry-type'],
-        'Point',
+        'all',
+        [
+          '!=',
+          ['geometry-type'],
+          'Point',
+        ],
+        // Ownership cuts are display boundaries, not physical hazard edges.
+        [
+          '!=',
+          ['get', 'nw_render_role'],
+          'area',
+        ],
       ],
       lineColor: 0xFF596874,
       lineWidth: 1,

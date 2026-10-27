@@ -37,27 +37,54 @@ jusqu'à Z16 ; les autres familles restent bornées à Z14. Un XYZ invalide est 
 `MarineViewport` récupère explicitement les corps de réponse, indépendamment du
 placement. Le préchargement n'est donc pas une simple déclaration de source.
 À Z10, marques et dangers sont effectivement demandés à la résolution Z12 ;
-à Z12, les profondeurs sont également demandées. Les cellules centrales et leur
-voisinage immédiat sont prioritaires, au maximum neuf cellules par famille et
-deux requêtes simultanées. Sur une vue très large/inclinée, ce budget limite la
-couverture préparée ; aucune exhaustivité du viewport entier n'est annoncée.
-À Z6, chacune des neuf cellules portuaires peut agréger seize enfants Open Waters
-Z8 : 144 lectures amont logiques au maximum par lot froid, amorties par le cache.
+à Z12, les profondeurs sont également demandées. La demande correspond aux
+limites géographiques réelles de la caméra, rotation, inclinaison et padding
+compris, avec une marge d'une cellule. Les plages XYZ restent paresseuses : une
+vue mondiale ne crée pas une liste de millions de cellules. L'antiméridien est
+déroulé avant normalisation des X et les Y restent dans les limites Mercator.
+
+Le groupe de travail comporte au maximum 64 cellules, toutes familles réunies,
+avec deux téléchargements GeoJSON simultanés. Les cellules visibles passent
+avant la marge, par anneaux autour du centre ; les familles alternent à priorité
+égale. Le calcul cherche d'abord une couverture de 48 cellules visibles pour
+réserver seize emplacements à la transition, au détail central ou à la marge.
+Si nécessaire, il réduit les résolutions de base, aux minima Z6 pour les ports
+et Z12 pour les autres familles ; les courbes restent toujours Z12. Les places
+restantes enrichissent le centre à la résolution demandée, puis la marge.
+Si les minima dépassent encore le budget, les plages conservent la demande
+géographique complète, mais seules les cellules centrales admissibles sont
+chargées. Le fond mondial GEBCO assure alors la couverture périphérique.
+À Z6, une cellule portuaire peut agréger seize enfants Open Waters Z8 ; deux
+requêtes de l'application ne signifient pas deux lectures fournisseur au total.
 
 Cache client : 64 snapshots / 12 Mio de JSON encodé, plus au maximum 8 000 points
 conservés / 4 Mio encodés. Les objets Dart et les buffers GPU ne sont pas inclus
-dans ces budgets : la mémoire réelle doit être mesurée sur l'appareil. Chaque
-famille garde sa dernière résolution affichée dans le cache pendant le chargement
-des cellules demandées à la résolution suivante (neuf au maximum). Les surfaces,
-lignes et cellules modélisées ne basculent qu'après leurs réponses complètes ;
-une réponse dégradée ou HTTP 503 ne couvre pas la zone. Les anciennes cellules
-sont alors libérées.
-Une saturation refuse les nouveaux snapshots et laisse l'ancienne couverture
-affichée ; les limites de 64 snapshots et 12 Mio restent strictes. Chaque
+dans ces budgets : la mémoire réelle doit être mesurée sur l'appareil, y compris
+les buffers des deux réponses en cours et la mosaïque de rendu. La demande
+réseau et la couverture affichée sont distinctes. Une cellule complète remplace
+immédiatement sa propre zone, même si une voisine échoue. Les anciennes cellules
+couvrent les trous restants ; elles sont libérées lorsque la relève est complète
+ou lorsqu'elles quittent la région utile. Une réponse vide valide couvre sa zone,
+une réponse dégradée ou HTTP 503 ne supprime pas le secours existant.
+
+La soustraction des couvertures suit un quadtree, sans grille étendue au zoom
+le plus fin. Les lignes et surfaces anciennes sont découpées aux régions
+restantes, avec `clipper2 0.0.3` pour les polygones, trous et parties disjointes.
+Seuls les fragments d'affichage polygonaux sont calculés à 1e-9 degré ; les
+snapshots sources restent intacts. Les contours des dangers sont découpés comme
+des lignes d'origine : les nouvelles limites de relève ne deviennent pas des
+traits physiques. Les fragments adjacents d'une même identité sont réunis,
+sans supprimer une partie parce que son identifiant source est déjà présent.
+
+L'admission dans le cache est atomique avec le retrait des cellules remplacées
+et l'éviction éventuelle de marges moins prioritaires. Une saturation conserve
+le secours utile, réduit encore la résolution admissible ou diffère la cellule.
+Les refus de budget ne sont pas des erreurs réseau et ne provoquent pas de
+téléchargement à chaque temporisation. Chaque
 réponse est limitée à 4 Mio / 6 000 objets côté serveur ; le cache serveur final
 reste borné à 512 entrées / 32 Mio, tous formats confondus. En saturation, les
-nouveaux snapshots sont refusés, sans éviction des géométries utiles déjà gardées.
-Cela peut limiter l'enrichissement ; ne pas transformer ce refus en océan vide.
+nouveaux snapshots sont refusés si aucune relève respectant les budgets ne peut
+être admise. Cela peut limiter l'enrichissement ; le fond mondial reste présent.
 
 Le client annule les requêtes dépassées et suspend son travail en arrière-plan.
 Une erreur n'entre jamais dans le cache comme réponse vide. Les diagnostics
@@ -69,6 +96,9 @@ voyagent sans en-tête Firebase ; les services métier et les reports gardent
 `API_BASE_URL` et leurs règles d'authentification.
 Les diagnostics d'erreur et temporisations sont limités aux cellules demandées
 par la vue actuelle ; ils sont purgés quand une cellule quitte cet ensemble.
+Les métriques `planned_visible`, `wanted`, `budget_deferred` et `request_zooms`
+séparent la demande géographique adaptée, le groupe de travail, les refus de
+budget et les résolutions de base effectivement demandées.
 
 ## Ports
 
@@ -135,7 +165,9 @@ ne s'éteignent plus à Z15 et gardent leur opacité graphique nominale (.72/.48
 Les annotations ont leurs propres collisions. Les snapshots déjà récupérés sont
 conservés tant que leur cellule intersecte le champ géographique réel ou son
 voisinage utile. Un rafraîchissement ajoute de nouvelles identités sans remplacer
-les géométries précédentes. Le rechargement du style conserve cet état.
+les géométries précédentes. Une réponse complète explicitement vide confirme
+l'absence de données et vide la cellule, y compris ses points retenus ; une
+réponse partielle vide ne le fait jamais. Le rechargement du style conserve cet état.
 
 Les sondes NOAA peuvent être préparées dès Z12 ; la sélection réutilise la grille
 spatiale existante de Z14, sans synthétiser de profondeur. Les profondeurs
@@ -162,10 +194,17 @@ fixture n'est jamais présentée comme validation Android réelle.
 
 Les détails bathymétriques constituent une superposition visuelle au fond mondial
 GEBCO. Si le fournisseur ou le masque côtier est indisponible, leur route PNG
-renvoie une tuile transparente, marquée `X-NoWave-Marine-Status: unavailable`,
-avec un cache HTTP de 15 secondes. Le fond mondial reste visible. Cette réponse
-ne rejoint jamais le cache de rendus normaux de 24 heures ; les sondes, courbes
-et objets GeoJSON/MVT conservent leur contrat d'erreur existant.
+renvoie HTTP 503 avec le JSON d'erreur existant, `Cache-Control: no-store`,
+`X-NoWave-Marine-Status: unavailable` et `Retry-After: 15`. Une panne ne peut
+plus être acceptée comme un PNG transparent réussi à la place d'une ancienne
+tuile utile. Les tuiles transparentes réellement valides, notamment hors
+couverture, gardent HTTP 200. Toutes les familles GeoJSON/MVT utilisent le même
+contrat 503 explicite. Les caches fournisseur et leurs temporisations restent
+actifs et le fond mondial reste installé sous le détail régional.
+
+La source régionale utilise désormais `prefetchZoomDelta: 4`, comme le fond
+GEBCO, pour préparer une couverture de résolution inférieure. Le cache disque,
+les tuiles parentes, les limites géographiques et le fondu restent actifs.
 
 Les appels WMS partagent un délai de reprise après une panne : 5 secondes pour
 une erreur réseau, 30 secondes pour une limitation ou erreur serveur, prolongées
@@ -175,12 +214,89 @@ Un rendu déjà commencé conserve son emplacement jusqu'à sa fin, afin de ne p
 multiplier les workers synchrones. Les demandes partagées encore utiles et les
 tuiles déjà calculées restent réutilisables.
 
-Le service HTTP natif Mapbox est limité à douze requêtes simultanées par hôte,
+Le service HTTP natif Mapbox est limité à deux requêtes simultanées par hôte,
 toutes sources confondues. Les deux requêtes GeoJSON Dart gardent leur budget
 distinct ; les requêtes métier disposent ainsi d'une marge sous la limite de
 trente connexions du proxy. Ce plafond ne constitue pas une limite de débit
 en requêtes par seconde : les délais de gestes et protections du serveur restent
 actifs.
+
+## Comparaison avant/après — 27 octobre 2026
+
+| Élément | Ancien comportement | Nouveau comportement |
+| --- | --- | --- |
+| Zone demandée | Neuf cellules autour du centre par famille | Limites visibles et marge, y compris vues inclinées |
+| Ordre | Une famille terminée avant la suivante | Visible avant marge, centre avant bords, alternance des familles |
+| File | Petit voisinage fixe | Plages paresseuses et groupe de travail borné à 64 cellules |
+| Changement de zoom | Une résolution affichée par famille, bascule après tout le lot | Mosaïque de résolutions et relève locale dès chaque succès complet |
+| Géométries anciennes | Conservées intégralement jusqu'à la bascule | Conservées seulement dans les zones encore sans relève complète |
+| Fragments | Déduplication globale par identité pouvant perdre un morceau adjacent | Réunion des fragments de même identité, coordonnées sources conservées |
+| Erreur ou réponse dégradée | Secours maintenu, sans enrichissement local d'une famille en transition | Secours maintenu localement ; les autres zones progressent indépendamment |
+| Réponse vide valide | Les points retenus et l'union des courbes pouvaient prolonger l'ancien contenu | L'absence confirmée remplace le contenu de la cellule et libère ses points retenus |
+| Saturation | Refus traité comme erreur, retenté après temporisation | Admission atomique, marge évictable, baisse du détail et report sans boucle réseau |
+| Raster régional | Préchargement basse résolution désactivé | Préchargement avec delta 4, fond GEBCO conservé |
+| Réseau natif | Douze requêtes par hôte | Deux par hôte, distinctes des deux requêtes GeoJSON |
+| Panne raster | HTTP 200 transparent, cache 15 s | HTTP 503 JSON non cacheable, statut unavailable et Retry-After |
+| Panne GeoJSON/MVT | En-têtes no-store explicites réservés aux sondes | Même contrat d'erreur explicite pour toutes les familles |
+| Diagnostics | Cache, octets et erreurs | Demande, résolutions adaptées et reports de budget ajoutés |
+
+Les recettes sur appareil doivent vérifier une inclinaison de 60°, les zooms
+10→11 et 12→13→14 puis retour, un réseau ralenti/interrompu et la reprise sans
+geste supplémentaire. Les tests Dart de mosaïque et HTTP ne prouvent pas la
+continuité du rendu natif ou la mémoire GPU sur un appareil réel.
+
+## Recette locale sur iPhone
+
+Le backend modifié doit être disponible pour vérifier aussi les réponses 503.
+`backend/tools/serve_marine_local.py` démarre l'API de cette branche et sert la
+pyramide GEBCO livrée dans le dépôt. Les caches sont temporaires et supprimés à
+l'arrêt. Depuis le checkout de la branche, avec l'environnement Python installé :
+
+```sh
+python backend/tools/serve_marine_local.py --port 8014 \
+  --fault-file /tmp/nowave-marine-progressive-fault.json
+```
+
+Le Mac et l'iPhone utilisent le même réseau local. L'IPA de recette surcharge
+uniquement `MARINE_API_BASE_URL=http://<nom-du-mac>.local:8014/` ; l'API métier,
+Firebase et les autres réglages restent ceux du fichier privé de compilation.
+Cette IPA exige que le serveur local reste lancé ; elle n'est pas une version
+de production. L'export `development` nécessite une signature et un appareil
+de développement autorisés par le profil Apple.
+
+Pour ralentir les réponses, écrire `{"delay_ms": 1000}` dans le fichier de
+contrôle ; pour simuler une panne, `{"unavailable": true}` ; pour rétablir le
+réseau normal, `{}`. Ces réglages concernent les PNG/PBF/GeoJSON marins, pas le
+fond GEBCO. Aucun endpoint de commande n'est ajouté à l'application serveur
+de production ; seul ce point d'entrée local lit le fichier de contrôle.
+
+### Fichiers concernés et contrôles
+
+- Sélection, file et cache : `mobile/lib/features/map/data/marine_cell.dart`
+  et `mobile/lib/features/map/data/marine_viewport.dart`.
+- Mosaïque et contours de dangers : `mobile/lib/features/map/data/marine_mosaic.dart`
+  et `mobile/lib/features/map/data/hydrography_layer.dart`.
+- Réseau natif et raster : `mobile/lib/core/map/map_config.dart`
+  et `mobile/lib/core/map/marine/marine_map_controller.dart`.
+- Contrat serveur et recette locale : `backend/app/api/routes/map_tiles.py`
+  et `backend/tools/serve_marine_local.py`.
+- Dépendance polygonale verrouillée : `mobile/pubspec.yaml` et `mobile/pubspec.lock`.
+- Tests Flutter : `mobile/test/features/map/data/marine_viewport_test.dart`,
+  `marine_viewport_progressive_test.dart`, `marine_mosaic_test.dart`,
+  `mobile/test/core/map/map_config_test.dart` et
+  `mobile/test/core/map/marine/marine_map_controller_test.dart`.
+- Tests API : `backend/tests/api/test_map_tiles.py`, `test_marine_tiles.py`
+  et `test_bathymetry_neighbour_masks.py`.
+
+Contrôles du 27 octobre 2026 : `flutter analyze --no-pub` sans anomalie,
+`flutter test --no-pub` avec **945 tests réussis**, suites Python API/unitaires
+avec **1 163 réussites et deux tests ignorés**, Ruff et `git diff --check` réussis.
+Un test de délai Python à 30 ms a échoué lors de l'exécution parallèle avec
+Flutter ; il a réussi isolément puis dans la suite Python complète exécutée seule.
+Le serveur local a aussi été vérifié en HTTP : panne simulée = 503/no-store,
+GEBCO disponible pendant la panne, PNG réellement hors couverture = 200.
+Ces résultats ne remplacent pas la recette visuelle à 60° et la mesure mémoire
+sur le téléphone, à effectuer avec l'IPA locale.
 
 
 ## Limitation géographique du raster EMODnet

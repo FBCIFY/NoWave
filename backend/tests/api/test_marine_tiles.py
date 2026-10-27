@@ -62,17 +62,30 @@ def test_invalid_tiles_rejected_before_provider_access(path):
     assert TestClient(app).get(f"/api/v1/map/{path}.pbf").status_code == 422
 
 
-def test_total_outage_is_503_not_cached_empty_tile(monkeypatch):
+@pytest.mark.parametrize("path", [
+    f"{family}/12/2115/1503.pbf" for family in (
+        "seamarks", "harbours", "port-infrastructure", "depth-contours",
+        "soundings", "underwater-hazards",
+    )
+] + [
+    f"marine-features/{family}/12/2115/1503.geojson" for family in (
+        "seamarks", "harbours", "depth-contours", "soundings", "underwater-hazards",
+    )
+])
+def test_total_outage_is_503_not_cached_empty_tile(monkeypatch, path):
     class Service:
-        async def get_tile(self, *args):
+        async def get_tile(self, *args, **kwargs):
             raise ProviderUnavailable("all down")
 
     monkeypatch.setattr(
         "app.api.routes.map_tiles.get_marine_service", lambda: Service()
     )
-    response = TestClient(app).get("/api/v1/map/seamarks/12/2115/1503.pbf")
+    response = TestClient(app).get(f"/api/v1/map/{path}")
     assert response.status_code == 503
-    assert "cache-control" not in response.headers
+    assert response.headers["cache-control"] == "no-store"
+    assert response.headers["x-nowave-marine-status"] == "unavailable"
+    assert response.headers["retry-after"] == "15"
+    assert response.json()["error"]["code"] == "http_503"
 
 
 def test_source_licenses_are_public_and_include_every_integrated_dataset():
