@@ -30,6 +30,8 @@ Depuis la racine du dépôt, avec Python 3.12 et les dépendances de `backend/re
 
 ```bash
 COMPOSE_PROJECT_NAME=nowave-admin-test docker compose -f compose.test.yaml up -d --build --wait database
+npm ci --prefix web
+npm run build --prefix web
 npm ci --prefix backend/tests/browser --ignore-scripts
 (cd backend/tests/browser && npx playwright install --with-deps chromium)
 PYTHON=python3.12 \

@@ -17,19 +17,33 @@ def test_public_api_filters_liveness_privacy_dateline_and_pagination(dsn, monkey
     user = User(firebase_uid=unique, username=f"private-{unique}", email=f"{unique}@nowave.test")
     PostgreSQLUserRepository().save(user)
     reports = []
-    for longitude in (175, -175, 0, 176, 177, 178):
-        report = Report.create_manual(
-            author_id=user.id, client_report_id=uuid4(), category=ReportCategory.POLLUTION,
-            longitude=longitude, latitude=-15, description=unique,
-            observed_at=datetime.now(UTC) - timedelta(minutes=5),
-        )
+    now = datetime.now(UTC)
+    for index, longitude in enumerate((175, -175, 0, 176, 177, 178)):
+        # Create the historical fixture at its original time; dates are immutable.
+        created_at = now - timedelta(hours=25) if index == 4 else now
+        with monkeypatch.context() as clock:
+            clock.setattr("app.domain.report.utc_now", lambda: created_at)
+            report = Report.create_manual(
+                author_id=user.id, client_report_id=uuid4(), category=ReportCategory.POLLUTION,
+                longitude=longitude, latitude=-15, description=unique,
+                observed_at=created_at - timedelta(minutes=5),
+            )
         PostgreSQLReportRepository().save(report)
         reports.append(report)
     with psycopg.connect(dsn) as connection:
         connection.execute("UPDATE nowave.reports SET status = 'removed', removed_at = now() WHERE id = %s", (reports[3].id,))
-        # Time-expired but still status='active': do not depend on a cleanup job.
-        connection.execute("UPDATE nowave.reports SET observed_at = now() - interval '25 hours', expires_at = now() - interval '1 hour' WHERE id = %s", (reports[4].id,))
         connection.execute("UPDATE nowave.reports SET status = 'expired' WHERE id = %s", (reports[5].id,))
+
+    # Time-expired but still status='active': do not depend on a cleanup job.
+    with psycopg.connect(dsn) as connection:
+        expired = connection.execute(
+            "SELECT status, observed_at, expires_at FROM nowave.reports WHERE id = %s",
+            (reports[4].id,),
+        ).fetchone()
+    assert expired[0] == "active"
+    assert expired[1] == reports[4].observed_at
+    assert expired[2] == expired[1] + timedelta(hours=24)
+    assert expired[2] < now
 
     client = TestClient(app)
     params = {"west": 170, "east": -170, "south": -20, "north": -10, "q": unique, "limit": 1}

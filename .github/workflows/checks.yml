@@ -134,6 +134,10 @@ jobs:
           node-version: '24'
           cache: npm
           cache-dependency-path: backend/tests/browser/package-lock.json
+      - name: Build shared web assets for admin browser tests
+        run: |
+          npm ci --prefix web
+          npm run build --prefix web
       - name: Install admin browser tests
         run: |
           npm ci --prefix backend/tests/browser --ignore-scripts

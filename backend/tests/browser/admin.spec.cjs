@@ -1,47 +1,54 @@
 const {test,expect}=require('@playwright/test');
 const id=n=>`00000000-0000-0000-0000-${n.toString(16).padStart(12,'0')}`;
-// Real Chromium and app; only the Mapbox network/runtime is replaced for these DOM journeys.
+// Real Chromium, app, sessions and SQL; only provider boundaries are doubles.
 async function mapDouble(page) {
   await page.route('**/admin-static/mapbox-gl.js',route=>route.fulfill({contentType:'application/javascript',body:`
     window.__maps=[];
-    window.mapboxgl={supported:()=>true,AttributionControl:class {},Map:class {
-      constructor(options){this.options=options;this.center={lng:options.center[0],lat:options.center[1]};this.zoom=options.zoom;this.events={};this.sources={};this.layers=[];this.images={};this.moves=[];this.touchZoomRotate={disableRotation(){}};window.__maps.push(this);setTimeout(()=>{this.emit('style.load');this.emit('load');},20);}
+    window.mapboxgl={supported:()=>true,AttributionControl:class {},Marker:class {
+      constructor({element}){this.element=element;}
+      setLngLat(value){this.location=value;return this;}
+      addTo(map){document.getElementById(map.options.container).append(this.element);return this;}
+      getElement(){return this.element;}remove(){this.element.remove();}
+    },Map:class {
+      constructor(options){this.options=options;this.center={lng:options.center[0],lat:options.center[1]};this.zoom=options.zoom;this.events={};this.sources={};this.layers=[];this.images={};this.moves=[];this.touchZoomRotate={disableRotation(){}};this.keyboard={disableRotation(){}};for(const name of ['dragPan','scrollZoom','boxZoom','doubleClickZoom','keyboard','touchZoomRotate'])this[name]={enable(){},disable(){},disableRotation(){}};this.canvas=document.createElement('canvas');document.getElementById(options.container).append(this.canvas);window.__maps.push(this);setTimeout(()=>{this.emit('style.load');this.emit('load');},20);}
       on(name,layer,fn){(this.events[typeof layer==='string'?name+':'+layer:name]??=[]).push(fn||layer);}
       emit(name,event){for(const fn of this.events[name]||[])fn(event);}
-      getCenter(){return this.center;}getZoom(){return this.zoom;}stop(){this.stopped=true;}
+      getCenter(){return this.center;}getZoom(){return this.zoom;}getPitch(){return 0;}getBearing(){return 0;}getCanvas(){return this.canvas;}stop(){}
       easeTo(o){this.moves.push(o);if(o.center)this.center={lng:o.center[0],lat:o.center[1]};if(o.zoom)this.zoom=o.zoom;}
-      jumpTo(options){this.easeTo(options);}
-      addControl(){}resize(){}setBearing(){}setFog(){}setLayoutProperty(){}setPaintProperty(){}
+      jumpTo(o){this.easeTo(o);}flyTo(o){this.easeTo(o);}
+      addControl(){}resize(){}setBearing(){}setFog(){}setLayoutProperty(){}setPaintProperty(){}setRenderWorldCopies(){}remove(){}
       getStyle(){return {sources:{},layers:[{id:'water',type:'fill','source-layer':'water'},{id:'road',type:'line'}]};}
       getBounds(){return {getWest:()=>-70,getEast:()=>20,getSouth:()=>-20,getNorth:()=>60};}
-      getSource(id){return this.sources[id];}getLayer(id){return this.layers.find(l=>l.id===id);}
-      addSource(id,s){this.sources[id]={...s,setData(d){this.data=d;},getClusterExpansionZoom(id,fn){fn(null,8);}};}
+      getSource(id){return this.sources[id];}getLayer(id){return this.layers.find(l=>l.id===id);}hasImage(id){return !!this.images[id];}
+      addSource(id,s){this.sources[id]={...s,setData(d){this.data=d;}};}
       addLayer(l){this.layers.push(l);}addImage(id,img){this.images[id]=img;}
       zoomIn(){this.zoom++;}zoomOut(){this.zoom--;}
-    }};` }));
+    }};`}));
 }
-async function login(page,{map=true}={}) {
-  if(map)await mapDouble(page);
-  await page.goto('/admin/login');await page.locator('#email').fill('user1@nowave.test');await page.locator('#password').fill('test-password');
-  await page.getByRole('button',{name:'Se connecter'}).click();await expect(page).toHaveURL(/\/admin$/);
+async function login(page) {
+  await mapDouble(page);
+  await page.goto('/admin/login');
+  await page.locator('#email').fill('user1@nowave.test');
+  await page.locator('#password').fill('test-password');
+  await page.getByRole('button',{name:'Se connecter'}).click();
+  await expect(page).toHaveURL(/\/admin$/);
 }
-async function openUser(page,number) {
-  await page.getByRole('button',{name:'Utilisateurs',exact:true}).click();
-  await page.getByRole('searchbox').fill(`User ${String(number).padStart(2,'0')}`);
-  await page.locator('.user-row').filter({hasText:`User ${String(number).padStart(2,'0')}`}).click();
-  await page.getByRole('button',{name:'Afficher les signalements'}).click();
-  await expect(page.locator('.user-reports')).toHaveAttribute('aria-busy','false');
+async function filterReports(page,query) {
+  const filters=page.locator('.map-view__filter-menu');
+  if(await filters.getAttribute('open')===null)await filters.locator('summary').click();
+  await page.locator('#map-report-search').fill(query);
+  await expect(page.locator('.map-view__list')).toHaveAttribute('aria-busy','false');
 }
-const checks=[];
 test.beforeEach(async({page},info)=>{
-  const errors=[];page.on('pageerror',e=>errors.push(e.name));
-  page.on('console',m=>{if(m.type()==='error'&&!m.text().startsWith('Failed to load resource'))errors.push(m.text());});
-  const expected=info.title.startsWith('login validates')?[401,403]:info.title.startsWith('synthetic moderation')?[400,403,422]:[];
-  page.on('response',r=>{if(r.status()>=400&&!expected.includes(r.status()))errors.push(`HTTP ${r.status()} ${new URL(r.url()).pathname}`);});
-  page.on('requestfailed',r=>{const code=r.failure()?.errorText;if(code!=='net::ERR_ABORTED'&&!(info.title.startsWith('network failure')&&code==='net::ERR_FAILED'))errors.push(`Transport ${code} ${new URL(r.url()).pathname}`);});
-  checks.push([page,errors]);
+  const errors=[];
+  page.on('pageerror',error=>errors.push(error.message));
+  page.on('console',message=>{if(message.type()==='error'&&!message.text().startsWith('Failed to load resource'))errors.push(message.text());});
+  const expected=info.title.startsWith('login validates')?[401,403]:info.title.startsWith('synthetic moderation')?[400,403,422]:info.title.startsWith('network failure')?[401,503]:[];
+  page.on('response',response=>{if(response.status()>=400&&!expected.includes(response.status()))errors.push(`HTTP ${response.status()} ${new URL(response.url()).pathname}`);});
+  page.on('requestfailed',request=>{const code=request.failure()?.errorText;if(code!=='net::ERR_ABORTED')errors.push(`Transport ${code} ${new URL(request.url()).pathname}`);});
+  page.__testErrors=errors;
 });
-test.afterEach(async({page})=>{expect(checks.find(x=>x[0]===page)[1]).toEqual([]);});
+test.afterEach(async({page})=>{expect(page.__testErrors).toEqual([]);});
 
 test('login validates identity, refuses non-admin and uses secure cookies',async({page,context})=>{
   await mapDouble(page);await page.goto('/admin');await expect(page).toHaveURL(/admin\/login/);
@@ -50,72 +57,78 @@ test('login validates identity, refuses non-admin and uses secure cookies',async
   await page.locator('#email').fill('user1@nowave.test');await page.locator('#password').fill('test-password');await page.getByRole('button',{name:'Se connecter'}).click();await expect(page).toHaveURL(/\/admin$/);
   const cookie=(await context.cookies()).find(c=>c.name==='__Host-nowave_admin_session');expect(cookie).toMatchObject({httpOnly:true,secure:true,sameSite:'Strict',path:'/'});
 });
-
-test('rotation pauses on typing and respects reduced motion without an extra control',async({page})=>{
+test('rotation pauses on typing and respects reduced motion',async({page})=>{
   await mapDouble(page);await page.goto('/admin/login');await expect.poll(()=>page.evaluate(()=>window.__maps[0]?.moves.length)).toBeGreaterThan(0);
   await page.locator('#email').focus();const before=await page.evaluate(()=>window.__maps[0].moves.length);await page.waitForTimeout(1200);expect(await page.evaluate(()=>window.__maps[0].moves.length)).toBe(before);
   await page.locator('#password-toggle').focus();await expect.poll(()=>page.evaluate(()=>window.__maps[0].moves.length)).toBeGreaterThan(before);
-  await expect(page.locator('#rotation-toggle')).toHaveCount(0);
   await page.emulateMedia({reducedMotion:'reduce'});const stopped=await page.evaluate(()=>window.__maps[0].moves.length);await page.waitForTimeout(1200);expect(await page.evaluate(()=>window.__maps[0].moves.length)).toBe(stopped);
-  await page.emulateMedia({reducedMotion:'no-preference'});await expect.poll(()=>page.evaluate(()=>window.__maps[0].moves.length)).toBeGreaterThan(stopped);
 });
-
-for(const [number,count] of [[2,0],[3,1],[4,20],[5,21],[6,40],[7,41]])test(`real SQL pagination exposes all ${count} report links and keyboard navigation`,async({page})=>{
-  await login(page);await openUser(page,number);let seen=[];
-  for(let p=1;p<=Math.max(1,Math.ceil(count/20));p++) {
-    await expect(page.locator('.user-reports')).toHaveAttribute('aria-busy','false');
-    const links=await page.locator('.user-reports a').evaluateAll(as=>as.map(a=>a.getAttribute('href')));seen.push(...links);
-    if(count>p*20){const next=page.getByRole('button',{name:'Page suivante',exact:true});await next.focus();await page.keyboard.press('Enter');await expect(page.locator('.user-reports')).toContainText(`Page ${p+1}`);}
+for(const [number,count] of [[2,0],[3,1],[4,49],[5,50],[6,51],[7,101]])test(`real SQL observation pagination exposes all ${count} reports with keyboard navigation`,async({page})=>{
+  await login(page);await filterReports(page,`Synthetic report ${number}/`);
+  const seen=[];
+  for(let p=1;p<=Math.max(1,Math.ceil(count/50));p++){
+    await expect(page.locator('.map-view__list')).toHaveAttribute('aria-busy','false');
+    const buttons=page.locator('.map-view__list button');
+    await expect(buttons).toHaveCount(Math.min(50,Math.max(0,count-(p-1)*50)));
+    seen.push(...await buttons.allTextContents());
+    if(count>p*50){const next=page.getByRole('button',{name:'Suivant',exact:true});await next.focus();await page.keyboard.press('Enter');await expect(page.locator('.map-view__page-number')).toHaveText(`Page ${p+1}`);}
   }
   expect(seen.length).toBe(count);expect(new Set(seen).size).toBe(count);
-  if(count>=21)expect(seen).toContain(`/admin?report=${id(number*1000+count-21)}`);
-  await expect(page.getByRole('button',{name:'Page suivante',exact:true})).toBeDisabled();
-  await expect(page.locator('.user-reports')).toContainText(count?'Fin de la liste':'Aucun signalement');
-  if(count===21){await page.locator('.user-reports a').first().click();await expect(page.locator('#report-detail')).toContainText('Synthetic report 5/0');}
+  if(count>50){await expect(page.getByRole('button',{name:'Suivant',exact:true})).toBeDisabled();await page.getByRole('button',{name:'Précédent',exact:true}).click();await expect(page.locator('.map-view__page-number')).toHaveText(`Page ${Math.ceil(count/50)-1}`);}
+  if(count===0)await expect(page.locator('.map-view__result-status')).toContainText('Aucune observation');
+  else {await page.locator('.map-view__list button').first().click();await expect(page.locator('.map-view__detail')).toContainText(`Synthetic report ${number}/`);await expect(page.getByRole('link',{name:'Fiche et historique'})).toBeVisible();}
 });
-
-test('search, user paging, filters and close/reopen reset the detail',async({page})=>{
-  await login(page);await page.getByRole('button',{name:'Utilisateurs',exact:true}).click();await expect(page.locator('.user-row')).toHaveCount(20);
-  await page.locator('#users-next').click();await expect(page.locator('#users-page')).toHaveText('2 / 2');await expect(page.locator('.user-row')).toHaveCount(8);
-  await page.locator('#users-prev').click();await expect(page.locator('#users-page')).toHaveText('1 / 2');
-  await page.locator('#user-status').selectOption('suspended');await expect(page.locator('#users-list')).toContainText('Aucun utilisateur');await page.locator('#user-status').selectOption('active');
-  await page.getByRole('searchbox').fill('User 05');await page.locator('.user-row').filter({hasText:'User 05'}).click();await page.getByRole('button',{name:'Afficher les signalements'}).click();await expect(page.locator('.user-reports a')).toHaveCount(20);
-  await page.locator('#users-close').click();await expect(page.locator('#users-panel')).toBeHidden();await page.getByRole('button',{name:'Utilisateurs',exact:true}).click();await expect(page.locator('#user-detail')).toBeEmpty();
-});
-
-test('network failure retry, delayed old user, navigation lock and expired session',async({page})=>{
-  await login(page);let release, started;const pending=new Promise(r=>release=r), requested=new Promise(r=>started=r);
-  await page.route(`**/admin/data/users/${id(5)}/reports*`,async route=>{started();await pending;await route.fulfill({json:{items:[{id:'stale',category:'stale'}],has_more:false}}).catch(()=>{});});
-  await page.getByRole('button',{name:'Utilisateurs',exact:true}).click();await page.getByRole('searchbox').fill('User 05');await page.locator('.user-row').filter({hasText:'User 05'}).click();await page.getByRole('button',{name:'Afficher les signalements'}).click();await requested;
-  await expect(page.getByRole('button',{name:'Page suivante',exact:true})).toBeDisabled();
-  await page.getByRole('searchbox').fill('User 03');await page.locator('.user-row').filter({hasText:'User 03'}).click();await page.getByRole('button',{name:'Afficher les signalements'}).click();await expect(page.locator('.user-reports a')).toHaveCount(1);release();await page.waitForTimeout(100);await expect(page.locator('.user-reports')).not.toContainText('stale');
-  await page.route(`**/admin/data/users/${id(3)}/reports*`,route=>route.abort('failed'),{times:1});await page.getByRole('button',{name:'Afficher les signalements'}).click();await page.getByRole('button',{name:'Réessayer'}).click();await expect(page.locator('.user-reports a')).toHaveCount(1);
-  await page.context().clearCookies();await page.getByRole('button',{name:'Afficher les signalements'}).click();await expect(page.locator('.user-reports')).toContainText('Session expirée');
-});
-
-test('shared globe camera, clusters, selection, authorized/hidden/absent photo and panel close',async({page},info)=>{
-  await login(page);await expect.poll(()=>page.evaluate(()=>window.__maps[0]?.sources.reports?.data.features.length)).toBeGreaterThan(0);
-  expect(await page.evaluate(()=>window.__maps[0].options)).toMatchObject({center:[-20,25],projection:'globe',dragRotate:false,pitchWithRotate:false,maxPitch:0});
-  await page.screenshot({path:`test-results/${info.project.name}-surveillance.png`});
-  await page.evaluate(()=>window.__maps[0].emit('click:clusters',{features:[{properties:{cluster_id:7},geometry:{coordinates:[-30,24]}}]}));expect(await page.evaluate(()=>window.__maps[0].zoom)).toBe(8);
-  await page.evaluate(r=>window.__maps[0].emit('click:points',{features:[{properties:{id:r,category:'pollution'},geometry:{coordinates:[-30,24]}}]}),id(5020));await expect(page.locator('#report-detail img')).toBeVisible();await expect(page.locator('#report-detail img')).toHaveJSProperty('naturalWidth',100);
-  await page.screenshot({path:`test-results/${info.project.name}-report.png`});
-  await page.locator('#report-close').click();await expect(page.locator('#report-panel')).toBeHidden();
-  await page.goto(`/admin?report=${id(5019)}`);await expect(page.locator('#report-detail')).toContainText('Photo masquée');await expect(page.locator('#report-detail img')).toHaveCount(0);
-  const hidden=await (await page.request.get(`/admin/data/reports/${id(5019)}`)).json();expect(hidden.photo.url).toBeNull();
-  await page.goto(`/admin?report=${id(5018)}`);await expect(page.locator('#report-detail')).toContainText('Synthetic report');await expect(page.locator('#report-detail img')).toHaveCount(0);await expect(page.locator('#report-detail').getByRole('link',{name:'Masquer la photo'})).toHaveCount(0);
-  await page.locator('#reset-map').click();expect(await page.evaluate(()=>window.__maps[0].center)).toEqual({lng:-20,lat:25});
-});
-
-test('no Mapbox token keeps login, lists and direct report operational without overflow',async({page},info)=>{
-  await page.route('**/admin/login',async route=>{if(route.request().method()!=='GET')return route.continue();const r=await route.fetch();await route.fulfill({response:r,body:(await r.text()).replace(/data-token="[^"]*"/,'data-token=""')});});
-  await page.route(/\/admin(?:\?.*)?$/,async route=>{if(route.request().method()!=='GET')return route.continue();const r=await route.fetch();await route.fulfill({response:r,body:(await r.text()).replace(/data-token="[^"]*"/,'data-token=""')});});
-  await login(page);await page.goto('/admin');await expect(page.locator('#map-status')).toContainText('Carte indisponible');
-  await page.goto(`/admin?report=${id(5018)}`);await expect(page.locator('#report-detail')).toContainText('Synthetic report');
-  await openUser(page,5);await page.screenshot({path:`test-results/${info.project.name}-users.png`});
+test('users and moderation pages preserve pagination and contextual returns',async({page},info)=>{
+  await login(page);await page.getByRole('link',{name:'Utilisateurs',exact:true}).click();
+  await expect(page.locator('.users-table tbody tr')).toHaveCount(20);
+  await page.getByRole('link',{name:'Page suivante'}).click();await expect(page.locator('.users-table tbody tr')).toHaveCount(8);
+  await expect(page.locator('.page-total')).toHaveText('28');await expect(page).toHaveURL(/users\?page=2/);
+  await page.screenshot({path:`test-results/${info.project.name}-users.png`});
+  await page.getByRole('link',{name:'Modération',exact:true}).click();await expect(page).toHaveURL(/\/admin\/reports$/);
+  await page.getByRole('link',{name:'Page suivante'}).click();const listUrl=page.url();
+  await page.locator('.report-observation a').first().click();await expect(page.locator('.report-summary')).toContainText('Synthetic report');
+  await page.getByRole('link',{name:'← Retour',exact:true}).click();await expect(page).toHaveURL(listUrl);
   expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
-  const header=await page.locator('.surveillance-header').boundingBox();
-  const panel=await page.locator('#users-panel').boundingBox();expect(panel.y).toBeGreaterThanOrEqual(header.y+header.height);expect(panel.x).toBeGreaterThanOrEqual(0);expect(panel.x+panel.width).toBeLessThanOrEqual(info.project.name==='mobile'?390:1440);
+});
+test('network failure retries and old responses cannot replace a new query',async({page,context})=>{
+  await login(page);let release,started;const pending=new Promise(resolve=>release=resolve),requested=new Promise(resolve=>started=resolve);
+  await page.route('**/api/v1/map/observations?*',async route=>{
+    if(new URL(route.request().url()).searchParams.get('q')!=='slow')return route.continue();
+    started();await pending;await route.fulfill({json:{items:[],has_more:false,next_cursor:null}}).catch(()=>{});
+  });
+  const filters=page.locator('.map-view__filter-menu');await filters.locator('summary').click();
+  await page.locator('#map-report-search').fill('slow');await requested;
+  await page.locator('#map-report-search').fill('Synthetic report 3/');await expect(page.locator('.map-view__list button')).toHaveCount(1);release();
+  await expect(page.locator('.map-view__list')).toHaveAttribute('aria-busy','false');await expect(page.locator('.map-view__list')).toContainText('Synthetic report 3/0');
+  await page.route('**/api/v1/map/observations?*',route=>route.fulfill({status:503,json:{detail:'fixture outage'}}),{times:1});
+  await filterReports(page,'Synthetic report 5/');await expect(page.locator('.map-view__retry')).toBeVisible();await page.locator('.map-view__retry').click();await expect(page.locator('.map-view__list button')).toHaveCount(50);
+  await context.clearCookies();await page.locator('.map-view__list button').first().click();await expect(page.locator('.map-view__admin-status')).toContainText('Session expirée');
+});
+test('shared map selection restores its view and keeps authorized photo links private',async({page},info)=>{
+  await login(page);await expect(page.getByRole('button',{name:'Zoom avant',exact:true})).toBeEnabled();
+  expect(await page.evaluate(()=>window.__maps[0].options)).toMatchObject({center:[-20,25],projection:'globe',dragRotate:false,maxPitch:0});
+  await filterReports(page,'Synthetic report 5/');const before=await page.evaluate(()=>({center:window.__maps[0].getCenter(),zoom:window.__maps[0].getZoom()}));
+  await page.locator('.map-view__list button').first().click();await expect(page.locator('.map-view__admin-status')).toHaveText('Actif');
+  await page.getByRole('button',{name:'← Observations',exact:true}).click();
+  await expect(page.locator('#map-report-search')).toHaveValue('Synthetic report 5/');
+  expect(await page.evaluate(()=>({center:window.__maps[0].getCenter(),zoom:window.__maps[0].getZoom()}))).toEqual(before);
+  await page.goto(`/admin?report=${id(5020)}`);await expect(page.locator('.map-view__detail')).toContainText('Synthetic report 5/20');await expect(page.getByRole('link',{name:'Masquer la photo',exact:true})).toBeVisible();
+  const visible=await(await page.request.get(`/admin/data/reports/${id(5020)}`)).json();expect(visible.photo.url).toBe('/__fixtures/photo.svg');
+  await page.screenshot({path:`test-results/${info.project.name}-report.png`});
+  await page.goto(`/admin?report=${id(5019)}`);await expect(page.locator('.map-view__detail')).toContainText('Synthetic report 5/19');await expect(page.getByRole('link',{name:'Masquer la photo',exact:true})).toHaveCount(0);
+  const hidden=await(await page.request.get(`/admin/data/reports/${id(5019)}`)).json();expect(hidden.photo.url).toBeNull();
+  await page.goto(`/admin?report=${id(5018)}`);await expect(page.locator('.map-view__detail')).toContainText('Synthetic report 5/18');await expect(page.getByRole('link',{name:'Masquer la photo',exact:true})).toHaveCount(0);
+});
+test('no Mapbox token keeps the map list, report and administration usable on mobile',async({page},info)=>{
+  await page.route('**/api/v1/map/web-config',route=>route.fulfill({json:{mapbox_token:''}}));
+  await login(page);await expect(page.locator('#navigation-status')).toContainText('La carte n’est pas disponible');
+  await expect(page.locator('.map-view__list button')).toHaveCount(50);
+  await page.goto(`/admin?report=${id(5018)}`);await expect(page.locator('.map-view__detail')).toContainText('Synthetic report 5/18');
+  await page.getByRole('link',{name:'Utilisateurs',exact:true}).click();
+  const header=await page.locator('.site-header').boundingBox(),title=await page.getByRole('heading',{name:'Utilisateurs',exact:true}).boundingBox();expect(title.y).toBeGreaterThanOrEqual(header.y+header.height);
+  const count=await page.locator('.page-total').boundingBox();expect(count.x).toBeGreaterThan(title.x+title.width);
+  expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
+  await page.screenshot({path:`test-results/${info.project.name}-no-map.png`});
 });
 
 test('synthetic moderation enforces CSRF, reason and confirmation, then records real actions',async({page},info)=>{

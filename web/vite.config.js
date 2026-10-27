@@ -12,6 +12,7 @@ export default defineConfig(({ mode }) => {
   );
   return {
     build: {
+      assetsInlineLimit: 0,
       cssCodeSplit: false,
       rollupOptions: {
         input: {
