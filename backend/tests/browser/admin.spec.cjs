@@ -84,7 +84,7 @@ test('users and moderation pages preserve pagination and contextual returns',asy
   await page.getByRole('link',{name:'Page suivante'}).click();await expect(page.locator('.users-table tbody tr')).toHaveCount(8);
   await expect(page.locator('.page-total')).toHaveText('28');await expect(page).toHaveURL(/users\?page=2/);
   await page.screenshot({path:`test-results/${info.project.name}-users.png`});
-  await page.getByRole('link',{name:'Modération',exact:true}).click();await expect(page).toHaveURL(/\/admin\/reports$/);
+  await page.getByRole('link',{name:'Signalements',exact:true}).click();await expect(page).toHaveURL(/\/admin\/reports$/);
   await page.getByRole('link',{name:'Page suivante'}).click();const listUrl=page.url();
   await page.locator('.report-observation a').first().click();await expect(page.locator('.report-summary')).toContainText('Synthetic report');
   await page.getByRole('link',{name:'← Retour',exact:true}).click();await expect(page).toHaveURL(listUrl);
