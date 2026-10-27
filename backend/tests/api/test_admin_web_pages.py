@@ -574,7 +574,7 @@ def test_users_search_and_filter_preserve_pagination(client, services, monkeypat
     response = client.get("/admin/users?search=navigateur&status=suspended&page=2&limit=10")
     assert response.status_code == 200
     assert calls == [(2, UserStatus.SUSPENDED, "navigateur", 10)]
-    assert 'value="suspended" selected' in response.text
+    assert 'value="suspended" aria-label="Comptes suspendus" aria-pressed="true"' in response.text
     assert "search=navigateur&amp;status=suspended&amp;page=3&amp;limit=10" in response.text
     assert f'/admin/users/{USER_ID}/reports' in response.text
     assert "Réactiver" in response.text
@@ -590,12 +590,48 @@ def test_user_reports_page(client, services, monkeypatch, page, has_more):
     calls = []
     def reports(self, user_id, requested_page):
         calls.append((user_id, requested_page))
-        return [(REPORT_ID, "pollution", "active", datetime.now(UTC))], has_more
+        return [(REPORT_ID, "pollution", "active", datetime.now(UTC), "Débris près du port", "Alex")], has_more
     monkeypatch.setattr(PostgreSQLAdminReadRepository, "user_reports", reports)
     sign_in(client)
     response = client.get(f"/admin/users/{USER_ID}/reports?page={page}")
     assert response.status_code == 200
     assert calls == [(USER_ID, page)]
     assert f'/admin/reports/{REPORT_ID}' in response.text
+    assert 'Signalements de Alex' in response.text
+    assert 'Débris près du port' in response.text
+    assert f'>{REPORT_ID}</a>' not in response.text
+    assert f'<p class="identifier">{USER_ID}</p>' not in response.text
     assert ('rel="next"' in response.text) is has_more
     assert ('rel="prev"' in response.text) is (page > 1)
+
+
+@pytest.mark.parametrize("status", ["", "active", "removed", "expired"])
+def test_reports_search_and_status_preserve_pagination(client, services, monkeypatch, status):
+    from app.domain.report import ReportStatus
+
+    reads, _ = services
+    original = reads.list_reports
+    calls = []
+
+    def filtered_reports(**kwargs):
+        calls.append(kwargs)
+        return original(page=kwargs["page"], limit=kwargs["limit"])
+
+    monkeypatch.setattr(reads, "list_reports", filtered_reports)
+    sign_in(client)
+    response = client.get(
+        "/admin/reports",
+        params={"search": " bouée ", "status": status, "page": 2, "limit": 10},
+    )
+    assert response.status_code == 200
+    assert calls == [{"page": 2, "limit": 10,
+                      "status": ReportStatus(status) if status else None,
+                      "search": "bouée"}]
+    assert 'value="bouée"' in response.text
+    assert 'status=' + status + '&amp;page=3&amp;limit=10' in response.text
+    assert 'value="' + status + '" aria-label=' in response.text
+    assert 'aria-pressed="true"' in response.text
+    calls.clear()
+    assert client.get("/admin/reports?status=invalid").status_code == 422
+    assert client.get("/admin/reports", params={"search": "a" * 81}).status_code == 422
+    assert not calls

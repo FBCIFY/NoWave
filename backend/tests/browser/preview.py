@@ -6,6 +6,7 @@ The normal browser login accepts admin@nowave.test / preview-only.
 
 import argparse
 from datetime import UTC, datetime, timedelta
+from dataclasses import replace
 import json
 from http.cookies import SimpleCookie
 import os
@@ -126,7 +127,7 @@ def configure_preview():
     users = [AdminUserData(
         id=UUID(int=i + 10), username=name, email=f"navigateur{i}@nowave.test",
         role=UserRole.USER, status=UserStatus.SUSPENDED if i == 2 else UserStatus.ACTIVE,
-        created_at=now - timedelta(days=42 + i), updated_at=now, reports_count=1,
+        created_at=now - timedelta(days=42 + i), updated_at=now, reports_count=2 if i == 0 else 1,
     ) for i, name in enumerate(["Alex", "Léa", "Camille"])]
     # Same synthetic scenarios and offshore locations as web/src/data.js.
     reports = [AdminReportDetailData(
@@ -143,11 +144,18 @@ def configure_preview():
         (ReportCategory.MARINE_ANIMAL, "Une baleine observée au large, en direction de l’est.", -28.7, 38.33),
         (ReportCategory.POLLUTION, "Débris plastiques dispersés en surface.", 178.4, -18.29),
     ])]
+    # A removed duplicate makes the inactive list and its audit inspectable.
+    reports.append(replace(
+        reports[0], id=UUID(int=103),
+        description="Conteneur signalé en double au large de Singapour.",
+        observed_at=now - timedelta(hours=2),
+        status=ReportStatus.REMOVED, removed_at=now - timedelta(hours=1), version=2,
+    ))
     actions = [ModerationActionData(
         id=UUID(int=200), action=ModerationActionType.REMOVE_REPORT,
         admin_user_id=admin.id, admin_username=admin.username, target_user_id=None,
-        target_report_id=reports[0].id, target_photo_report_id=None,
-        reason="Doublon — entrée synthétique pour l’aperçu.", previous_status="active",
+        target_report_id=reports[-1].id, target_photo_report_id=None,
+        reason="Doublon d’un signalement déjà présent sur la carte.", previous_status="active",
         new_status="removed", created_at=now - timedelta(hours=1),
     )]
 
@@ -156,8 +164,11 @@ def configure_preview():
         return Page(items=items[start:start + limit], page=number, limit=limit, total=len(items))
 
     class Reads:
-        def list_reports(self, page=1, limit=20, status=None, now=None):
-            return make_page([r for r in reports if status is None or r.status == status], page, limit)
+        def list_reports(self, page=1, limit=20, status=None, now=None, search=""):
+            query = search.strip().casefold()
+            matching = [r for r in reports if (status is None or r.status == status)
+                        and (not query or query in f"{r.description} {r.author_username} {r.id}".casefold())]
+            return make_page(matching, page, limit)
 
         def get_report(self, report_id, now=None):
             for report in reports:
@@ -186,7 +197,7 @@ def configure_preview():
 
         def user_reports(self, user_id, page):
             found = [r for r in reports if r.author_id == user_id]
-            return [(r.id, r.category.value, r.status.value, r.observed_at)
+            return [(r.id, r.category.value, r.status.value, r.observed_at, r.description, r.author_username)
                     for r in make_page(found, page, 20).items], len(found) > page * 20
 
     reads = Reads()
@@ -219,6 +230,7 @@ def configure_preview():
     app.dependency_overrides[admin_pages.get_admin_read_service] = lambda: reads
     admin_pages.PostgreSQLAdminReadRepository = lambda: reads
 
+    app.state.preview_mode = True
     app.add_middleware(PreviewCookiesMiddleware)
 
     @app.middleware("http")
@@ -230,7 +242,10 @@ def configure_preview():
         if request.method not in {"GET", "HEAD"} and path not in {
             "/admin/login", "/admin/logout",
         }:
-            return JSONResponse({"detail": "Aperçu local : modifications désactivées."}, status_code=409)
+            from app.web.templating import render
+            return render(request, "admin/preview-action.html", {
+                "back_path": "/admin/users" if path.startswith("/admin/actions/users/") else "/admin/reports",
+            }, status_code=409)
         response = await call_next(request)
         response.headers["X-NoWave-Preview"] = "synthetic-read-only"
         return response

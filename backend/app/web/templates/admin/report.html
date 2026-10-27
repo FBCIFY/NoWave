@@ -1,6 +1,7 @@
 {% extends 'admin/base.html' %}
 {% from 'admin/ui.html' import badge, date_label, identity %}
 {% block title %}Détail du signalement{% endblock %}
+{% block body_class %}admin-shell reports-page{% endblock %}
 {% block content %}
 <a class="back-link" data-nav-back href="{{ request.url_for('admin_reports').path }}">← Retour</a>
 <div class="page-head"><h1>Signalement</h1><a class="button" href="/admin?report={{ item.id }}">Voir sur la carte <span aria-hidden="true">↗</span></a></div>
@@ -37,7 +38,7 @@
 </details>
 {% else %}<a class="back-link" href="{{ request.url_for('admin_audit').path }}">Voir l’historique global de modération</a>{% endif %}
 <section class="card moderation-card">
-  <div><p class="eyebrow">ACTIONS</p><h2>Modération</h2><p>Chaque intervention est conservée dans l’historique.</p></div>
+  <h2>Modération</h2>
   <div class="actions">
     {% if item.status.value == 'removed' %}
     <a class="button" href="{{ request.url_for('admin_action', collection='reports', target_id=item.id, action_name='restore').path }}">Restaurer le signalement</a>

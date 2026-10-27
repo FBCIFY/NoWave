@@ -89,6 +89,7 @@ class AdminReadRepository(ABC):
         limit: int,
         status: ReportStatus | None,
         now: datetime,
+        search: str = "",
     ) -> Page[AdminReportSummaryData]:
         pass
 

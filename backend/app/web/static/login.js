@@ -5,7 +5,10 @@
   const toggle = document.getElementById('password-toggle');
   toggle.addEventListener('click', () => {
     password.type = password.type === 'password' ? 'text' : 'password';
-    toggle.textContent = password.type === 'password' ? 'Afficher' : 'Masquer';
+    const hidden = password.type === 'password';
+    toggle.textContent = hidden ? 'Afficher' : 'Masquer';
+    toggle.setAttribute('aria-label', hidden ? 'Afficher le mot de passe' : 'Masquer le mot de passe');
+    toggle.setAttribute('aria-pressed', String(!hidden));
   });
   const status = document.getElementById('globe-status');
   const reduced = matchMedia('(prefers-reduced-motion: reduce)');

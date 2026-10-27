@@ -28,6 +28,7 @@ from app.domain.pagination import (
     MAX_PAGE_LIMIT,
     Page,
 )
+from app.domain.report import ReportStatus
 from app.domain.user import UserRole, UserStatus
 from app.web.csrf import (
     check_login_csrf,
@@ -385,11 +386,22 @@ def admin_reports(
         ge=1,
         le=MAX_PAGE_LIMIT,
     ),
+    report_status: str = Query(default="", alias="status"),
+    search: str = Query(default="", max_length=80),
     context: AdminContext = Depends(get_admin_context),
     service: AdminReadService = Depends(get_admin_read_service),
 ):
+    search = search.strip()
     try:
-        result = service.list_reports(page=page, limit=limit)
+        status_filter = ReportStatus(report_status) if report_status else None
+    except ValueError:
+        return render_admin_error(request, context, "Statut invalide",
+                                  "Choisissez un statut de signalement valide.", 422)
+    try:
+        result = service.list_reports(
+            page=page, limit=limit, status=status_filter,
+            **({"search": search} if search else {}),
+        )
     except DEPENDENCY_ERRORS:
         raise WebServiceUnavailable() from None
 
@@ -401,6 +413,8 @@ def admin_reports(
             "result": result,
             "page": page,
             "limit": limit,
+            "search": search,
+            "report_status": report_status,
         },
     )
 
@@ -505,7 +519,9 @@ def admin_user_reports(
         raise WebServiceUnavailable() from None
     return render_admin_page(request, context, "admin/user-reports.html", {
         "user_id": user_id, "page": page, "has_more": has_more,
-        "items": [dict(id=row[0], category=row[1], status=row[2], observed_at=row[3])
+        "username": rows[0][5] if rows else None,
+        "items": [dict(id=row[0], category=row[1], status=row[2], observed_at=row[3],
+                       description=row[4])
                   for row in rows],
     })
 

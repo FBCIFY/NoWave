@@ -1,17 +1,33 @@
 {% extends 'admin/base.html' %}
-{% from 'admin/ui.html' import badge, date_label %}
+{% from 'admin/ui.html' import label, date_label %}
 {% block title %}Audit de modération{% endblock %}
+{% block body_class %}admin-shell audit-page{% endblock %}
 {% block content %}
-<div class="page-head"><h1>Audit de modération</h1></div>
-<section class="card table-card audit-card">
-  <div class="section-head"><h2>Actions de modération</h2><span class="count-badge">{{ result.total }} au total</span></div>
-  {% if result.items %}<div class="table-scroll"><table class="audit-table"><caption class="sr-only">Actions de modération</caption>
-    <colgroup><col class="audit-col-date"><col class="audit-col-action"><col class="audit-col-reason"><col class="audit-col-change"><col class="audit-col-target"></colgroup>
-    <thead><tr><th scope="col">Date</th><th scope="col">Action</th><th scope="col">Motif</th><th scope="col">Évolution</th><th scope="col">Cible</th></tr></thead>
-    <tbody>{% for item in result.items %}<tr><td class="audit-date">{% if item.created_at and item.created_at.strftime is defined %}<time datetime="{{ item.created_at.isoformat() }}"><span>{{ item.created_at.strftime('%d/%m/%Y') }}</span><small>{{ item.created_at.strftime('%H:%M %Z') }}</small></time>{% else %}{{ date_label(item.created_at) }}{% endif %}</td><td>{{ badge(item.action.value) }}</td><td class="preserve audit-reason">{{ item.reason }}</td><td class="audit-change"><div class="status-change">{{ badge(item.previous_status) }}<span aria-label="devient">→</span>{{ badge(item.new_status) }}</div></td><td class="audit-target">
-      {% if item.target_report_id or item.target_photo_report_id %}<a href="{{ request.url_for('admin_report', target_id=item.target_report_id or item.target_photo_report_id).path }}">Voir le signalement ↗</a>{% elif item.target_user_id %}<a href="{{ request.url_for('admin_users').path }}">Utilisateurs ↗</a>{% else %}<span class="count-badge">Cible supprimée</span>{% endif %}
-    </td></tr>{% endfor %}</tbody>
-  </table></div>{% else %}<div class="empty"><h3>Aucune action</h3><p>Les actions de modération apparaîtront ici.</p></div>{% endif %}
-  {% include 'admin/pagination.html' %}
+<a class="back-link" data-nav-back href="/admin">← Retour</a>
+<div class="page-head audit-heading"><h1>Audit de modération</h1><span class="audit-total">{{ result.total }} action{{ 's' if result.total != 1 else '' }}</span></div>
+<section aria-label="Historique de modération">
+  {% if result.items %}
+  <ol class="audit-feed">
+    {% for item in result.items %}
+    <li class="audit-entry">
+      <div class="audit-entry-content">
+        <h2>{{ label(item.action.value) }}</h2>
+        {% if item.reason %}<p class="audit-entry-reason preserve">{{ item.reason }}</p>{% endif %}
+        <div class="audit-entry-meta">
+          {{ date_label(item.created_at) }}
+          <span aria-hidden="true">·</span>
+          <span>{{ item.admin_username or 'Administrateur supprimé' }}</span>
+        </div>
+      </div>
+      {% if item.target_report_id or item.target_photo_report_id %}
+      <a class="audit-entry-link" href="{{ request.url_for('admin_report', target_id=item.target_report_id or item.target_photo_report_id).path }}">Voir le signalement <span aria-hidden="true">→</span></a>
+      {% elif item.target_user_id %}
+      <a class="audit-entry-link" href="{{ request.url_for('admin_user_reports', user_id=item.target_user_id).path }}">Voir le compte <span aria-hidden="true">→</span></a>
+      {% endif %}
+    </li>
+    {% endfor %}
+  </ol>
+  {% else %}<p class="audit-empty">Aucune action de modération.</p>{% endif %}
+  {% if result.pages > 1 or page > 1 %}{% include 'admin/pagination.html' %}{% endif %}
 </section>
 {% endblock %}

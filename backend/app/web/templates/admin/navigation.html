@@ -3,7 +3,7 @@
   <nav class="main-nav" aria-label="Navigation administration">
     <a href="/admin"{% if request.url.path == '/admin' %} aria-current="page"{% endif %}>La carte</a>
     <a href="/admin/users"{% if request.url.path == '/admin/users' %} aria-current="page"{% endif %}>Utilisateurs</a>
-    <a href="/admin/reports"{% if request.url.path.startswith('/admin/reports') or request.url.path.startswith('/admin/actions') %} aria-current="page"{% endif %}>Modération</a>
+    <a href="/admin/reports"{% if request.url.path.startswith('/admin/reports') or request.url.path.startswith('/admin/actions') %} aria-current="page"{% endif %}>Signalements</a>
     <a href="/admin/audit"{% if request.url.path == '/admin/audit' %} aria-current="page"{% endif %}>Audit</a>
   </nav>
   <form class="admin-map-logout" method="post" action="/admin/logout">

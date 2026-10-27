@@ -163,7 +163,7 @@ test('user search, status filters and user reports remain reachable',async({page
   await page.locator('tbody a').first().click();await expect(page.locator('.report-summary')).toContainText('Synthetic report 7/');
   await page.getByRole('link',{name:'← Retour',exact:true}).click();await expect(page).toHaveURL(url=>url.pathname===`/admin/users/${id(7)}/reports`&&url.searchParams.get("page")==="2");
   await page.getByRole('link',{name:'← Utilisateurs',exact:true}).click();await expect(page.getByLabel('Rechercher un compte')).toHaveValue('user7@nowave.test');
-  await page.getByLabel('Statut',{exact:true}).selectOption('suspended');await page.getByRole('button',{name:'Rechercher',exact:true}).click();await expect(page.locator('main')).toContainText('Aucun utilisateur');
-  await page.getByLabel('Statut',{exact:true}).selectOption('');await page.getByRole('button',{name:'Rechercher',exact:true}).click();await expect(page.locator('.users-table tbody tr')).toHaveCount(1);
+  await page.getByRole('button',{name:'Comptes suspendus',exact:true}).click();await expect(page.locator('main')).toContainText('Aucun utilisateur');
+  await page.getByRole('button',{name:'Tous les statuts',exact:true}).click();await expect(page.locator('.users-table tbody tr')).toHaveCount(1);
   expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
 });

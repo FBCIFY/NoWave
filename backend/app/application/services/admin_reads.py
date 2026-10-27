@@ -34,6 +34,7 @@ class AdminReadService:
         limit: int = DEFAULT_PAGE_LIMIT,
         status: ReportStatus | None = None,
         now: datetime | None = None,
+        search: str = "",
     ) -> Page[AdminReportSummaryData]:
         validate_page(page, limit)
 
@@ -42,6 +43,7 @@ class AdminReadService:
             limit=limit,
             status=status,
             now=self._now(now),
+            **({"search": search.strip()} if search.strip() else {}),
         )
 
     def get_report(

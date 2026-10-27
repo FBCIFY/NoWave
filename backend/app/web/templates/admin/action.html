@@ -10,6 +10,7 @@
   <p id="reason-help" class="form-help">Expliquez précisément la raison de cette action.</p>
   <textarea id="reason" name="reason" rows="5" required aria-describedby="reason-help">{{ reason }}</textarea>
   <label class="confirmation"><input type="checkbox" name="confirmed" value="yes" required> Je confirme « {{ action.label }} ».</label>
-  <div class="actions"><button type="submit">Confirmer l’action</button><a data-nav-back href="{{ request.url_for('admin_reports' if action.collection == 'reports' else 'admin_users').path }}">Annuler</a></div>
+  {% if request.app.state.preview_mode|default(false) %}<p class="form-help" role="status">Aperçu local : vous pouvez consulter ce formulaire, mais les modifications ne sont pas enregistrées.</p>{% endif %}
+  <div class="actions"><button type="submit"{% if request.app.state.preview_mode|default(false) %} disabled{% endif %}>Confirmer l’action</button><a data-nav-back href="{{ request.url_for('admin_reports' if action.collection == 'reports' else 'admin_users').path }}">Annuler</a></div>
 </form>
 {% endblock %}

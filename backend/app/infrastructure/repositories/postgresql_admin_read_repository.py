@@ -73,8 +73,11 @@ class PostgreSQLAdminReadRepository(
         """One bounded page and a lookahead, without a separate count query."""
         offset = page_offset(page, 20)
         query = f"""
-            SELECT r.id, r.category, {EFFECTIVE_REPORT_STATUS}, r.observed_at
-            FROM nowave.reports r WHERE r.author_id = %(user_id)s
+            SELECT r.id, r.category, {EFFECTIVE_REPORT_STATUS}, r.observed_at,
+                   r.description, u.username
+            FROM nowave.reports r
+            LEFT JOIN nowave.users u ON u.id = r.author_id
+            WHERE r.author_id = %(user_id)s
             ORDER BY r.observed_at DESC, r.id DESC LIMIT 21 OFFSET %(offset)s
         """
         with database_connection() as connection:
@@ -111,6 +114,7 @@ class PostgreSQLAdminReadRepository(
         limit: int,
         status: ReportStatus | None,
         now: datetime,
+        search: str = "",
     ) -> Page[AdminReportSummaryData]:
         filters = f"""
             WHERE (
@@ -118,6 +122,18 @@ class PostgreSQLAdminReadRepository(
                 OR ({EFFECTIVE_REPORT_STATUS}) = %(status)s
             )
         """
+
+        if search:
+            filters += """
+                AND (r.description ILIKE %(search)s
+                     OR r.id::text = %(exact_search)s
+                     OR EXISTS (
+                         SELECT 1 FROM nowave.users AS author
+                         WHERE author.id = r.author_id
+                           AND author.username ILIKE %(search)s
+                     ))
+            """
+        escaped_search = search.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
 
         count_query = f"""
             SELECT count(*)
@@ -168,6 +184,8 @@ class PostgreSQLAdminReadRepository(
                     else None
                 ),
                 "now": now,
+                "search": f"%{escaped_search}%",
+                "exact_search": search,
             },
         )
 

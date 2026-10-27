@@ -90,6 +90,31 @@
       !!link.closest(".pagination"),
     );
   });
+  document.addEventListener("submit", (event) => {
+    const form = event.target;
+    if (event.defaultPrevented || !form.matches(".user-filters")) return;
+    const submitter = event.submitter;
+    form.setAttribute("aria-busy", "true");
+    if (submitter) {
+      submitter.classList.add("is-loading");
+      if (submitter.classList.contains("user-status-filter")) {
+        form.querySelectorAll(".user-status-filter").forEach((button) => {
+          button.setAttribute("aria-pressed", String(button === submitter));
+        });
+      }
+    }
+    // Keep the native GET submission: the clicked button supplies the status.
+  });
+  window.addEventListener("pageshow", () => {
+    const status = new URL(location.href).searchParams.get("status") || "";
+    document.querySelectorAll(".user-filters").forEach((form) => {
+      form.removeAttribute("aria-busy");
+      form.querySelectorAll(".is-loading").forEach((button) => button.classList.remove("is-loading"));
+      form.querySelectorAll(".user-status-filter").forEach((button) => {
+        button.setAttribute("aria-pressed", String(button.value === status));
+      });
+    });
+  });
   const scrollKey = "nowave.admin.scroll";
   function saveScroll() {
     try {
