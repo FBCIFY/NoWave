@@ -8,6 +8,7 @@ import {
   easeCamera,
   settledStep,
   getTransitionState,
+  stepInDirection,
 } from "./story-state.js";
 
 test("every product screen has a readable stop before the free map", () => {
@@ -83,4 +84,12 @@ test("reduced motion switches scenes without interpolated travel", () => {
     assert.ok(state.blend === 0 || state.blend === 1);
     assert.equal(state.opacity, 1);
   }
+});
+
+test("reversing mid-trip selects the nearest stop in the requested direction", () => {
+  const middle = (storyStops[1] + storyStops[2]) / 2;
+  assert.equal(stepInDirection(middle, -1), 1);
+  assert.equal(stepInDirection(middle, 1), 2);
+  assert.equal(stepInDirection(0, -1), 0);
+  assert.equal(stepInDirection(1, 1), storyStops.length - 1);
 });

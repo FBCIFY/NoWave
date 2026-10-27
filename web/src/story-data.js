@@ -27,4 +27,11 @@ export const journey = [
     asset: "/assets/pollution-v3.png",
     report: "duck",
   },
+  {
+    id: "alerts",
+    label: "Mes alertes",
+    theme: "À PROXIMITÉ",
+    title: ["Les observations", "viennent à vous."],
+    body: "Les alertes autour de votre position.",
+  },
 ];

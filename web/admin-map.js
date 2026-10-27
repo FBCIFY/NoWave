@@ -5,6 +5,9 @@ import { createMapView } from "./src/map-view.js";
 // the same component as the public site; private actions keep their guards.
 let detailRequest;
 async function moderationDetail({ report, container }) {
+  const url = new URL(location.href);
+  url.searchParams.set("report", report.id);
+  history.replaceState(history.state, "", url);
   detailRequest?.abort();
   const current = (detailRequest = new AbortController());
   container
@@ -68,9 +71,11 @@ async function moderationDetail({ report, container }) {
         "Masquer la photo",
         `/admin/actions/reports/${encodeURIComponent(report.id)}/hide-photo`,
       );
+    note.dataset.status = data.status;
     note.textContent =
       { active: "Actif", expired: "Expiré", removed: "Retiré" }[data.status] ||
       "";
+    container.querySelector(".map-view__detail-heading").append(note);
     container.append(actions);
   } catch (error) {
     if (
@@ -82,8 +87,45 @@ async function moderationDetail({ report, container }) {
       note.textContent = error.message;
   }
 }
-const chart = createMapView({ admin: true, onSelectReport: moderationDetail });
+const chart = createMapView({
+  admin: true,
+  onSelectReport: moderationDetail,
+  onReturn() {
+    const navigation = window.NoWaveAdminNavigation;
+    const parent = navigation?.parentPath(location.href, location.origin);
+    if (!parent) return false;
+    if (
+      history.length > 1 &&
+      navigation.safePath(document.referrer, location.origin) === parent
+    )
+      history.back();
+    else location.assign(parent);
+    return true;
+  },
+});
 chart.open();
+const memoryKey = "nowave.admin.map-view";
+const memoryUrl = () => {
+  const url = new URL(location.href);
+  url.searchParams.delete("return_to");
+  return url.pathname + url.search;
+};
+let savedMapView = null;
+try {
+  const saved = JSON.parse(sessionStorage.getItem(memoryKey));
+  if (saved?.url === memoryUrl()) savedMapView = saved.view;
+} catch {
+  /* Optional tab-local navigation memory. */
+}
+chart.restoreNavigation(savedMapView);
+window.addEventListener("pagehide", () => {
+  try {
+    sessionStorage.setItem(
+      memoryKey,
+      JSON.stringify({ url: memoryUrl(), view: chart.captureNavigation() }),
+    );
+  } catch {}
+});
 const header = document.querySelector(".site-header");
 new ResizeObserver(() =>
   document.documentElement.style.setProperty(
@@ -102,20 +144,36 @@ if (direct && /^[0-9a-f-]{36}$/i.test(direct)) {
         throw Error("Fiche indisponible.");
       return response.json();
     })
-    .then((report) =>
-      chart.showReport({
-        id: String(report.id),
-        category: report.category,
-        location: report.final_position.coordinates,
-        observedAt: report.observed_at,
-        expiresAt: Date.parse(report.expires_at),
-        description: report.description || "",
-        author: report.author?.username || "",
-      }),
-    )
+    .then((report) => {
+      chart.showReport(
+        {
+          id: String(report.id),
+          category: report.category,
+          location: report.final_position.coordinates,
+          observedAt: report.observed_at,
+          expiresAt: Date.parse(report.expires_at),
+          description: report.description || "",
+          author: report.author?.username || "",
+        },
+        {
+          asEntry: new URL(location.href).searchParams.has("return_to"),
+        },
+      );
+      chart.restoreNavigation(savedMapView);
+    })
     .catch(() => {
       const status = document.querySelector("#navigation-status");
       status.textContent =
         "Fiche indisponible. Retrouvez les signalements dans Modération.";
     });
 }
+
+document.addEventListener("click", (event) => {
+  if (!event.target.closest("[data-map-back]")) return;
+  const url = new URL(location.href);
+  const selected = document.querySelector(".map-view__detail:not([hidden])");
+  if (selected?.dataset.reportId)
+    url.searchParams.set("report", selected.dataset.reportId);
+  else url.searchParams.delete("report");
+  history.replaceState(history.state, "", url);
+});

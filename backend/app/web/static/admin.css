@@ -295,3 +295,13 @@ dd { margin: 0; }
 @media (max-height:560px) and (min-width:751px) {
   .side-panel { left: 220px; bottom: 20px; max-height: calc(100% - 40px); }
 }
+
+/* Distinct identities and states make operational lists scannable. */
+.page-head--counted { display: flex; flex-direction: row; align-items: center; justify-content: space-between; gap: 20px; }
+.page-head--counted h1 { min-width: 0; margin: 0; }
+.page-total { flex-shrink: 0; margin-left: auto; color: var(--text); font-size: 68px; font-weight: 650; line-height: 1; letter-spacing: -.04em; font-variant-numeric: tabular-nums; }
+.person { display: inline-flex; align-items: center; gap: 11px; min-width: 0; }
+.person-avatar { display: grid; place-items: center; flex-shrink: 0; width: 34px; height: 34px; border-radius: 11px; background: var(--panel-soft); border: 1px solid var(--line); color: var(--muted); font-size: 12px; font-weight: 700; }
+.badge svg { width: 17px; height: 17px; flex-shrink: 0; }
+.report-summary .badge-row { gap: 10px; }
+@media(max-width:750px) { .page-head--counted { gap: 12px; } .page-total { font-size: 50px; } .person { gap: 8px; } .person-avatar { width: 29px; height: 29px; border-radius: 9px; } }

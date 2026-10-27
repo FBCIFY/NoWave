@@ -2,10 +2,16 @@
 
 Landing maritime sombre et épurée, avec la carte de l’administration et quatre
 illustrations 3D rafraîchies, ancrées sur le globe. Un geste de molette ou un
-balayage passe à une seule étape. Chaque vue se stabilise avant la suivante.
-Les trajets prennent le temps de reculer avant le déplacement, puis
-de rejoindre progressivement la côte. Les petites corrections durent environ
-une seconde ; les traversées océaniques prennent entre six et huit secondes.
+balayage passe à une seule étape. Continuer à défiler accélère progressivement
+le trajet en cours, puis la caméra freine et se stabilise au repère.
+Un saut de plusieurs slides utilise un trajet plus court vers la destination choisie. L’inertie
+ne déclenche pas l’étape suivante.
+Les étapes parcourent plusieurs îles de l’Atlantique : Madère, Tenerife,
+Grande Canarie, Santo Antão et Sal. Les observations restent en mer,
+près des côtes. Les transitions régionales prennent environ deux secondes,
+avec un recul modéré de la caméra plutôt qu’un tour du globe.
+L’accélération du trackpad reste limitée et ignore les petites fins de geste.
+Un geste opposé inverse le déplacement en cours vers le repère voisin.
 
 ## Tester localement
 
@@ -69,21 +75,35 @@ Les variables du lanceur `NOWAVE_PREVIEW_API_PORT`, `NOWAVE_PREVIEW_WEB_PORT`,
 ## Parcours
 
 - Accueil avec phare 3D, puis animal marin, obstacle et pollution.
-  Le parcours part de Madère et relie les Açores, Singapour et les Fidji : les grands
-  déplacements reculent vers le globe avant de rejoindre la côte suivante.
+  Le phare reste à Madère. La baleine se trouve au large de Tenerife, le conteneur
+  au large d’Agaete, à l’ouest de Grande Canarie, et les déchets près de Santo Antão, au Cap-Vert.
+  Le sonar termine le parcours au large de Sal, plus à l’est dans le même archipel.
+  Les observations et l’emprise de leurs illustrations gardent une marge en mer
+  par rapport aux côtes, y compris pendant les transitions.
 - Observations fictives compactes : catégorie, texte, auteur, heure.
   La fiche donne le lieu et un historique de publication.
 - Création d’un exemple depuis « Signaler » : trois catégories, commentaire
   facultatif et confirmation locale. Aucune requête de publication.
-- « Mes alertes » suit la dernière slide et reste accessible par `/#alertes`,
-  sans lien supplémentaire dans le header. Cette vue fixe masque le parcours ;
-  son retour retrouve la dernière étape, y compris après un rechargement.
-  Le rayon de 10 NM apparaît dans le sous-titre, à côté de l’activation.
-  Un sonar discret en arrière-plan illustre la proximité, sans bouton de test
-  ni carte de réglages. L’historique reste consultable quand les alertes sont
-  désactivées ; l’animation s’arrête alors.
-  Aucun appel à Notification ni demande de permission : cette démonstration
-  ne modifie ni préférence réelle ni historique personnel.
+- « Mes alertes » est la quatrième slide, juste après les déchets, sur la même
+  carte du parcours. La caméra rejoint progressivement le sonar avec le même
+  freinage que les autres étapes. Aucun lien supplémentaire dans le header.
+  Le lien `/#alertes` et le dernier point du parcours ciblent cette slide.
+  Le parcours s’y arrête : continuer le geste ne peut pas ouvrir la carte libre.
+  Le panneau garde « Mes alertes », le rayon de 10 NM, une courte accroche et
+  trois exemples. Les fiches montrent uniquement le type, la description,
+  l’heure, la distance et le lieu. Sur mobile, elles restent dans la partie basse
+  et laissent le sonar visible. Les barres de défilement et l’indicateur de slides
+  sont masqués ; les gestes et le clavier restent disponibles.
+  La sélection et le retour d’une alerte gardent exactement le même cadrage.
+  Le panneau explique les notifications de l’application, sans interrupteur fictif.
+  Le sonar reprend le mobile : trois fronts géographiques rouges avec halo,
+  espacés de deux secondes, qui atteignent le point GPS en six secondes en
+  s’effaçant. Les exemples sont situés au large de Sal, à la distance affichée
+  du même point GPS fictif. Aucun second moteur de carte n’est créé.
+  Les couches et l’animation s’arrêtent dès que la slide est quittée.
+  Le mode à mouvements réduits conserve les marqueurs.
+  Aucun appel à Notification ni demande de géolocalisation ou de permission :
+  cette démonstration ne modifie ni préférence réelle ni historique personnel.
 - Onglet « La carte » en pleine page, accessible directement via `/#carte`.
   Le panneau gauche affiche les observations actives les plus récentes,
   provenant de `/api/v1/map/observations`, indépendamment de la zone visible.
@@ -117,6 +137,9 @@ cartographie quand le backend n’est pas disponible.
 Le build produit les entrées publique et admin ainsi qu’un seul CSS partagé
 `/assets/nowave.css`. Le backend admin authentifie toujours la page et les
 lectures privées ; les actions gardent leurs pages de confirmation et leur CSRF.
+Les retours remontent une étape à la fois (liste ou carte, fiche, action), avec
+le cadrage, les filtres et la pagination conservés dans l’onglet. Les destinations
+de retour sont limitées aux pages de la même administration.
 En développement, Vite transmet son contexte et sert l’entrée source. En
 production, le frontal doit servir les assets du même build que la page admin.
 

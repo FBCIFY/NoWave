@@ -23,10 +23,10 @@ test("long coastal transfers show a globe before arriving at the exact example",
       assert.ok(Math.abs(view.y) <= 85);
       assert.ok(view.zoom >= 0.5 && view.zoom <= 12);
     }
-    if (i > 1)
+    if ((globeDistance(from, to) * 180) / Math.PI > 25)
       assert.ok(
-        cameraBetween(from, to, 0.5).zoom >= 2.5 &&
-          cameraBetween(from, to, 0.5).zoom <= 2.7,
+        cameraBetween(from, to, 0.5).zoom >= 4.1 &&
+          cameraBetween(from, to, 0.5).zoom <= 4.3,
       );
   }
 });
@@ -43,14 +43,31 @@ test("scene destinations and illustrated report positions stay aligned", () => {
     );
   });
 });
-test("nearby coastal trips are shorter than bounded ocean transfers", () => {
-  const nearby = cameraTravelDuration(overview, mapJourney[0]);
-  assert.ok(nearby >= 3600 && nearby <= 5600);
-  for (let i = 1; i < mapJourney.length; i++) {
-    const duration = cameraTravelDuration(mapJourney[i - 1], mapJourney[i]);
-    assert.ok(duration >= 5800 && duration <= 8000);
-    assert.ok(duration > nearby);
+test("the journey spans several Atlantic islands with short regional transfers", () => {
+  const poses = [overview, ...mapJourney];
+  const legs = poses
+    .slice(1)
+    .map((to, index) => globeDistance(poses[index], to) * 6371008.8);
+  assert.ok(legs.filter((meters) => meters > 100000).length >= 3);
+  assert.ok(
+    Math.max(...poses.map((pose) => pose.y)) -
+      Math.min(...poses.map((pose) => pose.y)) >
+      15,
+  );
+  assert.ok(
+    Math.max(...poses.map((pose) => pose.x)) -
+      Math.min(...poses.map((pose) => pose.x)) >
+      8,
+  );
+  for (let i = 1; i < poses.length; i++) {
+    const duration = cameraTravelDuration(poses[i - 1], poses[i]);
+    assert.ok(duration >= 1400 && duration <= 2700);
+    assert.ok(legs[i - 1] < 2000000);
+    assert.ok(cameraBetween(poses[i - 1], poses[i], 0.5).zoom >= 5.5);
   }
+  const distant = { ...overview, x: 104, y: 1 };
+  assert.ok(cameraTravelDuration(overview, distant) <= 3600);
+  assert.ok(cameraBetween(overview, distant, 0.5).zoom >= 4.1);
 });
 test("coastal camera travel limits zoom and angular speed and eases at both ends", () => {
   const poses = [overview, ...mapJourney];
@@ -66,9 +83,9 @@ test("coastal camera travel limits zoom and angular speed and eases at both ends
       const zoomSpeed = Math.abs(next.zoom - previous.zoom) / secondsPerFrame;
       const angularSpeed =
         (globeDistance(previous, next) * 180) / Math.PI / secondsPerFrame;
-      assert.ok(zoomSpeed < 8, `zoom speed ${zoomSpeed} on route ${i}`);
+      assert.ok(zoomSpeed < 16, `zoom speed ${zoomSpeed} on route ${i}`);
       assert.ok(
-        angularSpeed < 60,
+        angularSpeed < 170,
         `angular speed ${angularSpeed} on route ${i}`,
       );
       if (frame === 1 || frame === count) assert.ok(zoomSpeed < 0.02);
@@ -80,4 +97,11 @@ test("coastal camera travel limits zoom and angular speed and eases at both ends
     regional.zoom >= 5.5 && regional.zoom < overview.zoom,
     "regional travel stays close to the coast while allowing a gentle pullback",
   );
+});
+
+test("jumping several slides shortens travel while retaining the selected destination", () => {
+  const normal = cameraTravelDuration(overview, mapJourney[2]);
+  const jump = cameraTravelDuration(overview, mapJourney[2], 3);
+  assert.ok(jump < normal && jump >= 1000);
+  assert.deepEqual(cameraBetween(overview, mapJourney[2], 1), mapJourney[2]);
 });

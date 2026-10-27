@@ -13,5 +13,6 @@
   {% include 'admin/navigation.html' %}
   <main><section id="carte" class="map-view" aria-label="Carte des observations maritimes"></section></main>
   <script type="module" src="{{ '/admin-map.js' if dev else '/assets/admin-map.js' }}"></script>
+  <script defer src="/admin-static/admin-navigation.js"></script>
 </body>
 </html>

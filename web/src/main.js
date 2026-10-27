@@ -30,15 +30,17 @@ function reportCard(id) {
   return `<button class="floating-report ${report.category}" data-report-demo="${id}"><span class="report-top"><span class="badge">${reportCategories[report.category]}</span><small>${report.place}</small></span><strong>${report.description}</strong><span class="report-byline"><span class="avatar">${report.author[0]}</span><span>${report.author}</span><time>${report.time}</time><span aria-hidden="true">↗</span></span></button>`;
 }
 $("#map-spots").innerHTML = journey
+  .filter((scene) => scene.report)
   .map(
     (scene) =>
       `<div class="map-spot spot-${scene.id}" data-spot="${scene.id}" inert><div class="geo-anchor" data-geo="${scene.report}"><img class="scene-art" src="${scene.asset}" alt="" draggable="false" decoding="async" /><span class="geo-point"></span></div>${reportCard(scene.report)}</div>`,
   )
   .join("");
 $("#story-narration").innerHTML = journey
-  .map(
-    (scene) =>
-      `<article class="story-copy" id="story-${scene.id}" hidden><p class="eyebrow">${scene.theme}</p><h2>${scene.title.join("<br/>")}</h2>${scene.id === "obstacle" ? '<button class="text-link" data-compose>Signaler ↗</button>' : ""}</article>`,
+  .map((scene) =>
+    scene.id === "alerts"
+      ? '<article id="story-alerts" hidden><section id="alertes" class="alerts-page" aria-labelledby="alerts-title"></section></article>'
+      : `<article class="story-copy" id="story-${scene.id}" hidden><p class="eyebrow">${scene.theme}</p><h2>${scene.title.join("<br/>")}</h2>${scene.id === "obstacle" ? '<button class="text-link" data-compose>Signaler ↗</button>' : ""}</article>`,
   )
   .join("");
 $(".story-steps").innerHTML = [{ label: "Accueil" }, ...journey]
@@ -47,14 +49,21 @@ $(".story-steps").innerHTML = [{ label: "Accueil" }, ...journey]
       `<button data-story-step="${i}" aria-label="${scene.label}" title="${scene.label}" ${i === 0 ? 'aria-current="step"' : ""}><span></span></button>`,
   )
   .join("");
-const alerts = createNotificationDemo($("#alertes"));
-const composer = createReportComposer($("#compose-dialog"));
 const world = createWorld();
+const alerts = createNotificationDemo($("#alertes"), {
+  world,
+  onFocus: (report) => story.focusReport(report),
+});
+const composer = createReportComposer($("#compose-dialog"));
 const story = createStory({
   world,
   isMotionPaused: () => motionPaused,
-  onComplete: () => {
-    navigate("alertes");
+  onStep: (state) => {
+    const active = state.step === journey.length && state.opacity > 0.5;
+    alerts.setVisible(active);
+    document.title = active
+      ? "Mes alertes · NoWave"
+      : "NoWave — La mer, en commun.";
   },
 });
 const mapView = createMapView({ onReport: () => composer.open() });
@@ -73,48 +82,47 @@ function showView() {
     : location.hash === "#alertes"
       ? "alertes"
       : "home";
-  if (showingView === nextView) return;
-  if (showingView === "home") tourScroll = scrollY;
+  if (showingView === nextView) {
+    if (nextView === "alertes") story.scrollToStep(journey.length);
+    return;
+  }
+  if (showingView && showingView !== "carte") tourScroll = scrollY;
   if (showingView === "alertes") alertsScroll = $("#alertes").scrollTop;
   const previousView = showingView;
   showingView = nextView;
   story.setVisible(false);
   world.setVisible(false);
   if (nextView !== "carte") mapView.close();
-  $("#ocean-story").hidden = nextView !== "home";
+  $("#ocean-story").hidden = nextView === "carte";
   $("#carte").hidden = nextView !== "carte";
-  $("#alertes").hidden = nextView !== "alertes";
-  $(".footer").hidden = nextView !== "home";
+  $(".footer").hidden = nextView === "carte";
   document.body.classList.toggle("map-page", nextView === "carte");
-  document.body.classList.toggle("alerts-page-open", nextView === "alertes");
   scrollTo({
-    top: nextView === "home" ? tourScroll : 0,
+    top: nextView === "carte" ? 0 : tourScroll,
     behavior: "instant",
   });
   if (nextView === "carte") mapView.open();
-  if (nextView === "home") {
+  if (nextView !== "carte") {
     world.setVisible(true);
     story.setVisible(true);
   }
   $("#alertes").scrollTop = alertsScroll;
-  alerts.setVisible(nextView === "alertes");
+  if (nextView === "carte") alerts.setVisible(false);
   document.title =
     nextView === "alertes"
       ? "Mes alertes · NoWave"
       : "NoWave — La mer, en commun.";
-  if (nextView === "alertes" && previousView)
-    $("#alerts-title").focus({ preventScroll: true });
+  if (nextView === "alertes") story.scrollToStep(journey.length, !previousView);
   document.querySelectorAll(".main-nav a").forEach((link) => {
     const active =
-      link.getAttribute("href") ===
-      (nextView === "home" ? "#" : `#${nextView}`);
+      link.getAttribute("href") === (nextView === "carte" ? "#carte" : "#");
     if (active) link.setAttribute("aria-current", "page");
     else link.removeAttribute("aria-current");
   });
   saveView();
 }
 function saveView() {
-  if (showingView === "home") tourScroll = scrollY;
+  if (showingView && showingView !== "carte") tourScroll = scrollY;
   if (showingView === "alertes") alertsScroll = $("#alertes").scrollTop;
   try {
     sessionStorage.setItem(
@@ -150,9 +158,8 @@ document.addEventListener("click", (event) => {
   if (anchor) {
     event.preventDefault();
     const href = anchor.getAttribute("href");
-    const wasHome = showingView === "home";
     navigate(href === "#" ? "home" : href.slice(1));
-    if (href === "#" && wasHome) story.scrollToStep(0);
+    if (href === "#") story.scrollToStep(0);
     return;
   }
   if (event.target.closest("[data-resume-tour]")) {

@@ -1,14 +1,14 @@
 {% extends 'admin/base.html' %}
-{% from 'admin/ui.html' import badge, date_label %}
+{% from 'admin/ui.html' import badge, date_label, identity %}
 {% block title %}Détail du signalement{% endblock %}
 {% block content %}
-<a class="back-link" href="{{ request.url_for('admin_reports').path }}">← Signalements</a>
+<a class="back-link" data-nav-back href="{{ request.url_for('admin_reports').path }}">← Retour</a>
 <div class="page-head"><h1>Signalement</h1><a class="button" href="/admin?report={{ item.id }}">Voir sur la carte <span aria-hidden="true">↗</span></a></div>
 <section class="card report-summary" aria-label="Résumé du signalement">
   <div class="badge-row">{{ badge(item.category.value) }}{{ badge(item.status.value) }}</div>
   <p class="report-description preserve">{{ item.description or 'Aucune description' }}</p>
   <dl class="summary-grid">
-    <div><dt>Auteur</dt><dd>{{ item.author_username or 'Utilisateur supprimé' }}</dd></div>
+    <div><dt>Auteur</dt><dd>{{ identity(item.author_username) }}</dd></div>
     <div><dt>Observé le</dt><dd>{{ date_label(item.observed_at) }}</dd></div>
   </dl>
 </section>
@@ -28,7 +28,7 @@
 </details>
 {% else %}<a class="back-link" href="{{ request.url_for('admin_audit').path }}">Voir l’historique global de modération</a>{% endif %}
 <section class="card moderation-card">
-  <h2>Modération</h2>
+  <div><p class="eyebrow">ACTIONS</p><h2>Modération</h2><p>Chaque intervention est conservée dans l’historique.</p></div>
   <div class="actions">
     {% if item.status.value == 'removed' %}
     <a class="button" href="{{ request.url_for('admin_action', collection='reports', target_id=item.id, action_name='restore').path }}">Restaurer le signalement</a>

@@ -1,13 +1,14 @@
 {% extends 'admin/base.html' %}
-{% from 'admin/ui.html' import badge %}
+{% from 'admin/ui.html' import badge, identity %}
 {% block title %}Utilisateurs{% endblock %}
 {% block content %}
-<div class="page-head"><h1>Utilisateurs</h1><a class="button" href="/admin?panel=users">Rechercher un utilisateur <span aria-hidden="true">↗</span></a></div>
+<a class="back-link" data-nav-back href="/admin">← Retour</a>
+<div class="page-head page-head--counted"><h1>Utilisateurs</h1><strong class="page-total" aria-label="{{ result.total }} utilisateurs au total">{{ result.total }}</strong></div>
 <section class="card table-card">
-  <div class="section-head"><h2>Comptes enregistrés</h2><span class="count-badge">{{ result.total }} au total</span></div>
+  <div class="section-head"><h2>Comptes enregistrés</h2></div>
   {% if result.items %}<div class="table-scroll"><table class="users-table"><caption class="sr-only">Comptes enregistrés</caption>
     <thead><tr><th scope="col">Utilisateur</th><th scope="col">Adresse e-mail</th><th scope="col">Rôle</th><th scope="col">Statut</th><th scope="col">Actions</th></tr></thead>
-    <tbody>{% for item in result.items %}<tr><td class="user-name">{{ item.username }}</td><td class="email-cell">{{ item.email or 'Non renseignée' }}</td><td>{{ badge(item.role.value) }}</td><td>{{ badge(item.status.value) }}</td><td class="table-action">
+    <tbody>{% for item in result.items %}<tr><td class="user-name">{{ identity(item.username) }}</td><td class="email-cell">{{ item.email or 'Non renseignée' }}</td><td>{{ badge(item.role.value) }}</td><td>{{ badge(item.status.value) }}</td><td class="table-action">
       {% if item.status.value == 'suspended' %}<a href="{{ request.url_for('admin_action', collection='users', target_id=item.id, action_name='reactivate').path }}">Réactiver</a>{% else %}<a href="{{ request.url_for('admin_action', collection='users', target_id=item.id, action_name='suspend').path }}">Suspendre</a>{% endif %}
     </td></tr>{% endfor %}</tbody>
   </table></div>{% else %}<div class="empty"><h3>Aucun utilisateur</h3><p>Aucun compte à afficher sur cette page.</p></div>{% endif %}

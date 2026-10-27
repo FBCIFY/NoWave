@@ -1,6 +1,7 @@
 import { clamp } from "./data.js";
 import { journey } from "./story-data.js";
 import { createStepGesture } from "./step-gesture.js";
+import { createTravelProgress } from "./story-travel.js";
 import {
   mapJourney,
   overview,
@@ -13,9 +14,10 @@ import {
   followProgress,
   getTransitionState,
   settledStep,
+  stepInDirection,
 } from "./story-state.js";
 
-export function createStory({ world, isMotionPaused, onComplete }) {
+export function createStory({ world, isMotionPaused, onStep = () => {} }) {
   const $ = (selector) => document.querySelector(selector);
   const wrapper = $("#ocean-story"),
     hero = $("#ocean"),
@@ -40,9 +42,7 @@ export function createStory({ world, isMotionPaused, onComplete }) {
   let start = 0,
     distance = 1,
     travel = null;
-  let enabled = !["#carte", "#alertes"].some((hash) =>
-    location.hash.startsWith(hash),
-  );
+  let enabled = !location.hash.startsWith("#carte");
 
   function measure() {
     if (!enabled) return;
@@ -73,9 +73,7 @@ export function createStory({ world, isMotionPaused, onComplete }) {
     }
     let transition;
     if (travel) {
-      const phase = isMotionPaused()
-        ? 1
-        : clamp((time - travel.at) / travel.duration, 0, 1);
+      const phase = isMotionPaused() ? 1 : travel.progress.sample(time);
       transition = {
         state: getTransitionState(
           travel.fromStep,
@@ -107,6 +105,8 @@ export function createStory({ world, isMotionPaused, onComplete }) {
       cameraBetween(from, to, state.phase),
       (state.from === 0 ? 1 - state.blend : 0) +
         (state.to === 0 ? state.blend : 0),
+      (state.from === journey.length ? 1 - state.blend : 0) +
+        (state.to === journey.length ? state.blend : 0),
     );
     hero.style.setProperty(
       "--intro-opacity",
@@ -123,6 +123,7 @@ export function createStory({ world, isMotionPaused, onComplete }) {
     hero.style.setProperty("--progress", current);
     hero.style.setProperty("--copy-shift", `${(1 - state.opacity) * 9}px`);
     markers.forEach((marker, index) => {
+      if (!marker) return;
       const weight =
         (state.from === index + 1 ? 1 - state.blend : 0) +
         (state.to === index + 1 ? state.blend : 0);
@@ -138,8 +139,10 @@ export function createStory({ world, isMotionPaused, onComplete }) {
       marker.setAttribute("aria-hidden", String(marker.inert));
       marker.classList.toggle("is-story-focus", weight > 0.99);
     });
+    onStep(state);
     activeStep = state.step;
     hero.dataset.storyStep = state.step;
+    hero.dataset.finalStep = String(state.step === journey.length);
     hero.dataset.moving = String(Boolean(travel) || current !== target);
     intro.inert = state.step !== 0 || state.opacity < 0.1;
     intro.setAttribute("aria-hidden", String(state.step !== 0));
@@ -148,20 +151,22 @@ export function createStory({ world, isMotionPaused, onComplete }) {
       panel.inert = panel.hidden || state.opacity < 0.1;
     });
     nav.forEach((button, index) => {
-      button.disabled = Boolean(travel);
       if (index === state.step) button.setAttribute("aria-current", "step");
       else button.removeAttribute("aria-current");
     });
     previous.disabled = state.step === 0 || Boolean(travel);
-    next.disabled = Boolean(travel);
+    next.disabled = Boolean(travel) || state.step === journey.length;
+    next.hidden = state.step === journey.length && !travel;
     next.setAttribute(
       "aria-label",
-      state.step === journey.length
-        ? "Découvrir les alertes à proximité"
-        : "Repère suivant",
+      state.step === journey.length ? "Fin du parcours" : "Repère suivant",
     );
     next.querySelector("span").textContent =
-      state.step === journey.length ? "Mes alertes" : "Continuer";
+      state.step === journey.length
+        ? "Fin du parcours"
+        : state.step === journey.length - 1
+          ? "Mes alertes"
+          : "Continuer";
     if (current !== target || travel) requestUpdate();
     else lastTime = 0;
   }
@@ -171,10 +176,8 @@ export function createStory({ world, isMotionPaused, onComplete }) {
   }
   function scrollToStep(step, instant = false) {
     clearTimeout(settleTimer);
-    if (travel && !instant) return;
     if (step > journey.length) {
       travel = null;
-      onComplete();
       return;
     }
     const toStep = clamp(step, 0, journey.length),
@@ -189,11 +192,17 @@ export function createStory({ world, isMotionPaused, onComplete }) {
       travel = {
         from: scrollY,
         to,
-        at: performance.now(),
+        progress: createTravelProgress(
+          cameraTravelDuration(
+            pose,
+            poses[toStep],
+            Math.abs(toStep - activeStep),
+          ),
+          performance.now(),
+        ),
         fromStep: activeStep,
         toStep,
         pose,
-        duration: cameraTravelDuration(pose, poses[toStep]),
       };
     }
     requestUpdate();
@@ -225,7 +234,11 @@ export function createStory({ world, isMotionPaused, onComplete }) {
   }
   function canGuide(target, direction) {
     if (!enabled || document.querySelector("dialog[open]")) return false;
-    if (target.closest?.("input, textarea, select, [contenteditable]"))
+    if (
+      target.closest?.(
+        ".alerts-page, input, textarea, select, [contenteditable]",
+      )
+    )
       return false;
     const progress = (scrollY - start) / distance;
     if (progress < -0.001 || progress > storyStops.at(-1) + 0.015) return false;
@@ -233,7 +246,17 @@ export function createStory({ world, isMotionPaused, onComplete }) {
     return true;
   }
   function advance(direction) {
-    if (direction && !travel) scrollToStep(restingStep + direction);
+    if (!direction) return;
+    if (!travel) scrollToStep(restingStep + direction);
+    else if (direction !== Math.sign(travel.to - scrollY))
+      scrollToStep(stepInDirection((scrollY - start) / distance, direction));
+  }
+  function accelerateTravel(delta, time = performance.now()) {
+    if (
+      travel &&
+      Math.sign(delta) === Math.sign(travel.toStep - travel.fromStep)
+    )
+      travel.progress.accelerate(delta, time);
   }
   window.addEventListener(
     "wheel",
@@ -248,7 +271,9 @@ export function createStory({ world, isMotionPaused, onComplete }) {
       const delta =
         event.deltaY *
         (event.deltaMode === 1 ? 16 : event.deltaMode === 2 ? innerHeight : 1);
-      advance(wheelGesture.push(delta, performance.now()));
+      const time = performance.now();
+      advance(wheelGesture.push(delta, time));
+      accelerateTravel(delta, time);
     },
     { passive: false },
   );
@@ -264,7 +289,7 @@ export function createStory({ world, isMotionPaused, onComplete }) {
         y: point.clientY,
         target: event.target,
         delta: 0,
-        guided: false,
+        consumed: false,
       };
     },
     { passive: true },
@@ -281,8 +306,16 @@ export function createStory({ world, isMotionPaused, onComplete }) {
       )
         return;
       if (event.cancelable) event.preventDefault();
+      const movement = delta - touch.delta;
       touch.delta = delta;
-      touch.guided = true;
+      if (!travel && !touch.consumed && Math.abs(delta) >= 36) {
+        touch.consumed = true;
+        advance(Math.sign(delta));
+      }
+      if (travel) {
+        touch.consumed = true;
+        accelerateTravel(movement);
+      }
     },
     { passive: false },
   );
@@ -290,9 +323,7 @@ export function createStory({ world, isMotionPaused, onComplete }) {
     "touchend",
     () => {
       touching = false;
-      if (touch?.guided && Math.abs(touch.delta) >= 36)
-        advance(Math.sign(touch.delta));
-      else scheduleSettle();
+      scheduleSettle();
       touch = null;
     },
     { passive: true },
@@ -322,6 +353,7 @@ export function createStory({ world, isMotionPaused, onComplete }) {
       return;
     event.preventDefault();
     if (!event.repeat) advance(direction);
+    accelerateTravel(direction * 70);
   });
   window.addEventListener(
     "scroll",
@@ -349,6 +381,10 @@ export function createStory({ world, isMotionPaused, onComplete }) {
   return {
     refresh: requestUpdate,
     scrollToStep,
+    focusReport() {
+      // All nearby points stay in the frame; selecting one only updates its sonar.
+      scrollToStep(journey.length, activeStep === journey.length);
+    },
     setVisible(value) {
       enabled = value;
       travel = null;

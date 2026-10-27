@@ -20,9 +20,14 @@ test("every screen has a valid camera stop within the shared maritime map bounds
   }
 });
 test("refreshed illustrations and current report examples cover the product journey", () => {
-  assert.equal(journey.filter((scene) => scene.asset).length, journey.length);
-  assert.equal(journey.length, 3);
-  assert.ok(journey.every((scene) => scene.report));
+  assert.equal(journey.filter((scene) => scene.asset).length, 3);
+  assert.equal(journey.length, 4);
+  assert.equal(journey.at(-1).id, "alerts");
+  assert.ok(
+    journey
+      .filter((scene) => scene.id !== "alerts")
+      .every((scene) => scene.report),
+  );
   for (const scene of journey) {
     if (scene.asset) assert.ok(scene.asset.startsWith("/assets/"));
     if (scene.report) assert.ok(demoReports[scene.report]);

@@ -127,6 +127,15 @@
   overflow-y: auto;
   overscroll-behavior: contain;
 }
+.map-view__detail-heading {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 6px 12px;
+}
+.map-view__detail-heading .map-view__admin-status {
+  margin: 0;
+}
 .map-view__feed > :not(.map-view__list) {
   flex-shrink: 0;
 }
@@ -517,4 +526,110 @@
   .map-view__marker img {
     transition: none;
   }
+}
+
+.map-view__detail {
+  --category-color: #7dd4dc;
+}
+.map-view__detail[data-category="obstruction"],
+[data-category="obstruction"] .map-view__list-symbol {
+  --category-color: #ffb26e;
+}
+.map-view__detail[data-category="pollution"],
+[data-category="pollution"] .map-view__list-symbol {
+  --category-color: #c1a2ff;
+}
+.map-view__category-symbol,
+.map-view__list-symbol {
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  width: 42px;
+  height: 42px;
+  border-radius: 13px;
+  color: var(--category-color, #7dd4dc);
+  background: color-mix(in srgb, var(--category-color, #7dd4dc) 12%, #0c1929);
+  border: 1px solid
+    color-mix(in srgb, var(--category-color, #7dd4dc) 35%, transparent);
+}
+.map-view__detail-heading {
+  align-items: center;
+  margin-top: 4px;
+  gap: 10px;
+}
+.map-view__detail-heading h2 {
+  margin: 0;
+  flex: 1;
+}
+.map-view__admin-status[data-status] {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 9px;
+  border-radius: 20px;
+  color: #c2d4de;
+  background: #142538;
+  border: 1px solid #45616e;
+  font-size: 10px;
+}
+.map-view__admin-status[data-status]::before {
+  content: "";
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: currentColor;
+}
+.map-view__byline {
+  padding: 14px;
+  border: 1px solid #88acba26;
+  border-radius: 12px;
+  background: #88acba08;
+}
+.map-view__byline > span {
+  display: grid;
+  gap: 5px;
+  min-width: 0;
+}
+.map-view__byline small {
+  color: #9ebac7;
+  font-size: 10px;
+}
+.map-view__byline time {
+  color: #e0edf1;
+}
+.map-view__list button {
+  grid-template-columns: 38px minmax(0, 1fr) 10px;
+  align-items: center;
+  gap: 11px;
+  padding: 15px 0;
+}
+.map-view__list-symbol {
+  width: 38px;
+  height: 38px;
+  border-radius: 12px;
+}
+.map-view__list-copy {
+  min-width: 0;
+  display: grid;
+  gap: 5px;
+}
+.map-view__list-arrow {
+  color: #9ebac7;
+  font-size: 20px;
+}
+.map-view__list-meta {
+  align-items: center;
+  gap: 8px;
+}
+.map-view__list strong {
+  font-size: 12px;
+  font-weight: 500;
+}
+.map-view__list-category {
+  font-weight: 650;
+  color: #e0edf1;
+  font-size: 11px;
+}
+.map-view__list-meta time {
+  font-size: 9px;
 }

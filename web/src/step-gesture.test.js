@@ -17,12 +17,12 @@ test("one long trackpad gesture and its momentum advance only one stop", () => {
     "a new gesture after release can advance",
   );
 });
-test("small deltas accumulate; reversing within the same gesture cannot skip another stop", () => {
+test("small deltas accumulate and a deliberate reversal changes direction", () => {
   const gate = createStepGesture();
   assert.equal(gate.push(8, 0), 0);
   assert.equal(gate.push(12, 16), 0);
   assert.equal(gate.push(12, 32), 1);
-  assert.equal(gate.push(-120, 48), 0);
+  assert.equal(gate.push(-120, 48), -1);
   assert.equal(gate.push(-120, 300), -1);
 });
 test("a fresh swipe can interrupt old momentum without waiting for camera travel", () => {
@@ -32,4 +32,13 @@ test("a fresh swipe can interrupt old momentum without waiting for camera travel
   assert.equal(gate.push(6, 180), 0);
   assert.equal(gate.push(90, 290), 1);
   assert.equal(gate.push(60, 310), 0);
+});
+
+test("tiny opposite drift is ignored but a sustained reversal is recognized", () => {
+  const gate = createStepGesture();
+  assert.equal(gate.push(100, 0), 1);
+  assert.equal(gate.push(-8, 16), 0);
+  assert.equal(gate.push(-12, 32), 0);
+  assert.equal(gate.push(-24, 48), -1);
+  assert.equal(gate.push(-8, 64), 0);
 });

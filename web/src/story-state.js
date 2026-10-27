@@ -77,3 +77,14 @@ export function followProgress(current, target, elapsedMs) {
     (target - current) * (1 - Math.exp(-Math.min(elapsedMs, 64) / 85));
   return Math.abs(next - target) < 0.00001 ? target : next;
 }
+
+// Retarget a moving camera to the nearest stop in the new scroll direction.
+export function stepInDirection(progress, direction) {
+  if (direction < 0)
+    return Math.max(
+      0,
+      storyStops.findLastIndex((stop) => stop < progress - 0.0001),
+    );
+  const next = storyStops.findIndex((stop) => stop > progress + 0.0001);
+  return next < 0 ? storyStops.length - 1 : next;
+}

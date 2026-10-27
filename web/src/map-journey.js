@@ -1,37 +1,63 @@
 import { clamp, demoReports } from "./data.js";
 import { easeCamera } from "./story-state.js";
+import { alertExamples, demoGps } from "./alert-sonar.js";
 
-// Coastal examples in three oceans. Long transfers pull back to the globe.
-// An illustrated headland just offshore from Ponta do Pargo, Madeira.
-export const harbor = [-17.34, 32.8133];
+// Offshore stops across Madeira, the Canaries and Cape Verde keep coastal arrivals.
+// An illustrated island offshore from Madeira, clear of the real coastline.
+export const harbor = [-17.029277, 32.93];
 export const overview = {
   x: harbor[0] + 0.015,
   y: harbor[1],
-  zoom: 10.5,
-  pitch: 38,
-  bearing: -18,
+  zoom: 10.6,
+  pitch: 28,
+  bearing: 0,
 };
 export const mapJourney = [
   {
     x: demoReports.whale.location[0],
     y: demoReports.whale.location[1],
-    zoom: 9.3,
-    pitch: 32,
-    bearing: -12,
+    zoom: 10,
+    pitch: 28,
+    bearing: 0,
   },
   {
     x: demoReports.container.location[0],
     y: demoReports.container.location[1],
-    zoom: 10.5,
-    pitch: 36,
-    bearing: 12,
+    zoom: 10.7,
+    pitch: 28,
+    bearing: -24,
   },
   {
     x: demoReports.duck.location[0],
     y: demoReports.duck.location[1],
-    zoom: 10.2,
-    pitch: 32,
+    zoom: 10.6,
+    pitch: 28,
     bearing: -12,
+  },
+  {
+    x:
+      (Math.min(
+        demoGps[0],
+        ...alertExamples.map((report) => report.location[0]),
+      ) +
+        Math.max(
+          demoGps[0],
+          ...alertExamples.map((report) => report.location[0]),
+        )) /
+      2,
+    y:
+      (Math.min(
+        demoGps[1],
+        ...alertExamples.map((report) => report.location[1]),
+      ) +
+        Math.max(
+          demoGps[1],
+          ...alertExamples.map((report) => report.location[1]),
+        )) /
+      2,
+    zoom: 11.2,
+    pitch: 0,
+    bearing: 0,
   },
 ];
 const radians = (value) => (value * Math.PI) / 180;
@@ -73,18 +99,20 @@ export function globePoint(from, to, progress) {
     degrees(Math.atan2(point[2], Math.hypot(point[0], point[1]))),
   ];
 }
-export function cameraTravelDuration(from, to) {
+export function cameraTravelDuration(from, to, steps = 1) {
   const distance = degrees(globeDistance(from, to));
+  let duration;
   if (distance < 0.5)
-    return Math.round(
-      clamp(
-        900 + Math.abs(to.zoom - from.zoom) * 280 + distance * 500,
-        900,
-        1800,
-      ),
+    duration = clamp(
+      1400 + Math.abs(to.zoom - from.zoom) * 200 + distance * 1000,
+      1400,
+      2200,
     );
-  if (distance < 25) return Math.round(clamp(3600 + distance * 80, 3600, 5600));
-  return Math.round(clamp(5200 + distance * 16, 5800, 8000));
+  else if (distance < 25) duration = clamp(1800 + distance * 35, 1800, 2700);
+  else duration = clamp(2600 + distance * 5, 2800, 3600);
+  return Math.round(
+    steps > 1 ? Math.max(1000, duration / Math.sqrt(steps)) : duration,
+  );
 }
 export function cameraBetween(from, to, progress) {
   const t = clamp(progress, 0, 1);
@@ -109,7 +137,7 @@ export function cameraBetween(from, to, progress) {
   const departure = easeCamera(clamp(t / 0.45, 0, 1));
   const arrival = easeCamera(clamp((t - 0.55) / 0.45, 0, 1));
   const cruiseZoom =
-    distance > 25 ? 2.6 : clamp(8.6 - Math.log2(distance), 5.6, 7.5);
+    distance > 25 ? 4.2 : clamp(8.6 - Math.log2(distance), 5.6, 7.5);
   const globeZoom = Math.min(cruiseZoom, from.zoom, to.zoom);
   return {
     x,

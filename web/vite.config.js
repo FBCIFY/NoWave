@@ -6,7 +6,7 @@ export default defineConfig(({ mode }) => {
   const target = env.NOWAVE_API_URL || "http://127.0.0.1:8000";
   const proxy = Object.fromEntries(
     ["/api", "/admin-static", "/admin"].map((path) => [
-      path === "/admin" ? "^/admin(?:/|$)" : path,
+      path === "/admin" ? "^/admin(?:[/?]|$)" : path,
       { target, changeOrigin: true, headers: { "x-nowave-web-dev": "1" } },
     ]),
   );

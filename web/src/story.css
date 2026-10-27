@@ -10,7 +10,7 @@
   top: 0;
   height: 100svh;
   min-height: 620px;
-  overflow: hidden;
+  overflow: clip;
   isolation: isolate;
   background: #0b2533;
 }
@@ -92,8 +92,8 @@
   position: absolute;
   left: var(--map-x);
   top: var(--map-y);
-  width: clamp(300px, 33vw, 470px);
-  height: clamp(240px, 26vw, 365px);
+  width: clamp(300px, 39vw, 560px);
+  height: clamp(240px, 31vw, 435px);
   transform: translate(-50%, calc(-1 * var(--anchor-y))) scale(var(--map-scale));
   transform-origin: 50% var(--anchor-y);
   pointer-events: none;
@@ -126,8 +126,8 @@
   display: none;
 }
 .intro-preview .geo-anchor {
-  width: 420px;
-  height: 380px;
+  width: 530px;
+  height: 480px;
 }
 .floating-report {
   --card-width: 315px;
@@ -533,4 +533,18 @@
     font-size: 11px;
     margin: 8px 0;
   }
+}
+
+/* Keep gesture navigation without visible scroll tracks or a slide indicator. */
+html:has(.ocean-story:not([hidden])) {
+  scrollbar-width: none;
+}
+html:has(.ocean-story:not([hidden]))::-webkit-scrollbar {
+  display: none;
+}
+.story-steps {
+  display: none;
+}
+.hero[data-final-step="true"] .story-footer {
+  display: none;
 }

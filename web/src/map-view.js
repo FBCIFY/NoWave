@@ -53,6 +53,7 @@ function markerImages() {
 export function createMapView({
   admin = false,
   onSelectReport = () => {},
+  onReturn = () => false,
 } = {}) {
   const root = document.querySelector("#carte");
   root.innerHTML = `
@@ -81,9 +82,9 @@ export function createMapView({
     </aside>
     <article class="map-view__detail" aria-labelledby="map-report-title" hidden>
       <div class="map-view__panel-head"><button type="button" class="map-view__back" data-map-back>← Observations</button></div>
-      <h2 id="map-report-title" tabindex="-1"></h2>
+      <div class="map-view__detail-heading"><span class="map-view__category-symbol" aria-hidden="true"></span><h2 id="map-report-title" tabindex="-1"></h2></div>
       <p class="map-view__description"></p>
-      <div class="map-view__byline"><span class="map-view__author"></span><time></time></div>
+      <div class="map-view__byline"><span><small>Partagé par</small><span class="map-view__author"></span></span><span><small>Observé le</small><time></time></span></div>
     </article>
     </div>
     <p class="map-view__data-status" role="status" aria-live="polite"></p>
@@ -102,6 +103,10 @@ export function createMapView({
     images,
     returnFocus,
     selectedReport = null;
+  const viewStack = [];
+  let restoringView = false;
+  let restoredCamera = null,
+    restoredListScroll = null;
   let active = false,
     overviewMode = true,
     followSelection = false;
@@ -192,6 +197,43 @@ export function createMapView({
       target.focus({ preventScroll: true });
     }
   }
+  function backToPreviousView() {
+    const frame = viewStack.pop();
+    if (!frame) {
+      if (onReturn()) return;
+      closeDetail();
+      return;
+    }
+    restoringView = true;
+    if (frame.report) selectReport(frame.report.id, frame.focus, frame.report);
+    else {
+      selectedReport = null;
+      closeDetail(false);
+      setList(frame.listOpen);
+      overviewMode = frame.overview;
+      $('[data-map-control="reset"]').hidden = overviewMode;
+    }
+    restoringView = false;
+    if (frame.camera && chart?.ready)
+      chart.map.easeTo({
+        ...frame.camera,
+        padding: mapPadding(),
+        duration: reducedMotion() ? 0 : 350,
+      });
+    if (!frame.camera && frame.overview && chart?.ready) {
+      const view = globeView();
+      chart.map.easeTo({
+        center: [view.x, view.y],
+        zoom: view.zoom,
+        padding: view.padding,
+        duration: reducedMotion() ? 0 : 350,
+      });
+    }
+    $(".map-view__list").scrollTop = frame.scroll;
+    if (frame.focus?.isConnected && !frame.focus.closest("[hidden]"))
+      frame.focus.focus({ preventScroll: true });
+    updateMarkers();
+  }
   function setList(open) {
     listPanel.hidden = !open;
     listToggle.setAttribute("aria-expanded", String(open));
@@ -220,7 +262,31 @@ export function createMapView({
   function selectReport(id, trigger, suppliedReport) {
     const report = suppliedReport || reports.get(id);
     if (!report || (!admin && report.expiresAt <= Date.now())) return;
+    if (!restoringView && (detail.hidden || selectedReport?.id !== report.id)) {
+      const map = chart?.ready ? chart.map : null;
+      viewStack.push({
+        report: detail.hidden ? null : selectedReport,
+        listOpen: !listPanel.hidden,
+        scroll: $(".map-view__list").scrollTop,
+        focus: trigger || document.activeElement,
+        overview: overviewMode,
+        camera: map
+          ? {
+              center: [map.getCenter().lng, map.getCenter().lat],
+              zoom: map.getZoom(),
+              pitch: map.getPitch(),
+              bearing: map.getBearing(),
+            }
+          : null,
+      });
+    }
+    restoredCamera = null;
     selectedReport = report;
+    detail.dataset.category = report.category;
+    $(".map-view__category-symbol").innerHTML = categoryIcon(
+      categories.find((item) => item.value === report.category) ||
+        categories[1],
+    );
     leaveOverview();
     followSelection = true;
     returnFocus = trigger;
@@ -265,12 +331,29 @@ export function createMapView({
       const description = document.createElement("strong");
       description.textContent =
         report.description || "Observation sans précision";
-      button.append(meta, description);
+      const symbol = document.createElement("span");
+      symbol.className = "map-view__list-symbol";
+      symbol.innerHTML = categoryIcon(
+        categories.find((item) => item.value === report.category) ||
+          categories[1],
+      );
+      const copy = document.createElement("span");
+      copy.className = "map-view__list-copy";
+      copy.append(meta, description);
+      const arrow = document.createElement("span");
+      arrow.className = "map-view__list-arrow";
+      arrow.setAttribute("aria-hidden", "true");
+      arrow.textContent = "›";
+      button.append(symbol, copy, arrow);
       button.addEventListener("click", () => selectReport(report.id, button));
       item.append(button);
       fragment.append(item);
     }
     list.replaceChildren(fragment);
+    if (restoredListScroll !== null && list.childElementCount) {
+      list.scrollTop = restoredListScroll;
+      restoredListScroll = null;
+    }
     markers.forEach(({ marker }) => marker.remove());
     markers = [];
     if (chart?.ready && images)
@@ -460,6 +543,7 @@ export function createMapView({
         markers = [];
       },
       onReady(map) {
+        map.setRenderWorldCopies(true);
         images = markerImages();
         renderReports();
         map.on("render", updateMarkers);
@@ -477,6 +561,8 @@ export function createMapView({
           if (event.originalEvent) leaveOverview();
         });
         layout(true);
+        if (restoredCamera)
+          map.jumpTo({ ...restoredCamera, padding: mapPadding() });
         status.textContent = "";
       },
     });
@@ -518,13 +604,13 @@ export function createMapView({
       categoryInput.dispatchEvent(new Event("change"));
       renderState();
     }
-    if (event.target.closest("[data-map-back]")) closeDetail();
+    if (event.target.closest("[data-map-back]")) backToPreviousView();
     const close = event.target.closest("[data-map-close]");
     if (close?.dataset.mapClose === "list") {
       setList(false);
       renderState();
       listToggle.focus({ preventScroll: true });
-    } else if (close) closeDetail();
+    } else if (close) backToPreviousView();
     const action =
       event.target.closest("[data-map-control]")?.dataset.mapControl;
     if (!action || !chart?.ready) return;
@@ -534,6 +620,7 @@ export function createMapView({
     if (action === "out") chart.map.zoomOut({ duration });
     if (action === "reset") {
       selectedReport = null;
+      viewStack.length = 0;
       closeDetail(false);
       overviewMode = true;
       $('[data-map-control="reset"]').hidden = true;
@@ -551,7 +638,7 @@ export function createMapView({
   });
   root.addEventListener("keydown", (event) => {
     if (event.key !== "Escape") return;
-    if (!detail.hidden) closeDetail();
+    if (!detail.hidden) backToPreviousView();
     else if (!listPanel.hidden) {
       setList(false);
       renderState();
@@ -584,8 +671,87 @@ export function createMapView({
   }
   new ResizeObserver(() => layout()).observe(root);
   return {
-    showReport(report) {
+    showReport(report, { asEntry = false } = {}) {
+      restoringView = asEntry;
       selectReport(report.id, null, report);
+      restoringView = false;
+    },
+    captureNavigation() {
+      const map = chart?.ready ? chart.map : null;
+      return {
+        query: searchInput.value,
+        category: categoryInput.value,
+        pageIndex,
+        pageCursors,
+        overview: overviewMode,
+        scroll: $(".map-view__list").scrollTop,
+        camera: map
+          ? {
+              center: [map.getCenter().lng, map.getCenter().lat],
+              zoom: map.getZoom(),
+              pitch: map.getPitch(),
+              bearing: map.getBearing(),
+            }
+          : null,
+      };
+    },
+    restoreNavigation(value) {
+      if (!value || typeof value !== "object") return;
+      const query =
+        typeof value.query === "string" ? value.query.slice(0, 120) : "";
+      const category = categories.some((item) => item.value === value.category)
+        ? value.category
+        : "";
+      const cursors =
+        Array.isArray(value.pageCursors) &&
+        value.pageCursors.length <= 100 &&
+        value.pageCursors.every(
+          (cursor) =>
+            cursor === null ||
+            (typeof cursor === "string" && cursor.length <= 4096),
+        )
+          ? value.pageCursors
+          : [null];
+      const index =
+        Number.isInteger(value.pageIndex) &&
+        value.pageIndex >= 0 &&
+        value.pageIndex < cursors.length
+          ? value.pageIndex
+          : 0;
+      const changed =
+        searchInput.value !== query ||
+        categoryInput.value !== category ||
+        pageIndex !== index;
+      searchInput.value = query;
+      categoryInput.value = category;
+      pageIndex = index;
+      pageCursors = cursors;
+      restoredListScroll = Number.isFinite(value.scroll)
+        ? Math.max(0, value.scroll)
+        : 0;
+      const camera = value.camera;
+      if (
+        camera &&
+        Array.isArray(camera.center) &&
+        camera.center.length === 2 &&
+        camera.center.every(Number.isFinite) &&
+        Math.abs(camera.center[0]) <= 180 &&
+        Math.abs(camera.center[1]) <= 85 &&
+        [camera.zoom, camera.pitch, camera.bearing].every(Number.isFinite) &&
+        camera.zoom >= 0.5 &&
+        camera.zoom <= 20 &&
+        camera.pitch >= 0 &&
+        camera.pitch <= 60
+      ) {
+        restoredCamera = camera;
+        overviewMode = !!value.overview;
+        followSelection = false;
+        $('[data-map-control="reset"]').hidden = overviewMode;
+        if (chart?.ready)
+          chart.map.jumpTo({ ...camera, padding: mapPadding() });
+      }
+      renderState();
+      if (changed) loadObservations();
     },
     open() {
       active = true;
