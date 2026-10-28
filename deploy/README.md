@@ -204,3 +204,12 @@ prévu par `deploy.sh`. Cette vérification à faible débit ne prouve pas la
 couverture complète des sept familles ni leur rendu Android ; conserver la
 recette cartographique sur téléphone après livraison. Les erreurs de fournisseur
 peuvent également bloquer la promotion, volontairement.
+
+## Téléchargements mobiles
+
+La page `https://no-wave.fr/downloads/mobile/` et ses APK, IPA et QR codes sont
+servis depuis `/opt/nowave/downloads/mobile` sur le VPS. Le service web monte
+`/opt/nowave/downloads` en lecture seule, hors des images de release : les
+déploiements applicatifs conservent les fichiers publiés. Les APK et IPA restent
+hors de Git. Vérifier les signatures et les empreintes du paquet avant sa
+publication ; un QR pointe vers le fichier versionné correspondant.

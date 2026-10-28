@@ -122,6 +122,9 @@ services:
       frontend:
         ipv4_address: 172.30.72.3
       operations:
+    # Public mobile builds persist outside release images.
+    volumes:
+      - /opt/nowave/downloads:/usr/share/nginx/html/downloads:ro
     # Local operations only. Public traffic enters through Cloudflare Tunnel.
     ports: ['127.0.0.1:18080:8080']
     tmpfs: ['/tmp:rw,noexec,nosuid,uid=101,gid=101,size=32m']
