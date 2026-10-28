@@ -140,28 +140,8 @@ async def _marine_tile(z, x, y, family, *, geojson=False):
         ) from error
     try:
         result = await get_marine_service().get_tile(tile, family, **({"geojson": True} if geojson else {}))
-    except ProviderUnavailable as error:
-        if family == MarineFamily.SOUNDINGS:
-            # The application's generic exception handler drops custom headers.
-            # Keep its JSON error contract, with an explicit non-cacheable 503.
-            return JSONResponse(
-                status_code=503,
-                content={
-                    "error": {
-                        "code": "http_503",
-                        "message": "Marine data temporarily unavailable.",
-                        "details": None,
-                    }
-                },
-                headers={
-                    "Cache-Control": "no-store",
-                    "X-NoWave-Marine-Status": "unavailable",
-                },
-            )
-        raise HTTPException(
-            status_code=503,
-            detail="Marine data temporarily unavailable.",
-        ) from error
+    except ProviderUnavailable:
+        return _marine_unavailable("Marine data temporarily unavailable.")
     return Response(
         content=result.content,
         media_type="application/geo+json" if geojson else "application/vnd.mapbox-vector-tile",
@@ -172,6 +152,20 @@ async def _marine_tile(z, x, y, family, *, geojson=False):
             "X-NoWave-Marine-Status": "degraded" if result.failures else result.status,
             "X-NoWave-Marine-Sources": ",".join(result.sources),
             "Link": '</api/v1/map/marine-sources>; rel="describedby"',
+        },
+    )
+
+
+def _marine_unavailable(message: str) -> JSONResponse:
+    # The generic HTTP exception handler drops custom headers. A failure must
+    # never look like a complete empty cell or overwrite a useful raster tile.
+    return JSONResponse(
+        status_code=503,
+        content={"error": {"code": "http_503", "message": message, "details": None}},
+        headers={
+            "Cache-Control": "no-store",
+            "X-NoWave-Marine-Status": "unavailable",
+            "Retry-After": "15",
         },
     )
 
@@ -267,18 +261,7 @@ async def get_bathymetry_tile(
             "Bathymetry tile=%s/%s/%s failed error=%s detail=%s",
             z, x, y, type(error).__name__, error,
         )
-        # Raster 503s cause native tile retries while the supplier is already
-        # overloaded. A short-lived transparent overlay leaves GEBCO visible.
-        # Never put this fallback into the normal daily raster cache.
-        return Response(
-            content=empty_bathymetry_tile(),
-            media_type="image/png",
-            headers={
-                "Cache-Control": "public, max-age=15, must-revalidate",
-                "X-NoWave-Marine-Status": "unavailable",
-                "X-NoWave-Raster-Usage": "visual-only; global-fallback",
-            },
-        )
+        return _marine_unavailable("Bathymetry temporarily unavailable.")
     finally:
         if not work.done():
             work.cancel()

@@ -129,7 +129,7 @@ class MarineMapController {
           // The versioned URL keeps old coastal renders separate. Reuse valid
           // public tiles on disk when returning to a place or reopening the app.
           volatile: false,
-          prefetchZoomDelta: 0,
+          prefetchZoomDelta: 4,
           tileNetworkRequestsDelay: 0.6,
         ),
       );

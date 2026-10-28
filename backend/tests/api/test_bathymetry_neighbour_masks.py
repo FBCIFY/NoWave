@@ -120,16 +120,15 @@ def test_west_mask_failure_keeps_central_raster_200_without_daily_caching(
         assert db.execute("SELECT COUNT(*) FROM tiles").fetchone()[0] == 0
 
 
-def test_central_mask_failure_leaves_only_global_base_temporarily(coastal_pipeline):
+def test_central_mask_failure_is_non_cacheable_503(coastal_pipeline):
     state = coastal_pipeline
     state.failed = {CENTRE}
     with TestClient(app) as client:
         response = client.get(URL)
-    assert response.status_code == 200
-    assert response.headers['cache-control'] == 'public, max-age=15, must-revalidate'
+    assert response.status_code == 503
+    assert response.headers['cache-control'] == 'no-store'
     assert response.headers['x-nowave-marine-status'] == 'unavailable'
-    with Image.open(BytesIO(response.content)) as image:
-        assert image.convert('RGBA').getchannel('A').getbbox() is None
+    assert response.json()['error']['code'] == 'http_503'
     assert state.calls == {CENTRE: 1}
     assert not state.cache._memory
 

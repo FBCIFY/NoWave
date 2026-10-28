@@ -9,31 +9,14 @@ import 'package:mapbox_maps_flutter/mapbox_maps_flutter.dart';
 
 import '../../../core/api/api_config.dart';
 import '../../../core/map/map_performance.dart';
+import '../../../core/map/marine/marine_zoom.dart';
 import 'buoy_layer.dart';
 import 'harbour_layer.dart';
 import 'hydrography_layer.dart';
-import '../../../core/map/marine/marine_zoom.dart';
+import 'marine_cell.dart';
+import 'marine_mosaic.dart';
 
-/// Fixed XYZ ownership; contours always use Z12, including overzoom and reload.
-@immutable
-class MarineCell {
-  const MarineCell(this.z, this.x, this.y);
-  final int z, x, y;
-  String get key => '$z/$x/$y';
-  static MarineCell at(double lon, double lat, int z) {
-    final n = 1 << z;
-    final phi = lat.clamp(-85.05112878, 85.05112878) * math.pi / 180;
-    return MarineCell(
-      z,
-      (((lon + 180) / 360 * n).floor() % n),
-      ((1 - math.log(math.tan(phi) + 1 / math.cos(phi)) / math.pi) / 2 * n)
-          .floor()
-          .clamp(0, n - 1),
-    );
-  }
-
-  bool contains(double lon, double lat) => at(lon, lat, z).key == key;
-}
+export 'marine_cell.dart' show MarineCell;
 
 /// Stable representative placement. Collision eligibility is recalculated from
 /// the current screen positions; retained ports precede all newcomers.
@@ -193,7 +176,7 @@ class _EncodedCollection {
   }
 }
 
-/// Public data only: two in-flight requests, at most nine cells per family,
+/// Public data only: two in-flight requests, lazy visible XYZ ranges,
 /// 64 cached snapshots / 12 MiB encoded data. No Firebase headers or credentials.
 /// Displayed geometry remains pinned until complete replacement coverage arrives;
 /// contours keep their fixed Z12 ownership.
@@ -223,9 +206,21 @@ class MarineViewport {
   final _cancelledFlights = <String>{};
   final _failures = <String, DateTime>{};
   final _wanted = <String, (String, MarineCell)>{};
-  final _displayZoom = <String, int>{};
+  // Full geographic demand is represented by ranges, not a world-sized list.
+  // The bounded working set includes visible cells first, then their margin.
+  final _ranges = <String, MarineCellRange>{};
+  // Keep response sizes, not payloads, until enough capacity is available.
+  final _budgetBlocked = <String, int>{};
+  int _obsoleteEvictions = 0, _marginEvictions = 0;
+  int _visibleBudgetRefusals = 0, _marginBudgetRefusals = 0;
+  final _mosaics = <String, (int, List<Map<String, dynamic>>)>{};
+  int _dataRevision = 0;
+  int _plannedVisible = 0;
+  static const maxSnapshots = 64;
+  static const maxEncodedBytes = 12 * 1024 * 1024;
   MarineCell? _useful;
   CoordinateBounds? _visibleBounds;
+  final _visibilityRanges = <int, MarineCellRange>{};
   int _retainedBytes = 0;
   final _retainedSizes = <String, int>{};
   final _retainedPoints = <String, Map<String, dynamic>>{};
@@ -258,6 +253,14 @@ class MarineViewport {
     'cache_encoded_bytes': _bytes,
     'retained_encoded_bytes': _retainedBytes,
     'active': _active.length,
+    'planned_visible': _plannedVisible,
+    'wanted': _wanted.length,
+    'budget_deferred': _budgetBlocked.length,
+    'cache_obsolete_evictions': _obsoleteEvictions,
+    'cache_margin_evictions': _marginEvictions,
+    'budget_refusals_visible': _visibleBudgetRefusals,
+    'budget_refusals_margin': _marginBudgetRefusals,
+    'request_zooms': {for (final e in _ranges.entries) e.key: e.value.z},
     'encodings': _encodings,
     'busy': _busy,
     'latency_ms': List<int>.of(_latencies),
@@ -325,6 +328,7 @@ class MarineViewport {
     _nextCamera = null;
     _cameraGeneration++;
     _wanted.clear();
+    _budgetBlocked.clear();
     for (final entry in _active.entries) {
       _cancel(entry.key, entry.value);
     }
@@ -400,47 +404,18 @@ class MarineViewport {
         return;
       }
       _visibleBounds = bounds;
+      _visibilityRanges.clear();
       _currentMap = map;
       _currentZoom = zoom;
       _renderRevision++;
-      _wanted.clear();
-      for (final family in sources.keys) {
-        final threshold = family == 'harbours'
-            ? MarineZoom.harbourPreload
-            : family == 'seamarks' || family == 'underwater-hazards'
-            ? MarineZoom.marksPreload
-            : MarineZoom.depthsPreload;
-        if (zoom < threshold) continue;
-        final z = family == 'depth-contours'
-            ? 12
-            : family == 'harbours'
-            ? zoom.floor().clamp(6, 14)
-            : zoom.floor().clamp(12, family == 'soundings' ? 16 : 14);
-        final center = MarineCell.at(lon, lat, z);
-        // Centre first, then nearest visible cells and immediate neighbours.
-        // The nine-cell cap also applies to a pitched/wide viewport at Z6.
-        final cells = <MarineCell>[];
-        for (var dx = -1; dx <= 1; dx++) {
-          for (var dy = -1; dy <= 1; dy++) {
-            final y = center.y + dy;
-            if (y < 0 || y >= 1 << z) continue;
-            cells.add(MarineCell(z, (center.x + dx) % (1 << z), y));
-          }
-        }
-        cells.sort(
-          (a, b) => ((a.x - center.x).abs() + (a.y - center.y).abs()).compareTo(
-            (b.x - center.x).abs() + (b.y - center.y).abs(),
-          ),
-        );
-        for (final cell in cells) {
-          _wanted['$family/${cell.key}'] = (family, cell);
-        }
-      }
-      _displayZoom.removeWhere(
-        (family, _) => !_wanted.values.any((entry) => entry.$1 == family),
+      _useful = MarineCell.at(
+        lon,
+        lat,
+        math.min(12, math.max(6, zoom.floor())),
       );
-      // Diagnostics and retry metadata belong to the current request set too.
-      // Successful degraded responses otherwise accumulate stale keys on pan.
+      _planRequests(bounds, lon, lat, zoom);
+      _pruneCache();
+      // Diagnostics and active flights follow this generation's working set.
       _failures.removeWhere((key, _) => !_wanted.containsKey(key));
       _failureReasons.removeWhere((key, _) => !_wanted.containsKey(key));
       hits += _wanted.keys.where((key) {
@@ -448,38 +423,7 @@ class MarineViewport {
         return cached != null && cached.expires.isAfter(_now());
       }).length;
       for (final entry in _active.entries) {
-        if (!_wanted.containsKey(entry.key)) {
-          _cancel(entry.key, entry.value);
-        }
-      }
-      // Remove old snapshots only outside the useful geographic region. Fixed
-      // contour cells stay identical across zooms, style reload and reconnect.
-      final useful = MarineCell.at(
-        lon,
-        lat,
-        math.min(12, math.max(6, zoom.floor())),
-      );
-      _useful = useful;
-      bool nearby(_Snapshot snapshot) {
-        final c = snapshot.cell;
-        if (snapshot.family == 'depth-contours' && _cellVisible(c)) return true;
-        if (c.z < useful.z) return _cellVisible(c);
-        final delta = c.z - useful.z;
-        final x = c.x >> delta, y = c.y >> delta;
-        final n = 1 << useful.z;
-        final dx = (x - useful.x).abs();
-        return math.min(dx, n - dx) <= 1 && (y - useful.y).abs() <= 1;
-      }
-
-      for (final key in _cache.keys.toList()) {
-        final snapshot = _cache[key]!;
-        final fallback = _displayZoom[snapshot.family];
-        if (!nearby(snapshot) ||
-            (!_wanted.containsKey(key) &&
-                (snapshot.cell.z != fallback ||
-                    !_cellVisible(snapshot.cell)))) {
-          _bytes -= _cache.remove(key)!.bytes;
-        }
+        if (!_wanted.containsKey(entry.key)) _cancel(entry.key, entry.value);
       }
       if (zoom < MarineZoom.harbours) selection.reset();
       // Draw cached data immediately, even while the network is unavailable.
@@ -513,6 +457,189 @@ class MarineViewport {
     } catch (e) {
       if (kDebugMode) debugPrint('NW220_VIEWPORT drain: ${e.runtimeType}');
     }
+  }
+
+  void _planRequests(
+    CoordinateBounds bounds,
+    double lon,
+    double lat,
+    double zoom,
+  ) {
+    final ideal = <String, int>{};
+    final levels = <String, int>{};
+    for (final family in sources.keys) {
+      final threshold = family == 'harbours'
+          ? MarineZoom.harbourPreload
+          : family == 'seamarks' || family == 'underwater-hazards'
+          ? MarineZoom.marksPreload
+          : MarineZoom.depthsPreload;
+      if (zoom < threshold) continue;
+      final z = family == 'depth-contours'
+          ? 12
+          : family == 'harbours'
+          ? zoom.floor().clamp(6, 14)
+          : zoom.floor().clamp(12, family == 'soundings' ? 16 : 14);
+      ideal[family] = z;
+      levels[family] = ideal[family]!;
+    }
+    // Reserve sixteen slots for a transition, central refinement or margin.
+    // When minimum legal resolutions still exceed the budget, ranges retain
+    // the full demand but only the nearest 64 cells are admitted to work.
+    while (true) {
+      final counts = {
+        for (final e in levels.entries)
+          e.key: MarineCellRange(bounds, e.value).count,
+      };
+      if (counts.values.fold(0, (int a, b) => a + b) <= 48) break;
+      final reducible =
+          levels.keys
+              .where(
+                (f) =>
+                    f != 'depth-contours' &&
+                    levels[f]! > (f == 'harbours' ? 6 : 12),
+              )
+              .toList()
+            ..sort((a, b) => counts[b]!.compareTo(counts[a]!));
+      if (reducible.isEmpty) break;
+      levels[reducible.first] = levels[reducible.first]! - 1;
+    }
+    _ranges.clear();
+    for (final e in levels.entries) {
+      _ranges[e.key] = MarineCellRange(bounds, e.value);
+    }
+    _plannedVisible = _ranges.values.fold(0, (a, r) => a + r.count);
+    final next = <String, (String, MarineCell)>{};
+    void take(Map<String, Iterator<MarineCell>> iterators) {
+      while (iterators.isNotEmpty && next.length < maxSnapshots) {
+        for (final family in iterators.keys.toList()) {
+          final iterator = iterators[family]!;
+          if (!iterator.moveNext()) {
+            iterators.remove(family);
+            continue;
+          }
+          final cell = iterator.current;
+          next['$family/${cell.key}'] = (family, cell);
+          if (next.length == maxSnapshots) break;
+        }
+      }
+    }
+
+    take({
+      for (final e in _ranges.entries) e.key: e.value.cells(lon, lat).iterator,
+    });
+    // Keep detail at the centre even when the peripheral baseline is coarser.
+    take({
+      for (final e in ideal.entries)
+        if (e.value != levels[e.key])
+          e.key: MarineCellRange(bounds, e.value).cells(lon, lat).iterator,
+    });
+    take({
+      for (final e in _ranges.entries)
+        e.key: e.value.cells(lon, lat, marginOnly: true).iterator,
+    });
+    if (!listEquals(next.keys.toList(), _wanted.keys.toList())) {
+      _budgetBlocked.clear();
+      _dataRevision++;
+    }
+    _wanted
+      ..clear()
+      ..addAll(next);
+  }
+
+  List<String> _obsoleteKeys(Map<String, _Snapshot> cache) {
+    final result = <String>[];
+    for (final e in cache.entries) {
+      final s = e.value;
+      if (!_ranges.containsKey(s.family) ||
+          (!_cellVisible(s.cell) && !_wanted.containsKey(e.key))) {
+        result.add(e.key);
+        continue;
+      }
+      if (_wanted.containsKey(e.key)) continue;
+      final replacements = cache.entries
+          .where(
+            (other) =>
+                other.key != e.key &&
+                other.value.family == s.family &&
+                other.value.complete &&
+                _wanted.containsKey(other.key),
+          )
+          .map((other) => other.value.cell);
+      // Offscreen descendants must not pin a large parent after its visible
+      // coverage has been completely replaced.
+      if (!s.cell.uncovered(replacements).any(_cellVisible)) {
+        result.add(e.key);
+      }
+    }
+    return result;
+  }
+
+  void _pruneCache() {
+    final obsolete = _obsoleteKeys(_cache);
+    for (final key in obsolete) {
+      _bytes -= _cache.remove(key)!.bytes;
+    }
+    if (obsolete.isNotEmpty) {
+      _obsoleteEvictions += obsolete.length;
+      _retryFittingBudgetBlocks();
+      _dataRevision++;
+    }
+  }
+
+  void _retryFittingBudgetBlocks() {
+    _budgetBlocked.removeWhere((key, bytes) {
+      final previous = _cache[key];
+      return _bytes - (previous?.bytes ?? 0) + bytes <= maxEncodedBytes &&
+          (_cache.length < maxSnapshots || previous != null);
+    });
+  }
+
+  bool _admit(String key, _Snapshot snapshot) {
+    final proposed = {..._cache, key: snapshot};
+    final obsolete = _obsoleteKeys(proposed);
+    for (final old in obsolete) {
+      proposed.remove(old);
+    }
+    var size = proposed.values.fold(0, (int a, s) => a + s.bytes);
+    final ranks = {for (final (i, k) in _wanted.keys.indexed) k: i};
+    final optional =
+        proposed.keys
+            .where(
+              (k) =>
+                  k != key &&
+                  !_cellVisible(proposed[k]!.cell) &&
+                  (ranks[k] ?? maxSnapshots) > (ranks[key] ?? maxSnapshots),
+            )
+            .toList()
+          ..sort(
+            (a, b) =>
+                (ranks[b] ?? maxSnapshots).compareTo(ranks[a] ?? maxSnapshots),
+          );
+    final evictedMargins = <String>[];
+    for (final victim in optional) {
+      if (proposed.length <= maxSnapshots && size <= maxEncodedBytes) break;
+      size -= proposed.remove(victim)!.bytes;
+      evictedMargins.add(victim);
+    }
+    if (proposed.length > maxSnapshots || size > maxEncodedBytes) return false;
+    // Commit the replacement and its evictions together. Never remove a useful
+    // fallback before knowing that its replacement fits the encoded budgets.
+    for (final removed in _cache.keys.where((k) => !proposed.containsKey(k))) {
+      if (_wanted.containsKey(removed)) {
+        _budgetBlocked[removed] = _cache[removed]!.bytes;
+      }
+      _mosaics.remove(_cache[removed]!.family);
+    }
+    _cache
+      ..clear()
+      ..addAll(proposed);
+    _bytes = size;
+    _obsoleteEvictions += obsolete.length;
+    _marginEvictions += evictedMargins.length;
+    _budgetBlocked.remove(key);
+    _retryFittingBudgetBlocks();
+    _mosaics.remove(snapshot.family);
+    return true;
   }
 
   Future<void> _renderCurrent() {
@@ -550,7 +677,10 @@ class MarineViewport {
   }
 
   bool get _hasPending => _wanted.entries.any((entry) {
-    if (_active.containsKey(entry.key)) return false;
+    if (_active.containsKey(entry.key) ||
+        _budgetBlocked.containsKey(entry.key)) {
+      return false;
+    }
     final cached = _cache[entry.key];
     if (cached != null && cached.expires.isAfter(_now())) return false;
     return !(_failures[entry.key]?.isAfter(_now()) ?? false);
@@ -561,7 +691,10 @@ class MarineViewport {
       while (!_disposed && !_paused) {
         MapEntry<String, (String, MarineCell)>? next;
         for (final entry in _wanted.entries) {
-          if (_active.containsKey(entry.key)) continue;
+          if (_active.containsKey(entry.key) ||
+              _budgetBlocked.containsKey(entry.key)) {
+            continue;
+          }
           final cached = _cache[entry.key];
           if (cached != null && cached.expires.isAfter(_now())) continue;
           if (_failures[entry.key]?.isAfter(_now()) ?? false) continue;
@@ -647,15 +780,17 @@ class MarineViewport {
       };
       final complete =
           marineStatus == null || completeStatuses.contains(marineStatus);
-      if (previous != null && (family == 'depth-contours' || !complete)) {
+      final retainPrevious =
+          previous != null &&
+          (!complete || (family == 'depth-contours' && features.isNotEmpty));
+      if (retainPrevious) {
         final kept = {for (final f in previous.features) f['id'].toString(): f};
         for (final f in features) {
           kept.putIfAbsent(f['id'].toString(), () => f);
         }
         features = kept.values.toList();
       }
-      final bytes =
-          previous != null && (family == 'depth-contours' || !complete)
+      final bytes = retainPrevious
           ? utf8
                 .encode(
                   jsonEncode({
@@ -665,26 +800,30 @@ class MarineViewport {
                 )
                 .length
           : response.bodyBytes.length;
-      // Never evict useful retained geometry for a newcomer when saturated.
-      if (_bytes - (previous?.bytes ?? 0) + bytes > 12 * 1024 * 1024 ||
-          (_cache.length >= 64 && previous == null)) {
-        throw StateError('viewport budget');
+      final snapshot = _Snapshot(
+        family,
+        cell,
+        features,
+        bytes,
+        _now().add(Duration(seconds: complete ? 300 : 15)),
+        complete || (previous?.complete ?? false),
+      );
+      if (!_admit(key, snapshot)) {
+        _budgetBlocked[key] = bytes;
+        if (_cellVisible(cell)) {
+          _visibleBudgetRefusals++;
+        } else {
+          _marginBudgetRefusals++;
+        }
+        // Defer this cell without lowering detail for the whole family.
+        return;
       }
-      _bytes += bytes - (previous?.bytes ?? 0);
       _failureReasons.remove(key);
       _failures.remove(key);
       if (!complete) {
         _failures[key] = _now().add(const Duration(seconds: 15));
         _failureReasons[key] = 'degraded';
       }
-      _cache[key] = _Snapshot(
-        family,
-        cell,
-        features,
-        bytes,
-        _now().add(Duration(seconds: complete ? 300 : 15)),
-        complete,
-      );
       if (kDebugMode) {
         debugPrint(
           'NW220_FETCH ${jsonEncode({'key': key, 'features': features.length, 'bytes': bytes, 'ms': watch.elapsedMilliseconds, 'status': response.headers['x-nowave-marine-status']})}',
@@ -720,88 +859,41 @@ class MarineViewport {
     if (bounds == null) return false;
     final sw = bounds.southwest.coordinates, ne = bounds.northeast.coordinates;
     if (lat < sw.lat || lat > ne.lat) return false;
-    return sw.lng <= ne.lng
-        ? lon >= sw.lng && lon <= ne.lng
-        : lon >= sw.lng || lon <= ne.lng;
+    final rawSpan = (ne.lng - sw.lng).toDouble();
+    if (bounds.infiniteBounds || rawSpan.abs() >= 360) return true;
+    final span = rawSpan < 0 ? rawSpan + 360 : rawSpan;
+    return (lon - sw.lng) % 360 <= span;
   }
 
   bool _cellVisible(MarineCell cell) {
     final bounds = _visibleBounds;
     if (bounds == null) return false;
-    final n = 1 << cell.z;
-    final w = cell.x / n * 360 - 180, e = (cell.x + 1) / n * 360 - 180;
-    double latitude(int y) =>
-        math.atan(
-          ((math.exp(math.pi * (1 - 2 * y / n)) -
-                  math.exp(-math.pi * (1 - 2 * y / n))) /
-              2),
-        ) *
-        180 /
-        math.pi;
-    final north = latitude(cell.y), south = latitude(cell.y + 1);
-    final sw = bounds.southwest.coordinates, ne = bounds.northeast.coordinates;
-    if (south > ne.lat || north < sw.lat) return false;
-    return sw.lng <= ne.lng
-        ? e >= sw.lng && w <= ne.lng
-        : e >= sw.lng || w <= ne.lng;
+    return _visibilityRanges
+        .putIfAbsent(cell.z, () => MarineCellRange(bounds, cell.z))
+        .contains(cell);
   }
 
   /// Read-only snapshot features. Callers must not mutate the maps/geometries.
   List<Map<String, dynamic>> features(String family) {
     final span = MapPerformance.begin();
     final all = <String, Map<String, dynamic>>{};
-    final target = _wanted.values
-        .where((entry) => entry.$1 == family)
-        .map((entry) => entry.$2.z)
-        .firstOrNull;
-    if (target != null) {
-      final displayed = _displayZoom[family];
-      if (displayed == null ||
-          !_cache.values.any(
-            (snapshot) =>
-                snapshot.family == family &&
-                snapshot.cell.z == displayed &&
-                _cellVisible(snapshot.cell),
-          )) {
-        if (_cache.values.any(
-          (snapshot) => snapshot.family == family && snapshot.cell.z == target,
-        )) {
-          _displayZoom[family] = target;
-        }
-      }
-      final wanted = _wanted.entries.where((entry) => entry.value.$1 == family);
-      if (wanted.every((entry) {
-        final snapshot = _cache[entry.key];
-        return snapshot != null &&
-            snapshot.complete &&
-            snapshot.expires.isAfter(_now());
-      })) {
-        _displayZoom[family] = target;
-        for (final key in _cache.keys.toList()) {
-          final snapshot = _cache[key]!;
-          if (snapshot.family == family && snapshot.cell.z != target) {
-            _bytes -= _cache.remove(key)!.bytes;
-          }
-        }
-      }
-    }
-    final fallback = _displayZoom[family];
-    final selectedZoom =
-        fallback != null &&
-            _cache.values.any(
-              (s) =>
-                  s.family == family &&
-                  s.cell.z == fallback &&
-                  _cellVisible(s.cell),
-            )
-        ? fallback
-        : target;
-    for (final snapshot in _cache.values.where(
-      (s) => s.family == family && s.cell.z == selectedZoom,
-    )) {
-      for (final f in snapshot.features) {
-        all.putIfAbsent(f['id'].toString(), () => f);
-      }
+    final memo = _mosaics[family];
+    final data = memo != null && memo.$1 == _dataRevision
+        ? memo.$2
+        : marineMosaic(
+            [
+              for (final s in _cache.values.where((s) => s.family == family))
+                MarinePatch(s.cell, s.features, s.complete),
+            ],
+            {
+              for (final e in _wanted.values.where((e) => e.$1 == family))
+                e.$2.key,
+            },
+            hazardOutlines: family == 'underwater-hazards',
+          );
+    _mosaics[family] = (_dataRevision, data);
+    for (final f in data) {
+      all[f['id'].toString()] = f;
     }
     final useful = _useful;
     bool keepPoint(Map<String, dynamic> f) {
@@ -821,7 +913,24 @@ class MarineViewport {
     }
 
     for (final key in _retainedPoints.keys.toList()) {
-      if (!keepPoint(_retainedPoints[key]!)) {
+      final point = _retainedPoints[key]!;
+      final pointFamily = key.substring(0, key.indexOf('/'));
+      final id = key.substring(key.indexOf('/') + 1);
+      final xy = point['geometry']['coordinates'] as List;
+      final replaced =
+          pointFamily == family &&
+          !all.containsKey(id) &&
+          _cache.entries.any(
+            (e) =>
+                e.value.family == family &&
+                e.value.complete &&
+                _wanted.containsKey(e.key) &&
+                e.value.cell.contains(
+                  (xy[0] as num).toDouble(),
+                  (xy[1] as num).toDouble(),
+                ),
+          );
+      if (!_ranges.containsKey(pointFamily) || replaced || !keepPoint(point)) {
         _retainedBytes -= _retainedSizes.remove(key)!;
         _retainedPoints.remove(key);
       }

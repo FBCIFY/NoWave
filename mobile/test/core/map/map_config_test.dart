@@ -31,7 +31,7 @@ void main() {
       addTearDown(() => messenger.setMockMethodCallHandler(channel, null));
       await MapConfig.configureNetwork(NetworkMap());
       expect(calls.single.method, 'map#setMaxRequestsPerHost');
-      expect(calls.single.arguments, {'max': 12});
+      expect(calls.single.arguments, {'max': 2});
       // A native configuration failure must not stop the map from opening.
       messenger.setMockMethodCallHandler(channel, (_) async {
         throw PlatformException(code: 'native-unavailable');

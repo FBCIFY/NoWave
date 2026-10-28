@@ -134,7 +134,7 @@ void main() {
         contains('https://emodnet.ec.europa.eu/en/bathymetry'),
       );
       expect(source['volatile'], false);
-      expect(source['prefetch-zoom-delta'], 0);
+      expect(source['prefetch-zoom-delta'], 4);
       expect(layer['slot'], 'middle');
       expect(layer['minzoom'], 5); // No marine tile requests in globe view.
       expect(layer['maxzoom'], isNull); // Z14 tiles remain eligible at Z17+.
