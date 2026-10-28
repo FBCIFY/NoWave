@@ -71,7 +71,9 @@ List<Map<String, dynamic>> marineMosaic(
         if (outline != null) _add(all, feature, outline, role: 'outline');
       }
     }
-    covered.addAll(remaining);
+    // Partial responses cannot prove an area is empty, even when the fallback
+    // is itself partial. Only complete coverage may hide older geometry.
+    if (patch.complete) covered.addAll(remaining);
   }
   return all.values.toList();
 }

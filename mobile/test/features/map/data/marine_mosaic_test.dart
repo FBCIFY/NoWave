@@ -150,6 +150,37 @@ void main() {
     expect(coarse, isEmpty);
   });
 
+  for (final complete in [false, true]) {
+    test(
+      'empty Z13 responses ${complete ? 'replace' : 'preserve'} degraded Z12 hazards',
+      () {
+        final coarse = MarineCell.at(-4.5, 48.3, 12);
+        final children = coarse.children.toList();
+        final cell = children.first;
+        final latitude = (cell.south + cell.north) / 2;
+        final hazard = shape('cached-hazard', 'LineString', [
+          [(3 * cell.west + cell.east) / 4, latitude],
+          [(cell.west + 3 * cell.east) / 4, latitude],
+        ]);
+        final cached = MarinePatch(coarse, [hazard], false);
+        final before = jsonEncode(hazard);
+        expect(marineMosaic([cached], {coarse.key}), [hazard]);
+
+        final result = marineMosaic(
+          [
+            cached,
+            for (final child in children) MarinePatch(child, [], complete),
+          ],
+          children.map((c) => c.key).toSet(),
+          hazardOutlines: true,
+        );
+
+        expect(result, complete ? isEmpty : equals([hazard]));
+        expect(jsonEncode(hazard), before);
+      },
+    );
+  }
+
   test(
     'polygon holes, concavity and disconnected multipolygons survive clipping',
     () {
