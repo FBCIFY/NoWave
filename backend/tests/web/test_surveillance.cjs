@@ -52,10 +52,12 @@ test('latest user list wins even when abort is ignored by transport',async()=>{
   const h=harness();h.ids['users-open'].click();const old=h.pending.at(-1);h.ids['user-status'].onchange();
   h.pending.at(-1).resolve(response({items:[user('bob')],pages:1,total:1}));await flush();old.resolve(response({items:[user('alice')],pages:1,total:1}));await flush();assert.match(h.ids['users-list'].text,/bob/);assert.doesNotMatch(h.ids['users-list'].text,/alice/);
 });
-for(const icons of [true,false])test(`Mapbox layers keep selection above red clusters and ${icons?'sprite':'circle'} fallback`,async()=>{
+for(const icons of [true,false])test(`Mapbox layers keep selection above neutral clusters and ${icons?'sprite':'circle'} fallback`,async()=>{
   const h=harness({withMap:true,icons});h.handlers['load:']();
   const layer=id=>h.layers.find(x=>x.id===id);
-  assert.equal(layer('clusters').paint['circle-color'],'#cf3149');
+  assert.equal(layer('clusters').paint['circle-color'],'#284e61');
+  assert.equal(h.map.options.projection,'globe');
+  assert.equal(h.map.options.dragRotate,false);
   assert.ok(h.layers.indexOf(layer('selected-report'))>h.layers.indexOf(layer('clusters')));
   if(icons){assert.equal(layer('points').layout['icon-anchor'],'center');assert.match(JSON.stringify(layer('points').layout['icon-image']),/coalesce.*report-unknown/);assert.equal(layer('selected-icon').layout['icon-allow-overlap'],true);}
   else assert.equal(layer('points').type,'circle');
@@ -68,8 +70,9 @@ test('direct report works before map load and stale same-id response cannot over
   const h=harness({withMap:true,href:`https://local.test/admin?report=${id}`});const old=h.pending.at(-1);
   assert.match(old.url,/data\/reports\//);h.handlers['load:']();h.ids['report-close'].click();
   h.handlers['click:points']({features:[{properties:{id,category:'pollution'},geometry:{coordinates:[-30,24]}}]});
-  const data={id,category:'pollution',status:'active',final_position:{coordinates:[-30,24]},description:'fresh'};
+  const data={id,category:'pollution',status:'active',final_position:{coordinates:[-30,24]},description:'fresh',version:9,positioning_mode:'manual',author:{id:'private-author-id',username:'Navigateur',email:'private-email@test'}};
   h.pending.at(-1).resolve(response(data));await flush();
   old.resolve(response({...data,description:'obsolete'}));await flush();assert.equal(h.ids['report-panel'].hidden,false);
-  assert.match(h.ids['report-detail'].text,/fresh/);assert.doesNotMatch(h.ids['report-detail'].text,/obsolete/);
+  assert.match(h.ids['report-detail'].text,/fresh/);assert.doesNotMatch(h.ids['report-detail'].text,/obsolete|Identifiant|Expiration|Retrait|Positionnement|Auteur ID|E-mail|private-author-id|private-email/);
+  assert.match(h.ids['report-detail'].text,/Pollution.*Actif.*fresh.*Navigateur/);
 });

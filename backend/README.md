@@ -403,7 +403,39 @@ Ils créent leur propre base, appliquent les migrations puis la suppriment. Ils
 ne doivent jamais réinitialiser la base partagée.
 
 
+### Configuration de la carte web
+
+`GET /api/v1/map/web-config` est public et renvoie uniquement
+`{"mapbox_token": "..."}` à partir de `MAPBOX_PUBLIC_TOKEN`. Seul le format public
+`pk.<payload>.<signature>` est exposé ; un jeton absent, secret ou malformé donne
+une chaîne vide. Cette réponse porte `Cache-Control: no-store`, ne crée aucun
+cookie et ne lit ni la session ni la base de données. Elle permet à la landing
+de charger le même moteur et le même fond cartographique que l’administration.
+Les endpoints des signalements restent authentifiés.
+
 ### Tuiles des signalements
+
+`GET /api/v1/map/observations` alimente le poste d’observation public en lecture
+seule. Il renvoie uniquement les signalements `active`, non retirés et dont
+`expires_at` est encore à venir, à chaque requête (`Cache-Control: no-store`).
+Une suspension de compte ne retire pas ses signalements existants : leur statut
+de modération reste indépendant, comme dans les tuiles mobiles.
+
+Paramètres : `west`, `south`, `east`, `north` ensemble (ou aucun pour le monde),
+`category`, `q` (120 caractères au plus), `limit` (1–500, défaut 200), `cursor`.
+Une boîte `west > east` traverse l’antiméridien. `q` recherche littéralement
+dans la description et les pseudonymes publics, jamais dans les pseudonymes
+masqués ou les e-mails. La réponse contient `items`, `has_more` et, si une suite
+existe, `next_cursor` ; conserver les mêmes filtres pour la page suivante.
+Le tri est `observed_at DESC, id DESC`.
+
+Chaque observation expose `id`, `category`, `longitude`, `latitude`,
+`observed_at`, `expires_at`, puis `description` et `author_username` uniquement
+s’ils sont renseignés. Le pseudonyme respecte `show_user_name`. Aucun e-mail,
+identifiant d’auteur, bateau, photo ou détail technique n’est publié. Les
+routes de détail, les tuiles de signalements et les routes d’administration
+conservent leur authentification. L’aperçu local substitue les seules fixtures
+synthétiques et les identifie par `X-NoWave-Preview: synthetic-read-only`.
 
 `GET /api/v1/map/tiles/{z}/{x}/{y}.mvt` demande un jeton Firebase et renvoie
 une tuile Mapbox Vector Tile (`application/vnd.mapbox-vector-tile`). Les paramètres

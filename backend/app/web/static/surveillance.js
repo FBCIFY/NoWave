@@ -3,8 +3,23 @@
   const $ = id => document.getElementById(id);
   const status = $('map-status'); let map, mapAbort, detailAbort, userAbort, selected = null, userPage = 1, userPages = 1, users = [];
   let reportsAbort, activeUser = null, reportPage = 1, reportsSection = null;
-  const initial = [-30, 24], initialZoom = 2.4;
+  let overviewMode = true, mapReady = false;
+  const reducedMotion = () => matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const overview = () => window.NoWaveMapCore.overview(root.clientWidth || 1024, root.clientHeight || 768);
+  function leaveOverview() { overviewMode = false; $('reset-map').hidden = false; }
+  function centerReport(coordinates) {
+    if (!map || !coordinates) return;
+    leaveOverview();
+    const mobile = (root.clientWidth || 1024) <= 750;
+    map.easeTo({center:coordinates,zoom:Math.max(map.getZoom(),7.2),pitch:0,bearing:0,
+      offset:mobile?[0,-Math.min(110,(root.clientHeight || 768)*0.18)]:[150,0],duration:reducedMotion()?0:900});
+  }
   const clean = value => String(value ?? '—');
+  const labels = {marine_animal:'Animal marin',obstruction:'Obstacle',objet:'Objet',pollution:'Pollution',active:'Actif',expired:'Expiré',removed:'Retiré',suspended:'Suspendu',admin:'Administrateur',user:'Navigateur'};
+  const label = value => labels[value] || clean(value);
+  const dateFormat = new Intl.DateTimeFormat('fr-FR',{day:'numeric',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit',timeZone:'UTC',timeZoneName:'short'});
+  function dateLabel(value) { if(!value) return '—'; const date=new Date(value); return Number.isNaN(date.getTime())?clean(value):dateFormat.format(date); }
+  function badge(value) { const node=el('span',label(value)); node.className='badge'+(labels[value]?' badge-'+value:''); return node; }
   const emptyCollection = () => ({type:'FeatureCollection',features:[]});
   let selectedData = emptyCollection();
   function markSelected(coordinates, category) {
@@ -21,20 +36,20 @@
   }
   function openUsers(open) {
     resetUserReports();
-    if(open && matchMedia('(max-width:750px)').matches) closeReport();
+    if(open) closeReport();
     if (!open) { clearTimeout(searchTimer); userAbort?.abort(); userAbort = null; }
-    $('users-panel').hidden = !open; const url = new URL(location); if (open) url.searchParams.set('panel','users'); else url.searchParams.delete('panel'); history.replaceState({},'',url); if(open) loadUsers(); map?.resize(); }
+    $('users-panel').hidden = !open; $('users-tab').setAttribute('aria-expanded', String(open)); const url = new URL(location); if (open) url.searchParams.set('panel','users'); else url.searchParams.delete('panel'); history.replaceState({},'',url); if(open) loadUsers(); map?.resize(); }
   $('users-open').onclick = $('users-tab').onclick = () => openUsers(true);
   $('users-close').onclick = () => openUsers(false);
   function closeReport() { $('report-panel').hidden = true; selected = null; detailAbort?.abort(); const url = new URL(location); url.searchParams.delete('report'); history.replaceState({},'',url); markSelected(); map?.resize(); }
   $('report-close').onclick = closeReport;
   function reportLink(id, action, label, parent) { const a=el('a',label); a.href=`/admin/actions/reports/${encodeURIComponent(id)}/${action}`; parent.append(a); }
   async function selectReport(id, coordinates, category) {
-    if(matchMedia('(max-width:750px)').matches) openUsers(false);
+    openUsers(false);
     selected = id; detailAbort?.abort(); const request = detailAbort = new AbortController();
     $('report-panel').hidden = false; $('report-detail').replaceChildren(el('p','Chargement…'));
     const url = new URL(location); url.searchParams.set('report',id); history.replaceState({},'',url);
-    if (coordinates && map) map.easeTo({center:coordinates,zoom:Math.max(map.getZoom(),7),duration:matchMedia('(prefers-reduced-motion: reduce)').matches?0:900});
+    centerReport(coordinates);
     markSelected(coordinates, category); map?.resize();
     try {
       const response = await fetch(`/admin/data/reports/${encodeURIComponent(id)}`,{signal:request.signal,credentials:'same-origin'});
@@ -42,20 +57,20 @@
       if(!response.ok) throw Error(`Fiche indisponible (${response.status}).`);
       const data=await response.json(); if(request !== detailAbort || request.signal.aborted || selected!==id) return;
       markSelected(data.final_position?.coordinates, data.category);
-      if (!coordinates && map && data.final_position?.coordinates) map.easeTo({center:data.final_position.coordinates,zoom:7,duration:matchMedia('(prefers-reduced-motion: reduce)').matches?0:900});
+      if (!coordinates) centerReport(data.final_position?.coordinates);
       const box=$('report-detail'), dl=document.createElement('dl'); dl.className='detail-grid';
-      field(dl,'Identifiant',data.id); field(dl,'Catégorie',data.category); field(dl,'Statut',data.status);
-      field(dl,'Observation',data.observed_at); field(dl,'Expiration',data.expires_at); field(dl,'Retrait',data.removed_at);
-      field(dl,'Latitude',data.final_position.coordinates[1]); field(dl,'Longitude',data.final_position.coordinates[0]);
-      field(dl,'Positionnement',data.positioning_mode); field(dl,'Auteur',data.author?.deleted?'Compte supprimé':data.author?.username);
-      field(dl,'Auteur ID',data.author?.id); field(dl,'E-mail',data.author?.email); field(dl,'Compte',data.author?.status);
-      field(dl,'Bateau',data.boat?.name); field(dl,'Description',data.description || 'Aucune description'); box.replaceChildren(dl);
-      if(data.photo?.hidden_at) box.append(el('p','Photo masquée'));
+      const badges=document.createElement('div'); badges.className='badge-row'; badges.append(badge(data.category),badge(data.status));
+      const description=el('p',data.description || 'Aucune description'); description.className='report-description preserve';
+      field(dl,'Observé le',dateLabel(data.observed_at));
+      field(dl,'Auteur',data.author?.deleted?'Compte supprimé':data.author?.username || 'Non renseigné');
+      box.replaceChildren(badges,description,dl);
+      const photoNote=value=>{const note=el('p',value); note.className='photo-note'; box.append(note);};
+      if(data.photo?.hidden_at) photoNote('Photo masquée');
       else if(data.photo?.url) { const a=document.createElement('a'), img=document.createElement('img'); a.href=data.photo.url; a.target='_blank'; a.rel='noopener noreferrer'; img.src=data.photo.url; img.alt='Photographie du signalement'; img.className='photo'; img.onerror=()=>img.replaceWith(el('p','Photo indisponible')); a.append(img); box.append(a); }
-      else box.append(el('p','Aucune photo'));
       const actions=document.createElement('div'); actions.className='detail-actions';
+      const historyLink=el('a','Fiche et historique'); historyLink.href=`/admin/reports/${encodeURIComponent(id)}#report-history`; actions.append(historyLink);
       if(data.status==='removed') reportLink(id,'restore','Restaurer',actions);
-      else if(data.status==='active') reportLink(id,'remove','Retirer',actions);
+      else if(data.status==='active' || data.status==='expired') reportLink(id,'remove','Retirer',actions);
       if(data.photo?.url) reportLink(id,'hide-photo','Masquer la photo',actions);
       box.append(actions);
     } catch(error) { if(error.name!=='AbortError' && request === detailAbort && !request.signal.aborted && selected===id) $('report-detail').replaceChildren(el('p',error.message)); }
@@ -63,10 +78,11 @@
   function renderUsers() {
     const q=$('user-search').value.trim().toLocaleLowerCase(); const list=$('users-list'); list.replaceChildren();
     for(const user of users.filter(u=>`${u.username} ${u.id} ${u.email}`.toLocaleLowerCase().includes(q))) {
-      const b=el('button',`${user.username} · ${user.status}`); b.type='button'; b.className='user-row'; b.append(el('small',`${user.role} · ${user.reports_count} signalement(s)`)); b.onclick=()=>{
+      const b=document.createElement('button'); b.type='button'; b.className='user-row';
+      const heading=document.createElement('span'); heading.className='user-row-heading'; heading.append(el('span',user.username),badge(user.status)); b.append(heading,el('small',`${label(user.role)} · ${user.reports_count} signalement(s)`)); b.onclick=()=>{
         resetUserReports();
         const box=$('user-detail'), dl=document.createElement('dl'); dl.className='detail-grid';
-        for(const [name,value] of Object.entries({ID:user.id,E_mail:user.email,Rôle:user.role,Statut:user.status,Création:user.created_at,Signalements:user.reports_count})) field(dl,name.replace('_','-'),value);
+        for(const [name,value] of Object.entries({'E-mail':user.email,Rôle:label(user.role),Statut:label(user.status),Création:dateLabel(user.created_at),Signalements:user.reports_count})) field(dl,name,value);
         box.replaceChildren(el('h3',user.username),dl); const links=document.createElement('div'); links.className='detail-actions';
         const reports=el('button','Afficher les signalements'); reports.type='button';
         reports.onclick=()=>{
@@ -103,7 +119,7 @@
       if(!response.ok) throw Error(`Liste indisponible (${response.status}).`);
       const data=await response.json(); if(!current()) return;
       for(const item of data.items) {
-        const a=el('a',`${item.category} · ${item.status} · ${item.observed_at}`);
+        const a=el('a',`${label(item.category)} · ${label(item.status)} · ${dateLabel(item.observed_at)}`);
         a.href=`/admin?report=${encodeURIComponent(item.id)}`; list.append(a);
       }
       message.textContent=!data.items.length?(page===1?'Aucun signalement.':'Aucun signalement sur cette page.'):(data.has_more?'20 signalements sur cette page.':'Fin de la liste.');
@@ -127,38 +143,51 @@
   const direct=new URL(location).searchParams.get('report');
   if(new URL(location).searchParams.get('panel')==='users') openUsers(true);
   if(direct&&/^[0-9a-f-]{36}$/i.test(direct)) selectReport(direct);
-  if(!root.dataset.token || !window.mapboxgl || !mapboxgl.supported()) {status.textContent='Carte indisponible : configurez MAPBOX_PUBLIC_TOKEN. Les listes et actions restent accessibles.'; return;}
+  if(!root.dataset.token || !window.mapboxgl || !window.NoWaveMapCore || !mapboxgl.supported()) {status.textContent='Carte indisponible. Les listes et actions restent accessibles.'; return;}
   mapboxgl.accessToken=root.dataset.token;
-  try {map=new mapboxgl.Map({container:'surveillance-map',style:'mapbox://styles/mapbox/dark-v11',projection:'mercator',renderWorldCopies:false,maxBounds:[[-180,-85],[180,85]],center:initial,zoom:initialZoom,minZoom:0.5,maxZoom:12,pitch:0,bearing:0,dragRotate:false,pitchWithRotate:false,touchPitch:false,maxPitch:0,attributionControl:true});
-    map.touchZoomRotate.disableRotation(); map.on('rotate',()=>map.setBearing(0));
-    map.on('style.load',()=>window.NoWaveMaritimeStyle.apply(map));
+  try {
+    const initial=overview();
+    map=window.NoWaveMapCore.createMap({container:'surveillance-map',center:[initial.x,initial.y],zoom:initial.zoom,trackResize:false});
+    map.touchZoomRotate.disableRotation(); map.keyboard?.disableRotation();
+    map.getCanvas?.().setAttribute('aria-label','Carte maritime. Flèches pour déplacer, plus et moins pour zoomer.');
+    map.on('movestart',event=>{if(event.originalEvent)leaveOverview();});
+    map.on('style.load',()=>window.NoWaveMaritimeStyle.apply(map,{login:true}));
     map.on('load',()=>{map.addSource('reports',{type:'geojson',data:{type:'FeatureCollection',features:[]},cluster:true,clusterRadius:48,clusterMaxZoom:11});
       map.addSource('selected',{type:'geojson',data:selectedData});
-      map.addLayer({id:'cluster-halo',type:'circle',source:'reports',filter:['has','point_count'],paint:{'circle-color':'#e64255','circle-radius':['step',['get','point_count'],25,10,30,50,36],'circle-opacity':0.18,'circle-blur':0.65}});
+      map.addLayer({id:'cluster-halo',type:'circle',source:'reports',filter:['has','point_count'],paint:{'circle-color':'#9fc1ce','circle-radius':['step',['get','point_count'],25,10,30,50,36],'circle-opacity':0.18,'circle-blur':0.65}});
       map.addLayer({id:'cluster-shadow',type:'circle',source:'reports',filter:['has','point_count'],paint:{'circle-color':'#020711','circle-radius':['step',['get','point_count'],21,10,27,50,33],'circle-opacity':0.55,'circle-blur':0.4,'circle-translate':[0,2]}});
-      map.addLayer({id:'clusters',type:'circle',source:'reports',filter:['has','point_count'],paint:{'circle-color':'#cf3149','circle-radius':['step',['get','point_count'],18,10,24,50,30],'circle-opacity':0.97,'circle-stroke-color':'#ffd4db','circle-stroke-width':0.9}});
+      map.addLayer({id:'clusters',type:'circle',source:'reports',filter:['has','point_count'],paint:{'circle-color':'#284e61','circle-radius':['step',['get','point_count'],18,10,24,50,30],'circle-opacity':0.97,'circle-stroke-color':'#abc5d1','circle-stroke-width':0.9}});
       map.addLayer({id:'cluster-count',type:'symbol',source:'reports',filter:['has','point_count'],layout:{'text-field':['get','point_count_abbreviated'],'text-size':13},paint:{'text-color':'#fff'}});
-      map.addLayer({id:'point-halo',type:'circle',source:'reports',filter:['!', ['has','point_count']],paint:{'circle-color':'#e64255','circle-radius':['interpolate',['linear'],['zoom'],1,14,6,20,12,25],'circle-opacity':0.16,'circle-blur':0.7,'circle-translate':[0,0]}});
+      map.addLayer({id:'point-halo',type:'circle',source:'reports',filter:['!', ['has','point_count']],paint:{'circle-color':'#9fc1ce','circle-radius':['interpolate',['linear'],['zoom'],1,14,6,20,12,25],'circle-opacity':0.16,'circle-blur':0.7,'circle-translate':[0,0]}});
       let iconsReady = false;
       try { iconsReady = window.NoWaveMarkerIcons.install(map); } catch (_) { /* Circle fallback keeps reports visible. */ }
       const iconImage = ['coalesce',['image',['concat','report-',['get','category']]],['image','report-unknown']];
       if (iconsReady) {
         map.addLayer({id:'points',type:'symbol',source:'reports',filter:['!', ['has','point_count']],layout:{'icon-image':iconImage,'icon-size':['interpolate',['linear'],['zoom'],1,0.75,6,0.95,12,1.15],'icon-anchor':'center','icon-allow-overlap':true,'icon-ignore-placement':true}});
       } else {
-        map.addLayer({id:'points',type:'circle',source:'reports',filter:['!', ['has','point_count']],paint:{'circle-color':'#e64255','circle-radius':8,'circle-stroke-color':'#fff','circle-stroke-width':1}});
+        map.addLayer({id:'points',type:'circle',source:'reports',filter:['!', ['has','point_count']],paint:{'circle-color':'#9fc1ce','circle-radius':8,'circle-stroke-color':'#fff','circle-stroke-width':1}});
       }
-      map.addLayer({id:'selected-report',type:'circle',source:'selected',paint:{'circle-color':'#e64255','circle-radius':19,'circle-opacity':0.15,'circle-stroke-color':'#f5faff','circle-stroke-opacity':0.85,'circle-stroke-width':1.5,'circle-blur':0.25,'circle-translate':[0,0]}});
+      map.addLayer({id:'selected-report',type:'circle',source:'selected',paint:{'circle-color':'#9fc1ce','circle-radius':19,'circle-opacity':0.15,'circle-stroke-color':'#f5faff','circle-stroke-opacity':0.85,'circle-stroke-width':1.5,'circle-blur':0.25,'circle-translate':[0,0]}});
       if (iconsReady) map.addLayer({id:'selected-icon',type:'symbol',source:'selected',layout:{'icon-image':iconImage,'icon-size':1.2,'icon-anchor':'center','icon-allow-overlap':true,'icon-ignore-placement':true}});
       map.on('click','clusters',e=>window.NoWaveClusterInteraction.expand(map,e.features[0],matchMedia('(prefers-reduced-motion: reduce)').matches));
       map.on('click','points',e=>selectReport(e.features[0].properties.id,e.features[0].geometry.coordinates,e.features[0].properties.category));
-      map.on('moveend',loadReports); loadReports(); if(selectedData.features.length) map.easeTo({center:selectedData.features[0].geometry.coordinates,zoom:7,duration:matchMedia('(prefers-reduced-motion: reduce)').matches?0:900});
+      window.NoWaveMapSearch?.mount({container:$('admin-map-search'),map,token:root.dataset.token,onSelect(){closeReport();openUsers(false);leaveOverview();}});
+      mapReady=true; ['zoom-in','zoom-out','reset-map'].forEach(id=>{$(id).disabled=false;});
+      map.on('moveend',loadReports); loadReports(); if(selectedData.features.length) centerReport(selectedData.features[0].geometry.coordinates);
     });
     map.on('error',()=>{status.textContent='Cartographie momentanément indisponible. Les listes restent accessibles.';});
   } catch(_) {status.textContent='Carte indisponible. Les listes restent accessibles.';}
   async function loadReports(){mapAbort?.abort(); const request=mapAbort=new AbortController(); const bounds=map.getBounds(); const west=Math.max(-180,bounds.getWest()),east=Math.min(180,bounds.getEast()); if(west>=east)return;
     const url=new URL('/admin/data/reports',location); for(const [key,value] of Object.entries({west,south:Math.max(-90,bounds.getSouth()),east,north:Math.min(90,bounds.getNorth())}))url.searchParams.set(key,value);
-    status.textContent='Chargement des signalements…'; try{const response=await fetch(url,{signal:request.signal,credentials:'same-origin'});if(response.redirected&&response.url.includes('/admin/login'))throw Error('Session expirée. Reconnectez-vous.');if(!response.ok)throw Error(`Signalements indisponibles (${response.status}).`);const data=await response.json();if(request!==mapAbort || request.signal.aborted)return;map.getSource('reports').setData(data);status.textContent=data.truncated?`Affichage partiel. ${data.features.length.toLocaleString('fr-FR')} signalements chargés dans cette zone. Les compteurs correspondent uniquement aux signalements affichés.`:`${data.features.length} signalements dans la zone visible`;}
+    status.textContent='Chargement des signalements…'; try{const response=await fetch(url,{signal:request.signal,credentials:'same-origin'});if(response.redirected&&response.url.includes('/admin/login'))throw Error('Session expirée. Reconnectez-vous.');if(!response.ok)throw Error(`Signalements indisponibles (${response.status}).`);const data=await response.json();if($('map-preview-note'))$('map-preview-note').hidden=response.headers?.get('X-NoWave-Preview')!=='synthetic-read-only';if(request!==mapAbort || request.signal.aborted)return;map.getSource('reports').setData(data);$('reports-count').textContent=data.features.length;status.textContent=data.truncated?`Affichage partiel. ${data.features.length.toLocaleString('fr-FR')} signalements chargés dans cette zone. Les compteurs correspondent uniquement aux signalements affichés.`:'';}
     catch(error){if(error.name!=='AbortError' && request===mapAbort && !request.signal.aborted)status.textContent=error.message;}
   }
-  $('zoom-in').onclick=()=>map?.zoomIn(); $('zoom-out').onclick=()=>map?.zoomOut(); $('reset-map').onclick=()=>map?.easeTo({center:initial,zoom:initialZoom,bearing:0,pitch:0,duration:600});
+  $('zoom-in').onclick=()=>{leaveOverview();map?.zoomIn({duration:reducedMotion()?0:300});};
+  $('zoom-out').onclick=()=>{leaveOverview();map?.zoomOut({duration:reducedMotion()?0:300});};
+  $('reset-map').onclick=()=>{closeReport();overviewMode=true;$('reset-map').hidden=true;const view=overview();map?.easeTo({center:[view.x,view.y],zoom:view.zoom,bearing:0,pitch:0,duration:reducedMotion()?0:1200});};
+  if(window.ResizeObserver) new window.ResizeObserver(()=>{
+    map?.resize();
+    if(mapReady && overviewMode) {const view=overview();map.jumpTo({center:[view.x,view.y],zoom:view.zoom,pitch:0,bearing:0});}
+  }).observe(root);
+  root.onkeydown=event=>{if(event.key!=='Escape')return;if(!$('users-panel').hidden){openUsers(false);$('users-tab').focus();}else if(!$('report-panel').hidden){closeReport();map?.getCanvas?.().focus();}else return;event.preventDefault();};
 })();

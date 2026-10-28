@@ -88,11 +88,11 @@ Ce rapport est versionné avant publication. Les résultats GitHub Actions du no
 
 - Chromium 153.0.8010.12 via Playwright 1.64.1, Linux, HTTPS local, 1440×1000 et 390×844 tactile.
 - `admin.spec.cjs` : 26 scénarios bureau/mobile avec vraie application, session et modération, base isolée ; frontières Firebase, Mapbox et stockage photo simulées.
-- `mapbox.spec.cjs` : 2 parcours avec **Mapbox GL JS et API Mapbox réels**, token public externe fourni par l'utilisateur, GEBCO réel du dépôt servi localement, API administrative et PostGIS réels. Seul le dernier point de catégorie inconnue est injecté par une réponse API de test.
+- `mapbox.spec.cjs` : 2 parcours avec **Mapbox GL JS et API Mapbox réels**, jeton public de configuration externe, GEBCO réel du dépôt servi localement, API administrative et PostGIS réels. Seul le dernier point de catégorie inconnue est injecté par une réponse API de test.
 - Connexion, refus non-admin et mauvais mot de passe, cookies sécurisés, globe et mouvement réduit, caméra Atlantique fixe, cluster cliqué, sélection visible, liens directs, photos autorisée/masquée/absente, recherche/filtres, deux paginations, erreurs/réessai, expiration, sans token, clavier, fermeture/réouverture et cinq modérations avec CSRF/motif/confirmation/audit.
 - Contrôle des exceptions JavaScript, console, réponses HTTP, transport, erreurs Mapbox et largeur des panneaux. Les réponses terrain océanique `404 {"message":"Tile not found"}` sont recensées séparément ; aucun contournement pour les autres erreurs.
 - Huit captures finales des quatre vues réelles, bureau et mobile, sont conservées dans `docs/test-reports/artifacts/NW-244/`. Les artefacts et captures intermédiaires de Playwright restent ignorés.
-- Les références précises `photo/image.png` et `photo/image2.png` sont absentes. Une référence mobile locale dans `docs/design` a été inspectée mais n'est pas une maquette des quatre vues ; aucune comparaison pixel à pixel aux maquettes absentes n'est revendiquée.
+- La recette vérifie le rendu fonctionnel des vues ; elle ne constitue pas une comparaison pixel à pixel avec des maquettes.
 - **Limite acceptée explicitement par l'utilisateur** : Firebase reste simulé. Aucun compte de test confirmé ; isolation de `blueway-dev` non prouvée. Aucun compte créé, aucune requête de modération réelle. Le stockage Scaleway est simulé. La connexion Firebase et les URLs Scaleway réelles restent à valider sur des services de test isolés avant une future livraison contrôlée.
 
 ## H. Premier audit — vérification technique
@@ -123,7 +123,7 @@ Seconde passe réalisée à partir du diff réel contre `origin/dev`, incluant l
 - Le message de troncature limite explicitement les compteurs aux points affichés. Les tests distinguent 1 000 et 1 001, sans compter la limite atteinte comme troncature.
 - Aucun changement aux contrôles serveur, cookies, CSRF, signatures photo ou règles CSP. Les cinq modérations sont testées uniquement sur les fixtures ; une photo masquée n'a pas d'URL dans la réponse.
 - CI : les workflows existants gardent leurs jobs et gardes de déploiement ; seule la couverture augmente. L'authentification du serveur de test n'est jamais importée ou configurée dans le serveur produit.
-- Pas de fichier Flutter, VPS, secret, base locale, cache, trace ou artefact de compilation dans le diff. Seules huit captures finales utiles sont retenues. Le nom de projet Firebase déjà donné par l'utilisateur n'est pas un secret ; aucun contenu de clé n'est inclus.
+- Pas de fichier Flutter, VPS, secret, base locale, cache, trace ou artefact de compilation dans le diff. Seules huit captures finales utiles sont retenues. Aucun contenu de clé n'est inclus.
 - `git diff --check`, Ruff, 23 tests Node, 286 tests PostGIS et dernière recette 28/28 valides ; 32 tests API/SQL ciblés repassés après le durcissement des bornes.
 
 Aucune régression P0/P1/P2 restante identifiée. Pas de modification fonctionnelle issue de cette seconde passe ; le renforcement du test a été revérifié. Restent les limites externes déclarées (Firebase/Scaleway réels et références graphiques absentes).

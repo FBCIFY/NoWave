@@ -250,13 +250,29 @@ def test_home_shows_active_admin(client, web_session):
 
     assert response.status_code == 200
     assert response.headers["cache-control"] == "no-store"
-    assert "Centre de surveillance maritime" in response.text
+    assert 'aria-label="Navigation administration"' in response.text
     assert "admin" in response.text
     assert 'action="/admin/logout"' in response.text
     token = session_csrf_token("session-cookie")
     assert f'name="csrf_token" value="{token}"' in response.text
+    assert 'src="/assets/admin-map.js"' in response.text
+    assert 'href="/assets/nowave.css"' in response.text
+    assert 'id="carte"' in response.text
+    assert 'id="users-panel"' not in response.text
+    assert 'id="admin-map-search"' not in response.text
     # The page does not set a login token again.
     assert CSRF_COOKIE not in response.headers.get("set-cookie", "")
+
+
+def test_dev_home_uses_the_shared_web_map_entry(client, web_session):
+    sign_in(client)
+    response = client.get("/admin", headers={"x-nowave-web-dev": "1"})
+    assert response.status_code == 200
+    assert 'src="/admin-map.js"' in response.text
+    assert 'href="/src/map-view.css"' in response.text
+    assert 'id="users-panel"' not in response.text
+    assert 'href="/admin/users"' in response.text
+    assert 'href="/admin/reports"' in response.text
 
 
 def test_invalid_session_redirects_and_clears_cookie(client, web_session):
@@ -404,7 +420,7 @@ def test_admin_security_requires_session():
         security.require_active_admin(request_with_session(None))
 
 
-def test_username_is_escaped(client, web_session):
+def test_session_username_is_not_exposed_in_header(client, web_session):
     web_session.admin = User(
         firebase_uid="firebase-admin-1",
         username="<script>alert(1)</script>",
@@ -417,7 +433,8 @@ def test_username_is_escaped(client, web_session):
     response = client.get("/admin")
 
     assert "<script>" not in response.text
-    assert "&lt;script&gt;" in response.text
+    assert "&lt;script&gt;" not in response.text
+    assert 'action="/admin/logout"' in response.text
 
 
 def test_admin_pages_are_not_in_openapi(client):

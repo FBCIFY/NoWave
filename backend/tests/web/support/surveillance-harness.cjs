@@ -17,18 +17,19 @@ function deferred() { let resolve,reject; const promise=new Promise((a,b)=>{reso
 function response(data, extra={}) { return {ok:true,status:200,redirected:false,json:async()=>data,...extra}; }
 const flush=()=>new Promise(resolve=>setImmediate(resolve));
 function harness({withMap=false,icons=true,href='https://local.test/admin'}={}) {
-  const ids={}; for(const id of ['map-status','users-panel','users-open','users-tab','users-close','report-close','report-panel','report-detail','user-detail','users-list','user-search','user-status','users-count','users-page','users-prev','users-next','zoom-in','zoom-out','reset-map']) ids[id]=new Element();
+  const ids={}; for(const id of ['map-status','reports-count','users-panel','users-open','users-tab','users-close','report-close','report-panel','report-detail','user-detail','users-list','user-search','user-status','users-count','users-page','users-prev','users-next','zoom-in','zoom-out','reset-map']) ids[id]=new Element();
   const root=new Element();root.dataset.token=withMap?'public-test':'';
   const pending=[],layers=[],images=[],sources={},handlers={};
   const map={on(event,layer,fn) { handlers[layer?`${event}:${typeof layer==='string'?layer:''}`:event]=fn||layer; },
-    resize(){},getSource:id=>sources[id],addSource(id,s){sources[id]={...s,setData(data){this.data=data;}};},
+    addControl(){},resize(){},getSource:id=>sources[id],addSource(id,s){sources[id]={...s,setData(data){this.data=data;}};},
     addLayer(l){layers.push(l);},touchZoomRotate:{disableRotation(){}},getZoom:()=>3,easeTo(){},
     getBounds:()=>({getWest:()=>-70,getEast:()=>20,getSouth:()=>-20,getNorth:()=>60})};
   const context={window:{NoWaveMaritimeStyle:{apply(){}},NoWaveMarkerIcons:{install(){return icons;}},NoWaveClusterInteraction:{expand(){}}},
     document:{querySelector:()=>root,getElementById:id=>ids[id],createElement:tag=>new Element(tag)},
     location:new URL(href),history:{replaceState(){}},URL,AbortController,matchMedia:()=>({matches:false}),setTimeout,clearTimeout,
     fetch:(url,options)=>{const d=deferred();pending.push({url:String(url),options,...d});return d.promise;}};
-  if(withMap) context.mapboxgl=context.window.mapboxgl={supported:()=>true,Map:function(){return map;}};
+  if(withMap) context.mapboxgl=context.window.mapboxgl={supported:()=>true,AttributionControl:function(){},Map:function(options){map.options=options;return map;}};
+  vm.runInNewContext(fs.readFileSync('backend/app/web/static/map-core.js','utf8'),context);
   vm.runInNewContext(fs.readFileSync('backend/app/web/static/surveillance.js','utf8'),context);
   return {ids,pending,layers,images,sources,handlers,map};
 }
