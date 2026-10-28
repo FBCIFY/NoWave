@@ -209,13 +209,13 @@ class MarineViewport {
   // Full geographic demand is represented by ranges, not a world-sized list.
   // The bounded working set includes visible cells first, then their margin.
   final _ranges = <String, MarineCellRange>{};
-  final _resolutionCaps = <String, int>{};
-  final _budgetBlocked = <String>{};
+  // Keep response sizes, not payloads, until enough capacity is available.
+  final _budgetBlocked = <String, int>{};
+  int _obsoleteEvictions = 0, _marginEvictions = 0;
+  int _visibleBudgetRefusals = 0, _marginBudgetRefusals = 0;
   final _mosaics = <String, (int, List<Map<String, dynamic>>)>{};
   int _dataRevision = 0;
   int _plannedVisible = 0;
-  double _longitude = 0, _latitude = 0;
-  int? _requestCameraZoom;
   static const maxSnapshots = 64;
   static const maxEncodedBytes = 12 * 1024 * 1024;
   MarineCell? _useful;
@@ -256,6 +256,10 @@ class MarineViewport {
     'planned_visible': _plannedVisible,
     'wanted': _wanted.length,
     'budget_deferred': _budgetBlocked.length,
+    'cache_obsolete_evictions': _obsoleteEvictions,
+    'cache_margin_evictions': _marginEvictions,
+    'budget_refusals_visible': _visibleBudgetRefusals,
+    'budget_refusals_margin': _marginBudgetRefusals,
     'request_zooms': {for (final e in _ranges.entries) e.key: e.value.z},
     'encodings': _encodings,
     'busy': _busy,
@@ -401,16 +405,9 @@ class MarineViewport {
       }
       _visibleBounds = bounds;
       _visibilityRanges.clear();
-      // A byte-pressure cap belongs to the useful region that caused it. A
-      // distant pan must allow normal detail again instead of pinning Z6.
-      if (!_cache.values.any((s) => _cellVisible(s.cell))) {
-        _resolutionCaps.clear();
-      }
       _currentMap = map;
       _currentZoom = zoom;
       _renderRevision++;
-      _longitude = lon;
-      _latitude = lat;
       _useful = MarineCell.at(
         lon,
         lat,
@@ -468,8 +465,6 @@ class MarineViewport {
     double lat,
     double zoom,
   ) {
-    if (_requestCameraZoom != zoom.floor()) _resolutionCaps.clear();
-    _requestCameraZoom = zoom.floor();
     final ideal = <String, int>{};
     final levels = <String, int>{};
     for (final family in sources.keys) {
@@ -484,7 +479,7 @@ class MarineViewport {
           : family == 'harbours'
           ? zoom.floor().clamp(6, 14)
           : zoom.floor().clamp(12, family == 'soundings' ? 16 : 14);
-      ideal[family] = math.min(z, _resolutionCaps[family] ?? z);
+      ideal[family] = z;
       levels[family] = ideal[family]!;
     }
     // Reserve sixteen slots for a transition, central refinement or margin.
@@ -570,7 +565,11 @@ class MarineViewport {
                 _wanted.containsKey(other.key),
           )
           .map((other) => other.value.cell);
-      if (s.cell.uncovered(replacements).isEmpty) result.add(e.key);
+      // Offscreen descendants must not pin a large parent after its visible
+      // coverage has been completely replaced.
+      if (!s.cell.uncovered(replacements).any(_cellVisible)) {
+        result.add(e.key);
+      }
     }
     return result;
   }
@@ -581,9 +580,18 @@ class MarineViewport {
       _bytes -= _cache.remove(key)!.bytes;
     }
     if (obsolete.isNotEmpty) {
-      _budgetBlocked.clear();
+      _obsoleteEvictions += obsolete.length;
+      _retryFittingBudgetBlocks();
       _dataRevision++;
     }
+  }
+
+  void _retryFittingBudgetBlocks() {
+    _budgetBlocked.removeWhere((key, bytes) {
+      final previous = _cache[key];
+      return _bytes - (previous?.bytes ?? 0) + bytes <= maxEncodedBytes &&
+          (_cache.length < maxSnapshots || previous != null);
+    });
   }
 
   bool _admit(String key, _Snapshot snapshot) {
@@ -607,24 +615,29 @@ class MarineViewport {
             (a, b) =>
                 (ranks[b] ?? maxSnapshots).compareTo(ranks[a] ?? maxSnapshots),
           );
+    final evictedMargins = <String>[];
     for (final victim in optional) {
       if (proposed.length <= maxSnapshots && size <= maxEncodedBytes) break;
       size -= proposed.remove(victim)!.bytes;
+      evictedMargins.add(victim);
     }
     if (proposed.length > maxSnapshots || size > maxEncodedBytes) return false;
     // Commit the replacement and its evictions together. Never remove a useful
     // fallback before knowing that its replacement fits the encoded budgets.
-    if (size < _bytes || proposed.length < _cache.length) {
-      _budgetBlocked.clear();
-    }
     for (final removed in _cache.keys.where((k) => !proposed.containsKey(k))) {
-      if (_wanted.containsKey(removed)) _budgetBlocked.add(removed);
+      if (_wanted.containsKey(removed)) {
+        _budgetBlocked[removed] = _cache[removed]!.bytes;
+      }
       _mosaics.remove(_cache[removed]!.family);
     }
     _cache
       ..clear()
       ..addAll(proposed);
     _bytes = size;
+    _obsoleteEvictions += obsolete.length;
+    _marginEvictions += evictedMargins.length;
+    _budgetBlocked.remove(key);
+    _retryFittingBudgetBlocks();
     _mosaics.remove(snapshot.family);
     return true;
   }
@@ -664,7 +677,8 @@ class MarineViewport {
   }
 
   bool get _hasPending => _wanted.entries.any((entry) {
-    if (_active.containsKey(entry.key) || _budgetBlocked.contains(entry.key)) {
+    if (_active.containsKey(entry.key) ||
+        _budgetBlocked.containsKey(entry.key)) {
       return false;
     }
     final cached = _cache[entry.key];
@@ -678,7 +692,7 @@ class MarineViewport {
         MapEntry<String, (String, MarineCell)>? next;
         for (final entry in _wanted.entries) {
           if (_active.containsKey(entry.key) ||
-              _budgetBlocked.contains(entry.key)) {
+              _budgetBlocked.containsKey(entry.key)) {
             continue;
           }
           final cached = _cache[entry.key];
@@ -795,15 +809,13 @@ class MarineViewport {
         complete || (previous?.complete ?? false),
       );
       if (!_admit(key, snapshot)) {
-        _budgetBlocked.add(key);
-        // A memory refusal is not a network failure: lower detail or defer
-        // until the view/cache changes instead of downloading every 15s.
-        final minimum = family == 'harbours' ? 6 : 12;
-        if (cell.z > minimum && _visibleBounds != null) {
-          _resolutionCaps[family] = cell.z - 1;
-          _planRequests(_visibleBounds!, _longitude, _latitude, _currentZoom);
-          _pruneCache();
+        _budgetBlocked[key] = bytes;
+        if (_cellVisible(cell)) {
+          _visibleBudgetRefusals++;
+        } else {
+          _marginBudgetRefusals++;
         }
+        // Defer this cell without lowering detail for the whole family.
         return;
       }
       _failureReasons.remove(key);
