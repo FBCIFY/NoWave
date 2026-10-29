@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "495354488401",
+    "project_id": "blueway-dev",
+    "storage_bucket": "blueway-dev.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:495354488401:android:8dfa44d49172757dceba70",
+        "android_client_info": {
+          "package_name": "fr.blueway.app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBtVwxrDnQLD7s6zaqrD8UtBfTsX_NghHw"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

@@ -1,0 +1,529 @@
+{
+  "users": [
+    {
+      "name": "id",
+      "type": "uuid",
+      "nullable": false
+    },
+    {
+      "name": "firebase_uid",
+      "type": "text",
+      "nullable": false
+    },
+    {
+      "name": "username",
+      "type": "varchar(100)",
+      "nullable": false
+    },
+    {
+      "name": "email",
+      "type": "varchar(254)",
+      "nullable": false
+    },
+    {
+      "name": "date_of_birth",
+      "type": "date",
+      "nullable": true
+    },
+    {
+      "name": "nationality",
+      "type": "char(2)",
+      "nullable": true
+    },
+    {
+      "name": "role",
+      "type": "varchar(10)",
+      "nullable": false
+    },
+    {
+      "name": "status",
+      "type": "varchar(10)",
+      "nullable": false
+    },
+    {
+      "name": "show_user_name",
+      "type": "boolean",
+      "nullable": false
+    },
+    {
+      "name": "show_boat_info",
+      "type": "boolean",
+      "nullable": false
+    },
+    {
+      "name": "notifications_enabled",
+      "type": "boolean",
+      "nullable": false
+    },
+    {
+      "name": "created_at",
+      "type": "timestamptz",
+      "nullable": false
+    },
+    {
+      "name": "updated_at",
+      "type": "timestamptz",
+      "nullable": false
+    }
+  ],
+  "boats": [
+    {
+      "name": "id",
+      "type": "uuid",
+      "nullable": false
+    },
+    {
+      "name": "user_id",
+      "type": "uuid",
+      "nullable": false
+    },
+    {
+      "name": "name",
+      "type": "varchar(100)",
+      "nullable": true
+    },
+    {
+      "name": "boat_type",
+      "type": "varchar(20)",
+      "nullable": false
+    },
+    {
+      "name": "flag_country",
+      "type": "char(2)",
+      "nullable": true
+    },
+    {
+      "name": "created_at",
+      "type": "timestamptz",
+      "nullable": false
+    },
+    {
+      "name": "updated_at",
+      "type": "timestamptz",
+      "nullable": false
+    }
+  ],
+  "devices": [
+    {
+      "name": "id",
+      "type": "uuid",
+      "nullable": false
+    },
+    {
+      "name": "user_id",
+      "type": "uuid",
+      "nullable": false
+    },
+    {
+      "name": "installation_id",
+      "type": "uuid",
+      "nullable": false
+    },
+    {
+      "name": "fcm_token",
+      "type": "text",
+      "nullable": true
+    },
+    {
+      "name": "platform",
+      "type": "varchar(10)",
+      "nullable": false
+    },
+    {
+      "name": "is_active",
+      "type": "boolean",
+      "nullable": false
+    },
+    {
+      "name": "last_seen_at",
+      "type": "timestamptz",
+      "nullable": false
+    }
+  ],
+  "device_positions": [
+    {
+      "name": "device_id",
+      "type": "uuid",
+      "nullable": false
+    },
+    {
+      "name": "position",
+      "type": "geography(Point,4326)",
+      "nullable": false
+    },
+    {
+      "name": "accuracy_m",
+      "type": "double precision",
+      "nullable": false
+    },
+    {
+      "name": "heading_deg",
+      "type": "double precision",
+      "nullable": true
+    },
+    {
+      "name": "measured_at",
+      "type": "timestamptz",
+      "nullable": false
+    },
+    {
+      "name": "received_at",
+      "type": "timestamptz",
+      "nullable": false
+    }
+  ],
+  "reports": [
+    {
+      "name": "id",
+      "type": "uuid",
+      "nullable": false
+    },
+    {
+      "name": "author_id",
+      "type": "uuid",
+      "nullable": true
+    },
+    {
+      "name": "client_report_id",
+      "type": "uuid",
+      "nullable": false
+    },
+    {
+      "name": "category",
+      "type": "varchar(20)",
+      "nullable": false
+    },
+    {
+      "name": "positioning_mode",
+      "type": "varchar(10)",
+      "nullable": false
+    },
+    {
+      "name": "description",
+      "type": "varchar(250)",
+      "nullable": true
+    },
+    {
+      "name": "final_position",
+      "type": "geography(Point,4326)",
+      "nullable": false
+    },
+    {
+      "name": "observed_at",
+      "type": "timestamptz",
+      "nullable": false
+    },
+    {
+      "name": "created_at",
+      "type": "timestamptz",
+      "nullable": false
+    },
+    {
+      "name": "expires_at",
+      "type": "timestamptz",
+      "nullable": false
+    },
+    {
+      "name": "status",
+      "type": "varchar(10)",
+      "nullable": false
+    },
+    {
+      "name": "version",
+      "type": "integer",
+      "nullable": false
+    },
+    {
+      "name": "updated_at",
+      "type": "timestamptz",
+      "nullable": false
+    },
+    {
+      "name": "removed_at",
+      "type": "timestamptz",
+      "nullable": true
+    }
+  ],
+  "report_positioning": [
+    {
+      "name": "report_id",
+      "type": "uuid",
+      "nullable": false
+    },
+    {
+      "name": "observer_position",
+      "type": "geography(Point,4326)",
+      "nullable": false
+    },
+    {
+      "name": "gps_accuracy_m",
+      "type": "double precision",
+      "nullable": false
+    },
+    {
+      "name": "azimuth_deg",
+      "type": "double precision",
+      "nullable": false
+    },
+    {
+      "name": "inclination_deg",
+      "type": "double precision",
+      "nullable": false
+    },
+    {
+      "name": "camera_height_m",
+      "type": "numeric(6,2)",
+      "nullable": false
+    },
+    {
+      "name": "camera_height_source",
+      "type": "varchar(30)",
+      "nullable": true
+    },
+    {
+      "name": "camera_height_uncertainty_m",
+      "type": "double precision",
+      "nullable": true
+    },
+    {
+      "name": "focal_length_mm",
+      "type": "double precision",
+      "nullable": true
+    },
+    {
+      "name": "zoom_ratio",
+      "type": "double precision",
+      "nullable": true
+    },
+    {
+      "name": "estimated_position",
+      "type": "geography(Point,4326)",
+      "nullable": true
+    },
+    {
+      "name": "estimated_distance_m",
+      "type": "double precision",
+      "nullable": true
+    },
+    {
+      "name": "algorithm_version",
+      "type": "varchar(50)",
+      "nullable": true
+    },
+    {
+      "name": "captured_at",
+      "type": "timestamptz",
+      "nullable": false
+    }
+  ],
+  "report_photos": [
+    {
+      "name": "report_id",
+      "type": "uuid",
+      "nullable": false
+    },
+    {
+      "name": "upload_status",
+      "type": "varchar(10)",
+      "nullable": false
+    },
+    {
+      "name": "object_key",
+      "type": "text",
+      "nullable": true
+    },
+    {
+      "name": "size_bytes",
+      "type": "integer",
+      "nullable": true
+    },
+    {
+      "name": "mime_type",
+      "type": "varchar(100)",
+      "nullable": true
+    },
+    {
+      "name": "uploaded_at",
+      "type": "timestamptz",
+      "nullable": true
+    },
+    {
+      "name": "hidden_at",
+      "type": "timestamptz",
+      "nullable": true
+    },
+    {
+      "name": "created_at",
+      "type": "timestamptz",
+      "nullable": false
+    },
+    {
+      "name": "updated_at",
+      "type": "timestamptz",
+      "nullable": false
+    }
+  ],
+  "notifications": [
+    {
+      "name": "id",
+      "type": "uuid",
+      "nullable": false
+    },
+    {
+      "name": "report_id",
+      "type": "uuid",
+      "nullable": false
+    },
+    {
+      "name": "device_id",
+      "type": "uuid",
+      "nullable": false
+    },
+    {
+      "name": "report_version",
+      "type": "integer",
+      "nullable": false
+    },
+    {
+      "name": "status",
+      "type": "varchar(10)",
+      "nullable": false
+    },
+    {
+      "name": "attempt_count",
+      "type": "integer",
+      "nullable": false
+    },
+    {
+      "name": "next_attempt_at",
+      "type": "timestamptz",
+      "nullable": true
+    },
+    {
+      "name": "sent_at",
+      "type": "timestamptz",
+      "nullable": true
+    },
+    {
+      "name": "last_error_code",
+      "type": "text",
+      "nullable": true
+    },
+    {
+      "name": "created_at",
+      "type": "timestamptz",
+      "nullable": false
+    },
+    {
+      "name": "updated_at",
+      "type": "timestamptz",
+      "nullable": false
+    }
+  ],
+  "alert_history": [
+    {
+      "name": "id",
+      "type": "uuid",
+      "nullable": false
+    },
+    {
+      "name": "user_id",
+      "type": "uuid",
+      "nullable": false
+    },
+    {
+      "name": "report_id",
+      "type": "uuid",
+      "nullable": false
+    },
+    {
+      "name": "report_version",
+      "type": "integer",
+      "nullable": false
+    },
+    {
+      "name": "category",
+      "type": "varchar(20)",
+      "nullable": false
+    },
+    {
+      "name": "position",
+      "type": "geography(Point,4326)",
+      "nullable": false
+    },
+    {
+      "name": "distance_m",
+      "type": "double precision",
+      "nullable": false
+    },
+    {
+      "name": "alerted_at",
+      "type": "timestamptz",
+      "nullable": false
+    }
+  ],
+  "moderation_actions": [
+    {
+      "name": "id",
+      "type": "uuid",
+      "nullable": false
+    },
+    {
+      "name": "admin_user_id",
+      "type": "uuid",
+      "nullable": true
+    },
+    {
+      "name": "target_user_id",
+      "type": "uuid",
+      "nullable": true
+    },
+    {
+      "name": "target_report_id",
+      "type": "uuid",
+      "nullable": true
+    },
+    {
+      "name": "target_photo_report_id",
+      "type": "uuid",
+      "nullable": true
+    },
+    {
+      "name": "action",
+      "type": "varchar(20)",
+      "nullable": false
+    },
+    {
+      "name": "reason",
+      "type": "text",
+      "nullable": false
+    },
+    {
+      "name": "previous_status",
+      "type": "varchar(10)",
+      "nullable": true
+    },
+    {
+      "name": "new_status",
+      "type": "varchar(10)",
+      "nullable": true
+    },
+    {
+      "name": "created_at",
+      "type": "timestamptz",
+      "nullable": false
+    }
+  ],
+  "map_cache_revision": [
+    {
+      "name": "singleton",
+      "type": "boolean",
+      "nullable": false
+    },
+    {
+      "name": "revision",
+      "type": "uuid",
+      "nullable": false
+    }
+  ]
+}

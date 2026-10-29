@@ -1,0 +1,2 @@
+-r ../../app/infrastructure/database/requirements.txt
+pytest==8.4.2

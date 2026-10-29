@@ -1,0 +1,18 @@
+{% set dev = request.headers.get('x-nowave-web-dev') == '1' %}
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="robots" content="noindex,nofollow"><meta name="theme-color" content="#070f1b">
+  <title>Surveillance maritime · NoWave</title>
+  <link rel="icon" href="/admin-static/favicon.svg">
+  {% if dev %}<link rel="stylesheet" href="/src/style.css"><link rel="stylesheet" href="/src/map-view.css">{% else %}<link rel="stylesheet" href="/assets/nowave.css">{% endif %}
+  <link rel="stylesheet" href="/admin-static/admin-header.css">
+</head>
+<body class="map-page admin-map-page">
+  <a class="skip-link" href="#carte">Aller aux observations</a>
+  {% include 'admin/navigation.html' %}
+  <main><section id="carte" class="map-view" aria-label="Carte des observations maritimes"></section></main>
+  <script type="module" src="{{ '/admin-map.js' if dev else '/assets/admin-map.js' }}"></script>
+  <script defer src="/admin-static/admin-navigation.js"></script>
+</body>
+</html>

@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex, nofollow">
+  <meta name="theme-color" content="#070f1b">
+  <link rel="icon" type="image/svg+xml" href="/admin-static/favicon.svg">
+  <title>{% block title %}Administration{% endblock %} · NoWave</title>
+  <link rel="stylesheet" href="/admin-static/mapbox-gl.css">
+  <link rel="stylesheet" href="/admin-static/admin.css">
+  <link rel="stylesheet" href="/admin-static/map-search.css">
+  <link rel="stylesheet" href="/admin-static/admin-header.css">
+</head>
+<body class="{% block body_class %}admin-shell{% endblock %}">
+  <a class="skip-link" href="#main-content">Aller au contenu</a>
+  {% block header %}
+    {% if admin %}{% include 'admin/navigation.html' %}{% endif %}
+  {% endblock %}
+  <main id="main-content">
+    {% block content %}{% endblock %}
+  </main>
+  <script defer src="/admin-static/admin-navigation.js"></script>
+</body>
+</html>

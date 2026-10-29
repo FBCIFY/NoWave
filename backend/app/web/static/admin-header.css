@@ -1,0 +1,152 @@
+/* One header for the chart, moderation, users and audit. */
+:root {
+  --header-height: 64px;
+}
+body.admin-shell,
+body.admin-map-page {
+  background: #070f1b;
+  --bg: #070f1b;
+  --panel: #0c1929;
+  --panel-soft: #101f30;
+  --line: #293b4d;
+}
+.admin-header.site-header {
+  position: fixed;
+  inset: 0 0 auto;
+  z-index: 30;
+  display: flex;
+  align-items: center;
+  gap: 0;
+  height: var(--header-height);
+  padding: 0 24px;
+  background: transparent;
+  border: 0;
+}
+.admin-header.site-header .wordmark {
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  flex-shrink: 0;
+  color: #edf5f5;
+  font-size: 25px;
+  line-height: 1.6;
+  font-weight: 800;
+  letter-spacing: -0.05em;
+  text-decoration: none;
+}
+.admin-header.site-header .wordmark img {
+  width: 48px;
+  height: 24px;
+  flex-shrink: 0;
+}
+.admin-header.site-header .main-nav {
+  display: flex;
+  align-items: center;
+  gap: 30px;
+  margin-left: 40px;
+  padding: 0;
+  overflow: visible;
+}
+.admin-header.site-header .main-nav a {
+  display: block;
+  padding: 12px 0;
+  min-height: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: #bed1da;
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 1.6;
+  white-space: nowrap;
+}
+.admin-header.site-header .main-nav a:hover,
+.admin-header.site-header .main-nav a[aria-current="page"] {
+  color: #fff;
+}
+.admin-header.site-header .admin-map-logout {
+  display: flex;
+  margin: 0 0 0 auto;
+  padding-left: 24px;
+}
+.admin-header.site-header .admin-map-logout button {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 36px;
+  padding: 6px 10px;
+  border: 0;
+  background: transparent;
+  color: #bed1da;
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 1.6;
+  cursor: pointer;
+}
+.admin-header.site-header .admin-map-logout button:hover {
+  color: #fff;
+}
+.admin-header.site-header a:focus-visible,
+.admin-header.site-header button:focus-visible {
+  outline: 2px solid #8bdae0;
+  outline-offset: 5px;
+}
+.admin-shell main {
+  padding-top: calc(var(--header-height) + 40px);
+}
+.admin-map-page .map-view {
+  --map-panel: #0c1929f7;
+  --map-border: #52687e55;
+}
+@media (max-width: 760px) {
+  :root {
+    --header-height: 56px;
+  }
+  .admin-header.site-header .main-nav {
+    gap: 20px;
+    margin-left: 24px;
+  }
+  .admin-header.site-header .main-nav a {
+    font-size: 11px;
+  }
+  .admin-shell main {
+    padding-top: calc(var(--header-height) + 28px);
+  }
+}
+@media (max-width: 600px) {
+  .admin-header.site-header {
+    padding-inline: 14px;
+  }
+  .admin-header.site-header .admin-map-brand-text,
+  .admin-header.site-header .admin-map-logout span {
+    display: none;
+  }
+  .admin-header.site-header .wordmark img {
+    width: 34px;
+  }
+  .admin-header.site-header .main-nav {
+    margin-left: 16px;
+    gap: 12px;
+  }
+  .admin-header.site-header .main-nav a {
+    font-size: 10px;
+  }
+  .admin-header.site-header .admin-map-logout {
+    padding-left: 8px;
+  }
+  .admin-header.site-header .admin-map-logout button {
+    padding-inline: 4px;
+  }
+}
+@media (max-width: 400px) {
+  .admin-header.site-header .wordmark img {
+    width: 28px;
+  }
+  .admin-header.site-header .main-nav {
+    margin-left: 12px;
+    gap: 10px;
+  }
+  .admin-header.site-header .main-nav a {
+    font-size: 9px;
+  }
+}

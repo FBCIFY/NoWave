@@ -1,0 +1,34 @@
+{
+  "tile": [
+    14,
+    8462,
+    6014
+  ],
+  "getmap_calls": 1,
+  "wms": [
+    {
+      "params": {
+        "service": "WMS",
+        "request": "GetMap",
+        "version": "1.1.1",
+        "layers": "emodnet:mean_multicolour",
+        "styles": "",
+        "format": "image/png",
+        "transparent": "true",
+        "interpolations": "bilinear",
+        "width": "280",
+        "height": "280",
+        "srs": "EPSG:3857",
+        "bbox": "660301.268841,5324794.482916,662976.564831,5327469.778906"
+      },
+      "seconds": 0.22326340500148945,
+      "bytes": 81552
+    }
+  ],
+  "generation_s": 0.24134454199884203,
+  "visual_cpu_ms": 17.6571949996287,
+  "png_bytes": 22936,
+  "visual_fill": 334,
+  "original_coverage_zero": 58,
+  "display_alpha_zero": 58
+}

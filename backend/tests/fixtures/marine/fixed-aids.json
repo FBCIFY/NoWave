@@ -1,0 +1,834 @@
+{
+  "shom_bcncar": [
+    {
+      "type": "Feature",
+      "id": "bcncar.341",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          5.8968319,
+          43.0806806
+        ]
+      },
+      "geometry_name": "geometry",
+      "properties": {
+        "inspireid": "FR000002344000001",
+        "posacc": 0.5,
+        "objnam": null,
+        "nobjnm": null,
+        "inform": null,
+        "ninfom": null,
+        "numald": "8300074",
+        "persta": null,
+        "perend": null,
+        "condtn": null,
+        "convis": 2,
+        "bcnshp": 5,
+        "catcam": 1,
+        "colour": "2,6",
+        "colpat": "1",
+        "height": 4.5,
+        "verlen": 3,
+        "status": null,
+        "aisatn": null,
+        "daymar": null,
+        "topmar": "FR000005249600001",
+        "fogsig": null,
+        "radsta": null,
+        "rtpbcn": null,
+        "rdosta": null,
+        "sistat": null,
+        "sistaw": null,
+        "lights": "FR000005249500001"
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "bcncar.342",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          5.9235903,
+          43.104025
+        ]
+      },
+      "geometry_name": "geometry",
+      "properties": {
+        "inspireid": "FR000002390400001",
+        "posacc": 0.4,
+        "objnam": "Banc de l'\u00c2ne",
+        "nobjnm": null,
+        "inform": null,
+        "ninfom": null,
+        "numald": "8300097",
+        "persta": null,
+        "perend": null,
+        "condtn": null,
+        "convis": 2,
+        "bcnshp": 5,
+        "catcam": 4,
+        "colour": "6,2,6",
+        "colpat": "1",
+        "height": 4.2,
+        "verlen": 4,
+        "status": null,
+        "aisatn": null,
+        "daymar": null,
+        "topmar": "FR000005260300001",
+        "fogsig": null,
+        "radsta": null,
+        "rtpbcn": null,
+        "rdosta": null,
+        "sistat": null,
+        "sistaw": null,
+        "lights": "FR000005260200001"
+      }
+    }
+  ],
+  "shom_bcnlat": [
+    {
+      "type": "Feature",
+      "id": "bcnlat.1007",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          5.91425,
+          43.1004833
+        ]
+      },
+      "geometry_name": "geometry",
+      "properties": {
+        "inspireid": "FR000001968500003",
+        "posacc": 5,
+        "objnam": "\u00c9guillette",
+        "nobjnm": null,
+        "inform": null,
+        "ninfom": null,
+        "numald": "8300082",
+        "persta": null,
+        "perend": null,
+        "condtn": null,
+        "convis": 2,
+        "bcnshp": 7,
+        "catlam": 1,
+        "colour": "3",
+        "colpat": null,
+        "height": null,
+        "verlen": null,
+        "status": null,
+        "aisatn": null,
+        "daymar": null,
+        "topmar": "FR000005252000001",
+        "fogsig": null,
+        "radsta": null,
+        "rtpbcn": null,
+        "rdosta": null,
+        "sistat": null,
+        "sistaw": null,
+        "lights": "FR000005251900001"
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "bcnlat.1243",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          5.8987442,
+          43.0759117
+        ]
+      },
+      "geometry_name": "geometry",
+      "properties": {
+        "inspireid": "FR000002314500001",
+        "posacc": 0.5,
+        "objnam": null,
+        "nobjnm": null,
+        "inform": null,
+        "ninfom": null,
+        "numald": "8300015",
+        "persta": null,
+        "perend": null,
+        "condtn": null,
+        "convis": 2,
+        "bcnshp": 4,
+        "catlam": 2,
+        "colour": "4",
+        "colpat": null,
+        "height": 9,
+        "verlen": 5,
+        "status": null,
+        "aisatn": null,
+        "daymar": null,
+        "topmar": null,
+        "fogsig": null,
+        "radsta": null,
+        "rtpbcn": null,
+        "rdosta": null,
+        "sistat": null,
+        "sistaw": null,
+        "lights": "FR000005242100001"
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "bcnlat.1260",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          5.9250578,
+          43.0891355
+        ]
+      },
+      "geometry_name": "geometry",
+      "properties": {
+        "inspireid": "FR000002339800001",
+        "posacc": 0.2,
+        "objnam": "Grande jet\u00e9e",
+        "nobjnm": null,
+        "inform": null,
+        "ninfom": null,
+        "numald": "8300070",
+        "persta": null,
+        "perend": null,
+        "condtn": null,
+        "convis": 2,
+        "bcnshp": 3,
+        "catlam": 2,
+        "colour": "4,1",
+        "colpat": "1",
+        "height": null,
+        "verlen": 8,
+        "status": null,
+        "aisatn": null,
+        "daymar": null,
+        "topmar": null,
+        "fogsig": null,
+        "radsta": null,
+        "rtpbcn": null,
+        "rdosta": null,
+        "sistat": null,
+        "sistaw": null,
+        "lights": "FR000005247400001"
+      }
+    }
+  ],
+  "shom_bcnspp": [
+    {
+      "type": "Feature",
+      "id": "bcnspp.464",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          5.8580771,
+          43.0467741
+        ]
+      },
+      "geometry_name": "geometry",
+      "properties": {
+        "inspireid": "FR000002316600001",
+        "posacc": 0.5,
+        "objnam": "Cap Sici\u00e9",
+        "nobjnm": null,
+        "inform": null,
+        "ninfom": null,
+        "numald": "8300014",
+        "persta": null,
+        "perend": null,
+        "condtn": null,
+        "convis": 2,
+        "bcnshp": 5,
+        "catspm": null,
+        "colour": "1",
+        "colpat": null,
+        "height": 47,
+        "verlen": 0.5,
+        "status": null,
+        "aisatn": null,
+        "daymar": null,
+        "topmar": null,
+        "fogsig": null,
+        "radsta": null,
+        "rtpbcn": null,
+        "rdosta": null,
+        "sistat": null,
+        "sistaw": null,
+        "lights": "FR000005240600001"
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "bcnspp.470",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          5.9301243,
+          43.0823186
+        ]
+      },
+      "geometry_name": "geometry",
+      "properties": {
+        "inspireid": "FR000002345000001",
+        "posacc": 0.5,
+        "objnam": null,
+        "nobjnm": null,
+        "inform": null,
+        "ninfom": null,
+        "numald": null,
+        "persta": null,
+        "perend": null,
+        "condtn": null,
+        "convis": 2,
+        "bcnshp": 5,
+        "catspm": null,
+        "colour": "1",
+        "colpat": null,
+        "height": 2,
+        "verlen": 2,
+        "status": null,
+        "aisatn": null,
+        "daymar": null,
+        "topmar": null,
+        "fogsig": null,
+        "radsta": null,
+        "rtpbcn": null,
+        "rdosta": null,
+        "sistat": null,
+        "sistaw": null,
+        "lights": null
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "bcnspp.471",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          5.9303361,
+          43.0823866
+        ]
+      },
+      "geometry_name": "geometry",
+      "properties": {
+        "inspireid": "FR000002345200001",
+        "posacc": 0.5,
+        "objnam": null,
+        "nobjnm": null,
+        "inform": null,
+        "ninfom": null,
+        "numald": null,
+        "persta": null,
+        "perend": null,
+        "condtn": null,
+        "convis": 2,
+        "bcnshp": 5,
+        "catspm": null,
+        "colour": "1",
+        "colpat": null,
+        "height": 2,
+        "verlen": 2,
+        "status": null,
+        "aisatn": null,
+        "daymar": null,
+        "topmar": null,
+        "fogsig": null,
+        "radsta": null,
+        "rtpbcn": null,
+        "rdosta": null,
+        "sistat": null,
+        "sistaw": null,
+        "lights": null
+      }
+    }
+  ],
+  "shom_lights": [
+    {
+      "type": "Feature",
+      "id": "lights.2571",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          5.8580771,
+          43.0467741
+        ]
+      },
+      "geometry_name": "geometry",
+      "properties": {
+        "inspireid": "FR000005240600001",
+        "posacc": 0.5,
+        "inform": null,
+        "ninfom": null,
+        "persta": null,
+        "perend": null,
+        "catlit": null,
+        "exclit": null,
+        "mltylt": null,
+        "valnmr": 9,
+        "sectr1": null,
+        "sectr2": null,
+        "orient": null,
+        "litvis": null,
+        "litchr": 2,
+        "colour": "1",
+        "siggrp": "(2)",
+        "sigper": 6,
+        "sigseq": "1.00+(1.00)+1.00+(3.00)",
+        "height": 47,
+        "status": null
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "lights.2572",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          5.8987442,
+          43.0759117
+        ]
+      },
+      "geometry_name": "geometry",
+      "properties": {
+        "inspireid": "FR000005242100001",
+        "posacc": 0.5,
+        "inform": null,
+        "ninfom": null,
+        "persta": null,
+        "perend": null,
+        "catlit": null,
+        "exclit": null,
+        "mltylt": null,
+        "valnmr": 7,
+        "sectr1": null,
+        "sectr2": null,
+        "orient": null,
+        "litvis": null,
+        "litchr": 2,
+        "colour": "4",
+        "siggrp": "(1)",
+        "sigper": 4,
+        "sigseq": "1.00+(3.00)",
+        "height": 9,
+        "status": null
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "lights.2573",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          5.9463102,
+          43.068651
+        ]
+      },
+      "geometry_name": "geometry",
+      "properties": {
+        "inspireid": "FR000005242600001",
+        "posacc": 10,
+        "inform": null,
+        "ninfom": null,
+        "persta": null,
+        "perend": null,
+        "catlit": null,
+        "exclit": null,
+        "mltylt": null,
+        "valnmr": 20,
+        "sectr1": null,
+        "sectr2": null,
+        "orient": null,
+        "litvis": null,
+        "litchr": 2,
+        "colour": "1",
+        "siggrp": "(3)",
+        "sigper": 15,
+        "sigseq": "0.20+(2.80)+0.20+(2.80)+0.20+(8.80)",
+        "height": 76,
+        "status": null
+      }
+    }
+  ],
+  "shom_lndmrk": [
+    {
+      "type": "Feature",
+      "id": "lndmrk.3065",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          5.9463102,
+          43.068651
+        ]
+      },
+      "geometry_name": "geometry",
+      "properties": {
+        "inspireid": "FR000005242300001",
+        "posacc": 10,
+        "objnam": "Cap C\u00e9pet",
+        "nobjnm": null,
+        "inform": null,
+        "ninfom": null,
+        "numald": "8300016",
+        "condtn": null,
+        "convis": 2,
+        "catlmk": "17",
+        "functn": "33",
+        "colour": "2,1",
+        "colpat": "1",
+        "natcon": null,
+        "height": null,
+        "verlen": 14,
+        "status": null,
+        "aisatn": null,
+        "daymar": null,
+        "topmar": null,
+        "fogsig": null,
+        "radsta": null,
+        "rtpbcn": null,
+        "rdosta": null,
+        "sistat": null,
+        "sistaw": null,
+        "lights": "FR000005242600001"
+      }
+    }
+  ],
+  "noaa_1": [
+    {
+      "type": "Feature",
+      "id": 174320,
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -80.27736599999997,
+          25.615425000000016
+        ]
+      },
+      "properties": {
+        "OBJECTID": 174320,
+        "OBJL": 7,
+        "BCNSHP": "stake, pole, perch, post",
+        "CATLAM": 1,
+        "COLOUR": "4",
+        "COLPAT": null,
+        "CONDTN": null,
+        "CONRAD": null,
+        "CONVIS": null,
+        "ELEVAT": null,
+        "HEIGHT": null,
+        "MARSYS": null,
+        "NATCON": null,
+        "OBJNAM": "Deering Bay Channel Daybeacon 3",
+        "VERACC": null,
+        "VERDAT": null,
+        "VERLEN": null,
+        "INFORM": null,
+        "PICREP": null,
+        "SCAMIN": 29999,
+        "SORDAT": "19940405",
+        "SORIND": "US,US,reprt,7thCGD,LNM 14/94",
+        "DSNM": "US5FL5MM.000"
+      }
+    },
+    {
+      "type": "Feature",
+      "id": 174321,
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -80.27601700000002,
+          25.616579
+        ]
+      },
+      "properties": {
+        "OBJECTID": 174321,
+        "OBJL": 7,
+        "BCNSHP": "stake, pole, perch, post",
+        "CATLAM": 2,
+        "COLOUR": "3",
+        "COLPAT": null,
+        "CONDTN": null,
+        "CONRAD": null,
+        "CONVIS": null,
+        "ELEVAT": null,
+        "HEIGHT": null,
+        "MARSYS": null,
+        "NATCON": null,
+        "OBJNAM": "Deering Bay Channel Daybeacon 4",
+        "VERACC": null,
+        "VERDAT": null,
+        "VERLEN": null,
+        "INFORM": null,
+        "PICREP": null,
+        "SCAMIN": 29999,
+        "SORDAT": "19940405",
+        "SORIND": "US,US,reprt,7thCGD,LNM 14/94",
+        "DSNM": "US5FL5MM.000"
+      }
+    }
+  ],
+  "noaa_11": [
+    {
+      "type": "Feature",
+      "id": 209024,
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -80.1937656,
+          25.643894400000022
+        ]
+      },
+      "properties": {
+        "OBJECTID": 209024,
+        "OBJL": 75,
+        "CATLIT": " ",
+        "COLOUR": "4",
+        "EXCLIT": 4,
+        "HEIGHT": 4.8,
+        "LITCHR": 2,
+        "LITVIS": null,
+        "MARSYS": null,
+        "MLTYLT": null,
+        "OBJNAM": null,
+        "ORIENT": null,
+        "SECTR1": null,
+        "SECTR2": null,
+        "SIGGRP": "(1)",
+        "SIGPER": 4,
+        "SIGSEQ": "00.4+(03.6)",
+        "VERACC": null,
+        "VALNMR": 5,
+        "VERDAT": null,
+        "INFORM": null,
+        "SCAMIN": 29999,
+        "SORDAT": "20150203",
+        "SORIND": "US,US,reprt,7thCGD,LNM 5/15",
+        "DSNM": "US5FL5MN.000"
+      }
+    },
+    {
+      "type": "Feature",
+      "id": 209025,
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -80.19208220000002,
+          25.61694
+        ]
+      },
+      "properties": {
+        "OBJECTID": 209025,
+        "OBJL": 75,
+        "CATLIT": " ",
+        "COLOUR": "4",
+        "EXCLIT": 4,
+        "HEIGHT": 4.8,
+        "LITCHR": 2,
+        "LITVIS": null,
+        "MARSYS": null,
+        "MLTYLT": null,
+        "OBJNAM": null,
+        "ORIENT": null,
+        "SECTR1": null,
+        "SECTR2": null,
+        "SIGGRP": "(1)",
+        "SIGPER": 6,
+        "SIGSEQ": "00.6+(05.4)",
+        "VERACC": null,
+        "VALNMR": 6,
+        "VERDAT": null,
+        "INFORM": null,
+        "SCAMIN": 29999,
+        "SORDAT": "20160921",
+        "SORIND": "US,US,reprt,7thCGD,LNM 38/16",
+        "DSNM": "US5FL5MN.000"
+      }
+    },
+    {
+      "type": "Feature",
+      "id": 209027,
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -80.13451199999997,
+          25.64724000000001
+        ]
+      },
+      "properties": {
+        "OBJECTID": 209027,
+        "OBJL": 75,
+        "CATLIT": " ",
+        "COLOUR": "3",
+        "EXCLIT": 4,
+        "HEIGHT": 4.8,
+        "LITCHR": 2,
+        "LITVIS": null,
+        "MARSYS": null,
+        "MLTYLT": null,
+        "OBJNAM": null,
+        "ORIENT": null,
+        "SECTR1": null,
+        "SECTR2": null,
+        "SIGGRP": "(1)",
+        "SIGPER": 2.5,
+        "SIGSEQ": "00.3+(02.2)",
+        "VERACC": null,
+        "VALNMR": 5,
+        "VERDAT": null,
+        "INFORM": null,
+        "SCAMIN": 59999,
+        "SORDAT": "19980818",
+        "SORIND": "US,US,reprt,7thCGD,LNM 33/98",
+        "DSNM": "US5FL5MO.000"
+      }
+    }
+  ],
+  "noaa_26": [
+    {
+      "type": "Feature",
+      "id": 62971,
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -80.15586100000002,
+          25.666637999999978
+        ]
+      },
+      "properties": {
+        "OBJECTID": 62971,
+        "OBJL": 74,
+        "CATLMK": "tower",
+        "COLOUR": "1",
+        "COLPAT": null,
+        "CONDTN": null,
+        "CONRAD": null,
+        "CONVIS": 1,
+        "ELEVAT": null,
+        "FUNCTN": "33",
+        "HEIGHT": null,
+        "NATCON": null,
+        "OBJNAM": "Cape Florida Light",
+        "VERACC": null,
+        "VERDAT": null,
+        "VERLEN": null,
+        "INFORM": "Conical",
+        "SCAMIN": 59999,
+        "SORDAT": "19980728",
+        "SORIND": "US,US,reprt,7thCGD,LNM 30/98",
+        "DSNM": "US5MIABC.000"
+      }
+    },
+    {
+      "type": "Feature",
+      "id": 61310,
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -80.298427,
+          25.63173599999999
+        ]
+      },
+      "properties": {
+        "OBJECTID": 61310,
+        "OBJL": 74,
+        "CATLMK": "chimney",
+        "COLOUR": null,
+        "COLPAT": null,
+        "CONDTN": null,
+        "CONRAD": null,
+        "CONVIS": 1,
+        "ELEVAT": null,
+        "FUNCTN": null,
+        "HEIGHT": null,
+        "NATCON": null,
+        "OBJNAM": null,
+        "VERACC": null,
+        "VERDAT": null,
+        "VERLEN": null,
+        "INFORM": "East of two",
+        "SCAMIN": 29999,
+        "SORDAT": "20021005",
+        "SORIND": "US,US,graph,chart 11465",
+        "DSNM": "US5FL5MM.000"
+      }
+    }
+  ],
+  "shom_bcnisd": [
+    {
+      "type": "Feature",
+      "id": "bcnisd.1",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -60.87015,
+          14.46085
+        ]
+      },
+      "geometry_name": "geometry",
+      "properties": {
+        "inspireid": "FR000000861300001",
+        "posacc": 10,
+        "objnam": "Caye Ronde",
+        "nobjnm": null,
+        "inform": null,
+        "ninfom": null,
+        "numald": "97200091",
+        "persta": null,
+        "perend": null,
+        "condtn": null,
+        "convis": 2,
+        "bcnshp": 1,
+        "colour": "2,3,2",
+        "colpat": "1",
+        "height": null,
+        "verlen": null,
+        "status": null,
+        "aisatn": null,
+        "daymar": null,
+        "topmar": "FR000008217700001",
+        "fogsig": null,
+        "radsta": null,
+        "rtpbcn": null,
+        "rdosta": null,
+        "sistat": null,
+        "sistaw": null,
+        "lights": null
+      }
+    }
+  ],
+  "noaa_safe": [
+    {
+      "type": "Feature",
+      "id": 32454,
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -82.6261202,
+          27.399326799999983
+        ]
+      },
+      "properties": {
+        "OBJECTID": 32454,
+        "OBJL": 8,
+        "BCNSHP": "stake, pole, perch, post",
+        "COLOUR": "3,1",
+        "COLPAT": "2",
+        "CONDTN": null,
+        "CONRAD": null,
+        "CONVIS": null,
+        "ELEVAT": null,
+        "HEIGHT": null,
+        "MARSYS": null,
+        "NATCON": null,
+        "OBJNAM": "Buttonwood Harbor Channel Daybeacon A",
+        "VERACC": null,
+        "VERDAT": null,
+        "VERLEN": null,
+        "INFORM": null,
+        "PICREP": null,
+        "SCAMIN": 59999,
+        "SORDAT": "201305",
+        "SORIND": "US,US,graph,Chart 11425",
+        "DSNM": "US5FL3YD.000"
+      }
+    }
+  ]
+}

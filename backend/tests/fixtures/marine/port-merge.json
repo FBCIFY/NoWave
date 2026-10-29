@@ -1,0 +1,269 @@
+{
+  "tile": [
+    12,
+    2115,
+    1503
+  ],
+  "bounds": [
+    5.888671875000006,
+    43.068887774169625,
+    5.976562500000006,
+    43.13306116240612
+  ],
+  "cases": [
+    {
+      "pair": [
+        "ign:CONSLINE0000000074759995",
+        "osm:pier_lines:12/2115/1503:5ebc2104a6c146127291"
+      ],
+      "features": [
+        {
+          "geometry": {
+            "type": "LineString",
+            "coordinates": [
+              [
+                5.93206185,
+                43.1190677
+              ],
+              [
+                5.93258099,
+                43.11963771
+              ]
+            ]
+          },
+          "id": "ign:CONSLINE0000000074759995",
+          "source": "ign",
+          "source_id": "CONSLINE0000000074759995",
+          "source_priority": 100,
+          "infrastructure_type": "pontoon",
+          "name": "",
+          "harbour": "",
+          "provenance": [
+            "ign:CONSLINE0000000074759995"
+          ]
+        },
+        {
+          "geometry": {
+            "type": "LineString",
+            "coordinates": [
+              [
+                5.932595729827887,
+                43.11963982413682
+              ],
+              [
+                5.9320592880249094,
+                43.11907596951718
+              ]
+            ]
+          },
+          "id": "osm:pier_lines:12/2115/1503:5ebc2104a6c146127291",
+          "source": "osm",
+          "source_id": "pier_lines:12/2115/1503:5ebc2104a6c146127291",
+          "source_priority": 10,
+          "infrastructure_type": "pier",
+          "name": "",
+          "harbour": "",
+          "provenance": [
+            "osm:pier_lines:12/2115/1503:5ebc2104a6c146127291"
+          ]
+        }
+      ]
+    },
+    {
+      "pair": [
+        "ign:CONSLINE0000000074760542",
+        "osm:pier_polygons:12/2115/1503:4e094844761973080739"
+      ],
+      "features": [
+        {
+          "geometry": {
+            "type": "LineString",
+            "coordinates": [
+              [
+                5.90667973,
+                43.07916766
+              ],
+              [
+                5.90738714,
+                43.08056429
+              ]
+            ]
+          },
+          "id": "ign:CONSLINE0000000074760542",
+          "source": "ign",
+          "source_id": "CONSLINE0000000074760542",
+          "source_priority": 100,
+          "infrastructure_type": "pontoon",
+          "name": "",
+          "harbour": "",
+          "provenance": [
+            "ign:CONSLINE0000000074760542"
+          ]
+        },
+        {
+          "geometry": {
+            "type": "Polygon",
+            "coordinates": [
+              [
+                [
+                  5.907468795776373,
+                  43.08064330296772
+                ],
+                [
+                  5.906696319580084,
+                  43.07917006696288
+                ],
+                [
+                  5.906674861907966,
+                  43.07917006696288
+                ],
+                [
+                  5.907425880432135,
+                  43.08065897550075
+                ],
+                [
+                  5.907468795776373,
+                  43.08064330296772
+                ]
+              ]
+            ]
+          },
+          "id": "osm:pier_polygons:12/2115/1503:4e094844761973080739",
+          "source": "osm",
+          "source_id": "pier_polygons:12/2115/1503:4e094844761973080739",
+          "source_priority": 10,
+          "infrastructure_type": "pier",
+          "name": "",
+          "harbour": "",
+          "provenance": [
+            "osm:pier_polygons:12/2115/1503:4e094844761973080739"
+          ]
+        }
+      ]
+    },
+    {
+      "pair": [
+        "ign:CONSLINE0000000225076054",
+        "osm:pier_lines:12/2115/1503:82981718ee70e8f128cd"
+      ],
+      "features": [
+        {
+          "geometry": {
+            "type": "LineString",
+            "coordinates": [
+              [
+                5.92726338,
+                43.07906363
+              ],
+              [
+                5.92699208,
+                43.0789189
+              ],
+              [
+                5.92665294,
+                43.07874361
+              ]
+            ]
+          },
+          "id": "ign:CONSLINE0000000225076054",
+          "source": "ign",
+          "source_id": "CONSLINE0000000225076054",
+          "source_priority": 100,
+          "infrastructure_type": "pontoon",
+          "name": "",
+          "harbour": "",
+          "provenance": [
+            "ign:CONSLINE0000000225076054"
+          ]
+        },
+        {
+          "geometry": {
+            "type": "LineString",
+            "coordinates": [
+              [
+                5.926651954650886,
+                43.07874689688087
+              ],
+              [
+                5.92727422714234,
+                43.07906035648149
+              ]
+            ]
+          },
+          "id": "osm:pier_lines:12/2115/1503:82981718ee70e8f128cd",
+          "source": "osm",
+          "source_id": "pier_lines:12/2115/1503:82981718ee70e8f128cd",
+          "source_priority": 10,
+          "infrastructure_type": "pier",
+          "name": "",
+          "harbour": "",
+          "provenance": [
+            "osm:pier_lines:12/2115/1503:82981718ee70e8f128cd"
+          ]
+        }
+      ]
+    },
+    {
+      "pair": [
+        "ign:CONSLINE0000000315829854",
+        "osm:pier_lines:12/2115/1503:769816235f345f4aa212"
+      ],
+      "features": [
+        {
+          "geometry": {
+            "type": "LineString",
+            "coordinates": [
+              [
+                5.92544592,
+                43.0781347
+              ],
+              [
+                5.92546195,
+                43.07813606
+              ],
+              [
+                5.92621334,
+                43.07852426
+              ]
+            ]
+          },
+          "id": "ign:CONSLINE0000000315829854",
+          "source": "ign",
+          "source_id": "CONSLINE0000000315829854",
+          "source_priority": 100,
+          "infrastructure_type": "pontoon",
+          "name": "",
+          "harbour": "",
+          "provenance": [
+            "ign:CONSLINE0000000315829854"
+          ]
+        },
+        {
+          "geometry": {
+            "type": "LineString",
+            "coordinates": [
+              [
+                5.925450325012213,
+                43.07813564604729
+              ],
+              [
+                5.926222801208501,
+                43.07852747420627
+              ]
+            ]
+          },
+          "id": "osm:pier_lines:12/2115/1503:769816235f345f4aa212",
+          "source": "osm",
+          "source_id": "pier_lines:12/2115/1503:769816235f345f4aa212",
+          "source_priority": 10,
+          "infrastructure_type": "pier",
+          "name": "",
+          "harbour": "",
+          "provenance": [
+            "osm:pier_lines:12/2115/1503:769816235f345f4aa212"
+          ]
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,406 @@
+import asyncio
+import sqlite3
+import time
+from concurrent.futures import ThreadPoolExecutor
+from threading import Event, Thread
+
+import pytest
+
+from app.domain.marine_tile import Tile
+from app.domain.marine import ProviderUnavailable
+from app.infrastructure.adapters.emodnet_bathymetry import BathymetryUnavailable
+from app.infrastructure.marine.bathymetry_cache import BathymetryTileCache
+
+
+TILE = Tile(8, 131, 94)
+
+
+def test_parallel_disk_operations_preserve_every_tile_and_report_no_errors(tmp_path):
+    async def scenario():
+        path = tmp_path / "parallel.sqlite3"
+        cache = BathymetryTileCache(None, path)
+        with ThreadPoolExecutor(max_workers=24) as pool:
+            list(pool.map(lambda i: cache._write(str(i), time.time() + 60, b"png"), range(128)))
+            rows = list(pool.map(lambda i: cache._read(str(i)), range(128)))
+        assert all(row and row[1] == b"png" for row in rows)
+        assert cache.metrics["disk_errors"] == 0
+        await cache.close()
+        assert cache._connection is None
+
+    asyncio.run(scenario())
+
+
+def test_external_sqlite_writer_longer_than_old_timeout_is_tolerated(tmp_path):
+    async def scenario():
+        path = tmp_path / "locked.sqlite3"
+        cache = BathymetryTileCache(None, path)
+        cache._write("initial", time.time() + 60, b"initial")
+        locked = Event()
+
+        def hold_writer():
+            with sqlite3.connect(path) as db:
+                db.execute("BEGIN IMMEDIATE")
+                locked.set()
+                time.sleep(.25)  # Original 100ms timeout would lose this write.
+
+        thread = Thread(target=hold_writer)
+        thread.start()
+        assert locked.wait(2)
+        await cache._disk(cache._write, "new", time.time() + 60, b"saved")
+        thread.join()
+        assert cache._read("new")[1] == b"saved"
+        assert cache.metrics["disk_errors"] == 0
+        await cache.close()
+
+    asyncio.run(scenario())
+
+
+def test_response_deadline_keeps_inflight_render_and_worker_bound(tmp_path):
+    async def scenario():
+        release = asyncio.Event()
+        started = asyncio.Event()
+        calls = 0
+
+        async def render(tile):
+            nonlocal calls
+            calls += 1
+            started.set()
+            await release.wait()
+            return b"png"
+
+        cache = BathymetryTileCache(render, tmp_path / "deadline.sqlite3", concurrency=1)
+        cache.RESPONSE_TIMEOUT = .05
+        cache.QUEUE_TIMEOUT = .02
+        first = asyncio.create_task(cache.get(TILE))
+        await started.wait()
+        with pytest.raises(ProviderUnavailable, match="response deadline"):
+            await first
+        with pytest.raises(ProviderUnavailable, match="queue deadline"):
+            await cache.get(Tile(8, 132, 94))
+        duplicate = asyncio.create_task(cache.get(TILE))
+        await asyncio.sleep(0)
+        release.set()
+        assert await duplicate == b"png"
+        assert calls == 1
+        assert cache.metrics["shared"] == 1
+        await cache.close()
+
+    asyncio.run(scenario())
+
+
+def test_cold_duplicate_requests_share_one_render_and_survive_a_cancel(tmp_path):
+    async def scenario():
+        started, release = asyncio.Event(), asyncio.Event()
+        calls = 0
+
+        async def render(tile):
+            nonlocal calls
+            calls += 1
+            started.set()
+            await release.wait()
+            return b"finished coastal png"
+
+        cache = BathymetryTileCache(render, tmp_path / "cache.sqlite3")
+        first = asyncio.create_task(cache.get(TILE))
+        await started.wait()
+        others = [asyncio.create_task(cache.get(TILE)) for _ in range(31)]
+        await asyncio.sleep(0)
+        first.cancel()
+        with pytest.raises(asyncio.CancelledError):
+            await first
+        release.set()
+        assert await asyncio.gather(*others) == [b"finished coastal png"] * 31
+        assert await cache.get(TILE) == b"finished coastal png"
+        assert calls == 1
+        assert cache.metrics["shared"] == 31
+        assert cache.metrics["memory_hits"] == 1
+        await cache.close()
+
+    asyncio.run(scenario())
+
+
+def test_distinct_tiles_wait_without_occupying_more_render_workers(tmp_path):
+    async def scenario():
+        active, peak = 0, 0
+        saturated, release = asyncio.Event(), asyncio.Event()
+
+        async def render(tile):
+            nonlocal active, peak
+            active += 1
+            peak = max(peak, active)
+            if active == 8:
+                saturated.set()
+            await release.wait()
+            active -= 1
+            return b"png"
+
+        cache = BathymetryTileCache(render, tmp_path / "cache.sqlite3")
+        tasks = [asyncio.create_task(cache.get(Tile(8, x, 94))) for x in range(32)]
+        await asyncio.wait_for(saturated.wait(), 2)
+        # The event loop and independent work continue while tiles are queued.
+        assert await asyncio.to_thread(lambda: "profile response") == "profile response"
+        assert peak == 8
+        release.set()
+        assert await asyncio.gather(*tasks) == [b"png"] * 32
+        assert peak == 8
+        await cache.close()
+
+    asyncio.run(scenario())
+
+
+def test_finished_tile_survives_service_restart_without_provider_or_coastline(tmp_path):
+    async def scenario():
+        path = tmp_path / "cache.sqlite3"
+
+        async def render(tile):
+            return b"fully masked png"
+
+        first = BathymetryTileCache(render, path)
+        expected = await first.get(TILE)
+        await first.close()
+
+        async def offline(tile):
+            raise AssertionError("cache hit must not contact a provider or mask again")
+
+        second = BathymetryTileCache(offline, path)
+        assert await second.get(TILE) == expected
+        assert second.metrics["disk_hits"] == 1
+        assert second.metrics["renders"] == 0
+        await second.close()
+
+    asyncio.run(scenario())
+
+
+def test_failures_are_shared_but_never_cached_as_empty_water(tmp_path):
+    async def scenario():
+        release = asyncio.Event()
+        calls = 0
+
+        async def render(tile):
+            nonlocal calls
+            calls += 1
+            await release.wait()
+            if calls == 1:
+                raise BathymetryUnavailable("upstream offline")
+            return b"recovered png"
+
+        cache = BathymetryTileCache(render, tmp_path / "cache.sqlite3")
+        tasks = [asyncio.create_task(cache.get(TILE)) for _ in range(12)]
+        await asyncio.sleep(0)
+        release.set()
+        results = await asyncio.gather(*tasks, return_exceptions=True)
+        assert all(isinstance(result, BathymetryUnavailable) for result in results)
+        assert calls == 1
+        assert await cache.get(TILE) == b"recovered png"
+        assert calls == 2
+        await cache.close()
+
+    asyncio.run(scenario())
+
+
+def test_expired_or_other_version_tiles_are_not_reused(tmp_path):
+    async def scenario():
+        path = tmp_path / "cache.sqlite3"
+        calls = 0
+
+        async def render(tile):
+            nonlocal calls
+            calls += 1
+            return b"new png"
+
+        first = BathymetryTileCache(render, path)
+        await first.get(TILE)
+        await first.close()
+        with sqlite3.connect(path) as db:
+            db.execute("UPDATE tiles SET expires=?", (time.time() - 1,))
+        second = BathymetryTileCache(render, path)
+        await second.get(TILE)
+        assert calls == 2
+        await second.close()
+        third = BathymetryTileCache(render, path)
+        third.VERSION = "future-coastal-render"
+        await third.get(TILE)
+        assert calls == 3
+        await third.close()
+
+    asyncio.run(scenario())
+
+
+def test_palette_version_bypasses_old_disk_tile_without_purging_it(tmp_path):
+    async def scenario():
+        path = tmp_path / "cache.sqlite3"
+        with sqlite3.connect(path) as db:
+            db.execute(
+                "CREATE TABLE tiles (key TEXT PRIMARY KEY, expires REAL NOT NULL, content BLOB NOT NULL)"
+            )
+            db.executemany(
+                "INSERT INTO tiles VALUES (?, ?, ?)",
+                [(f"{version}:{TILE.z}/{TILE.x}/{TILE.y}", time.time() + 3600, b"old light png")
+                 for version in ['coast-feather-2', 'marine-palette-3', 'marine-visual-4', 'marine-visual-5', 'marine-visual-6']],
+            )
+        calls = 0
+
+        async def render(tile):
+            nonlocal calls
+            calls += 1
+            return b"new dark png"
+
+        cache = BathymetryTileCache(render, path)
+        assert cache.VERSION == "marine-visual-7"
+        assert await cache.get(TILE) == b"new dark png"
+        assert await cache.get(TILE) == b"new dark png"
+        assert calls == 1
+        assert cache.metrics["memory_hits"] == 1
+        assert cache.MAX_MEMORY == 32 * 1024 * 1024
+        with sqlite3.connect(path) as db:
+            rows = dict(db.execute("SELECT key, content FROM tiles"))
+        for version in ['coast-feather-2', 'marine-palette-3', 'marine-visual-4', 'marine-visual-5', 'marine-visual-6']:
+            assert rows[f"{version}:{TILE.z}/{TILE.x}/{TILE.y}"] == b"old light png"
+        assert rows[f"marine-visual-7:{TILE.z}/{TILE.x}/{TILE.y}"] == b"new dark png"
+        await cache.close()
+
+    asyncio.run(scenario())
+
+
+def test_cache_disk_and_memory_stay_bounded(tmp_path):
+    async def scenario():
+        async def render(tile):
+            return bytes([tile.x]) * 20
+
+        path = tmp_path / "cache.sqlite3"
+        cache = BathymetryTileCache(render, path)
+        cache.MAX_MEMORY = 50
+        cache.MAX_DISK = 100
+        for x in range(10):
+            await cache.get(Tile(8, x, 94))
+        assert cache._bytes <= 50
+        with sqlite3.connect(path) as db:
+            assert db.execute("SELECT SUM(length(content)) FROM tiles").fetchone()[0] <= 100
+        await cache.close()
+
+    asyncio.run(scenario())
+
+
+def test_unwritable_optional_cache_keeps_a_valid_render(tmp_path, caplog):
+    async def scenario():
+        forbidden = tmp_path / "not-a-directory"
+        forbidden.write_text("preserved")
+
+        async def render(tile):
+            return b"valid masked png"
+
+        cache = BathymetryTileCache(render, forbidden / "cache.sqlite3")
+        assert await cache.get(TILE) == b"valid masked png"
+        assert await cache.get(TILE) == b"valid masked png"
+        assert forbidden.read_text() == "preserved"
+        await cache.close()
+
+    asyncio.run(scenario())
+    assert "disk cache read failed:" in caplog.text
+    assert "sqlite=none" in caplog.text
+
+
+def test_queue_is_bounded_and_shutdown_cancels_waiters(tmp_path):
+    async def scenario():
+        started = asyncio.Event()
+
+        async def render(tile):
+            started.set()
+            await asyncio.Event().wait()
+
+        cache = BathymetryTileCache(render, tmp_path / "cache.sqlite3", concurrency=1)
+        cache.MAX_PENDING = 2
+        first = asyncio.create_task(cache.get(TILE))
+        await started.wait()
+        second = asyncio.create_task(cache.get(Tile(8, 132, 94)))
+        await asyncio.sleep(0)
+        with pytest.raises(ProviderUnavailable, match="queue is full"):
+            await cache.get(Tile(8, 133, 94))
+        await cache.close()
+        results = await asyncio.gather(first, second, return_exceptions=True)
+        assert all(isinstance(result, asyncio.CancelledError) for result in results)
+        assert not cache._pending
+
+    asyncio.run(scenario())
+
+
+def test_incomplete_context_shares_cold_requests_but_retries_and_never_persists(tmp_path):
+    from app.infrastructure.marine.bathymetry_cache import UncachedBathymetryTile
+
+    async def scenario():
+        started, release = asyncio.Event(), asyncio.Event()
+        calls = 0
+        path = tmp_path / 'cache.sqlite3'
+
+        async def render(tile):
+            nonlocal calls
+            calls += 1
+            if calls == 1:
+                started.set()
+                await release.wait()
+                return UncachedBathymetryTile(b'degraded but valid png')
+            return b'complete png'
+
+        cache = BathymetryTileCache(render, path)
+        first = asyncio.create_task(cache.get(TILE))
+        await started.wait()
+        others = [asyncio.create_task(cache.get(TILE)) for _ in range(11)]
+        await asyncio.sleep(0)
+        first.cancel()
+        with pytest.raises(asyncio.CancelledError):
+            await first
+        release.set()
+        results = await asyncio.gather(*others)
+        assert all(isinstance(item, UncachedBathymetryTile) for item in results)
+        assert results == [b'degraded but valid png'] * 11
+        assert cache.metrics['shared'] == 11
+        assert not cache._memory
+        assert cache._bytes == 0
+        with sqlite3.connect(path) as db:
+            assert db.execute('SELECT COUNT(*) FROM tiles').fetchone()[0] == 0
+        assert calls == 1
+        assert await cache.get(TILE) == b'complete png'
+        assert calls == 2
+        assert await cache.get(TILE) == b'complete png'
+        assert cache.metrics['memory_hits'] == 1
+        await cache.close()
+
+        async def forbidden(tile):
+            raise AssertionError('recovered normal tile should persist')
+
+        restarted = BathymetryTileCache(forbidden, path)
+        assert await restarted.get(TILE) == b'complete png'
+        assert restarted.metrics['disk_hits'] == 1
+        await restarted.close()
+
+    asyncio.run(scenario())
+
+
+
+def test_pan_discards_abandoned_queue_and_prioritizes_current_view(tmp_path):
+    async def scenario():
+        started, release = asyncio.Event(), asyncio.Event()
+        rendered = []
+        async def render(tile):
+            rendered.append(tile)
+            started.set()
+            await release.wait()
+            return b'png'
+        cache = BathymetryTileCache(render, tmp_path / 'pan.sqlite3', concurrency=1)
+        first = asyncio.create_task(cache.get(TILE))
+        await started.wait()
+        old_tiles = [Tile(8, x, 94) for x in range(20, 40)]
+        obsolete = [asyncio.create_task(cache.get(tile)) for tile in old_tiles]
+        await asyncio.sleep(.05)
+        for task in obsolete:
+            task.cancel()
+        await asyncio.gather(*obsolete, return_exceptions=True)
+        current_tile = Tile(8, 200, 94)
+        current = asyncio.create_task(cache.get(current_tile))
+        release.set()
+        assert await first == await current == b'png'
+        assert rendered == [TILE, current_tile]
+        assert not cache._waiters
+        assert not cache._rendering
+        await cache.close()
+    asyncio.run(scenario())

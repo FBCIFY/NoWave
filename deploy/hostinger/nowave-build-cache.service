@@ -1,0 +1,10 @@
+[Unit]
+Description=Bound regenerable Docker build cache on the NoWave VPS
+After=docker.service
+Requires=docker.service
+
+[Service]
+Type=oneshot
+ExecStart=/opt/nowave/config/prune-build-cache.sh
+Nice=19
+IOSchedulingClass=idle

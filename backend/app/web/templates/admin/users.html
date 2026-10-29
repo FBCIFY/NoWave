@@ -1,0 +1,33 @@
+{% extends 'admin/base.html' %}
+{% from 'admin/ui.html' import badge, identity %}
+{% block title %}Utilisateurs{% endblock %}
+{% block body_class %}admin-shell users-page{% endblock %}
+{% block content %}
+<a class="back-link" data-nav-back href="/admin">← Retour</a>
+<div class="page-head page-head--counted list-heading"><h1>Utilisateurs</h1><strong class="page-total" aria-label="{{ result.total }} utilisateurs au total">{{ result.total }}</strong></div>
+<form class="user-filters" method="get" action="{{ request.url_for('admin_users').path }}" role="search">
+  <div class="user-search-bar">
+    <label class="sr-only" for="user-search">Rechercher un compte</label>
+    <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="10.5" cy="10.5" r="6.5"/><path d="m16 16 4 4"/></svg>
+    <input id="user-search" type="search" name="search" maxlength="80" value="{{ search }}" placeholder="Pseudo, e-mail ou identifiant">
+    <button class="user-search-submit" type="submit" name="status" value="{{ user_status }}" aria-label="Rechercher" title="Rechercher"><svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M5 12h14m-6-6 6 6-6 6"/></svg></button>
+  </div>
+  <div class="user-status-filters" role="group" aria-label="Filtrer par statut">
+    <button class="user-status-filter" type="submit" name="status" value="" aria-label="Tous les statuts" aria-pressed="{{ 'true' if not user_status else 'false' }}" title="Tous les statuts"><svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="8" cy="8" r="2"/><circle cx="16" cy="8" r="2"/><circle cx="8" cy="16" r="2"/><circle cx="16" cy="16" r="2"/></svg></button>
+    <button class="user-status-filter user-status-filter--active" type="submit" name="status" value="active" aria-label="Comptes actifs" aria-pressed="{{ 'true' if user_status == 'active' else 'false' }}" title="Comptes actifs"><svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="m6 12 4 4 8-8"/></svg></button>
+    <button class="user-status-filter user-status-filter--suspended" type="submit" name="status" value="suspended" aria-label="Comptes suspendus" aria-pressed="{{ 'true' if user_status == 'suspended' else 'false' }}" title="Comptes suspendus"><svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M9 6v12M15 6v12"/></svg></button>
+  </div>
+  <input type="hidden" name="limit" value="{{ limit }}">
+</form>
+<section class="card table-card">
+  <div class="section-head"><h2>Comptes enregistrés</h2></div>
+  {% if result.items %}<div class="table-scroll"><table class="users-table"><caption class="sr-only">Comptes enregistrés</caption>
+    <thead><tr><th scope="col">Utilisateur</th><th scope="col">Adresse e-mail</th><th scope="col">Rôle</th><th scope="col">Statut</th><th scope="col">Actions</th></tr></thead>
+    <tbody>{% for item in result.items %}<tr><td class="user-name">{{ identity(item.username) }}</td><td class="email-cell">{{ item.email or 'Non renseignée' }}</td><td>{{ badge(item.role.value) }}</td><td>{{ badge(item.status.value) }}</td><td class="table-action">
+      <a href="{{ request.url_for('admin_user_reports', user_id=item.id).path }}">Voir les signalements</a>
+      {% if item.status.value == 'suspended' %}<a href="{{ request.url_for('admin_action', collection='users', target_id=item.id, action_name='reactivate').path }}">Réactiver</a>{% else %}<a href="{{ request.url_for('admin_action', collection='users', target_id=item.id, action_name='suspend').path }}">Suspendre</a>{% endif %}
+    </td></tr>{% endfor %}</tbody>
+  </table></div>{% else %}<div class="empty"><h3>Aucun utilisateur</h3><p>Aucun compte à afficher sur cette page.</p></div>{% endif %}
+  {% include 'admin/pagination.html' %}
+</section>
+{% endblock %}

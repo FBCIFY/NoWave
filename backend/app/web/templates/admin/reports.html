@@ -1,0 +1,39 @@
+{% extends 'admin/base.html' %}
+{% from 'admin/ui.html' import badge, date_label, identity %}
+{% block title %}Signalements{% endblock %}
+{% block body_class %}admin-shell reports-page{% endblock %}
+{% block content %}
+<a class="back-link" data-nav-back href="/admin">← Retour</a>
+<div class="page-head page-head--counted list-heading"><h1>Signalements</h1><strong class="page-total" aria-label="{{ result.total }} signalements au total">{{ result.total }}</strong></div>
+<form class="user-filters" method="get" action="{{ request.url_for('admin_reports').path }}" role="search">
+  <div class="user-search-bar">
+    <label class="sr-only" for="report-search">Rechercher un signalement</label>
+    <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="10.5" cy="10.5" r="6.5"/><path d="m16 16 4 4"/></svg>
+    <input id="report-search" type="search" name="search" maxlength="80" value="{{ search }}" placeholder="Observation, auteur ou identifiant">
+    <button class="user-search-submit" type="submit" name="status" value="{{ report_status }}" aria-label="Rechercher" title="Rechercher"><svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M5 12h14m-6-6 6 6-6 6"/></svg></button>
+  </div>
+  <div class="user-status-filters" role="group" aria-label="Filtrer par statut">
+    <button class="user-status-filter" type="submit" name="status" value="" aria-label="Tous les statuts" aria-pressed="{{ 'true' if not report_status else 'false' }}" title="Tous les statuts"><svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="8" cy="8" r="2"/><circle cx="16" cy="8" r="2"/><circle cx="8" cy="16" r="2"/><circle cx="16" cy="16" r="2"/></svg></button>
+    <button class="user-status-filter user-status-filter--active" type="submit" name="status" value="active" aria-label="Signalements actifs" aria-pressed="{{ 'true' if report_status == 'active' else 'false' }}" title="Signalements actifs"><svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="m6 12 4 4 8-8"/></svg></button>
+    <button class="user-status-filter user-status-filter--suspended" type="submit" name="status" value="removed" aria-label="Signalements retirés" aria-pressed="{{ 'true' if report_status == 'removed' else 'false' }}" title="Signalements retirés"><svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M9 6v12M15 6v12"/></svg></button>
+    <button class="user-status-filter" type="submit" name="status" value="expired" aria-label="Signalements expirés" aria-pressed="{{ 'true' if report_status == 'expired' else 'false' }}" title="Signalements expirés"><svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="12" cy="12" r="8"/><path d="M12 7v5l3 2"/></svg></button>
+  </div>
+  <input type="hidden" name="limit" value="{{ limit }}">
+</form>
+<section class="card table-card">
+  <div class="section-head"><h2>Observations</h2></div>
+  {% if result.items %}
+  <div class="table-scroll"><table class="reports-table"><caption class="sr-only">Signalements enregistrés</caption>
+    <thead><tr><th scope="col">Catégorie</th><th scope="col">Observation</th><th scope="col">Auteur</th><th scope="col">Date</th><th scope="col">Statut</th></tr></thead>
+    <tbody>{% for item in result.items %}<tr>
+      <td>{{ badge(item.category.value) }}</td>
+      <td class="report-observation"><a href="{{ request.url_for('admin_report', target_id=item.id).path }}">{{ item.description|default('', true) or 'Voir le signalement' }}</a></td>
+      <td class="user-name">{{ identity(item.author_username) }}</td>
+      <td>{{ date_label(item.observed_at) }}</td>
+      <td>{{ badge(item.status.value) }}</td>
+    </tr>{% endfor %}</tbody>
+  </table></div>
+  {% else %}<div class="empty"><h3>Aucun signalement</h3></div>{% endif %}
+  {% include 'admin/pagination.html' %}
+</section>
+{% endblock %}

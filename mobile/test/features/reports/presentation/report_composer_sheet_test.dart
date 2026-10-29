@@ -1,0 +1,498 @@
+import 'dart:typed_data';
+import 'dart:async';
+
+import 'package:blueway/features/reports/presentation/report_composer_sheet.dart';
+import 'package:blueway/features/reports/domain/manual_report.dart';
+import 'package:blueway/core/api/api_exception.dart';
+import 'package:flutter/material.dart';
+import 'package:flutter_test/flutter_test.dart';
+import 'package:image/image.dart' as img;
+
+import '../../../core/haptics/record_haptics.dart';
+
+void main() {
+  testWidgets(
+    'petit écran, texte doublé et clavier : saisie, erreur et réessai accessibles',
+    (tester) async {
+      tester.view.physicalSize = const Size(320, 568);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      var attempts = 0;
+      await tester.pumpWidget(
+        MaterialApp(
+          builder: (context, child) => MediaQuery(
+            data: MediaQuery.of(context).copyWith(
+              textScaler: const TextScaler.linear(2),
+              viewInsets: const EdgeInsets.only(bottom: 250),
+            ),
+            child: child!,
+          ),
+          home: Scaffold(
+            resizeToAvoidBottomInset: false,
+            body: Align(
+              alignment: Alignment.bottomCenter,
+              child: ReportComposerSheet(
+                onClose: _noop,
+                subtitle: 'Déplacez la carte pour placer le point',
+                onPublish: (_, description) async {
+                  expect(description, 'Commentaire conservé');
+                  attempts++;
+                  if (attempts == 1) {
+                    throw const ApiException(statusCode: 503, body: '');
+                  }
+                },
+              ),
+            ),
+          ),
+        ),
+      );
+      expect(tester.takeException(), isNull);
+      await tester.ensureVisible(find.text('Pollution'));
+      await tester.tap(find.text('Pollution'));
+      await tester.pump();
+      await tester.ensureVisible(find.byType(TextField));
+      await tester.enterText(find.byType(TextField), 'Commentaire conservé');
+      await tester.ensureVisible(find.text('Publier le signalement'));
+      await tester.tap(find.text('Publier le signalement'));
+      await tester.pumpAndSettle();
+      expect(find.text('Impossible de publier. Réessayez.'), findsOneWidget);
+      expect(find.text('Commentaire conservé'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+      await tester.ensureVisible(find.text('Publier le signalement'));
+      await tester.tap(find.text('Publier le signalement'));
+      await tester.pumpAndSettle();
+      expect(attempts, 2);
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets('texte lisible sur les contrôles cyan sélectionnés', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: ReportComposerSheet(onClose: _noop, onPublish: (_, _) async {}),
+        ),
+      ),
+    );
+    await tester.tap(find.text('Pollution'));
+    await tester.pump();
+    double contrast(Color foreground, Color background) {
+      final a = foreground.computeLuminance();
+      final b = background.computeLuminance();
+      return ((a > b ? a : b) + 0.05) / ((a < b ? a : b) + 0.05);
+    }
+
+    final label = tester.widget<Text>(find.text('Pollution'));
+    final tile = tester.widget<Material>(
+      find
+          .ancestor(of: find.text('Pollution'), matching: find.byType(Material))
+          .first,
+    );
+    expect(
+      contrast(label.style!.color!, tile.color!),
+      greaterThanOrEqualTo(4.5),
+    );
+    final style = tester.widget<FilledButton>(find.byType(FilledButton)).style!;
+    expect(
+      contrast(
+        style.foregroundColor!.resolve({})!,
+        style.backgroundColor!.resolve({})!,
+      ),
+      greaterThanOrEqualTo(4.5),
+    );
+  });
+
+  testWidgets('garde le texte et le focus quand le clavier masque le repère', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(390, 844);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    Widget sheetWithInsets(double keyboardHeight) => MaterialApp(
+      home: MediaQuery(
+        data: MediaQueryData(
+          size: const Size(390, 844),
+          viewInsets: EdgeInsets.only(bottom: keyboardHeight),
+        ),
+        child: Scaffold(
+          resizeToAvoidBottomInset: false,
+          body: Stack(
+            children: [
+              if (keyboardHeight == 0)
+                const Positioned(top: 0, child: SizedBox(width: 1, height: 1)),
+              const Positioned(
+                key: ValueKey('report-composer'),
+                left: 0,
+                right: 0,
+                bottom: 0,
+                child: ReportComposerSheet(onClose: _noop),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+
+    await tester.pumpWidget(sheetWithInsets(0));
+    expect(find.text('Animal marin'), findsOneWidget);
+    expect(find.text('Obstacle'), findsOneWidget);
+    expect(find.byType(TextField), findsOneWidget);
+    expect(
+      ReportComposerSheet.heightFor(const MediaQueryData(size: Size(390, 844))),
+      294,
+    );
+    // La carte place le marqueur avec heightFor : il doit correspondre à la
+    // hauteur réelle du formulaire (+ 12 de marge sous le panneau).
+    expect(
+      tester.getSize(find.byKey(const ValueKey('report-composer'))).height,
+      294 + 12,
+    );
+
+    await tester.tap(find.byType(TextField));
+    await tester.enterText(
+      find.byType(TextField),
+      'Un commentaire sur deux lignes\navec une précision',
+    );
+    await tester.pumpWidget(sheetWithInsets(300));
+    expect(
+      find.text('Un commentaire sur deux lignes\navec une précision'),
+      findsOneWidget,
+    );
+
+    expect(find.text('Animal marin'), findsOneWidget);
+    expect(find.text('Obstacle'), findsOneWidget);
+    await tester.enterText(find.byType(TextField), 'Le clavier reste actif');
+    expect(find.text('Le clavier reste actif'), findsOneWidget);
+    expect(
+      tester.widget<EditableText>(find.byType(EditableText)).focusNode.hasFocus,
+      isTrue,
+    );
+    final button = find.byType(FilledButton);
+    expect(button, findsOneWidget);
+    expect(tester.getBottomLeft(button).dy, lessThan(844 - 300));
+    expect(
+      ReportComposerSheet.heightFor(
+        const MediaQueryData(
+          size: Size(390, 844),
+          viewInsets: EdgeInsets.only(bottom: 300),
+        ),
+      ),
+      294,
+    );
+
+    await tester.pumpWidget(sheetWithInsets(0));
+    expect(find.text('Animal marin'), findsOneWidget);
+  });
+
+  testWidgets('publie la catégorie et le commentaire, puis permet un réessai', (
+    tester,
+  ) async {
+    final haptics = recordHaptics(tester);
+    var attempts = 0;
+    ReportCategory? submittedCategory;
+    String? submittedDescription;
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: ReportComposerSheet(
+            onClose: _noop,
+            onPublish: (category, description) async {
+              attempts++;
+              submittedCategory = category;
+              submittedDescription = description;
+              if (attempts == 1) {
+                throw const ApiException(statusCode: 409, body: 'conflit');
+              }
+            },
+          ),
+        ),
+      ),
+    );
+
+    final publish = find.text('Publier le signalement');
+    expect(
+      tester.widget<FilledButton>(find.byType(FilledButton)).onPressed,
+      isNull,
+    );
+    expect(find.text('Choisissez une catégorie'), findsOneWidget);
+    expect(publish, findsNothing);
+    await tester.tap(find.text('Pollution'));
+    await tester.pump();
+    expect(find.text('Choisissez une catégorie'), findsNothing);
+    // La première lettre passe en majuscule.
+    await tester.enterText(find.byType(TextField), '  pollution visible  ');
+    await tester.tap(publish);
+    await tester.pump();
+    expect(attempts, 1);
+    expect(submittedCategory, ReportCategory.pollution);
+    expect(submittedDescription, 'Pollution visible');
+    expect(
+      find.text('Ce signalement a changé depuis le premier envoi.'),
+      findsOneWidget,
+    );
+
+    await tester.tap(publish);
+    await tester.pump();
+    expect(attempts, 2);
+    expect(haptics, [
+      'HapticFeedbackType.selectionClick',
+      'HapticFeedbackType.heavyImpact',
+      'HapticFeedbackType.mediumImpact',
+    ]);
+    expect(
+      find.text('Ce signalement a changé depuis le premier envoi.'),
+      findsNothing,
+    );
+  });
+
+  testWidgets('ferme le clavier quand on touche en dehors du champ', (
+    tester,
+  ) async {
+    var mapTaps = 0;
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: Column(
+            children: [
+              Expanded(
+                child: GestureDetector(
+                  key: const ValueKey('map'),
+                  behavior: HitTestBehavior.opaque,
+                  onTap: () => mapTaps++,
+                  child: const SizedBox.expand(),
+                ),
+              ),
+              ReportComposerSheet(onClose: _noop),
+            ],
+          ),
+        ),
+      ),
+    );
+    bool hasFocus() => tester
+        .widget<EditableText>(find.byType(EditableText))
+        .focusNode
+        .hasFocus;
+
+    await tester.tap(find.byType(TextField));
+    await tester.pump();
+    expect(hasFocus(), isTrue);
+
+    await tester.tap(find.byKey(const ValueKey('map')));
+    await tester.pump();
+    expect(mapTaps, 1);
+    expect(hasFocus(), isFalse);
+  });
+
+  testWidgets('demande confirmation avant d’abandonner une saisie', (
+    tester,
+  ) async {
+    var closes = 0;
+    Future<void> pumpSheet({Uint8List? photo}) => tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: ReportComposerSheet(
+            key: UniqueKey(),
+            onClose: () => closes++,
+            photo: photo,
+          ),
+        ),
+      ),
+    );
+    const question = 'Abandonner ce signalement ?';
+
+    // Rien à perdre : la croix ferme directement.
+    await pumpSheet();
+    await tester.tap(find.byTooltip('Fermer'));
+    await tester.pumpAndSettle();
+    expect(find.text(question), findsNothing);
+    expect(closes, 1);
+
+    // « Continuer » garde la saisie.
+    await pumpSheet();
+    await tester.tap(find.text('Obstacle'));
+    await tester.enterText(find.byType(TextField), 'Bouée à la dérive');
+    await tester.tap(find.byTooltip('Fermer'));
+    await tester.pumpAndSettle();
+    expect(find.text(question), findsOneWidget);
+    expect(find.text('Il ne sera pas publié.'), findsOneWidget);
+    await tester.tap(find.text('Continuer'));
+    await tester.pumpAndSettle();
+    expect(find.text(question), findsNothing);
+    expect(closes, 1);
+    expect(find.text('Bouée à la dérive'), findsOneWidget);
+    expect(find.text('Publier le signalement'), findsOneWidget);
+
+    // Le retour arrière passe par la même question.
+    await tester.binding.handlePopRoute();
+    await tester.pumpAndSettle();
+    expect(find.text(question), findsOneWidget);
+    await tester.tap(find.text('Abandonner'));
+    await tester.pumpAndSettle();
+    expect(closes, 2);
+
+    // Une photo seule suffit à demander confirmation.
+    await pumpSheet(photo: img.encodeJpg(img.Image(width: 4, height: 4)));
+    await tester.tap(find.byTooltip('Fermer'));
+    await tester.pumpAndSettle();
+    expect(
+      find.text('Il ne sera pas publié, et la photo ne sera pas gardée.'),
+      findsOneWidget,
+    );
+    await tester.tap(find.text('Abandonner'));
+    await tester.pumpAndSettle();
+    expect(closes, 3);
+  });
+
+  testWidgets('n’affiche le compteur qu’à l’approche de la limite', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      const MaterialApp(
+        home: Scaffold(body: ReportComposerSheet(onClose: _noop)),
+      ),
+    );
+
+    await tester.enterText(find.byType(TextField), 'a' * 199);
+    await tester.pump();
+    expect(find.text('199/250'), findsNothing);
+
+    await tester.enterText(find.byType(TextField), 'a' * 200);
+    await tester.pump();
+    expect(find.text('200/250'), findsOneWidget);
+  });
+
+  testWidgets('affiche la photo et l’estimation dans l’en-tête', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(390, 844);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: Align(
+            alignment: Alignment.bottomCenter,
+            child: ReportComposerSheet(
+              onClose: _noop,
+              photo: img.encodeJpg(img.Image(width: 4, height: 4)),
+              subtitle: 'Estimé à 120 m · ajustez si besoin',
+            ),
+          ),
+        ),
+      ),
+    );
+
+    expect(find.byType(Image), findsOneWidget);
+    expect(find.text('Nouveau signalement'), findsOneWidget);
+    expect(find.text('Estimé à 120 m · ajustez si besoin'), findsOneWidget);
+
+    await tester.tap(find.bySemanticsLabel('Agrandir la photo'));
+    await tester.pumpAndSettle();
+    expect(find.byType(InteractiveViewer), findsOneWidget);
+
+    await tester.tap(find.byTooltip('Fermer la photo'));
+    await tester.pumpAndSettle();
+    expect(find.byType(InteractiveViewer), findsNothing);
+    expect(find.text('Nouveau signalement'), findsOneWidget);
+  });
+
+  testWidgets('envoie la photo après la publication, puis réessaie', (
+    tester,
+  ) async {
+    final haptics = recordHaptics(tester);
+    var publishes = 0;
+    var uploads = 0;
+    var closes = 0;
+    Completer<void>? firstUpload;
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: ReportComposerSheet(
+            onClose: () => closes++,
+            subtitle: 'Placez le point sur l’objet photographié',
+            onPublish: (_, _) async => publishes++,
+            onUploadPhoto: () {
+              uploads++;
+              if (uploads == 1) {
+                firstUpload = Completer<void>();
+                return firstUpload!.future;
+              }
+              return Future.value();
+            },
+          ),
+        ),
+      ),
+    );
+
+    expect(
+      find.text('Placez le point sur l’objet photographié'),
+      findsOneWidget,
+    );
+    await tester.tap(find.text('Pollution'));
+    await tester.pump();
+    await tester.tap(find.text('Publier le signalement'));
+    await tester.pump();
+    expect(publishes, 1);
+    // Le point est envoyé : plus rien à placer.
+    expect(find.text('Placez le point sur l’objet photographié'), findsNothing);
+    expect(uploads, 1);
+    expect(find.text('Signalement publié'), findsOneWidget);
+    expect(find.text('Envoi de la photo…'), findsOneWidget);
+    // Publié, mais pas encore de vibration de succès : la photo est en cours.
+    expect(haptics, ['HapticFeedbackType.selectionClick']);
+    // Publié : plus de croix, qui laissait croire à une annulation.
+    expect(find.byTooltip('Fermer'), findsNothing);
+
+    firstUpload!.completeError(
+      const ApiException(statusCode: 404, body: 'Not Found'),
+    );
+    await tester.pump();
+    expect(find.text('Signalement publié'), findsOneWidget);
+    expect(
+      find.text('Photo non envoyée : envoi indisponible sur ce serveur.'),
+      findsOneWidget,
+    );
+    expect(find.byTooltip('Fermer'), findsNothing);
+    expect(find.text('Publier le signalement'), findsNothing);
+
+    await tester.tap(find.text('Réessayer l’envoi'));
+    await tester.pump();
+    expect(publishes, 1);
+    expect(uploads, 2);
+    expect(haptics, [
+      'HapticFeedbackType.selectionClick',
+      'HapticFeedbackType.heavyImpact',
+      'HapticFeedbackType.mediumImpact',
+    ]);
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: ReportComposerSheet(
+            key: const ValueKey('second'),
+            onClose: () => closes++,
+            onPublish: (_, _) async {},
+            onUploadPhoto: () async =>
+                throw const ApiException(statusCode: 503, body: ''),
+          ),
+        ),
+      ),
+    );
+    await tester.tap(find.text('Obstacle'));
+    await tester.pump();
+    await tester.tap(find.text('Publier le signalement'));
+    await tester.pump();
+    expect(find.text('Photo non envoyée. Réessayez.'), findsOneWidget);
+    await tester.tap(find.text('Terminer sans photo'));
+    expect(closes, 1);
+  });
+}
+
+void _noop() {}

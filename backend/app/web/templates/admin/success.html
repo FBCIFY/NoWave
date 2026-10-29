@@ -1,0 +1,6 @@
+{% extends 'admin/base.html' %}
+{% block title %}Action effectuée{% endblock %}
+{% block content %}
+<div class="page-head"><div><p class="eyebrow">MODÉRATION</p><h1>Action effectuée</h1></div></div><div data-action-complete role="status" class="success"><p>{{ action.label }} : le service a confirmé la réussite.</p></div>
+<div class="actions"><a data-nav-back href="{{ request.url_for('admin_reports' if action.collection == 'reports' else 'admin_users').path }}">Retour</a><a href="{{ request.url_for('admin_audit').path }}">Consulter l’audit</a></div>
+{% endblock %}

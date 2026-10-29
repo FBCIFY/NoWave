@@ -1,0 +1,12 @@
+F                                                                        [100%]
+=================================== FAILURES ===================================
+_________ test_untrusted_host_simulation_returns_expected_http_status __________
+backend/tests/unit/test_deployment_transaction.py:263: in test_untrusted_host_simulation_returns_expected_http_status
+    assert result.stdout == "421"
+E   AssertionError: assert 'synthetic asset\n' == '421'
+E
+E     - 421
+E     + synthetic asset
+=========================== short test summary info ============================
+FAILED backend/tests/unit/test_deployment_transaction.py::test_untrusted_host_simulation_returns_expected_http_status
+1 failed in 0.13s

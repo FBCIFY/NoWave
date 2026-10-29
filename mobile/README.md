@@ -1,0 +1,763 @@
+# BlueWay mobile
+
+## Développement
+
+Depuis le dossier `mobile/` :
+
+```bash
+flutter pub get
+flutter devices
+flutter run -d <device-id> --dart-define-from-file=.env.json
+```
+
+Remplacer `<device-id>` par l’identifiant affiché par `flutter devices`.
+
+## Configuration locale
+
+Créer le fichier local depuis l’exemple :
+
+```bash
+cp .env.example.json .env.json
+```
+
+Compléter ensuite les valeurs :
+
+```json
+{
+  "MAPBOX_ACCESS_TOKEN": "jeton-public-mapbox",
+  "API_BASE_URL": "https://api.example.com/"
+}
+```
+
+`API_BASE_URL` est l’adresse principale du backend NoWave : profil,
+signalements, photos, alertes et tuiles authentifiées `/api/v1/map/tiles/`.
+`MARINE_API_BASE_URL` est facultative : renseignée, elle sélectionne un backend
+direct pour les seules sources publiques `bathymetry/`, `depth-contours/`,
+`soundings/`, `underwater-hazards/`, `seamarks/`, `port-infrastructure/`,
+`harbours/` et `marine-features/` sous
+`/api/v1/map/`, ainsi que leurs crédits `/api/v1/map/marine-sources`.
+Absente, vide ou composée d’espaces, elle conserve `API_BASE_URL` pour ces sources.
+`ApiConfig` construit toutes les URL avec la même validation et normalisation.
+Les services Firebase et Mapbox conservent leurs adresses propres. Les photos sont téléchargées
+depuis les URLs signées retournées par le backend, sans token Firebase envoyé au
+stockage.
+
+Le slash final est facultatif. Un préfixe tel que `https://api.example.com/proxy/`
+est conservé devant `api/v1/...`. HTTP et HTTPS sont acceptés ; une adresse
+absente ou invalide produit une erreur explicite, sans repli vers localhost.
+Les placeholders Mapbox `{z}/{x}/{y}` et les versions de cache existantes
+(`coast-1`, `depths-4`, etc.) sont conservés.
+
+Il n’y a pas de routage global de `/api/v1/map/` : le client métier et la source
+de signalements restent sur `API_BASE_URL`. Le token utilisateur est réservé
+à cet hôte ; les sources publiques n’ajoutent pas d’en-tête d’authentification.
+L’ancienne variable `BATHYMETRY_TILES_URL` n’est pas lue. Ne pas la passer aux builds.
+`MAPTILER_STYLE_URL` n’est plus utilisé : le style du globe importe Mapbox
+Standard et conserve Mapbox comme fond. Les couches marines fusionnées via
+NW-164 / PR #93 complètent ce socle sans changer de fournisseur.
+Le jeton Mapbox reste nécessaire ; les clés des fournisseurs marins restent
+sur le backend.
+
+Pour un backend de développement, choisir l’adresse adaptée :
+
+- Android Emulator : `http://10.0.2.2:8000/`
+- simulateur iOS : `http://127.0.0.1:8000/`
+- téléphone physique : adresse du poste sur le même réseau, ou reverse USB.
+
+Exemple de recette USB sur le LGN, avec backend principal distant et données
+marines locales, sans proxy HTTP et sans modifier `.env.json` :
+
+```bash
+adb -s AV5PJV6328H03108 reverse tcp:8004 tcp:8004
+flutter run -d AV5PJV6328H03108 --debug --no-pub \
+  --dart-define-from-file=.env.json \
+  --dart-define=API_BASE_URL=https://api.no-wave.fr/ \
+  --dart-define=MARINE_API_BASE_URL=http://127.0.0.1:8004/
+```
+
+Le serveur marin doit déjà être disponible sur le poste au port 8004.
+`adb reverse` transporte cette connexion TCP par USB ; aucune requête métier
+ni aucun token utilisateur n’est redirigé vers le backend marin local.
+Le reverse USB est nécessaire tant que cet APK utilise `127.0.0.1:8004`.
+
+Pour une APK utilisant uniquement le backend principal, laisser la variable
+marine vide (surcharge explicite si un ancien fichier privé la renseigne) :
+
+```bash
+flutter build apk --debug --no-pub --dart-define-from-file=.env.json \
+  --dart-define=MARINE_API_BASE_URL=
+```
+
+Une compilation réussie ne prouve pas que les routes marines sont déployées.
+Vérifier `/health`, les endpoints réels et leurs formats ; un 404 requiert un
+déploiement backend autorisé, sans substitution silencieuse vers le local.
+
+Une modification de configuration exige une reconstruction et un redémarrage
+complet. Le fichier privé `.env.json` reste ignoré par Git ; ne jamais le
+versionner, ni mettre de token Firebase dans un exemple ou un journal.
+
+## Organisation du code
+
+```text
+lib/
+├── main.dart          démarrage : Firebase, Mapbox, services partagés
+├── app/               racine de l’app et thème
+├── core/              outils partagés par toutes les fonctionnalités
+│   ├── api/           client HTTP vers le backend
+│   ├── haptics/       retours haptiques
+│   ├── location/      position GPS et format degrés/minutes/secondes
+│   ├── map/           réglages Mapbox communs
+│   ├── notifications/ autorisation du téléphone et messages push
+│   └── sensors/       cap et inclinaison du téléphone
+└── features/          une fonctionnalité par dossier
+    ├── auth/          connexion, inscription, vérification de l’e-mail
+    ├── profile/       création du profil, préférences et onboarding alertes
+    ├── home/          accueil et orchestration carte/profil/alertes
+    ├── alerts/        historique, parsing FCM et navigation des alertes
+    ├── map/           carte, boussole, mode signalement
+    ├── reports/       formulaire et envoi des signalements
+    └── camera/        prise de photo, mesures et estimation de position
+```
+
+Chaque dossier de `features/` suit le même découpage :
+
+- `data/` : appels au backend ou à Firebase ;
+- `domain/` : modèles et règles sans interface ;
+- `presentation/` : écrans et widgets.
+
+Les services sont créés une seule fois dans `main.dart`, puis transmis aux
+écrans. Les services qui appellent le backend reçoivent `getIdToken` pour
+ajouter le token Firebase.
+
+Enchaînement des écrans :
+
+```text
+AuthGate          (session Firebase)
+├── LoginScreen / RegisterScreen
+├── VerifyEmailScreen
+└── ProfileGate   (profil du backend)
+    ├── ProfileSetupScreen
+    ├── AlertsOnboardingScreen   une seule fois, après la création du profil
+    └── HomeScreen → MapScreen
+                     ├── ProfileScreen (bouton profil)
+                     ├── AlertsScreen (bouton alertes)
+                     │   └── AlertReportScreen
+                     │       └── retour à la MapScreen principale ciblée
+                     ├── ReportComposerSheet (bouton +, signalement manuel)
+                     └── CameraScreen (bouton appareil photo)
+                         └── ReportComposerSheet → ReportPhotoViewer
+```
+
+`AuthGate` et `ProfileGate` choisissent l’écran à afficher. Les écrans eux-mêmes
+ne naviguent presque pas : ils déclenchent une action et l’aiguillage suit.
+
+Fichiers présents mais non utilisés par l’application :
+
+- `features/demo/` : compteur du modèle Flutter ;
+- `features/reports/presentation/reports_screen.dart` et
+  `data/demo_reports_service.dart` : liste de démonstration, utilisée
+  seulement dans les tests ;
+- `app/router.dart` : fichier vide.
+
+## Authentification et profil — NW-51
+
+L’application utilise Firebase Authentication avec le fournisseur
+e-mail/mot de passe.
+
+Le parcours comprend :
+
+- la création du compte ;
+- l’envoi et la vérification automatique de l’adresse e-mail ;
+- la connexion et la déconnexion ;
+- la transmission du token Firebase au backend ;
+- la création d’un profil avec un nom d’utilisateur unique ;
+- la récupération du profil existant sans création implicite.
+
+Si la réponse à la création du profil se perd alors que le serveur l’a
+enregistré, le nouvel essai reçoit 409 `user_already_exists`. L’écran relit
+alors le profil du compte (`GET /api/v1/users/me`) et continue avec lui, avec
+le nom enregistré la première fois (NW-153). S’il ne le trouve pas, il affiche
+une erreur sans recréer de profil.
+
+Si l’adresse e-mail appartient déjà au profil d’un autre compte, le serveur
+répond 409 `email_already_registered`. L’écran affiche un message dédié et
+ne relit pas le profil : ce compte n’en a pas (NW-155).
+
+Les fichiers Firebase Android et iOS sont versionnés. Après un clone,
+`flutter pub get` suffit pour utiliser la configuration existante.
+
+Firebase CLI et FlutterFire CLI servent uniquement à modifier ou régénérer
+cette configuration.
+
+Sur macOS :
+
+```bash
+brew install firebase-cli
+dart pub global activate flutterfire_cli
+gem install xcodeproj
+```
+
+Sur Windows :
+
+```powershell
+npm install -g firebase-tools
+dart pub global activate flutterfire_cli
+```
+
+Pour régénérer la configuration :
+
+```bash
+firebase login
+flutterfire configure \
+  --project=blueway-dev \
+  --platforms=android,ios \
+  --android-package-name=fr.blueway.app \
+  --ios-bundle-id=fr.blueway.app
+```
+
+Le projet de développement est `blueway-dev` et l’identifiant des applications
+est `fr.blueway.app`. Les fichiers `.env`, les clés privées Firebase Admin et
+les mots de passe ne doivent jamais être ajoutés à Git.
+
+La connexion Google, la connexion Apple et la récupération du mot de passe ne
+font pas partie de NW-51.
+
+## Récupération du mot de passe — NW-52
+
+Depuis la connexion, « Mot de passe oublié ? » permet de demander un lien de
+réinitialisation. L’adresse déjà saisie est préremplie. Firebase envoie le
+courriel et héberge la page où l’utilisateur choisit son nouveau mot de passe.
+L’application affiche les erreurs de saisie et de réseau, puis permet de
+revenir à la connexion.
+
+Aucun mot de passe n’est enregistré dans PostgreSQL. Si le courriel n’arrive
+pas, vérifier aussi les courriers indésirables.
+
+## Vérifications
+
+```bash
+dart format lib test
+flutter analyze
+flutter test
+```
+
+## Carte maritime et localisation
+
+La carte utilise :
+
+- le SDK Mapbox pour l’affichage et les interactions ;
+- le style Mapbox Standard pour le fond ;
+- Geolocator pour récupérer la position de l’appareil.
+
+La palette `MarinePalette` met la mer en avant : terre beige, végétation
+vert sauge, routes et noms de lieux atténués. Les
+écussons routiers, points d’intérêt terrestres, transports et objets 3D du
+fond Standard sont masqués. La bathymétrie gagne légèrement en contraste
+et en saturation ; les couches de repères marins gardent leurs couleurs.
+La palette est appliquée dès le chargement du style et après chaque
+rechargement, sans effacer les réglages de visibilité des noms selon le zoom.
+
+L’écran permet de demander la permission de localisation, d’afficher la
+position en degrés, minutes et secondes (par exemple `48° 23′ 12″ N`), et de
+recentrer la carte. Déplacer la carte ne
+modifie pas la dernière position GPS affichée.
+
+## Signalement manuel — NW-54
+
+Depuis la carte, le bouton `+` ouvre un formulaire avec trois catégories et un
+commentaire facultatif de 250 caractères maximum. Déplacer la carte sous le
+repère choisit la position. La publication envoie le token Firebase à
+`POST /api/v1/reports` avec un point GeoJSON `[longitude, latitude]`, la date
+du signalement et un `client_report_id` UUID. Un nouvel essai sans modification
+réutilise le même identifiant pour éviter les doublons.
+
+L’API locale doit inclure l’endpoint backend de NW-104 pour tester la
+publication sur téléphone ; une ancienne version du backend répondra 404.
+
+## Consentements et alertes — NW-117
+
+L’écran profil propose trois préférences indépendantes, désactivées par
+défaut :
+
+- afficher le nom d’utilisateur ;
+- afficher les informations du bateau ;
+- recevoir les alertes.
+
+Chaque changement envoie `PATCH /api/v1/users/me` avec seulement le champ
+modifié. L’interrupteur change tout de suite ; en cas d’erreur, il revient à
+sa valeur précédente et un message s’affiche.
+
+La préférence « alertes » est distincte de l’autorisation de notifications du
+téléphone. L’écran profil affiche l’état de cette autorisation et le relit au
+retour dans l’application. En activant les alertes :
+
+- si le téléphone n’a encore jamais demandé, la demande système s’affiche ;
+- si l’autorisation a été refusée, les réglages du téléphone s’ouvrent ;
+- si elle est déjà accordée, rien de plus.
+
+Juste après la création du profil, un écran explique les alertes avec deux
+choix : « Activer les alertes » (préférence + demande système) ou « Plus tard ».
+L’application ne demande plus l’autorisation au lancement. Le token FCM est
+envoyé au backend avec l’enregistrement du téléphone (voir NW-116).
+
+### Limites connues
+
+- iOS n’affiche la demande système qu’une fois ; après un refus, seul le
+  passage par les réglages fonctionne ;
+- la ligne « Notifications » des réglages iOS n’apparaît qu’après une première
+  demande ;
+- les comptes créés avant NW-117 ne voient pas l’écran d’alertes ;
+- `ProfileGate` n’a pas de test automatisé : le parcours a été vérifié à la
+  main sur iPhone.
+
+## Historique et navigation des alertes — NW-125, NW-163
+
+L’historique des alertes du compte est chargé depuis
+`GET /api/v1/users/me/alerts` avec pagination.
+
+Lorsqu’une alerte est ouverte depuis l’historique ou depuis une notification
+FCM, le mobile relit le signalement avec `GET /api/v1/reports/{report_id}`.
+Le contenu du push ne constitue donc pas la source de vérité du signalement.
+
+La réception au premier plan affiche le badge et le sonar sans déplacer la
+caméra. Au démarrage et au retour au premier plan, l’accueil relit les vingt
+dernières alertes du compte pour récupérer la plus récente encore active et
+non consultée, même sans appui sur la notification système. Un contrôle toutes
+les quinze secondes, uniquement au premier plan, couvre les messages manqués.
+Les coordonnées et l’expiration du signalement sont alors relues dans l’API.
+Seule l’ouverture du détail compte comme consultation ; elle est mémorisée
+localement par compte pour éviter de relancer le sonar au prochain démarrage.
+Une nouvelle alerte postérieure à cette consultation reste affichable.
+
+Un tap FCM (app ouverte via « Ouvrir », en arrière-plan ou arrêtée) revient
+directement à la `MapScreen` principale, sans ouvrir de fiche. Un repère violet
+identifie le signalement même si les tuiles MVT ne sont pas encore chargées.
+La caméra Mapbox calcule un cadrage du point API et de la dernière position GPS
+exploitable (moins de cinq minutes), avec des marges pour les contrôles. Le zoom
+varie avec les deux points et les dimensions réelles de la carte. Le suivi GPS
+reste arrêté ; zoom, déplacement et orientation restent libres. Le curseur GPS
+reste affiché : flèche si le cap est disponible, repère neutre sinon.
+
+Sans GPS, la carte cadre seulement le signalement et affiche « Position
+indisponible — cadrage sur le signalement ». Une première position disponible
+ensuite provoque un seul nouveau cadrage, sauf si l’utilisateur a déjà touché
+la carte. Un délai GPS dépassé n’empêche pas cette reprise. Après un refus de
+permission, la disponibilité est revérifiée au retour dans l’application.
+
+Plusieurs notifications distinctes actualisent la sélection sur cette même
+carte, sans empiler de pages. Les doublons par `alert_id`,
+`report_id:report_version` ou `messageId` restent ignorés, même après un échec.
+Une erreur de chargement ou de cadrage propose une action explicite
+« Réessayer » ; aucune boucle de réouverture. Un signalement indisponible ou
+expiré affiche un message, avec accès à l’historique lorsqu’il est disponible.
+
+Toucher volontairement le repère ouvre `ReportDetailSheet`. L’historique
+conserve ses fiches et leur réessai HTTP. Leur action « Voir sur la carte »
+utilise la carte principale et la position du signalement relue auprès du backend.
+
+Pendant une création, un positionnement ou une prise de photo, le tap FCM attend
+la fin ou l’annulation du parcours et conserve le formulaire. Le recentrage
+volontaire depuis une fiche reste refusé tant que ce parcours est ouvert.
+
+Le champ `data` du message FCM utilise uniquement des valeurs chaîne.
+
+Champs obligatoires :
+
+- `alert_id`
+- `report_id`
+- `report_version`
+- `category`
+- `position_dms`
+- `distance_m`
+- `expires_at`
+
+Champs facultatifs :
+
+- `position`
+- `alerted_at`
+
+`position_dms` contient la position en degrés, minutes et secondes.
+`position`, lorsqu’il est fourni, contient un Point GeoJSON sérialisé.
+
+Si `position` est absent, le mobile reconstruit les coordonnées à partir de
+`position_dms`. S’il est présent, il doit être valide et cohérent avec
+`position_dms` ; sinon le payload est rejeté.
+
+Un signalement expiré, retiré ou introuvable n’est pas ouvert sur la carte.
+
+## Couche des signalements — NW-114
+
+Les signalements actifs sont affichés par-dessus le fond Mapbox, dans une
+couche à part (`ReportTiles`). Les tuiles MVT viennent du backend,
+`GET /api/v1/map/tiles/{z}/{x}/{y}.mvt`, avec le token Firebase.
+
+- **De loin (zoom < 9)** : le backend regroupe les signalements proches. La
+  carte montre une zone colorée qui bat doucement, du jaune au rouge selon le
+  nombre de signalements, avec ce nombre écrit dessus. Toucher le nombre
+  rapproche la carte de deux niveaux. Le battement s'arrête en arrière-plan et
+  quand l'option « Réduire les animations » du téléphone est active.
+- **De près (zoom ≥ 9)** : un badge par signalement, à l'icône et à la couleur
+  de sa catégorie. Les badges ne se masquent jamais entre eux. Entre 8,5 et
+  9,5, la zone s'efface pendant que les badges apparaissent.
+
+Toucher un badge ouvre la fiche du signalement (`ReportDetailSheet`),
+chargée par `GET /api/v1/reports/{id}` : catégorie, date d'observation,
+position en degrés/minutes/secondes, distance et direction depuis
+l'utilisateur en milles nautiques, auteur et bateau s'ils sont rendus
+publics, photo et fin du signalement. Un signalement expiré ou
+retiré entre-temps affiche « n'est plus disponible » ; les autres erreurs
+proposent de réessayer.
+
+La photo publiée (NW-151) est téléchargée depuis l'URL signée de la fiche,
+valable cinq minutes, sans token Firebase ; un appui l'ouvre en plein écran.
+Le stockage répond 403 aussi bien pour une URL expirée que pour un refus :
+sur un 403, la fiche est relue une fois pour une URL neuve, et un second
+refus s'affiche comme tel. « Réessayer » repart aussi d'une URL neuve. Une
+photo en cours d'envoi, en échec ou masquée reste affichée en texte.
+
+### Rafraîchissement
+
+Le backend sert les tuiles avec `Cache-Control: max-age=15`. Mapbox redemande
+lui-même les tuiles visibles une fois expirées et les remplace sans effacer
+les badges : un signalement publié, retiré ou expiré apparaît ou disparaît en
+15 s environ, sans code côté application. Comme les tuiles sont redemandées
+en continu, l'application redonne le token Firebase à Mapbox toutes les
+4 minutes et au retour au premier plan, pour qu'il n'expire jamais.
+
+En arrière-plan, les alertes gardent l'application en vie (NW-159). Mapbox
+continuerait alors de redemander les tuiles visibles toutes les 15 s : jusqu'à
+76 requêtes par minute mesurées sur iPhone. La carte coupe donc le réseau de
+Mapbox (`OfflineSwitch`) quand l'application passe en arrière-plan. Au retour,
+elle redonne d'abord le token, puis rebranche le réseau : Mapbox redemande les
+tuiles périmées sans tomber en 401. Si le token tarde plus de 5 s (réseau
+faible), le réseau est rebranché sans l'attendre. Pendant la coupure, les
+erreurs de chargement ne sont pas signalées : ni bandeau, ni écran d'erreur.
+Les appels à `OfflineSwitch` passent un par un, et un appel refusé est retenté
+après 5 s : un retour rapide dans l'app ne laisse jamais Mapbox coupé. Si la
+coupure est refusée, les erreurs de tuiles restent signalées.
+
+### État de la couche — NW-152
+
+`ReportLayerController` (`lib/features/map/data/report_layer_controller.dart`)
+suit la couche : en attente, non installée, installée ou indisponible. Le fond
+de carte reste utilisable dans tous les cas.
+
+- Si l'installation échoue (token, réseau), elle est retentée seule après
+  15 s, 30 s puis toutes les minutes, au retour dans l'app et à chaque
+  renouvellement du token, sans attendre un rechargement du style. Une seule
+  installation tourne à la fois, et `ReportTiles.addTo` ne recrée pas ce qui
+  existe déjà : pas de source en double.
+- Une tuile en échec (hors 429) rend la couche indisponible. Le bandeau
+  « Signalements indisponibles. Nouvel essai automatique. » reste affiché
+  jusqu'à ce qu'une tuile se charge sans nouvelle erreur pendant 2 s. Mapbox
+  signale aussi comme chargée une tuile qui vient d'échouer : seule une autre
+  tuile (identifiée par `z/x/y`) compte comme preuve de retour, même si elle
+  arrive dans les 2 s qui suivent l'erreur. Un appui ferme le bandeau jusqu'au
+  prochain changement d'état.
+- Seul un 401 fait redonner le token à Mapbox (au plus toutes les 30 s). Un
+  403 fait revalider le profil (compte peut-être suspendu) ; un 503 ne
+  déclenche que le bandeau.
+
+La carte ne fonctionne pas hors ligne : les badges déjà affichés peuvent
+rester visibles sans être à jour.
+
+### Limite de débit du serveur
+
+nginx limite les tuiles à 30 requêtes/s par IP (rafale de 50, avec attente
+au-delà de 15 requêtes en pointe), séparément des autres routes API qui
+restent à 10 requêtes/s (rafale de 30). La limite de 30 connexions par IP
+s'applique toujours à tout le serveur. Pour garder de la marge, la source
+demande le moins de tuiles possible : aucune au-delà du zoom 12 (Mapbox
+agrandit celles du zoom 12, qui placent déjà un badge à 2 m près), pas de
+préchargement des zooms inférieurs, et un délai réseau pendant les gestes et
+animations. Une tuile refusée en 429 n'affiche pas le
+bandeau : Mapbox la redemande lui-même quelques secondes plus tard. nginx
+répond maintenant 429 aussi lorsque la limite de 30 connexions est atteinte.
+Un 503 affiche le bandeau, car il indique une panne du backend ou d'une de ses
+dépendances, et Mapbox ne transmet que le code HTTP. Le backend réutilise ses
+connexions PostgreSQL pour réduire le temps de traitement des tuiles ; les 429
+restent possibles pendant une forte rafale.
+
+### Position de l'utilisateur
+
+Un chevron bleu marine indique la position et suit le même cap que la
+boussole. Un mât planté à son pied porte le pavillon du bateau (voir
+« Curseur de position »). Sans cap disponible, un disque marine remplace le
+chevron.
+
+### Limites connues
+
+- vérifié à la main sur iPhone uniquement, pas encore sur Android ;
+- le rafraîchissement dépend de l'en-tête `Cache-Control` du backend : si
+  `max-age` change, la fréquence de mise à jour de la carte change aussi ;
+- hors ligne, les badges déjà affichés restent visibles sans être à jour ;
+  seul le bandeau « Signalements indisponibles » le signale ;
+- Mapbox redemande seul une tuile en échec réseau ou 5xx, mais pas une tuile
+  refusée en 401 : après le renvoi du token, le bandeau ne part qu'au
+  prochain chargement de tuile (déplacement de la carte, ou expiration des
+  tuiles visibles) ;
+- l'état de la photo reste « Envoi en cours » tant que la route d'envoi de
+  NW-112 n'est pas déployée ;
+- la limite propre aux tuiles doit être validée sur appareil après
+  déploiement : compter les 429/503 et le délai d'apparition des badges
+  pendant des zooms répétés ;
+- les regroupements sont calculés tuile par tuile, aux zooms entiers : en
+  dézoomant, ils fusionnent par sauts, et deux zones proches séparées par une
+  limite de tuile ne fusionnent qu'à un zoom plus bas.
+
+## Signalement photo — NW-55, NW-115
+
+Le bouton appareil photo de la carte ouvre `CameraScreen` en plein écran.
+Le parcours reprend le prototype caméra de NW-55 :
+
+1. La caméra arrière affiche l’aperçu, la position GPS et sa précision. La
+   capture est bloquée tant que la précision dépasse 50 mètres.
+2. Au déclenchement, l’azimut, l’inclinaison (lue sur l’accéléromètre),
+   l’altitude et la position sont figés avec la photo.
+3. « Continuer » envoie ces mesures à `POST /api/v1/position-estimates`, avec
+   une hauteur de caméra de 2,5 m (source `default`). Rien n’est enregistré
+   côté serveur.
+4. De retour sur la carte, le repère est placé sur la position estimée.
+   L’utilisateur la confirme ou la corrige en déplaçant la carte. Sans
+   estimation, il place lui-même le point sur l’objet photographié.
+5. La photo est redressée, débarrassée de ses EXIF et réduite à 500 000 octets
+   au plus (`report_jpeg.dart`).
+6. « Publier » crée le signalement (`POST /api/v1/reports`), puis envoie la
+   photo à part : `POST /api/v1/reports/{id}/photo`, en multipart, champ
+   `file`. L’envoi est réussi si la réponse contient
+   `"upload_status": "uploaded"`.
+
+Si l’envoi de la photo échoue, le signalement reste publié. « Réessayer
+l’envoi » renvoie la même photo pour le même signalement ; « Terminer sans
+photo » ferme le formulaire. Le formulaire et la photo restent en mémoire
+tant que le parcours est ouvert, mais rien n’est gardé après fermeture : pas
+de brouillon, pas de file d’attente, pas d’envoi automatique plus tard.
+
+La vignette ouvre la photo en plein écran (`ReportPhotoViewer`). Fermer un
+signalement rempli demande une confirmation.
+
+### Azimut de la caméra — NW-150
+
+L’azimut envoyé est celui de l’axe de visée de la caméra arrière, par rapport
+au nord vrai :
+
+- sur Android, `precise_compass` donne le cap du haut du téléphone, faux quand
+  on le tient debout pour photographier. `MainActivity` envoie donc la matrice
+  de rotation du téléphone (canal `fr.blueway.app/rotation_matrix`) ;
+  `camera_azimuth.dart` en tire l’axe de la caméra, le projette à
+  l’horizontale et calcule son azimut. La déclinaison magnétique vient de
+  `precise_compass` (cap vrai − cap magnétique) ;
+- sur iOS, le cap vrai de CoreLocation suit déjà la caméra (à vérifier dans
+  NW-128) ;
+- caméra presque verticale (sol ou ciel), l’azimut n’a pas de sens : la photo
+  est bloquée avec « Relevez le téléphone vers l’horizon. ».
+
+### Estimation, caméra et arrière-plan — NW-156
+
+- si l’estimation est indisponible (pas de réseau, 404, 429 ou 5xx), le
+  bouton « Placer le point moi-même » garde la photo et ouvre la carte sans
+  estimation : l’utilisateur place le point sur l’objet photographié. Les
+  refus (401, 403, 422) n’affichent pas ce bouton ;
+- la requête d’estimation envoie aussi la focale lue dans les EXIF de la photo
+  (`focal_length_mm`, omise si absente) et `zoom_ratio: 1`, car l’application
+  ne zoome jamais ;
+- quand l’application passe en arrière-plan (écran verrouillé, autre
+  application), la caméra est libérée ; elle est rouverte au retour. Une photo
+  déjà prise est conservée. Une ouverture encore en cours quand l’écran se
+  ferme est annulée et le contrôleur libéré (`DeviceReportCamera`) ;
+- deux caméras ne sont jamais ouvertes en même temps : `dispose()` ne se
+  termine qu’une fois la caméra rendue au système (après la fin d’une
+  ouverture en cours), et `CameraScreen` attend cette libération avant d’en
+  ouvrir une nouvelle ;
+- hauteur de caméra : 2,5 ± 0,5 m (source `default`), une valeur moyenne non
+  calibrée, gardée comme compromis pour le MVP plutôt que demandée à
+  l’utilisateur. Si le téléphone est tenu à 1 m ou à 6 m, la distance estimée peut
+  être fausse d’un facteur 2 environ ; l’utilisateur confirme toujours le
+  point sur la carte.
+
+### Curseur de position
+
+`LocationMarker` dessine deux couches, à partir des images de
+`LocationMast`, dessinées en Dart à la densité de l’écran :
+
+- un chevron bleu marine couché sur la carte, dans une couche native
+  `LocationIndicatorLayer`. Il suit le cap de
+  `DeviceOrientationService.mapHeadings` : un cap de 350° reste 350°, et
+  Mapbox applique la rotation et l’inclinaison de la carte. Sans cap, un
+  disque marine le remplace ;
+- un mât debout face à l’écran, dans une couche de symboles. Il porte le
+  pavillon du bateau (`flag_country` du profil), plié par le vent.
+  Sans pavillon, ou avec un code inconnu, le pavillon est bleu uni.
+
+Les deux couches sont dans l’emplacement `top`. Les pastilles des
+signalements, ajoutées sans emplacement, passent donc devant le pied du mât ;
+seul le pavillon dépasse au-dessus.
+
+Les pavillons viennent de `assets/flags/` : un PNG de 80 pixels de large par
+code ISO à deux lettres (250 pays et territoires, flagcdn.com, drapeaux du
+domaine public). L’accueil relit le bateau au retour du profil, pour hisser
+un pavillon modifié.
+
+Une nouvelle position GPS est rejointe en une seconde, par interpolation en
+Dart (environ 30 images par seconde). Le glissement natif de la couche est
+coupé, pour que le chevron et le mât restent au même endroit.
+
+Le composant de localisation Mapbox reste actif, avec ses images masquées,
+pour conserver le suivi et le recentrage. Il ne dessine ni point bleu ni
+cercle de précision. Le modèle 3D historique et son générateur restent dans
+le dépôt, mais ne sont plus utilisés pour ce repère.
+
+Essai en cours : avec `MapConfig.nativeArrowPuck` à `true`, le chevron et le
+mât ne sont plus dessinés. Le repère est une flèche 3D orange
+(`assets/models/location_puck.glb`, générée par
+`python3 tool/make_location_puck.py`), affichée par le composant natif de
+Mapbox (`LocationPuck3D`). Mapbox la place et l'oriente selon le cap de
+l'appareil à chaque image, sans passer par Dart. Elle mesure 27,44 points dès
+le zoom 6 et diminue au dézoom jusqu'à 13,72 points au zoom 2 et en deçà, pour
+ne pas couvrir un pays entier. Remettre `false` revient au
+chevron et au mât.
+
+Les pastilles des signalements sont dans l'emplacement `top` de Mapbox. La
+flèche native, ajoutée sans emplacement, passe donc devant elles.
+
+### Limites connues
+
+- l’envoi de la photo suit le contrat de la doc technique mais n’a pas encore
+  été testé sur le serveur : la route de NW-112 n’est pas déployée et répond
+  404 (« envoi indisponible sur ce serveur ») ;
+- l’azimut dépend des perturbations magnétiques et de la calibration ;
+- l’inclinaison n’a pas été vérifiée avec un support d’angle étalonné ;
+- les conventions des capteurs doivent encore être validées sur Android réel,
+  avec une cible connue ;
+- la hauteur de caméra est fixée à 2,5 m pour le MVP ;
+- le plugin caméra ne permet pas de choisir l’objectif ni de forcer la mise
+  au point à l’infini : l’application ouvre la première caméra arrière, ce
+  qu’il faut vérifier sur chaque téléphone.
+
+## Appareil et position — NW-116
+
+Une fois le profil créé, le téléphone s'enregistre auprès du backend pour
+recevoir les alertes à proximité (`DeviceRegistration`) :
+
+- `PUT /api/v1/devices/current` envoie l'identifiant d'installation, la
+  plateforme et le token FCM. L'envoi a lieu à l'ouverture, à chaque retour
+  dans l'application et à chaque nouveau token ;
+- si les notifications ne sont pas autorisées, le token envoyé est `null`. Le
+  backend efface alors l'ancien token, et le téléphone reste enregistré pour
+  sa position ;
+- si le backend répond 409 (token ou identifiant déjà pris par un autre
+  appareil), l'application demande un nouveau token, puis, si ça ne suffit
+  pas, un nouvel identifiant.
+
+L'identifiant d'installation est un UUID gardé sur le téléphone avec
+`shared_preferences` (`InstallationIdStore`). Le backend le lie au premier
+compte qui l'enregistre.
+
+### Position GPS
+
+Tant que l'application est visible, et aussi en arrière-plan si les alertes
+sont activées, `DevicePositionReporter` envoie la dernière mesure GPS à
+`PUT /api/v1/devices/current/position`, avec l'en-tête `X-Installation-ID`, au
+plus une fois toutes les 60 s. La première mesure part dès qu'elle arrive. Le
+serveur ne garde que la dernière position, sans historique.
+
+- une mesure dont la précision dépasse 50 m n'est pas envoyée ;
+- en dessous de 1 m/s (environ 2 nœuds), le cap est envoyé à `null` ;
+- la position vient du GPS : déplacer la carte ne la change pas ;
+- l'application ne demande pas la localisation pour ce suivi : sans
+  autorisation, rien n'est envoyé. Le suivi revérifie à chaque retour dans
+  l'app, dont la fermeture de la fenêtre d'autorisation ;
+- en arrière-plan, le suivi s'arrête si les alertes sont désactivées
+  (`notifications_enabled`) ; il reprend au retour ;
+- alertes activées, il continue en arrière-plan (NW-159) : bandeau bleu sur
+  iOS, notification « NoWave suit votre position » sur Android. Il suffit de
+  l'autorisation « Lorsque l'app est active » : le suivi démarre app ouverte et
+  ne s'arrête pas en passant en arrière-plan. Si le flux GPS se coupe en
+  arrière-plan, il ne reprend qu'au retour dans l'app ;
+- une mesure à moins de 50 m de la dernière position envoyée ne part pas,
+  sauf si elle est au moins deux fois plus précise
+  (`DevicePositionReporter.minDistanceM`) : un téléphone immobile n'envoie
+  plus sa position toutes les 60 s, le backend garde la dernière. Après un
+  arrêt du suivi (déconnexion, app cachée sans alertes), la première mesure
+  repart dès qu'elle arrive. Ce tri ne touche que l'envoi : le flux GPS
+  n'est pas filtré, la carte et la caméra reçoivent chaque mesure ;
+- carte, caméra et suivi partagent un seul flux GPS (`LocationService`) :
+  geolocator n'en garde qu'un par app, avec les réglages du premier abonné.
+  Le suivi relance ce flux avec ses réglages d'arrière-plan ; la carte ignore
+  les positions tant que l'app est cachée ;
+- sans réseau, la mesure est gardée pour l'envoi suivant ;
+- un 404 (appareil inactif) relance l'enregistrement, puis l'envoi ;
+- un 409 (mesure plus ancienne que celle du serveur) abandonne la mesure.
+
+### Déconnexion
+
+Avant `signOut`, l'application :
+
+1. bloque les reprises GPS/FCM et attend la fin des envois en cours ;
+2. désactive le téléphone (`DELETE /api/v1/devices/current`, avec l'en-tête
+   `X-Installation-ID`) ;
+3. tente de supprimer le token FCM, même si le serveur n'a pas répondu ;
+4. oublie l'identifiant d'installation seulement après confirmation du
+   nettoyage serveur, puis ferme la session Firebase. Le compte suivant
+   reçoit un nouvel identifiant.
+
+Si le `DELETE` échoue, une fenêtre explique que la déconnexion reste à terminer
+et propose de réessayer ou d'annuler. L'identifiant et la session de l'ancien
+compte sont conservés : la nouvelle tentative utilise toujours ses droits. Un
+retour au premier plan ne relance pas les envois GPS/FCM pendant cette
+transition. « Annuler » garde l'utilisateur sur son compte et relance
+l'enregistrement du téléphone et le suivi GPS.
+
+Seuls un succès du `DELETE` ou un 404 métier `device_not_found` / `user_not_found`
+confirment qu'il ne reste rien à nettoyer pour ce compte. Un 404 de proxy ou une
+erreur d'authentification ne permettent pas de poursuivre. Si le serveur a
+confirmé le nettoyage, une erreur d'invalidation FCM est journalisée mais ne
+bloque pas la fermeture de session : l'ancien appareil n'a plus de token côté
+backend. Si seule la fermeture Firebase échoue, le prochain essai ne recrée
+pas d'appareil et ne répète pas un nettoyage déjà terminé.
+
+Un compte qui n'atteint pas l'accueil (sans profil ou suspendu) n'enregistre
+pas le téléphone. S'il succède à une autre session sans relancer l'app, sa
+déconnexion n'appelle pas le backend : l'identifiant a déjà été oublié et
+rien n'a été enregistré depuis (NW-158).
+
+Après fermeture forcée de l'application pendant un échec serveur, la session
+Firebase et l'ancien identifiant restent conservés. L'utilisateur peut reprendre
+la déconnexion depuis ce même compte. Les tests automatisés couvrent la
+conservation de l'identifiant et les requêtes authentifiées ; les essais sur
+deux comptes réels et après relancement sont à consigner dans NW-128.
+
+### Limites connues
+
+- hors ligne, la déconnexion et le changement de compte attendent le retour
+  du réseau. Tant que le nettoyage n'est pas confirmé, l'appareil peut rester
+  actif côté backend, mais le mobile conserve sa référence et la session ;
+- un enregistrement raté n'est pas réessayé tout de suite : il est refait au
+  prochain retour dans l'application, ou au prochain envoi de position (404) ;
+- sur le simulateur iOS, il n'y a pas de token APNs : le téléphone est
+  enregistré avec un token `null` ;
+- le suivi en arrière-plan s'arrête si l'utilisateur ferme l'app depuis le
+  sélecteur d'apps, ou si le système la ferme (mémoire) : il ne reprend qu'à la
+  réouverture. GPS haute précision et réveil du processeur (Android) : la
+  batterie baisse plus vite ;
+- tests sur iPhone et Android en cours.
+
+
+## Seuils et continuité maritimes — NW-220
+
+Les sources publiques de symboles et de courbes sont préparées par requêtes
+GeoJSON explicites à `/api/v1/map/marine-features/{family}/{z}/{x}/{y}.geojson`.
+Le backend NW-220 doit être disponible avant de lancer cet APK ; un ancien
+backend répondra 404. Les routes MVT existantes restent disponibles.
+Le client public n'ajoute aucun token métier, y compris avec la même base URL.
+
+Les seuils fractionnaires sont centralisés dans
+`lib/core/map/marine/marine_zoom.dart` : raster Z5 ; préparation des ports Z6,
+affichage Z8 et enrichissement Z10 ; préparation des marques Z10, fondu linéaire
+de 0 % à Z10 à 100 % à Z12 (50 % à Z11) ;
+préparation des profondeurs Z12, affichage Z13. Un appui long sur la carte liste
+les objets proches, y compris les symboles masqués par collision.
+
+Voir [le contrat de conservation et ses limites](../docs/architecture/marine-zoom-persistence.md).
+Les courbes EMODnet généralisées conservées ne constituent pas des relevés de
+précision portuaire ni une carte officielle de navigation.

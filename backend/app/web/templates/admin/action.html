@@ -1,0 +1,16 @@
+{% extends 'admin/base.html' %}
+{% block title %}{{ action.label }}{% endblock %}
+{% block content %}
+<a class="back-link" data-nav-back href="{{ request.url_for('admin_reports' if action.collection == 'reports' else 'admin_users').path }}">← Retour</a>
+<div class="page-head"><div><p class="eyebrow">MODÉRATION</p><h1>{{ action.label }}</h1>{% if action.collection == 'reports' %}<a href="{{ request.url_for('admin_report', target_id=target_id).path }}">Voir le signalement ↗</a>{% endif %}</div></div>
+{% if error %}<div role="alert" class="error"><p>{{ error }}</p>{% if uncertain %}<p>Le résultat de l’action n’est pas confirmé. Consultez l’état actuel et l’audit avant de recommencer.</p>{% endif %}</div>{% endif %}
+<form method="post" class="card form-card">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+  <label for="reason">Motif obligatoire</label>
+  <p id="reason-help" class="form-help">Expliquez précisément la raison de cette action.</p>
+  <textarea id="reason" name="reason" rows="5" required aria-describedby="reason-help">{{ reason }}</textarea>
+  <label class="confirmation"><input type="checkbox" name="confirmed" value="yes" required> Je confirme « {{ action.label }} ».</label>
+  {% if request.app.state.preview_mode|default(false) %}<p class="form-help" role="status">Aperçu local : vous pouvez consulter ce formulaire, mais les modifications ne sont pas enregistrées.</p>{% endif %}
+  <div class="actions"><button type="submit"{% if request.app.state.preview_mode|default(false) %} disabled{% endif %}>Confirmer l’action</button><a data-nav-back href="{{ request.url_for('admin_reports' if action.collection == 'reports' else 'admin_users').path }}">Annuler</a></div>
+</form>
+{% endblock %}

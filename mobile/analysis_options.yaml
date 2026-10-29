@@ -1,0 +1,9 @@
+# Règles de l'analyseur (`flutter analyze`) : les lints recommandés pour
+# Flutter, sans le code natif ni les fichiers générés.
+include: package:flutter_lints/flutter.yaml
+
+analyzer:
+  exclude:
+    - build/**
+    - android/**
+    - ios/**

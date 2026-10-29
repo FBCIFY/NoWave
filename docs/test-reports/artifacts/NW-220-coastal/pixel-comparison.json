@@ -1,0 +1,28 @@
+[
+  {
+    "area": "saint-mandrier",
+    "roi": [
+      300,
+      650,
+      470,
+      930
+    ],
+    "rule": "R<60,G<105,B<140 (sRGB), includes remaining chart symbols",
+    "dark_before": 9563,
+    "dark_after": 243,
+    "dark_removed": 9320
+  },
+  {
+    "area": "photo-area",
+    "roi": [
+      0,
+      280,
+      620,
+      530
+    ],
+    "rule": "R<60,G<105,B<140 (sRGB), includes remaining chart symbols",
+    "dark_before": 10594,
+    "dark_after": 252,
+    "dark_removed": 10342
+  }
+]

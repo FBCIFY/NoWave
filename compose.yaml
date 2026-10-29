@@ -1,0 +1,124 @@
+services:
+  web:
+    build:
+      context: .
+      dockerfile: deploy/web/Dockerfile
+    ports:
+      - "127.0.0.1:${NOWAVE_WEB_PORT:-8080}:8080"
+      - "127.0.0.1:${NOWAVE_WEB_HTTPS_PORT:-8443}:8443"
+    environment:
+      NOWAVE_WEB_HTTPS_PORT: ${NOWAVE_WEB_HTTPS_PORT:-8443}
+    entrypoint: ["/bin/sh", "/local/web-entrypoint.sh"]
+    tmpfs:
+      - /tmp:rw,nosuid,uid=101,gid=101,size=32m
+    volumes:
+      - ./deploy/local/web-entrypoint.sh:/local/web-entrypoint.sh:ro
+      - ./deploy/local/nginx.conf.template:/etc/nginx/local.conf.template:ro
+      - local_tls:/certificates:ro
+    depends_on:
+      backend:
+        condition: service_healthy
+      local-tls:
+        condition: service_completed_successfully
+    restart: unless-stopped
+
+  local-tls:
+    build: &api-build
+      context: .
+      dockerfile: deploy/api/Dockerfile
+    image: nowave-api:local
+    user: "0:0"
+    command: [python, /local/create_tls.py]
+    volumes:
+      - ./deploy/local/create_tls.py:/local/create_tls.py:ro
+      - local_tls:/certificates
+    healthcheck:
+      disable: true
+
+  database:
+    build:
+      context: .
+      dockerfile: Dockerfile.postgres
+    image: nowave-postgis:17-local
+
+    environment:
+      POSTGRES_DB: nowave
+      POSTGRES_USER: nowave
+      POSTGRES_PASSWORD: ${NOWAVE_DB_PASSWORD:?Set NOWAVE_DB_PASSWORD in your environment}
+      POSTGRES_INITDB_ARGS: "--encoding=UTF8 --locale=C.UTF-8"
+
+    ports:
+      - "127.0.0.1:${NOWAVE_DB_PORT:-55432}:5432"
+
+    volumes:
+      - nowave_database:/var/lib/postgresql/data
+
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U nowave -d nowave"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+
+  backend:
+    build: *api-build
+    image: nowave-api:local
+
+    ports:
+      - "127.0.0.1:${NOWAVE_API_PORT:-8000}:8000"
+
+    environment: &backend-environment
+      NOWAVE_ENV: development
+      DATABASE_URL: "postgresql://nowave:${NOWAVE_DB_PASSWORD}@database:5432/nowave"
+      GOOGLE_CLOUD_PROJECT: ${GOOGLE_CLOUD_PROJECT:-blueway-dev}
+      GOOGLE_APPLICATION_CREDENTIALS: /run/secrets/firebase_service_account
+      PHOTO_STORAGE_BUCKET: ${PHOTO_STORAGE_BUCKET:-}
+      PHOTO_STORAGE_REGION: ${PHOTO_STORAGE_REGION:-fr-par}
+      SCW_ACCESS_KEY: ${SCW_ACCESS_KEY:-}
+      SCW_SECRET_KEY: ${SCW_SECRET_KEY:-}
+      FIREBASE_WEB_API_KEY: ${FIREBASE_WEB_API_KEY:-}
+      MAPBOX_PUBLIC_TOKEN: ${MAPBOX_PUBLIC_TOKEN:-}
+
+    secrets:
+      - firebase_service_account
+
+    command: ["sh", "-c", "python -m alembic -c alembic.ini upgrade head && exec uvicorn app.main:app --host 0.0.0.0 --port 8000 --no-proxy-headers"]
+
+    depends_on:
+      database:
+        condition: service_healthy
+
+  photo-cleanup:
+    build: *api-build
+    image: nowave-api:local
+    profiles: [photos]
+    environment: *backend-environment
+    secrets:
+      - firebase_service_account
+    command: [python, -m, app.workers.photo_cleanup]
+    restart: unless-stopped
+    depends_on:
+      backend:
+        condition: service_started
+
+  notifications:
+    build: *api-build
+    image: nowave-api:local
+    profiles: [alerts]
+    environment: *backend-environment
+    secrets:
+      - firebase_service_account
+    command: [python, -m, app.workers.notifications]
+    restart: unless-stopped
+    stop_grace_period: 30s
+    depends_on:
+      backend:
+        condition: service_started
+
+volumes:
+  local_tls:
+  nowave_database:
+    name: nowave-database
+
+secrets:
+  firebase_service_account:
+    file: ${FIREBASE_SERVICE_ACCOUNT_FILE:?Set FIREBASE_SERVICE_ACCOUNT_FILE in .env}

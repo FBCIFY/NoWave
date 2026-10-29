@@ -1,0 +1,16 @@
+DROP TABLE nowave.moderation_actions;
+DROP TABLE nowave.alert_history;
+DROP TABLE nowave.notifications;
+DROP TABLE nowave.report_photos;
+DROP TABLE nowave.report_positioning;
+DROP TABLE nowave.reports;
+DROP TABLE nowave.device_positions;
+DROP TABLE nowave.devices;
+DROP TABLE nowave.boats;
+DROP TABLE nowave.users;
+DROP FUNCTION nowave.guard_audit();
+DROP FUNCTION nowave.guard_device_owner();
+DROP FUNCTION nowave.guard_report();
+DROP FUNCTION nowave.check_photo_children();
+DROP FUNCTION nowave.assert_photo_children(uuid);
+DROP SCHEMA nowave;

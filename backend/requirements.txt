@@ -1,0 +1,13 @@
+-r app/infrastructure/database/requirements.txt
+fastapi
+uvicorn[standard]
+httpx
+firebase-admin
+boto3
+Pillow
+python-multipart
+jinja2
+# Required by SQLAlchemy on the Linux x86_64 production host.
+greenlet
+mapbox-vector-tile==2.2.0
+shapely==2.1.2

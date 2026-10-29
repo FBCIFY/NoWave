@@ -1,0 +1,102 @@
+[
+  {
+    "tile": "14-8461-6012",
+    "alpha_lut_exact": true,
+    "feather_never_extends": true,
+    "mask_never_extends": true,
+    "mask_centres_exact": true,
+    "nodata_in_water": 1861,
+    "mask_excluded_water_centres": 0,
+    "source_opaque_in_land": 554
+  },
+  {
+    "tile": "14-8461-6013",
+    "alpha_lut_exact": true,
+    "feather_never_extends": true,
+    "mask_never_extends": true,
+    "mask_centres_exact": true,
+    "nodata_in_water": 1227,
+    "mask_excluded_water_centres": 0,
+    "source_opaque_in_land": 369
+  },
+  {
+    "tile": "14-8461-6014",
+    "alpha_lut_exact": true,
+    "feather_never_extends": true,
+    "mask_never_extends": true,
+    "mask_centres_exact": true,
+    "nodata_in_water": 122,
+    "mask_excluded_water_centres": 0,
+    "source_opaque_in_land": 29
+  },
+  {
+    "tile": "14-8461-6015",
+    "alpha_lut_exact": true,
+    "feather_never_extends": true,
+    "mask_never_extends": true,
+    "mask_centres_exact": true,
+    "nodata_in_water": 785,
+    "mask_excluded_water_centres": 0,
+    "source_opaque_in_land": 281
+  },
+  {
+    "tile": "14-8462-6012",
+    "alpha_lut_exact": true,
+    "feather_never_extends": true,
+    "mask_never_extends": true,
+    "mask_centres_exact": true,
+    "nodata_in_water": 28,
+    "mask_excluded_water_centres": 0,
+    "source_opaque_in_land": 56
+  },
+  {
+    "tile": "14-8462-6013",
+    "alpha_lut_exact": true,
+    "feather_never_extends": true,
+    "mask_never_extends": true,
+    "mask_centres_exact": true,
+    "nodata_in_water": 702,
+    "mask_excluded_water_centres": 0,
+    "source_opaque_in_land": 244
+  },
+  {
+    "tile": "14-8462-6014",
+    "alpha_lut_exact": true,
+    "feather_never_extends": true,
+    "mask_never_extends": true,
+    "mask_centres_exact": true,
+    "nodata_in_water": 82,
+    "mask_excluded_water_centres": 0,
+    "source_opaque_in_land": 12
+  },
+  {
+    "tile": "14-8462-6015",
+    "alpha_lut_exact": true,
+    "feather_never_extends": true,
+    "mask_never_extends": true,
+    "mask_centres_exact": true,
+    "nodata_in_water": 731,
+    "mask_excluded_water_centres": 0,
+    "source_opaque_in_land": 190
+  },
+  {
+    "tile": "14-8463-6013",
+    "alpha_lut_exact": true,
+    "feather_never_extends": true,
+    "mask_never_extends": true,
+    "mask_centres_exact": true,
+    "nodata_in_water": 536,
+    "mask_excluded_water_centres": 0,
+    "source_opaque_in_land": 236
+  },
+  {
+    "tile": "14-8463-6014",
+    "alpha_lut_exact": true,
+    "feather_never_extends": true,
+    "mask_never_extends": true,
+    "mask_centres_exact": true,
+    "nodata_in_water": 0,
+    "mask_excluded_water_centres": 0,
+    "source_opaque_in_land": 0
+  }
+]

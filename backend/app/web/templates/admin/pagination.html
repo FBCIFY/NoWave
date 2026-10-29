@@ -1,0 +1,5 @@
+<nav class="pagination" aria-label="Pagination">
+  {% if page > 1 %}<a rel="prev" href="{{ request.url.include_query_params(page=page - 1, limit=limit).path }}?{{ request.url.include_query_params(page=page - 1, limit=limit).query }}">Page précédente</a>{% endif %}
+  <span>Page {{ page }}{% if result.pages %} sur {{ result.pages }}{% endif %} · {{ result.total }} résultat(s)</span>
+  {% if page < result.pages %}<a rel="next" href="{{ request.url.include_query_params(page=page + 1, limit=limit).path }}?{{ request.url.include_query_params(page=page + 1, limit=limit).query }}">Page suivante</a>{% endif %}
+</nav>

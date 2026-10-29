@@ -1,0 +1,75 @@
+name: blueway
+description: "A new Flutter project."
+# Paquet privé : jamais publié sur pub.dev.
+publish_to: 'none'
+
+# Nom de version + numéro de build, modifiables à la compilation avec
+# --build-name et --build-number.
+version: 1.0.0+2026102004
+
+environment:
+  sdk: ^3.13.3
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+  flutter_localizations:
+    sdk: flutter
+
+  cupertino_icons: ^1.0.8
+  http: ^1.6.0
+  http_parser: ^4.1.2
+  mapbox_maps_flutter: ^2.30.1
+  geolocator: ^14.0.3
+  camera: ^0.12.1
+  precise_compass: ^0.2.0
+  firebase_core: ^4.15.0
+  firebase_auth: ^6.7.0
+  uuid: ^4.6.0
+  firebase_messaging: ^16.7.0
+  app_settings: ^9.0.0
+  image: ^4.10.1
+  sensors_plus: ^7.1.0
+  shared_preferences: ^2.5.5
+  package_info_plus: ^10.2.1
+  clipper2: 0.0.3
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+
+  flutter_lints: ^6.0.0
+
+flutter:
+  uses-material-design: true
+
+  # Flèche 3D de la position sur la carte, générée par
+  # tool/make_location_puck.py.
+  assets:
+    - assets/models/location_puck.glb
+    - assets/images/
+    - assets/icons/buoys/
+    - assets/icons/fixed-aids/
+    - assets/icons/harbours/
+    # Pavillons du curseur de position, un PNG par code ISO à deux lettres
+    # (flagcdn.com, drapeaux du domaine public).
+    - assets/flags/
+    # Fonds des écrans de connexion, d'inscription et de création de profil.
+    - assets/images/auth/
+    # Logo NoWave (variantes 2.0x et 3.0x choisies selon l'écran).
+    - assets/images/brand/
+
+  # Raleway, la police du logo NoWave (licence OFL dans le même dossier).
+  # Embarquée plutôt que téléchargée : elle reste disponible hors réseau.
+  fonts:
+    - family: Raleway
+      fonts:
+        - asset: assets/fonts/raleway/Raleway-Regular.ttf
+        - asset: assets/fonts/raleway/Raleway-Medium.ttf
+          weight: 500
+        - asset: assets/fonts/raleway/Raleway-SemiBold.ttf
+          weight: 600
+        - asset: assets/fonts/raleway/Raleway-Bold.ttf
+          weight: 700
+
