@@ -5,7 +5,7 @@ Le VPS héberge le site web, l’API FastAPI et PostgreSQL/PostGIS dans des cont
 ## Livraison
 
 Le workflow **NoWave CI** (`.github/workflows/checks.yml`) exécute une seule fois
-les contrôles Python, Flutter, PostGIS et web, dont le test HTTP du service Nginx
+les contrôles Python, Flutter, PostGIS, web et Admin Web, dont le test HTTP du service Nginx
 autonome. Après leur réussite, il appelle `.github/workflows/production.yml`
 pour les audits des dépendances et des quatre images Docker. Un échec d'un
 contrôle ou d'un audit bloque la livraison.
@@ -168,7 +168,7 @@ Utiliser un compte de recette ; aucune réussite de cette recette n'est implicit
 
 ## Convention Git de déploiement - [FIX T15 (NW-168)](https://linear.app/blueway/issue/NW-168) (19/10/2026)
 
-La branche `dev` est à la fois la **branche d'intégration** et, après les quatre contrôles CI ainsi que les audits requis, la source du **déploiement automatique actuel** sur le VPS. Le déploiement utilise le SHA précis du push validé. L'environnement GitHub portant le nom `production` ne constitue pas la preuve d'un deuxième serveur ou d'un environnement staging séparé.
+La branche `dev` est à la fois la **branche d'intégration** et, après les cinq contrôles CI ainsi que les audits requis, la source du **déploiement automatique actuel** sur le VPS. Le déploiement utilise le SHA précis du push validé. L'environnement GitHub portant le nom `production` ne constitue pas la preuve d'un deuxième serveur ou d'un environnement staging séparé.
 
 La branche `main` est la **référence des releases stables**, promues par Pull Request depuis `dev` après QA. Dans les workflows en vigueur, un push sur `main` ne déclenche **pas** de déploiement autonome ; une PR vers `main` exécute uniquement la validation. Il faut donc distinguer :
 
