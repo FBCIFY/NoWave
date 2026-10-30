@@ -153,7 +153,6 @@ ne naviguent presque pas : ils déclenchent une action et l’aiguillage suit.
 
 Fichiers présents mais non utilisés par l’application :
 
-- `features/demo/` : compteur du modèle Flutter ;
 - `features/reports/presentation/reports_screen.dart` et
   `data/demo_reports_service.dart` : liste de démonstration, utilisée
   seulement dans les tests ;
