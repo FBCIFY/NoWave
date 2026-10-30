@@ -151,10 +151,6 @@ AuthGate          (session Firebase)
 `AuthGate` et `ProfileGate` choisissent l’écran à afficher. Les écrans eux-mêmes
 ne naviguent presque pas : ils déclenchent une action et l’aiguillage suit.
 
-Fichiers présents mais non utilisés par l’application :
-
-- `app/router.dart` : fichier vide.
-
 ## Authentification et profil — NW-51
 
 L’application utilise Firebase Authentication avec le fournisseur
