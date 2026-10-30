@@ -42,4 +42,4 @@ La fiche propose précédent/suivant, chargement, fin de liste, erreur et réess
 
 La variable `MAPBOX_PUBLIC_TOKEN` doit être injectée dans le processus API par la configuration externe approuvée lors d'une future livraison contrôlée (fichier d'environnement ou secret externe). Seul un jeton **public** limité aux domaines nécessaires est rendu dans le HTML ; aucune clé Firebase de service ne doit y figurer. Vérifier les ressources `/admin-static/`, la CSP et l'alias GEBCO avant cette livraison. Cette mission ne modifie ni la configuration du VPS ni les services de production.
 
-Tests reproductibles, services simulés et validation Mapbox réelle : [recette navigateur](../../tests/browser/README.md). Le rapport de correction dans `docs/test-reports/NW-244-post-merge.md` distingue les résultats, les deux audits et les validations externes restantes.
+Tests reproductibles, services simulés et validation Mapbox réelle : [recette navigateur](../../tests/browser/README.md). Le [rapport de bug tracking Stage 4](../../../docs/NoWave_Rapport_Bug_Tracking.pdf) reprend les corrections et leurs limites ; les comptes rendus NW-244 détaillés restent dans l'historique Git.

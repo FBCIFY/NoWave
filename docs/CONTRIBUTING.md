@@ -1,4 +1,4 @@
-# Contribution Guidelines — Maritime BlueWay
+# Contribution Guidelines — NoWave
 
 ## Branch organization
 

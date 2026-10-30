@@ -212,7 +212,4 @@ L'effet de tous les caches natifs Mapbox/Android ou d'un éventuel proxy distant
 n'est pas audité. Aucun cache existant n'a été effacé ; aucune absence totale
 de stockage natif durable n'est affirmée.
 
-Voir [le rapport local](../test-reports/emodnet-depths-2024.md) pour les mesures,
-les commandes, la conservation Git et les limites de cette première validation.
-La [correction marine finale](../test-reports/marine-final-2026-10-18.md) documente
-la validation Android ultérieure et la restauration NOAA autorisée.
+Les comptes rendus détaillés de la première validation et de la correction marine finale restent accessibles dans l'historique Git précédant le nettoyage. Le [bilan Stage 4](../NoWave_Preuves_et_resultats_des_tests_29-10-2026.pdf) synthétise les vérifications datées sans certifier une couverture complète de tous les appareils et services distants.

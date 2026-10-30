@@ -174,7 +174,7 @@ la couche de lignes; la géométrie d'origine reste dans la couche canonique.
 Les cinq bouées gardent les PNG Temaki locaux, tailles, collisions et slot TOP.
 IALA B inverse les couleurs attendues des latérales/chenaux préférés. Sans système
 renseigné, la couleur publiée est dessinée sans supposer IALA A; avec un système
-connu, une contradiction reste neutre. Les aides fixes sont désormais affichées par `FixedAidLayer`, sous les bouées, avec six couches partageant cette même source. Voir le rapport `docs/test-reports/fixed-aids.md` pour les seuils et qualifications vérifiés.
+connu, une contradiction reste neutre. Les aides fixes sont désormais affichées par `FixedAidLayer`, sous les bouées, avec six couches partageant cette même source. Les seuils et qualifications des aides fixes sont détaillés dans la section d'extension ci-dessous ; les preuves historiques restent dans l'historique Git.
 
 Flutter conserve `API_BASE_URL` pour les services applicatifs et les tuiles
 authentifiées `/api/v1/map/tiles/`. La variable facultative `MARINE_API_BASE_URL`

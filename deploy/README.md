@@ -5,7 +5,7 @@ Le VPS héberge le site web, l’API FastAPI et PostgreSQL/PostGIS dans des cont
 ## Livraison
 
 Le workflow **NoWave CI** (`.github/workflows/checks.yml`) exécute une seule fois
-les contrôles Python, Flutter, PostGIS et web, dont le test HTTP du service Nginx
+les contrôles Python, Flutter, PostGIS, web et Admin Web, dont le test HTTP du service Nginx
 autonome. Après leur réussite, il appelle `.github/workflows/production.yml`
 pour les audits des dépendances et des quatre images Docker. Un échec d'un
 contrôle ou d'un audit bloque la livraison.
@@ -168,7 +168,7 @@ Utiliser un compte de recette ; aucune réussite de cette recette n'est implicit
 
 ## Convention Git de déploiement - [FIX T15 (NW-168)](https://linear.app/blueway/issue/NW-168) (19/10/2026)
 
-La branche `dev` est à la fois la **branche d'intégration** et, après les quatre contrôles CI ainsi que les audits requis, la source du **déploiement automatique actuel** sur le VPS. Le déploiement utilise le SHA précis du push validé. L'environnement GitHub portant le nom `production` ne constitue pas la preuve d'un deuxième serveur ou d'un environnement staging séparé.
+La branche `dev` est à la fois la **branche d'intégration** et, après les cinq contrôles CI ainsi que les audits requis, la source du **déploiement automatique actuel** sur le VPS. Le déploiement utilise le SHA précis du push validé. L'environnement GitHub portant le nom `production` ne constitue pas la preuve d'un deuxième serveur ou d'un environnement staging séparé.
 
 La branche `main` est la **référence des releases stables**, promues par Pull Request depuis `dev` après QA. Dans les workflows en vigueur, un push sur `main` ne déclenche **pas** de déploiement autonome ; une PR vers `main` exécute uniquement la validation. Il faut donc distinguer :
 
@@ -177,22 +177,17 @@ La branche `main` est la **référence des releases stables**, promues par Pull 
 - **release stable validée** : révision promue sur `main` après recette ;
 - **réception mobile et FCM** : recette spécifique, non prouvée par un conteneur démarré.
 
-Pour chaque livraison ou soutenance, noter la date, le SHA `dev`, le SHA annoncé par `/version`, le résultat du workflow GitHub Actions, la PR éventuelle `dev` vers `main` et les vérifications fonctionnelles réellement réalisées. Références : [parcours livraison](../docs/parcours/deploiement.md), [matrice de traçabilité](../docs/traceability-matrix.md), [CONTRIBUTING](../docs/CONTRIBUTING.md). Responsable : Brice (NW-57, NW-84).
+Pour chaque livraison ou soutenance, noter la date, le SHA `dev`, le SHA annoncé par `/version`, le résultat du workflow GitHub Actions, la PR éventuelle `dev` vers `main` et les vérifications fonctionnelles réellement réalisées. Références : [documentation Stage 4](https://docs.google.com/document/d/1Gez2BmfkdjTLyE9jkyf-U_QzJkUWQ9mu/edit), [correspondance des fonctionnalités et tests](../docs/TESTING.md#correspondance-fonctionnelle-code-et-tests), [CONTRIBUTING](../docs/CONTRIBUTING.md). Responsable : Brice (NW-57, NW-84).
 
 ### Livraison contrôlée des correctifs cartographiques
 
-Le job de production est **désactivé par défaut**, y compris après un push sur
-`dev`. Pour autoriser délibérément une livraison, définir la variable
-GitHub Actions du dépôt `NOWAVE_PRODUCTION_DEPLOY_ENABLED=true`, seulement
-après revue du commit et préparation de la fenêtre de déploiement. La retirer
-ou la remettre à `false` après la livraison. Les validations des PR restent
-actives même lorsque cette variable est absente.
-
-Le workflow `.github/workflows/production.yml` vérifie cette variable avant
-de commencer le job de déploiement. Les règles de protection de l'environnement
-GitHub `production` (approbateurs, délais, restrictions de branches) doivent
-aussi être contrôlées dans les paramètres GitHub ; le code source ne permet pas
-d'établir leur configuration effective.
+Le workflow `.github/workflows/production.yml` de la branche `dev`
+ne contient actuellement **aucun** verrou
+`NOWAVE_PRODUCTION_DEPLOY_ENABLED`. Le job de déploiement requiert
+un événement `push` sur `dev` après réussite des contrôles et audits.
+La protection de l'environnement GitHub `production`, ses approbateurs
+et les accès SSH doivent être vérifiés directement sur GitHub avant livraison.
+Ne pas présenter une ancienne variable documentaire comme un blocage effectif.
 
 La vérification publique `deploy/hostinger/verify-public.sh` sonde une fois
 par tentative trois tuiles marines représentatives près de Toulon :

@@ -1,3 +1,7 @@
+; Archive historique du fichier no-wave-dns.txt, déplacé le 30 octobre 2026.
+; La date de cette configuration et sa correspondance avec le DNS actif ne sont pas vérifiées.
+; Ne pas appliquer ces enregistrements en production sans vérification auprès du fournisseur DNS.
+;
 $ORIGIN no-wave.fr.
 $TTL 300
 @ 50 IN A 2.57.91.91
