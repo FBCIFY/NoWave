@@ -37,10 +37,11 @@ ont été retirés après cette consolidation.
 ## Preuves disponibles
 
 - [Consignes et preuves de test](TESTING.md)
-- [Rapport NW-128](test-reports/NW-128.md) — consulter son périmètre exact et ses limites.
-- [Rapport NW-163](test-reports/NW-163.md) — résultats automatisés consignés, essais réels FCM/Mapbox restant à réaliser selon le rapport.
+- [Preuves et résultats des tests — 29/10/2026](NoWave_Preuves_et_resultats_des_tests_29-10-2026.pdf) — bilan Stage 4 et limites des vérifications.
+- [Rapport de bug tracking](NoWave_Rapport_Bug_Tracking.pdf) — anomalies, corrections et vérifications.
+- [Dossier Stage 4 dans Drive](https://drive.google.com/drive/folders/1Oaq6JQChxLm8siO_6OPlh5odmq5J-vKW) — livrables de référence.
 
-**Règle de traçabilité :** distinguer code présent, test automatisé présent, test exécuté avec résultat, validation Android/iOS réelle et vérification de la version déployée. Une référence de fichier ne prouve pas, à elle seule, une validation.
+**Règle de traçabilité :** distinguer code présent, test automatisé présent, test exécuté avec résultat, validation Android/iOS réelle et vérification de la version déployée. Une référence de fichier ne prouve pas, à elle seule, une validation. Les anciens rapports individuels de `docs/test-reports/` restent dans l'historique Git, mais ne font plus partie de la documentation courante. Le bilan Stage 4 n'est pas une copie exhaustive des journaux et captures.
 
 ## Documents historiques
 
