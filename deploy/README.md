@@ -177,22 +177,17 @@ La branche `main` est la **référence des releases stables**, promues par Pull 
 - **release stable validée** : révision promue sur `main` après recette ;
 - **réception mobile et FCM** : recette spécifique, non prouvée par un conteneur démarré.
 
-Pour chaque livraison ou soutenance, noter la date, le SHA `dev`, le SHA annoncé par `/version`, le résultat du workflow GitHub Actions, la PR éventuelle `dev` vers `main` et les vérifications fonctionnelles réellement réalisées. Références : [parcours livraison](../docs/parcours/deploiement.md), [matrice de traçabilité](../docs/traceability-matrix.md), [CONTRIBUTING](../docs/CONTRIBUTING.md). Responsable : Brice (NW-57, NW-84).
+Pour chaque livraison ou soutenance, noter la date, le SHA `dev`, le SHA annoncé par `/version`, le résultat du workflow GitHub Actions, la PR éventuelle `dev` vers `main` et les vérifications fonctionnelles réellement réalisées. Références : [documentation Stage 4](https://docs.google.com/document/d/1Gez2BmfkdjTLyE9jkyf-U_QzJkUWQ9mu/edit), [matrice de traçabilité](../docs/traceability-matrix.md), [CONTRIBUTING](../docs/CONTRIBUTING.md). Responsable : Brice (NW-57, NW-84).
 
 ### Livraison contrôlée des correctifs cartographiques
 
-Le job de production est **désactivé par défaut**, y compris après un push sur
-`dev`. Pour autoriser délibérément une livraison, définir la variable
-GitHub Actions du dépôt `NOWAVE_PRODUCTION_DEPLOY_ENABLED=true`, seulement
-après revue du commit et préparation de la fenêtre de déploiement. La retirer
-ou la remettre à `false` après la livraison. Les validations des PR restent
-actives même lorsque cette variable est absente.
-
-Le workflow `.github/workflows/production.yml` vérifie cette variable avant
-de commencer le job de déploiement. Les règles de protection de l'environnement
-GitHub `production` (approbateurs, délais, restrictions de branches) doivent
-aussi être contrôlées dans les paramètres GitHub ; le code source ne permet pas
-d'établir leur configuration effective.
+Le workflow `.github/workflows/production.yml` de la branche `dev`
+ne contient actuellement **aucun** verrou
+`NOWAVE_PRODUCTION_DEPLOY_ENABLED`. Le job de déploiement requiert
+un événement `push` sur `dev` après réussite des contrôles et audits.
+La protection de l'environnement GitHub `production`, ses approbateurs
+et les accès SSH doivent être vérifiés directement sur GitHub avant livraison.
+Ne pas présenter une ancienne variable documentaire comme un blocage effectif.
 
 La vérification publique `deploy/hostinger/verify-public.sh` sonde une fois
 par tentative trois tuiles marines représentatives près de Toulon :
