@@ -77,7 +77,7 @@ La validité des signalements est de 24 h côté serveur. Les MVT ont un cache H
 ## Tests et documentation
 
 - [Index documentaire et annexes](docs/README.md)
-- [Matrice de traçabilité, statut réel des preuves](docs/traceability-matrix.md)
+- [Correspondance fonctionnalités, code et tests](docs/TESTING.md#correspondance-fonctionnelle-code-et-tests)
 - [Commandes de test, CI et limites de validation](docs/TESTING.md)
 - [Règles de contribution et branches](docs/CONTRIBUTING.md)
 - [Exploitation VPS et déploiement](deploy/README.md)
