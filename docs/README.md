@@ -1,6 +1,6 @@
 # Documentation NoWave
 
-Cette page est l'index de référence des guides conservés dans le dépôt. Elle complète la [documentation technique du MVP](https://docs.google.com/document/d/1PbbCySYhRy8_aeU4T19nfPSq3dXU-QI9/edit), les migrations PostgreSQL et les décisions Linear. **Code de référence audité :** `dev` à [`6b54aa8`](https://github.com/FBCIFY/NoWave/commit/6b54aa861e5cda93bf9b573c443f5946d230945d), 19/10/2026.
+Cet index distingue la [documentation technique Stage 4](https://docs.google.com/document/d/1Gez2BmfkdjTLyE9jkyf-U_QzJkUWQ9mu/edit), source fonctionnelle de référence, de son [PDF conservé dans le dépôt](NoWave_Documentation_Technique.pdf), des annexes spécialisées et des preuves. La version Stage 4 du 30/10/2026 décrit le code `dev` au commit [`ad54ffdb`](https://github.com/FBCIFY/NoWave/commit/ad54ffdb2cf359c36cf22b947494195bddcf87fb) (28/10/2026) ; elle ne prouve pas une recette ou un déploiement. La stricte identité du PDF du dépôt et du document du Drive n'a pas été établie.
 
 ## Démarrer et contribuer
 
@@ -12,16 +12,27 @@ Cette page est l'index de référence des guides conservés dans le dépôt. Ell
 - [Déploiement VPS](../deploy/README.md)
 - [Matrice de traçabilité](traceability-matrix.md)
 
+## Architecture marine : annexes techniques
+
+Les documents suivants apportent des détails sur les fournisseurs, licences,
+référentiels et algorithmes. Ils décrivent aussi des décisions historiques :
+en cas de divergence, vérifier le code `dev` actuel et la documentation Stage 4.
+
+- [Sources marines et normalisation](architecture/marine-sources.md) — choix, licences, fusion et provenances.
+- [Hydrographie](architecture/hydrography.md) — courbes, sondes, datums et dangers.
+- [Profondeurs EMODnet 2024](architecture/emodnet-depths.md) — contrat de grille, unités, erreurs et limites.
+- [Chargement progressif et persistance NW-220](architecture/marine-zoom-persistence.md) — zoom, mosaïque, réponses partielles et caches.
+
 ## Parcours fonctionnels
 
-| Parcours | Document | Périmètre |
-| --- | --- | --- |
-| Compte et profil | [authentification.md](parcours/authentification.md) | Firebase, profil, préférences, bateau |
-| Carte | [cartographie.md](parcours/cartographie.md) | GPS, MVT, cache et détails |
-| Signalements | [signalements.md](parcours/signalements.md) | Publication manuelle et photo, stockage |
-| Notifications | [notifications.md](parcours/notifications.md) | Éligibilité, FCM, historique et navigation |
-| Administration | [administration.md](parcours/administration.md) | Modération et audit |
-| Livraison | [deploiement.md](parcours/deploiement.md) | CI, `dev`, VPS et `main` |
+Les parcours d'inscription, carte, signalements, alertes, administration et
+déploiement sont décrits par la **documentation Stage 4** (contrats API, UML et
+séquences). Les scénarios de vérification et chemins de code qui apportaient
+une information complémentaire sont consolidés dans
+[TESTING.md — Recette fonctionnelle par parcours](TESTING.md#recette-fonctionnelle-par-parcours-consolidation-documentaire-du-30102026).
+Le déroulement d'une livraison et son retour arrière sont documentés dans
+[deploy/README.md](../deploy/README.md). Les anciens guides `docs/parcours/`
+ont été retirés après cette consolidation.
 
 ## Preuves disponibles
 
@@ -32,6 +43,8 @@ Cette page est l'index de référence des guides conservés dans le dépôt. Ell
 **Règle de traçabilité :** distinguer code présent, test automatisé présent, test exécuté avec résultat, validation Android/iOS réelle et vérification de la version déployée. Une référence de fichier ne prouve pas, à elle seule, une validation.
 
 ## Documents historiques
+
+- [Ancien relevé DNS non vérifié](archives/no-wave-dns-historique.txt) : **archive uniquement** ; ne pas appliquer les enregistrements sans contrôle de la zone DNS active.
 
 [BlueWay — Database Design — MVP](https://docs.google.com/document/d/1Gl4LLNGHcCR5BLrGtgfok0VrHJndEFfrR-ZWrPtdtSU/edit) est **ARCHIVÉ** ([FIX T16 (NW-169)](https://linear.app/blueway/issue/NW-169)). Il sert exclusivement à retracer l'évolution de l'architecture ; il ne définit pas le contrat SQL ou métier actuel. La documentation technique courante et les migrations font référence.
 
