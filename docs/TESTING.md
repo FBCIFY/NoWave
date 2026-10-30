@@ -2,12 +2,12 @@
 
 Le workflow **NoWave CI** (`.github/workflows/checks.yml`) est le point d'entrée
 unique. Chaque PR vers `dev` ou `main` exécute en parallèle les contrôles
-**Python**, **Flutter**, **PostGIS** et **Web**. Ils sont rejoués après fusion
+**Python**, **Flutter**, **PostGIS**, **Web** et **Admin Web**. Ils sont rejoués après fusion
 dans `dev` et peuvent être lancés manuellement depuis ce workflow. Aucun filtre
 de fichiers ne peut laisser un contrôle obligatoire indéfiniment en attente.
 Un échec de commande fait échouer le contrôle.
 
-Après la réussite des quatre contrôles, `production.yml` est appelé pour auditer
+Après la réussite des cinq contrôles, `production.yml` est appelé pour auditer
 les dépendances et construire/auditer les quatre images de production, sans
 rejouer les tests. Il valide aussi les PR vers `main`. Seul un push sur `dev`
 peut ensuite déployer la révision testée sur le VPS ; les PR et les lancements
@@ -141,7 +141,7 @@ L'administrateur du dépôt doit rendre obligatoires les contrôles **Python**,
 **Flutter**, **PostGIS**, **Web** et l'audit **Production / Dependency and image
 audits** dans les règles de branches, en préservant l'approbation d'un autre
 membre. Vérifier les noms exacts affichés par GitHub après la première exécution.
-Les noms des quatre jobs de test sont conservés ; les workflows séparés
+Les noms des cinq jobs de contrôle sont conservés ; les workflows séparés
 `database.yml` et `web.yml` ont été regroupés dans `checks.yml`.
 Une CI visible ne prouve pas à elle seule le blocage de la fusion : les règles
 GitHub ne sont pas modifiées par ces fichiers. Après approbation, fusionner dans
@@ -173,6 +173,7 @@ de recette la présence d'un test, d'un fichier de code ou d'un rapport historiq
 La référence de soutenance est le [rapport Preuves et résultats des tests du 29 octobre 2026](NoWave_Preuves_et_resultats_des_tests_29-10-2026.pdf), également présent dans le [Drive Stage 4](https://drive.google.com/drive/folders/1Oaq6JQChxLm8siO_6OPlh5odmq5J-vKW). Le [rapport de bug tracking](NoWave_Rapport_Bug_Tracking.pdf) documente les correctifs.
 
 Les anciens rapports individuels, captures et journaux de `docs/test-reports/` ont été retirés de la branche de nettoyage. Ils restent récupérables dans l'historique Git. Le rapport Stage 4 synthétise les résultats, sans reprendre toutes les traces brutes et sans garantir des essais réels non documentés.
+
 ## Correspondance fonctionnelle, code et tests
 
 La table suivante reprend les correspondances utiles de l'ancienne matrice de
@@ -186,16 +187,16 @@ identifiée dans son propre rapport.
 
 | Parcours | Tickets Linear | Implémentation à consulter | Tests à consulter |
 | --- | --- | --- | --- |
-| Inscription et profil | NW-51, NW-153, NW-155 | \`backend/app/api/routes/users.py\`, \`mobile/lib/features/auth/\`, \`mobile/lib/features/profile/\` | \`backend/tests/api/test_users.py\`, \`mobile/test/features/profile/\` |
-| Préférences, bateau et installations | NW-116, NW-117 | \`backend/app/api/routes/devices.py\`, \`backend/app/api/routes/users.py\`, \`mobile/lib/features/profile/\` | \`backend/tests/api/test_devices.py\`, \`backend/tests/api/test_my_alerts.py\` |
-| Carte et tuiles MVT de signalements | NW-111, NW-114 | \`backend/app/api/routes/map_tiles.py\`, \`backend/app/application/services/map_query.py\`, \`mobile/lib/features/map/\` | \`backend/tests/api/test_map_tiles.py\`, \`backend/tests/database/test_map_tile_cache.py\`, \`mobile/test/features/map/\` |
-| Signalements manuels | NW-104 | \`backend/app/api/routes/reports.py\`, \`backend/app/application/services/create_report.py\`, \`mobile/lib/features/reports/\` | \`backend/tests/api/test_reports.py\`, \`mobile/test/features/reports/\` |
-| Estimation photo et téléchargement JPEG | NW-109, NW-112 | \`backend/app/api/routes/position_estimates.py\`, \`backend/app/api/routes/reports.py\`, \`mobile/lib/features/camera/\` | \`backend/tests/api/test_photo_uploads.py\`, \`backend/tests/api/test_position_estimates.py\`, \`mobile/test/features/camera/\` |
-| Historique des alertes | NW-125 | \`backend/app/api/routes/users.py\`, \`backend/app/application/services/list_my_alerts.py\`, \`mobile/lib/features/alerts/\` | \`backend/tests/api/test_my_alerts.py\`, \`mobile/test/features/alerts/\` |
-| Alertes FCM et ouverture de la carte | NW-157, NW-163 | \`backend/app/application/services/send_notifications.py\`, \`mobile/lib/core/notifications/\`, \`mobile/lib/features/alerts/\` | \`backend/tests/database/test_notification_worker.py\`, \`mobile/test/features/alerts/\` |
-| Administration et modération | NW-48 pour les données ; tickets de modération dans Linear | \`backend/app/api/routes/admin.py\`, \`backend/app/web/routes/admin_pages.py\`, \`backend/app/application/services/moderation.py\` | \`backend/tests/api/test_admin_moderation.py\`, \`backend/tests/api/test_admin_web.py\` |
-| Sauvegarde et déploiement VPS | NW-57, NW-84 | \`.github/workflows/checks.yml\`, \`.github/workflows/production.yml\`, \`deploy/hostinger/\` | [Guide de déploiement](../deploy/README.md) et contrôles CI ci-dessus |
-| Documentation et traçabilité | NW-83, NW-129, NW-166 à NW-170 | \`README.md\`, \`docs/README.md\`, \`docs/TESTING.md\`, \`docs/architecture/\` | [Documentation Stage 4](https://docs.google.com/document/d/1Gez2BmfkdjTLyE9jkyf-U_QzJkUWQ9mu/edit) et [bilan des tests](NoWave_Preuves_et_resultats_des_tests_29-10-2026.pdf) |
+| Inscription et profil | NW-51, NW-153, NW-155 | `backend/app/api/routes/users.py`, `mobile/lib/features/auth/`, `mobile/lib/features/profile/` | `backend/tests/api/test_users.py`, `mobile/test/features/profile/` |
+| Préférences, bateau et installations | NW-116, NW-117 | `backend/app/api/routes/devices.py`, `backend/app/api/routes/users.py`, `mobile/lib/features/profile/` | `backend/tests/api/test_devices.py`, `backend/tests/api/test_my_alerts.py` |
+| Carte et tuiles MVT de signalements | NW-111, NW-114 | `backend/app/api/routes/map_tiles.py`, `backend/app/application/services/map_query.py`, `mobile/lib/features/map/` | `backend/tests/api/test_map_tiles.py`, `backend/tests/database/test_map_tile_cache.py`, `mobile/test/features/map/` |
+| Signalements manuels | NW-104 | `backend/app/api/routes/reports.py`, `backend/app/application/services/create_report.py`, `mobile/lib/features/reports/` | `backend/tests/api/test_reports.py`, `mobile/test/features/reports/` |
+| Estimation photo et téléchargement JPEG | NW-109, NW-112 | `backend/app/api/routes/position_estimates.py`, `backend/app/api/routes/reports.py`, `mobile/lib/features/camera/` | `backend/tests/api/test_photo_uploads.py`, `backend/tests/api/test_position_estimates.py`, `mobile/test/features/camera/` |
+| Historique des alertes | NW-125 | `backend/app/api/routes/users.py`, `backend/app/application/services/list_my_alerts.py`, `mobile/lib/features/alerts/` | `backend/tests/api/test_my_alerts.py`, `mobile/test/features/alerts/` |
+| Alertes FCM et ouverture de la carte | NW-157, NW-163 | `backend/app/application/services/send_notifications.py`, `mobile/lib/core/notifications/`, `mobile/lib/features/alerts/` | `backend/tests/database/test_notification_worker.py`, `mobile/test/features/alerts/` |
+| Administration et modération | NW-48 pour les données ; tickets de modération dans Linear | `backend/app/api/routes/admin.py`, `backend/app/web/routes/admin_pages.py`, `backend/app/application/services/moderation.py` | `backend/tests/api/test_admin_moderation.py`, `backend/tests/api/test_admin_web.py` |
+| Sauvegarde et déploiement VPS | NW-57, NW-84 | `.github/workflows/checks.yml`, `.github/workflows/production.yml`, `deploy/hostinger/` | [Guide de déploiement](../deploy/README.md) et contrôles CI ci-dessus |
+| Documentation et traçabilité | NW-83, NW-129, NW-166 à NW-170 | `README.md`, `docs/README.md`, `docs/TESTING.md`, `docs/architecture/` | [Documentation Stage 4](https://docs.google.com/document/d/1Gez2BmfkdjTLyE9jkyf-U_QzJkUWQ9mu/edit) et [bilan des tests](NoWave_Preuves_et_resultats_des_tests_29-10-2026.pdf) |
 
 Les parcours de la carte marine ont évolué depuis cette première table :
 les endpoints publics, les chargements GeoJSON, les seuils et la persistance
@@ -211,9 +212,9 @@ annonce de disponibilité future.
 
 | Fonction | Suivi | Précaution |
 | --- | --- | --- |
-| Modification d'un signalement par son auteur : \`PATCH /api/v1/reports/{report_id}\` | NW-73 | Ne pas la confondre avec les opérations administrateur |
-| Suppression par l'auteur : \`DELETE /api/v1/reports/{report_id}\` | NW-73 | La suppression en modération a une route différente |
-| Historique des signalements créés : \`GET /api/v1/users/me/reports\` | NW-74 | \`GET /users/me/alerts\` concerne les alertes reçues |
+| Modification d'un signalement par son auteur : `PATCH /api/v1/reports/{report_id}` | NW-73 | Ne pas la confondre avec les opérations administrateur |
+| Suppression par l'auteur : `DELETE /api/v1/reports/{report_id}` | NW-73 | La suppression en modération a une route différente |
+| Historique des signalements créés : `GET /api/v1/users/me/reports` | NW-74 | `GET /users/me/alerts` concerne les alertes reçues |
 | Regroupement métier de signalements à 200 m | NW-75 | Distinguer la règle métier du regroupement visuel par zoom ; ne pas déduire son statut de la seule présence de clusters MVT |
 
 ### Informations minimales d'une nouvelle preuve
