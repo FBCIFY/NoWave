@@ -68,15 +68,15 @@ Pour le mobile, suivre [mobile/README.md](mobile/README.md) : créer `mobile/.en
 
 ## Routes et périmètre MVP
 
-Les routes métier FastAPI se trouvent sous `/api/v1` ; `/health`, `/health/ready` et `/version` sont à la racine. La référence de `dev` comporte **28 opérations HTTP déclarées**, hors pages HTML d'administration. Voir le chapitre « Index des routes API » de la [documentation technique](https://docs.google.com/document/d/1PbbCySYhRy8_aeU4T19nfPSq3dXU-QI9/edit).
+Les routes métier FastAPI se trouvent sous `/api/v1` ; `/health`, `/health/ready` et `/version` sont à la racine. La référence de `dev` comporte **39 opérations HTTP déclarées**, hors pages HTML d'administration. Voir le chapitre « Index des routes API » de la [documentation technique](https://docs.google.com/document/d/1Gez2BmfkdjTLyE9jkyf-U_QzJkUWQ9mu/edit).
 
 Les opérations `PATCH /api/v1/reports/{report_id}`, `DELETE /api/v1/reports/{report_id}` par l'auteur et `GET /api/v1/users/me/reports` **ne sont pas implémentées** dans cette référence et ne doivent pas être considérées comme disponibles. Le suivi de ces demandes reste dans Linear (NW-73 et NW-74). L'historique des **alertes reçues**, lui, est exposé par `GET /api/v1/users/me/alerts`.
 
-La validité des signalements est de 24 h côté serveur. Les MVT ont un cache HTTP privé de 15 s ; la disparition à l'écran dépend également du rafraîchissement du mobile. Voir [parcours cartographique](docs/parcours/cartographie.md) ([FIX T13 (NW-166)](https://linear.app/blueway/issue/NW-166)).
+La validité des signalements est de 24 h côté serveur. Les MVT ont un cache HTTP privé de 15 s ; la disparition à l'écran dépend également du rafraîchissement du mobile. Voir [documentation cartographique et contrats NW-220](docs/architecture/marine-zoom-persistence.md) ([FIX T13 (NW-166)](https://linear.app/blueway/issue/NW-166)).
 
 ## Tests et documentation
 
-- [Index documentaire et parcours](docs/README.md)
+- [Index documentaire et annexes](docs/README.md)
 - [Matrice de traçabilité, statut réel des preuves](docs/traceability-matrix.md)
 - [Commandes de test, CI et limites de validation](docs/TESTING.md)
 - [Règles de contribution et branches](docs/CONTRIBUTING.md)
