@@ -2,7 +2,7 @@
 
 NoWave est un MVP de signalements participatifs pour la navigation de plaisance : **obstacles**, **animaux marins** et **pollution**. L'application mobile permet de publier une observation localisée, de consulter les signalements actifs sur une carte et de recevoir des alertes de proximité selon les préférences et la position du téléphone.
 
-> **État documentaire :** le présent README décrit le code de `dev` au commit de référence [`6b54aa8`](https://github.com/FBCIFY/NoWave/commit/6b54aa861e5cda93bf9b573c443f5946d230945d), vérifié le 19/10/2026. Il ne constitue pas une preuve de recette sur appareil ni de disponibilité des services externes. Un signalement NoWave ne remplace pas les informations nautiques officielles.
+> **État documentaire :** le présent README décrit le contrat applicatif de `dev` au commit de référence [`ad54ffdb`](https://github.com/FBCIFY/NoWave/commit/ad54ffdb2cf359c36cf22b947494195bddcf87fb), vérifié sur la documentation Stage 4 du 30/10/2026. Il ne constitue pas une preuve de recette sur appareil ni de disponibilité des services externes. Un signalement NoWave ne remplace pas les informations nautiques officielles.
 
 ## Architecture
 
