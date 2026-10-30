@@ -10,7 +10,7 @@ Cet index distingue la [documentation technique Stage 4](https://docs.google.com
 - [Règles de contribution et revue](CONTRIBUTING.md)
 - [Tests, CI et validation](TESTING.md)
 - [Déploiement VPS](../deploy/README.md)
-- [Matrice de traçabilité](traceability-matrix.md)
+- [Correspondance fonctionnalités, code et tests](TESTING.md#correspondance-fonctionnelle-code-et-tests)
 
 ## Architecture marine : annexes techniques
 
@@ -55,4 +55,4 @@ ont été retirés après cette consolidation.
 - [FIX T14 (NW-167)](https://linear.app/blueway/issue/NW-167): ne décrire comme disponibles que les routes réellement implémentées.
 - [FIX T15 (NW-168)](https://linear.app/blueway/issue/NW-168): documenter le déploiement existant depuis `dev`, sans inventer d'environnement distinct.
 - [FIX T16 (NW-169)](https://linear.app/blueway/issue/NW-169): conserver la conception BDD BlueWay comme archive historique.
-- [FIX T17 (NW-170)](https://linear.app/blueway/issue/NW-170): centraliser la documentation et la matrice de traçabilité, sans prétendre que les recettes manquantes sont validées.
+- [FIX T17 (NW-170)](https://linear.app/blueway/issue/NW-170): centraliser la documentation et les correspondances de traçabilité dans TESTING.md, sans prétendre que les recettes manquantes sont validées.
