@@ -104,11 +104,13 @@ lib/
 ├── app/               racine de l’app et thème
 ├── core/              outils partagés par toutes les fonctionnalités
 │   ├── api/           client HTTP vers le backend
+│   ├── device/        enregistrement et suivi de l’appareil
 │   ├── haptics/       retours haptiques
 │   ├── location/      position GPS et format degrés/minutes/secondes
 │   ├── map/           réglages Mapbox communs
 │   ├── notifications/ autorisation du téléphone et messages push
-│   └── sensors/       cap et inclinaison du téléphone
+│   ├── sensors/       cap et inclinaison du téléphone
+│   └── text/          formatage du texte
 └── features/          une fonctionnalité par dossier
     ├── auth/          connexion, inscription, vérification de l’e-mail
     ├── profile/       création du profil, préférences et onboarding alertes
@@ -119,7 +121,7 @@ lib/
     └── camera/        prise de photo, mesures et estimation de position
 ```
 
-Chaque dossier de `features/` suit le même découpage :
+Les fonctionnalités utilisent les dossiers dont elles ont besoin :
 
 - `data/` : appels au backend ou à Firebase ;
 - `domain/` : modèles et règles sans interface ;
@@ -150,6 +152,14 @@ AuthGate          (session Firebase)
 
 `AuthGate` et `ProfileGate` choisissent l’écran à afficher. Les écrans eux-mêmes
 ne naviguent presque pas : ils déclenchent une action et l’aiguillage suit.
+
+Fichiers présents mais non utilisés par l’application :
+
+- `features/demo/` : compteur du modèle Flutter ;
+- `features/reports/presentation/reports_screen.dart` et
+  `data/demo_reports_service.dart` : liste de démonstration, utilisée
+  seulement dans les tests ;
+- `app/router.dart` : fichier vide.
 
 ## Authentification et profil — NW-51
 
@@ -204,12 +214,14 @@ flutterfire configure \
   --project=blueway-dev \
   --platforms=android,ios \
   --android-package-name=fr.blueway.app \
-  --ios-bundle-id=fr.blueway.app
+  --ios-bundle-id=fr.blueway-arcadia.app
 ```
 
-Le projet de développement est `blueway-dev` et l’identifiant des applications
-est `fr.blueway.app`. Les fichiers `.env`, les clés privées Firebase Admin et
-les mots de passe ne doivent jamais être ajoutés à Git.
+Le projet de développement est `blueway-dev`. L’application Android utilise
+`fr.blueway.app` et l’application iOS `fr.blueway-arcadia.app`. Ces identifiants
+doivent correspondre aux applications enregistrées dans Firebase. Les fichiers
+`.env`, les clés privées Firebase Admin et les mots de passe ne doivent jamais
+être ajoutés à Git.
 
 La connexion Google, la connexion Apple et la récupération du mot de passe ne
 font pas partie de NW-51.
@@ -594,20 +606,18 @@ Une nouvelle position GPS est rejointe en une seconde, par interpolation en
 Dart (environ 30 images par seconde). Le glissement natif de la couche est
 coupé, pour que le chevron et le mât restent au même endroit.
 
-Le composant de localisation Mapbox reste actif, avec ses images masquées,
-pour conserver le suivi et le recentrage. Il ne dessine ni point bleu ni
-cercle de précision. Le modèle 3D historique et son générateur restent dans
-le dépôt, mais ne sont plus utilisés pour ce repère.
+Le repère actuellement activé est une flèche 3D orange, définie par
+`MapConfig.nativeArrowPuck` (`true`). Mapbox (`LocationPuck3D`) utilise
+`assets/models/location_puck.glb`, généré par
+`python3 tool/make_location_puck.py`, et la place et l’oriente selon le cap de
+l’appareil à chaque image. Elle mesure 27,44 points dès le zoom 6 et diminue
+au dézoom jusqu’à 13,72 points au zoom 2 et en deçà, pour ne pas couvrir un
+pays entier. Si `nativeArrowPuck` est désactivé, le chevron et le mât décrits
+ci-dessus sont utilisés à la place.
 
-Essai en cours : avec `MapConfig.nativeArrowPuck` à `true`, le chevron et le
-mât ne sont plus dessinés. Le repère est une flèche 3D orange
-(`assets/models/location_puck.glb`, générée par
-`python3 tool/make_location_puck.py`), affichée par le composant natif de
-Mapbox (`LocationPuck3D`). Mapbox la place et l'oriente selon le cap de
-l'appareil à chaque image, sans passer par Dart. Elle mesure 27,44 points dès
-le zoom 6 et diminue au dézoom jusqu'à 13,72 points au zoom 2 et en deçà, pour
-ne pas couvrir un pays entier. Remettre `false` revient au
-chevron et au mât.
+Le composant de localisation Mapbox reste actif dans les deux modes pour
+conserver le suivi et le recentrage. En mode chevron et mât, ses images sont
+masquées pour ne pas dessiner le point bleu natif.
 
 Les pastilles des signalements sont dans l'emplacement `top` de Mapbox. La
 flèche native, ajoutée sans emplacement, passe donc devant elles.
