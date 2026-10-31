@@ -199,9 +199,11 @@ un APK pointant vers les nouveaux endpoints distants.** Aucun déploiement n'a l
 
 ## Cache, réseau et limites opérationnelles
 
-Transport HTTP réutilisé, huit connexions concurrentes actives, timeout 4 s
+Transport HTTP réutilisé : 12 requêtes actives, pool de 24 connexions (12 réutilisables), timeout 4 s
 (connexion/pool 2 s), budget provider national 12 s et budget d'appel global provider
 14 s incluant l'attente. Pas de retry en boucle sur chaque déplacement.
+Une annulation attend la fermeture HTTP. NOAA garde 4 requêtes actives, EMODnet 2 ;
+leurs délais et quotas sont conservés. Ces pools HTTP sont distincts du pool PostgreSQL.
 Collecte partielle nationale tolérée: les couches réussies et le fallback subsistent.
 Les requêtes NOAA sont bornées à deux pages de 1000 objets par classe; SHOM/IGN à
 2000 objets par classe/zone. Un dépassement est déclaré dégradé, pas avalé comme
