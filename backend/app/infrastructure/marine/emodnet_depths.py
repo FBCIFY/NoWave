@@ -20,6 +20,7 @@ from shapely.geometry import Point
 
 from app.domain.hydrography import ModeledDepthCell
 from app.domain.marine import MarineFamily, ProviderBatch, ProviderUnavailable
+from app.infrastructure.marine.cancellation import cancellation_safe
 
 logger = logging.getLogger(__name__)
 PROVIDER_ID = "emodnet-dtm-2024"
@@ -216,37 +217,10 @@ class EmodnetDepthProvider:
         url = DATASET_URL + ".csv?" + quote(selection.query, safe=",:")
         started = time.monotonic()
         try:
-            # Includes queueing and rate gate; cancellation releases both locks.
+            # Keep the asyncio deadline in the parent: its raw cancellation is
+            # translated before it can interrupt the child's HTTP cleanup.
             async with asyncio.timeout(REQUEST_DEADLINE):
-                async with self._semaphore:
-                    async with self._gate:
-                        if self._cooldown > time.monotonic():
-                            raise EmodnetUnavailable("cooldown")
-                        delay = self._next_request - time.monotonic()
-                        if delay > 0:
-                            await asyncio.sleep(delay)
-                        if self._cooldown > time.monotonic():
-                            raise EmodnetUnavailable("cooldown")
-                        self._next_request = time.monotonic() + self._interval
-                    async with self._client.stream("GET", url) as response:
-                        self.metrics["requests"] += 1
-                        if response.status_code in {429, 503}:
-                            try:
-                                retry = float(response.headers.get("retry-after", "30"))
-                            except ValueError:
-                                retry = 30
-                            self._cooldown = time.monotonic() + max(30, min(120, retry))
-                        if response.status_code != 200:
-                            raise EmodnetUnavailable(f"http-{response.status_code}")
-                        length = response.headers.get("content-length")
-                        if length is not None and int(length) > MAX_BODY:
-                            raise EmodnetUnavailable("body-limit")
-                        body = bytearray()
-                        async for chunk in response.aiter_bytes(chunk_size=4096):
-                            self.metrics["bytes"] += len(chunk)
-                            if len(body) + len(chunk) > MAX_BODY:
-                                raise EmodnetUnavailable("body-limit")
-                            body.extend(chunk)
+                body = await cancellation_safe(lambda: self._read(url))
             features = parse_cells(body, selection)
             logger.info(
                 "EMODnet tile=%s/%s/%s cells=%s marine=%s bytes=%s ms=%.1f",
@@ -267,3 +241,35 @@ class EmodnetDepthProvider:
             raise EmodnetUnavailable("transport") from exc
         except ValueError as exc:
             raise EmodnetUnavailable("malformed-http") from exc
+
+    async def _read(self, url):
+        async with self._semaphore:
+            async with self._gate:
+                if self._cooldown > time.monotonic():
+                    raise EmodnetUnavailable("cooldown")
+                delay = self._next_request - time.monotonic()
+                if delay > 0:
+                    await asyncio.sleep(delay)
+                if self._cooldown > time.monotonic():
+                    raise EmodnetUnavailable("cooldown")
+                self._next_request = time.monotonic() + self._interval
+            async with self._client.stream("GET", url) as response:
+                self.metrics["requests"] += 1
+                if response.status_code in {429, 503}:
+                    try:
+                        retry = float(response.headers.get("retry-after", "30"))
+                    except ValueError:
+                        retry = 30
+                    self._cooldown = time.monotonic() + max(30, min(120, retry))
+                if response.status_code != 200:
+                    raise EmodnetUnavailable(f"http-{response.status_code}")
+                length = response.headers.get("content-length")
+                if length is not None and int(length) > MAX_BODY:
+                    raise EmodnetUnavailable("body-limit")
+                body = bytearray()
+                async for chunk in response.aiter_bytes(chunk_size=4096):
+                    self.metrics["bytes"] += len(chunk)
+                    if len(body) + len(chunk) > MAX_BODY:
+                        raise EmodnetUnavailable("body-limit")
+                    body.extend(chunk)
+        return body
