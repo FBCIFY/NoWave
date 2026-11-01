@@ -1,4 +1,4 @@
-# Sources marines
+# Sources et licences marines
 
 Le backend choisit les fournisseurs selon la tuile et leur couverture, sans
 utiliser le GPS ou le compte. Il conserve identité, provenance et attributs
@@ -24,16 +24,14 @@ visibles, la mention des transformations et les licences lors d'une redistributi
 La base fusionnée contenant OSM reste sous ODbL ; les dérivés Shom d'épaves et
 obstructions restent sous CC BY-SA 4.0.
 
-Le registre `marine-sources` expose les liens de produits, licences et limites ;
-voir les [contrats API](../API.md). Il est défini dans
+Le registre public `GET /api/v1/map/marine-sources` expose les produits, licences
+et limites. Son catalogue est dans
 [sources.py](../../backend/app/infrastructure/marine/sources.py).
 Les levés Shom archivés ne fournissent plus les chiffres affichés. CHS, AMSA,
 AHO et LINZ ne sont pas intégrés. Les couvertures restent celles des fournisseurs,
 sans garantie d'exhaustivité.
 
-## Configuration et cache
-
-Configuration de l’app : [guide mobile](../../mobile/README.md).
+## Configuration du cache
 
 Le cache HTTP SQLite utilise `MARINE_CACHE_DIR`, par défaut
 `~/.cache/nowave/marine`. En production, le volume `marine-cache` est monté sur

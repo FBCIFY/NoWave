@@ -1,23 +1,22 @@
 # NoWave web
 
-Site public et carte partagée avec l’administration. Versions des outils et
-contrôles : [tests](../docs/TESTING.md). [Contrats API](../docs/API.md).
+Site Vite et assets partagés avec l’admin.
 
-## Stack locale
+Prérequis : Node.js 24. Pour utiliser la base et les services réels, suivre
+le [démarrage Docker du projet](../README.md#lancer-le-projet).
 
-Suivre le [démarrage du projet](../README.md#lancer-le-projet), puis ouvrir
-[le site](https://localhost:8443) ou [l’admin](https://localhost:8443/admin).
-`MAPBOX_PUBLIC_TOKEN` doit autoriser localhost.
+## Aperçu local sans base
 
-## Aperçu sans base
-
-Sur macOS, ouvrir `Tester la refonte.command`. Connexion de démo :
-`admin@nowave.test` / `preview-only`. Données en mémoire, modération désactivée.
-Lancement manuel depuis la racine, avec l’environnement Python du [guide de tests](../docs/TESTING.md#backend) activé, dans deux terminaux :
+Python 3.12. Depuis la racine, dans un premier terminal :
 
 ```sh
+python3.12 -m venv .venv
+. .venv/bin/activate
+python -m pip install -r backend/requirements.txt
 PYTHONPATH=backend python backend/tests/browser/preview.py --port 8000
 ```
+
+Dans un second terminal :
 
 ```sh
 cd web
@@ -25,12 +24,17 @@ npm ci
 npm run dev -- --port 5173
 ```
 
-Aperçu : [localhost:5173](http://127.0.0.1:5173/).
-`NOWAVE_API_URL` change le backend Vite (défaut : port 8000).
-La carte demande `MAPBOX_PUBLIC_TOKEN` ou `NOWAVE_MAPBOX_CONFIG`, chemin du JSON
-contenant `MAPBOX_ACCESS_TOKEN`.
+Ouvrir [localhost:5173](http://127.0.0.1:5173/).
+Le faux compte admin `admin@nowave.test` / `preview-only` sert à cet aperçu :
+données en mémoire et modération désactivée.
+Sur macOS, `Tester la refonte.command` lance les deux services après installation
+des dépendances Python.
+
+- `NOWAVE_API_URL` : backend du proxy Vite, `http://127.0.0.1:8000` par défaut.
+- `MAPBOX_PUBLIC_TOKEN` : jeton public `pk.*` autorisé pour localhost.
+- `NOWAVE_MAPBOX_CONFIG` : alternative au jeton direct, chemin du JSON contenant `MAPBOX_ACCESS_TOKEN`.
 
 ## Build
 
-Depuis `web/` : `npm run build`. Servir les assets du même build que les pages
-admin. Configuration de production : [déploiement](../deploy/README.md).
+Depuis `web/` : `npm ci`, puis `npm run build`. Servir les assets du même build
+que les pages admin.

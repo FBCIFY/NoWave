@@ -282,7 +282,7 @@ ports sous Z6. Chaque snapshot est borné à 6 000 objets et 4 Mio.
 
 Les objets portent une géométrie, une identité et leurs propriétés source ;
 les propriétés de profondeur distinguent unités, datum et nature modélisée.
-Pour leurs champs et sources détaillés, voir les [guides cartographiques](README.md).
+Les fournisseurs et leurs licences sont décrits dans [sources et licences](architecture/sources-et-licences.md).
 MVT : `application/vnd.mapbox-vector-tile`. GeoJSON : `application/geo+json`.
 `X-NoWave-Marine-Status` distingue `ok`, `degraded`, `unavailable` et, pour les
 sondes, `empty`, `outside-coverage`, `below-minzoom`.
@@ -340,5 +340,4 @@ accès refusé → 403 HTML ; dépendance indisponible → 503 HTML.
 `page` conserve la borne 1–1 000 000. Recherche utilisateur : pseudo/e-mail
 partiel ou UUID exact. Les erreurs locales utilisent `{error: string}` pour
 emprise/statut invalides (422) ou détail absent (404). Les autres paramètres
-invalides suivent la validation 422. Les formulaires HTML sont décrits dans
-le [guide admin web](../backend/app/web/README.md).
+invalides suivent la validation 422. La configuration de session est dans le [README admin](../backend/app/web/README.md).

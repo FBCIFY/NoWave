@@ -18,10 +18,4 @@ Lors d’un remplacement, garder la géométrie, les attributs source et les cr�
 Les PBF utilisent un extent de 4096 et un axe Y vers le nord au décodage.
 Les cas synthétiques restent dans les tests Python.
 
-Sources : [Shom](https://diffusion.shom.fr/donnees/balisage_maritime.html)
-(DOI `10.17183/DOI_BALISAGE_MARITIME`),
-[NOAA](https://repository.library.noaa.gov/view/noaa/71555),
-[IGN](https://www.data.gouv.fr/datasets/bd-topo-r),
-[Seamap](https://github.com/openwatersio/seamap),
-[OpenStreetMap](https://www.openstreetmap.org/copyright).
-Les sources hydrographiques sont détaillées dans [le guide dédié](../../../../docs/architecture/hydrography.md).
+[Produits, provenance et conditions de redistribution](../../../../docs/architecture/sources-et-licences.md#jeux-et-licences).

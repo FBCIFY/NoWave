@@ -4,15 +4,12 @@ Le VPS exécute Nginx, FastAPI, PostgreSQL/PostGIS et les workers dans Docker. L
 
 ## Livraison
 
-Un push sur `dev` déclenche les [tests et audits](../docs/TESTING.md), puis déploie le même commit sur le VPS. Les PR et les lancements manuels ne déploient pas. `main` reçoit les releases stables après recette.
+Un push sur `dev` déploie le même commit sur le VPS après réussite de la CI et des audits. Les PR et les lancements manuels ne déploient pas. `main` reçoit les releases stables après recette.
 
 Dans l’environnement GitHub `production`, configurer :
 
-| Paramètre | Type |
-| --- | --- |
-| `NOWAVE_DEPLOY_HOST` | Variable |
-| `NOWAVE_DEPLOY_SSH_KEY` | Secret |
-| `NOWAVE_DEPLOY_KNOWN_HOSTS` | Secret |
+- la variable `NOWAVE_DEPLOY_HOST` ;
+- les secrets `NOWAVE_DEPLOY_SSH_KEY` et `NOWAVE_DEPLOY_KNOWN_HOSTS`.
 
 `hostinger/ci-deploy.sh` construit et audite les images. `hostinger/deploy.sh` sauvegarde, applique les migrations, démarre les services et vérifie l’origine puis les accès publics. Les livraisons sont sérialisées ; un échec empêche la promotion du commit.
 
@@ -20,13 +17,11 @@ Dans l’environnement GitHub `production`, configurer :
 
 Les secrets restent dans `/opt/nowave/secrets` et les paramètres dans `/opt/nowave/config`, hors Git. Les fichiers attendus sont déclarés dans `compose.yaml` et `tunnel.yaml`.
 
-| Service | Configuration indispensable |
-| --- | --- |
-| Tunnel Cloudflare | Secret `tunnel_token` du tunnel dédié NoWave |
-| Firebase | Compte de service du projet `blueway-dev`, autorisations FCM et secret `firebase_web_api_key` pour l’admin |
-| Carte web | `MAPBOX_PUBLIC_TOKEN`, public `pk.*` autorisé pour les domaines utilisés, à injecter dans l’API |
-| Photos | Bucket Scaleway privé sans versioning ; `photo-storage.env` avec `PHOTO_STORAGE_BUCKET` et `PHOTO_STORAGE_REGION` ; secrets `scaleway_access_key` et `scaleway_secret_key` |
-| Données marines | Volume persistant `marine-cache` ; fond [GEBCO](marine/README.md) inclus dans l’image web |
+- Cloudflare : secret `tunnel_token` du tunnel dédié.
+- Firebase : compte de service du projet `blueway-dev`, autorisations FCM et secret `firebase_web_api_key` pour l’admin.
+- Carte web : `MAPBOX_PUBLIC_TOKEN`, jeton public `pk.*` autorisé pour les domaines utilisés, à injecter dans l’API.
+- Photos : bucket Scaleway privé sans versioning, `photo-storage.env` avec `PHOTO_STORAGE_BUCKET` et `PHOTO_STORAGE_REGION`, secrets `scaleway_access_key` et `scaleway_secret_key`.
+- Données marines : volume persistant `marine-cache` et fond [GEBCO](marine/README.md) inclus dans l’image web.
 
 Le Compose de production ne transmet pas `MAPBOX_PUBLIC_TOKEN` par défaut. Les clés Scaleway doivent autoriser lecture, écriture, suppression et listing du préfixe `reports/`.
 

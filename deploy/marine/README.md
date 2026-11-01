@@ -30,4 +30,3 @@ modifier les octets compressés.
 
 Une modification de source ou palette exige une nouvelle version d'URL.
 Conserver les anciennes archives et URL immuables pour les clients installés.
-Les [contrats API](../../docs/API.md) décrivent les URL servies.

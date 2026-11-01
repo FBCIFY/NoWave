@@ -1,38 +1,37 @@
 # NoWave
 
-Application de signalements maritimes : obstacles, animaux marins et pollution. App Flutter, API FastAPI/PostGIS, carte Mapbox, authentification et notifications Firebase.
+App de signalements maritimes : obstacles, animaux marins et pollution. Stack : Flutter, FastAPI, PostGIS, Firebase et Mapbox.
 
-[Télécharger l’application mobile](https://no-wave.fr/downloads/mobile/).
+[Télécharger l’app mobile](https://no-wave.fr/downloads/mobile/).
 
-Le compte de l’utilisateur désigné sera configuré en `admin` à sa création par le responsable du projet pour accéder à [l’administration](https://no-wave.fr/admin).
+Le responsable du projet attribue le rôle `admin` au compte de l’utilisateur désigné à sa création. [Accès admin](https://no-wave.fr/admin).
 
 ## Lancer le projet
 
-Installer Docker avec Compose. Depuis la racine :
+Docker Compose requis. Depuis la racine :
 
 ```sh
-cp .env.example .env
-# Compléter les variables et le chemin du compte de service Firebase.
+test -f .env || cp .env.example .env
+# Compléter .env et le chemin du compte de service Firebase avant de lancer.
 docker compose up --build -d --wait
 ```
 
-Site : [localhost:8443](https://localhost:8443). Accepter le certificat local. API : [localhost:8000/docs](http://localhost:8000/docs). Les migrations sont automatiques ; `docker compose down` arrête les services en conservant les données. Les secrets restent hors Git.
+Site : [localhost:8443](https://localhost:8443), avec certificat local à accepter. Les migrations sont automatiques. `docker compose down` arrête la stack en gardant les données. Garder les secrets hors Git.
 
-Workers locaux (alertes et nettoyage photo) :
+Pour les alertes et le nettoyage photo en local :
 
 ```sh
 docker compose --profile alerts --profile photos up -d notifications photo-cleanup
 ```
 
-## Documentation
+## Guides
 
-| Besoin | Guide |
-| --- | --- |
-| Routes, entrées, réponses et erreurs | [Contrats API](docs/API.md) |
-| Développer un composant | [Backend](backend/README.md) · [Mobile](mobile/README.md) · [Web](web/README.md) |
-| Lancer les tests | [Tests](docs/TESTING.md) |
-| Livrer et exploiter | [Déploiement](deploy/README.md) |
-| Carte, sources et autres guides | [Index](docs/README.md) |
+- [Contrats API](docs/contrats-api.md) : routes, champs, réponses et erreurs.
+- Développement : [backend](backend/README.md), [mobile](mobile/README.md), [web](web/README.md).
+- [Tests](docs/tests.md) : commandes et recette sur appareil.
+- [Déploiement](deploy/README.md) : livraison, configuration et sauvegardes.
+- [Cartographie](docs/architecture/README.md) : sources, profondeurs et chargement.
+- [Contribution](docs/contribuer.md) : branches et revue.
 
 Documents de référence : [dossier Drive](https://drive.google.com/drive/folders/1tuDBQVBQNH7H6cWgftj46g7fPGZSxPQ2).
 

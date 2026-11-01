@@ -49,6 +49,7 @@ Depuis la racine, avec l’environnement Python activé. Ce bloc utilise une bas
   set -e
   export COMPOSE_FILE=compose.test.yaml
   export COMPOSE_PROJECT_NAME=nowave-tests
+  export NOWAVE_TEST_PORT=55433
   export NOWAVE_TEST_ADMIN_URL=postgresql://nowave_ci:ci-test-only@127.0.0.1:55433/nowave_ci
   trap 'docker compose down --volumes --remove-orphans' EXIT
   docker compose up -d --build --wait --wait-timeout 120 database

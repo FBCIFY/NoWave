@@ -1,12 +1,11 @@
-# Chargement et conservation des couches marines
+# Chargement et cache de la carte
 
 `MarineViewport` charge la vue Mapbox, rotation, inclinaison et padding compris,
-avec une marge d'une cellule. Les [contrats API](../API.md) décrivent les formats
-et bornes des requêtes ; ce guide couvre le comportement mobile.
+avec une marge d'une cellule.
 
 ## Seuils
 
-Les valeurs sont centralisées dans
+Seuils définis dans
 [MarineZoom](../../mobile/lib/core/map/marine/marine_zoom.dart).
 
 | Zoom caméra | Comportement |

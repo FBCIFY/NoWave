@@ -2,7 +2,7 @@
 
 DDS/DAS and CSV verified against the live service on 2026-10-18. Both axes
 increase, ordered [latitude][longitude], cell centres at 1/960 degree. See
-docs/architecture/emodnet-depths.md for the pinned contract and limitations.
+docs/architecture/profondeurs-emodnet.md for the pinned contract and limitations.
 """
 
 import asyncio

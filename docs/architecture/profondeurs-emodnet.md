@@ -42,6 +42,4 @@ Le client limite les appels à deux simultanés par processus, espacés d'au moi
 Les corps CSV ne sont pas stockés sur disque ; une déconnexion annule le travail.
 Une panne n'est jamais remplacée par un faux résultat vide.
 
-Voir les [contrats API](../API.md) pour les réponses HTTP et les
-[règles mobiles](marine-zoom-persistence.md) pour le cache. Ces valeurs ne
-garantissent ni précision portuaire ni marge sous quille.
+Ces valeurs ne garantissent ni précision portuaire ni marge sous quille.
