@@ -2,7 +2,7 @@
 
 DDS/DAS and CSV verified against the live service on 2026-10-18. Both axes
 increase, ordered [latitude][longitude], cell centres at 1/960 degree. See
-README.md#cartographie for the pinned contract and limitations.
+docs/contrats-api.md#carte for the public HTTP contract.
 """
 
 import asyncio
