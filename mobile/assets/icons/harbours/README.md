@@ -1,18 +1,16 @@
-# NoWave ports and marinas
+# Icônes de ports
 
-Two supplied NoWave maritime PNGs, transparent and 72×72 pixels:
+Deux PNG NoWave transparents de 72 × 72 px :
 
-| Asset | Mapbox image ID | Tile category |
+| Fichier | Identifiant Mapbox | Catégorie |
 | --- | --- | --- |
-| `port.png` | `nowave-harbour` | Other qualified harbour categories |
+| `port.png` | `nowave-harbour` | Autres catégories de ports qualifiées |
 | `marina.png` | `nowave-marina` | `marina` |
 
-Both are registered at pixel ratio 3 (24 logical pixels before the existing
-zoom interpolation). Harbour data is prepared from Z6, while `HarbourLayer`
-displays the icons from Z8 (`MarineZoom.harbours`). Collision rules, source
-coordinates, categories and rendering priorities remain unchanged.
+Le ratio Mapbox de 3 donne 24 points avant adaptation au zoom. Les données sont
+préparées au zoom 6 et les icônes affichées au zoom 8 par `HarbourLayer`.
+Les collisions et priorités suivent les règles de la couche.
 
-The native bridges of Mapbox Maps Flutter 2.30.1 decode encoded PNG bytes;
-`MarineIconImage` preserves that format and reads the real dimensions.
-Installation is idempotent, retries after errors, and restores both images
-when Mapbox reloads the style.
+`MarineIconImage` transmet les PNG encodés avec leurs dimensions réelles.
+L’installation peut être répétée sans doublon ; elle reprend après une erreur
+ou un rechargement du style.

@@ -1,47 +1,38 @@
-# GEBCO worldwide visual background
+# Fond marin mondial GEBCO
 
-`gebco-2026-v2.tar.gz` contains the complete XYZ Web Mercator pyramid Z0–Z6
-(5,461 WebP tiles, 256 px) and its provenance manifest. It is a versioned visual
-asset, checked into the release so builds, cold starts and map movement never
-depend on the availability of GEBCO's public services. The web image verifies
-the archive checksum before extracting it. Nginx serves it directly at
-`/api/v1/map/seafloor/gebco-2026-v2/{z}/{x}/{y}.webp`, with a one-year cache
-lifetime. It does not use the API render pool, SQLite, OSM or the WMS providers.
+`gebco-2026-v2.tar.gz` contient 5 461 tuiles WebP de 256 px, de Z0 à Z6,
+et leur manifeste de provenance. Le build vérifie leur checksum puis les extrait
+dans l'image web. Nginx les sert directement sous
+`/api/v1/map/seafloor/gebco-2026-v2/{z}/{x}/{y}.webp`, avec un an de cache.
+Le rendu ne dépend pas de l'API ni d'un fournisseur externe au démarrage.
 
-The client requests a coarse parent before the Z6 overview, keeps tiles on disk,
-then overlays EMODnet regional detail from Z5 after a 600 ms request delay.
-Outside the EMODnet service's advertised bounds, only GEBCO is requested.
-Source/layer order keeps regional transparent gaps open onto the global base.
-Failure of either optional raster does not hide the map or the other layers.
+Le mobile charge d'abord une tuile parente, conserve les tuiles sur disque et
+superpose le détail EMODnet à partir de Z5, après 600 ms d'attente. Hors de
+l'emprise EMODnet, seul GEBCO est demandé. Les zones transparentes régionales
+laissent voir le fond mondial.
 
-## Data and limitations
+## Source et précision
 
-GEBCO Bathymetric Compilation Group 2026 (2026). The GEBCO_2026 Grid — a
-continuous terrain model for oceans and land at 15 arc-second intervals.
-DOI: https://doi.org/10.5285/4f68d5c7-45eb-f999-e063-7086abc036fa
+GEBCO Bathymetric Compilation Group 2026, *The GEBCO_2026 Grid* :
+[jeu de données](https://doi.org/10.5285/4f68d5c7-45eb-f999-e063-7086abc036fa).
+Domaine public, avec attribution et respect des
+[conditions GEBCO](https://www.gebco.net/data-products/gridded-bathymetry/terms-of-use).
 
-This overview samples every eighth native cell (2 arc-minutes, approximately
-3.7 km north–south). It provides coarse relief worldwide, not port-scale
-detail. Z6 overzoom enlarges the same overview; it creates no finer data.
-Positive elevations and TID-classified land (including dry land below sea level)
-remain transparent. The entire bilinear sampling footprint must be confirmed ocean,
-so uncertain coastal pixels are excluded rather than washing land blue at port
-zoom. A one-pixel halo makes this conservative mask continuous across tile edges.
-The coarsely sampled shoreline
-can differ from the basemap shoreline. Pixels use the NoWave palette and WebP
-RGB compression. They never supply soundings, numerical depth labels or
-contours. Regional detail and numerical marine data retain their own sources.
+Le fond échantillonne une cellule sur huit de la grille native de 15 secondes
+d'arc : deux minutes d'arc, environ 3,7 km nord–sud. Il donne une vue d'ensemble,
+sans détail portuaire, sonde ni courbe dérivée. L'agrandissement n'ajoute aucune
+donnée. GEBCO mêle mesures et interpolations : l'espacement de la grille ne
+garantit pas une précision uniforme. Ces données ne servent pas à la navigation
+ni à la sécurité en mer.
 
-GEBCO combines heterogeneous measured and interpolated data. Native grid
-spacing does not guarantee uniform measurement resolution or precision.
-GEBCO must not be used for navigation or safety at sea.
-Public domain, with attribution and the GEBCO conditions of use:
-https://www.gebco.net/data-products/gridded-bathymetry/terms-of-use
+Les altitudes positives et les terres identifiées par TID restent transparentes,
+y compris les terres sèches sous le niveau marin. Le masque exclut les pixels
+côtiers incertains et utilise un halo d'un pixel pour raccorder les tuiles.
+Le trait de côte peut différer du fond Mapbox.
 
-## Regenerate the asset explicitly
+## Régénérer les tuiles
 
-Use the Python environment installed from `backend/requirements.lock` (numpy,
-Pillow; no new production dependency). From the repository root:
+Utiliser l'environnement Python de `backend/requirements.lock`. Depuis la racine :
 
 ```sh
 python backend/tools/prepare_gebco_background.py \
@@ -51,15 +42,12 @@ cd deploy/marine
 sha256sum gebco-2026-v2.tar.gz > gebco-2026-v2.tar.gz.sha256
 ```
 
-The preparation tool verifies the exact subset SHA-256 before rendering. The
-temporary DAP2 subsets are about 223 MiB (elevations) and 56 MiB (classification),
-and are not committed. Re-rendering may
-produce different compressed bytes with a different Pillow/libwebp version;
-review the pixels and update the archive checksum intentionally. A source or
-palette change requires a new path version to preserve HTTP/mobile caches.
-Run `backend/tests/unit/test_gebco_background.py` and the mobile controller
-tests. Production promotion also checks a real static tile near Japan; rollback
-verification remains compatible with the previous, pre-GEBCO web image.
+L'outil vérifie le SHA-256 des sous-ensembles téléchargés, environ 223 Mio
+pour les altitudes et 56 Mio pour la classification. Ces fichiers temporaires
+restent hors de Git. Une autre version de Pillow/libwebp peut modifier les octets
+compressés : contrôler le rendu avant de mettre à jour le checksum.
 
-The original `gebco-2026-v1.tar.gz` is retained for compatibility with early
-client builds and keeps its immutable URLs. New clients use v2.
+Une modification de source ou de palette exige une nouvelle version d'URL pour
+renouveler les caches. Vérifier `backend/tests/unit/test_gebco_background.py`
+et les tests du contrôleur mobile. Conserver l'archive v1 et ses URL immuables
+pour les anciens clients.

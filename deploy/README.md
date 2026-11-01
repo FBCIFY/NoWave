@@ -1,203 +1,137 @@
-# Déploiement de NoWave
+# Déployer NoWave
 
-Le VPS héberge le site web, l’API FastAPI et PostgreSQL/PostGIS dans des conteneurs Docker. Un tunnel Cloudflare dédié publie `no-wave.fr` et `api.no-wave.fr`. L’application mobile est construite séparément.
+Le VPS héberge Nginx, l'API FastAPI, PostgreSQL/PostGIS et les workers dans Docker.
+Un tunnel Cloudflare publie `no-wave.fr` et `api.no-wave.fr`.
+L'application mobile est construite séparément.
 
-## Livraison
+## Livraison automatique
 
-Le workflow **NoWave CI** (`.github/workflows/checks.yml`) exécute une seule fois
-les contrôles Python, Flutter, PostGIS, web et Admin Web, dont le test HTTP du service Nginx
-autonome. Après leur réussite, il appelle `.github/workflows/production.yml`
-pour les audits des dépendances et des quatre images Docker. Un échec d'un
-contrôle ou d'un audit bloque la livraison.
+Un push sur `dev` lance **NoWave CI** : Python, Flutter, PostGIS, Web et Admin Web.
+Après réussite, `production.yml` audite les dépendances et les quatre images,
+puis déploie la révision exacte du push. Les PR vers `dev` ou `main` et les
+lancements manuels valident le code sans déployer. `main` reçoit les versions
+stables par PR depuis `dev` après recette.
 
-Après un push sur `dev`, un résultat valide déclenche le déploiement de cette
-révision exacte sur le VPS. Les pull requests vers `dev` et `main` et les
-lancements manuels exécutent seulement la validation. Pour une vérification
-manuelle, lancer **NoWave CI** dans GitHub Actions ; `production.yml` est un
-workflow appelé, sans déclencheur indépendant. Les livraisons sont sérialisées
-et ne sont pas annulées par un nouveau push.
+`hostinger/ci-deploy.sh` reconstruit et audite sur le VPS.
+`hostinger/deploy.sh` sauvegarde, migre la base, démarre les services, vérifie
+l'origine privée, active le tunnel puis vérifie les routes publiques.
+La nouvelle révision n'est déclarée courante qu'après réussite complète.
+Les livraisons sont sérialisées.
 
-Le script `hostinger/ci-deploy.sh` reconstruit et audite les images sur le VPS, puis appelle `hostinger/deploy.sh`. Celui-ci effectue une sauvegarde, applique les migrations, démarre les services, vérifie l’origine privée, active le tunnel et vérifie les routes publiques. La révision courante n’est publiée qu’après réussite de l’ensemble de ces étapes.
+L'environnement GitHub `production` doit contenir :
 
-Les rapports JSON d’audit sont conservés dans `test-results/containers`. La base
-Trivy, son cache et les exports `.tar` des images sont temporaires : chaque export
-est supprimé après son analyse et le répertoire de travail est nettoyé à la fin du
-script, y compris en cas d’échec ou d’interruption SIGINT/SIGTERM. Un arrêt forcé
-(SIGKILL) ou une panne du serveur peut laisser un répertoire `.audit-*` à nettoyer
-après avoir vérifié qu’aucun audit ne l’utilise. Les images Docker restent disponibles
-pour le déploiement et le retour arrière.
+- la variable `NOWAVE_DEPLOY_HOST` ;
+- les secrets `NOWAVE_DEPLOY_SSH_KEY` et `NOWAVE_DEPLOY_KNOWN_HOSTS`.
 
-## Protection et sauvegardes
+Les protections et approbateurs de cet environnement se règlent sur GitHub.
+Il n'existe pas de verrou `NOWAVE_PRODUCTION_DEPLOY_ENABLED` dans le workflow.
+Pour confirmer une livraison, comparer `/version`, le SHA du push et le résultat
+GitHub Actions, puis effectuer la recette fonctionnelle.
 
-- L’API et PostgreSQL ne publient pas de port directement sur Internet.
-- Les identifiants Firebase et le jeton Cloudflare restent dans `/opt/nowave/secrets`, hors du dépôt.
-- `hostinger/backup.sh` sauvegarde la base et la configuration avant les mises à jour ; un timer système lance également une sauvegarde quotidienne sur le VPS.
-- Chaque sauvegarde réserve un répertoire unique, même pour deux lancements dans la même seconde. `database.dump` n’apparaît qu’après validation du dump et copie de la configuration et des journaux ; un échec nettoie le répertoire incomplet.
-- En cas d’échec des services, du tunnel ou des contrôles publics, `hostinger/deploy.sh` remet la précédente configuration applicative et celle du tunnel, puis redémarre le tunnel s’il fonctionnait auparavant. Sans version précédente, les nouveaux services applicatifs et le tunnel sont arrêtés. La base et ses sauvegardes sont préservées, sans restauration automatique des données. Un échec du rollback est explicitement signalé.
+## Secrets et accès réseau
 
-## Accès GitHub nécessaire
+L'API et PostgreSQL n'exposent aucun port directement sur Internet. Les clés
+restent dans `/opt/nowave/secrets`, hors du dépôt. Le service Firebase doit
+correspondre au projet `blueway-dev` et permettre les envois FCM.
+La connexion admin utilise le secret `firebase_web_api_key`.
 
-Pour que le déploiement automatique fonctionne, l’environnement GitHub `production` doit contenir la variable `NOWAVE_DEPLOY_HOST` et les secrets `NOWAVE_DEPLOY_SSH_KEY` et `NOWAVE_DEPLOY_KNOWN_HOSTS`. Ces accès ne sont pas fournis par le dépôt.
+Pour les cartes web, injecter `MAPBOX_PUBLIC_TOKEN` dans l'API avec un jeton
+public `pk.*` limité aux domaines autorisés. Cette variable n'est pas fournie
+par le Compose de production.
 
-## Notifications de proximité
+Pour les photos, créer un bucket Scaleway privé sans versioning et une clé
+limitée à la lecture, l'écriture, la suppression et au listing de `reports/`.
+Installer :
 
-Le service `notifications` démarre avec le profil de production `api`, depuis
-la même image et la même révision que l’API. Il utilise uniquement les secrets
-PostgreSQL et Firebase existants et dispose d’un accès sortant à FCM. Le compte
-Firebase doit être autorisé à envoyer des messages au projet `blueway-dev`.
-Les secrets restent hors du dépôt. Aucun nouveau schéma ni migration ne sont requis.
+| Fichier | Contenu |
+| --- | --- |
+| `/opt/nowave/config/photo-storage.env` | `PHOTO_STORAGE_BUCKET`, `PHOTO_STORAGE_REGION` (`fr-par`, `nl-ams` ou `pl-waw`) |
+| `/opt/nowave/secrets/scaleway_access_key` | Clé d'accès |
+| `/opt/nowave/secrets/scaleway_secret_key` | Clé secrète |
 
-Le déploiement vérifie que le conteneur exécute le worker attendu à la bonne
-révision. Un échec déclenche le rollback ; les workers de la nouvelle version
-sont arrêtés avant de restaurer les services de la version précédente. Ce contrôle
-de processus ne prouve pas la disponibilité de FCM ni la réception sur téléphone.
+Le déploiement vérifie ces fichiers et protège les clés en `root:10001`, mode
+`0440`. Les migrations appliquent les droits du rôle `nowave_runtime`.
+`NOWAVE_CONFIG_DIR` et `NOWAVE_SECRETS_DIR` permettent de valider Compose avec
+des répertoires de test.
 
-Pour le diagnostic, consulter les logs du service `notifications` et les compteurs
-de `nowave.notifications` par `status` et `last_error_code`, sans afficher de token.
-Des tâches `pending` à zéro tentative avec un worker absent indiquent que l’envoi
-n’a pas démarré, même si l’API est saine. Au démarrage, le worker reprend les tâches
-committées, revérifie leur éligibilité et clôture les tâches expirées sans les envoyer.
-`sent` signifie acceptation par FCM ; la réception doit être vérifiée sur un téléphone.
+## Sauvegardes et retour arrière
 
-## Stockage photo NW-112
+`hostinger/backup.sh` sauvegarde la base et la configuration avant chaque
+livraison ; un timer lance aussi une sauvegarde quotidienne. Chaque sauvegarde
+utilise un répertoire unique. Le dump définitif n'apparaît qu'après validation ;
+un échec nettoie la sauvegarde incomplète.
 
-Avant la première livraison avec les photos, créer un bucket Scaleway privé
-(sans versioning) et une clé dédiée autorisée à lister `reports/`, écrire, lire
-et supprimer ses objets. Aucun accès public ni URL permanente n'est utilisé.
-La signature S3 v4 suit la [documentation Scaleway](https://www.scaleway.com/en/docs/object-storage/concepts/).
+Si les services, le tunnel ou les vérifications publiques échouent, le script
+restaure la configuration applicative et celle du tunnel précédentes. Sans
+version précédente, il arrête les nouveaux services. La base et les sauvegardes
+sont préservées ; les données ne sont jamais restaurées automatiquement.
+Un échec du rollback est signalé.
 
-Installer hors du dépôt :
+Les rapports d'audit restent dans `test-results/containers`. Les exports d'images
+et caches Trivy temporaires sont nettoyés après chaque audit. Après un arrêt
+forcé, vérifier qu'aucun audit ne tourne avant de nettoyer un répertoire `.audit-*`.
+Les images de rollback sont conservées. Le timer `nowave-build-cache.timer`
+borne le cache BuildKit récupérable à 4 Go, sous le verrou de déploiement, sans
+effacer les volumes, sauvegardes ou images conservées.
 
-- `/opt/nowave/config/photo-storage.env`, avec `PHOTO_STORAGE_BUCKET` et
-  `PHOTO_STORAGE_REGION` (`fr-par`, `nl-ams` ou `pl-waw`).
-- `/opt/nowave/secrets/scaleway_access_key` et
-  `/opt/nowave/secrets/scaleway_secret_key`, contenant chacun uniquement la clé.
+## Workers
 
-Le déploiement vérifie la présence de ces fichiers avant le remplacement des
-services et protège les clés en `root:10001`, mode `0440`. La configuration du
-bucket est indépendante de `release.env` et conservée dans les sauvegardes.
-Les identifiants Firebase restent séparés. `NOWAVE_CONFIG_DIR` et
-`NOWAVE_SECRETS_DIR` permettent de valider Compose avec des répertoires de test.
+`notifications` et `photo-cleanup` utilisent la même image et la même révision
+que l'API. Le déploiement vérifie le processus du worker FCM avant promotion.
 
-Le rôle `nowave_runtime` obtient `UPDATE` sur `report_photos` lors des migrations.
-Les connexions PostgreSQL de l'API sont réutilisées dans un pool de 15 connexions maximum par
-processus. Les refus nginx pour débit ou connexions répondent 429 ; une panne
-de base répond 503. Le journal JSON du serveur web expose `status`,
-`upstream_status`, `limit_req_status` et `limit_conn_status` pour distinguer
-ces cas lors d'une recette de zooms répétés. Comparer aussi la révision de
-`/version` avec la révision livrée avant d'attribuer un incident à ce réglage.
-Les sept familles XYZ marines ont un budget distinct de **120 requêtes/s/IP**,
-avec une rafale bornée à 256 et mise en attente au-delà de 64. La limite générale
-reste à 10/s pour profil, publication et métadonnées. Les MVT de signalements
-ont un budget dédié de **60 requêtes/s/IP**, une rafale bornée à 128 avec mise
-en attente au-delà de 15, et un plafond de **128 requêtes simultanées/IP**.
-Les flux marins ont un plafond séparé de **256 requêtes simultanées/IP** : un écran
-de neuf tuiles sur sept sources ne doit pas saturer le plafond de 30 connexions/IP
-des autres routes. Le cache
-marin persistant réduit les appels fournisseurs mais ne réduit pas le nombre
-de requêtes reçues par Nginx : ces protections sont complémentaires.
+- `notifications` reprend les tâches committées et vérifie encore leur
+  éligibilité. Consulter ses logs et les compteurs SQL `status` / `last_error_code`
+  sans afficher les tokens. `sent` signifie acceptation FCM ; vérifier la
+  réception sur téléphone.
+- `photo-cleanup` passe toutes les cinq minutes et supprime uniquement les
+  objets NoWave non référencés depuis au moins une heure.
 
-La bathymétrie visuelle conserve également ses PNG terminés (couleurs et masque
-côtier inclus) dans `MARINE_CACHE_DIR/bathymetry.sqlite3`, pendant 24 heures,
-avec un plafond de 128 Mio sur disque et 32 Mio en mémoire. Le cache est
-versionné avec le rendu côtier ; toute modification de couleurs ou de masque
-doit changer cette version et celle de l'URL mobile. Les demandes simultanées
-de la même tuile partagent un seul rendu. Au maximum huit rendus occupent les
-workers, les autres attendent de façon asynchrone (file bornée à 128 tuiles).
-L'attente d'un worker est limitée à huit secondes et une réponse bathymétrique
-à 24 secondes, avant les 30 secondes de Nginx. Une réponse expirée ne libère pas
-prématurément le worker synchrone : son rendu reste partagé jusqu'à sa fin.
-SQLite utilise une connexion réutilisée et sérialisée hors de la boucle
-événementielle, avec deux secondes d'attente et un index d'expiration.
-Les logs exposent l'opération et le code SQLite en cas d'erreur, puis les temps
-de lecture, file, téléchargement, recoloration et masque/rendu côtier.
-EMODnet utilise six secondes d'inactivité et deux secondes de connexion ; une
-seule nouvelle tentative est permise sur erreur de connexion ou 502/504 sans
-`Retry-After`. Les 429, 503 et lectures expirées ne sont pas retentés.
-L'API dispose de 1,5 vCPU et 768 Mio au maximum, et de 384 requêtes entrantes
-simultanées. Ces plafonds ne réservent pas les ressources du VPS partagé.
-Un échec n'est jamais enregistré comme un océan vide et aucun masque côtier
-n'est contourné. Le cache disque natif mobile réutilise ces PNG publics selon
-leur durée HTTP, sans modifier le cache des sondes numériques.
+## Cartographie et limites réseau
 
-Pour reproduire sans charge publique, utiliser `backend/tools/probe_marine_rate_limits.py`
-avec un binaire Nginx local. Ce scénario ne contacte que le loopback et un
-fournisseur synthétique, après préchauffage du vrai cache `MarineHTTP`.
-Le probe inclut deux écrans de 63 tuiles, puis trois écrans superposés
-(189 requêtes simultanées) avec des réponses lentes
-et vérifie l'accès au profil pendant leur chargement.
-Les résultats locaux ne prouvent pas l'origine d'un 429 distant : vérifier
-`limit_req_status` et `upstream_status` dans les logs de production. Les 429/503
-amont conservent le backoff `Retry-After` du transport marin ; aucune boucle de
-retries ni préchargement de zones n'est ajouté.
+Nginx répond `429` sur dépassement de débit ou de connexions. Une panne SQL donne
+`503`. Ses logs exposent `status`, `upstream_status`, `limit_req_status` et
+`limit_conn_status` pour distinguer les causes.
 
-La table de recoloration est initialisée une seule fois, même si huit tuiles
-arrivent ensemble au démarrage. Le cache LRU seul ne sérialise pas ses défauts.
+| Flux | Débit par IP | Rafale | Requêtes simultanées par IP |
+| --- | --- | --- | --- |
+| Routes générales | 10/s | 30, sans attente | 30 |
+| MVT des signalements | 60/s | 128, attente au-delà de 15 | 128 |
+| Sept familles XYZ marines | 120/s | 256, attente au-delà de 64 | 256 |
 
-Le fond mondial GEBCO 2026 est précalculé dans l'image web : 5 461 tuiles Z0–Z6,
-environ 5 Mo compressés, servies directement par Nginx avec un budget distinct
-et un an de cache. Il apparaît du globe aux zooms détaillés, sous EMODnet, sans
-attendre l'API ni un fournisseur. EMODnet est limité à son emprise annoncée et
-ses requêtes sont différées de 600 ms. Le fond GEBCO reste une vue d'ensemble
-échantillonnée à deux minutes d'arc, sans sondes ni courbes dérivées ; les
-détails régionaux gardent leurs sources. Voir [la provenance et la régénération](marine/README.md).
+Le pool SQL est limité à 15 connexions par processus. L'API est plafonnée à
+1,5 vCPU, 768 Mio et 384 requêtes entrantes simultanées.
+Les uploads seuls acceptent 512 000 octets, enveloppe multipart comprise.
 
-Le cache HTTP des fournisseurs exécute également ses lectures, nettoyages et
-écritures SQLite dans un worker sérialisé, avec un index d'expiration. Une
-table volumineuse ne doit pas bloquer la boucle de l'API pendant son nettoyage.
-La rétention OSM d'au moins sept jours et le refus d'un cache plein sont conservés.
+Le cache marin persistant réduit les appels fournisseurs. Les PNG bathymétriques
+terminés sont conservés 24 h, avec 128 Mio sur disque et 32 Mio en mémoire.
+Huit rendus peuvent tourner en parallèle ; la file est bornée à 128 tuiles.
+L'attente d'un worker est limitée à 8 s et la réponse à 24 s, avant les 30 s Nginx.
+Une erreur ne doit jamais être mise en cache comme une tuile vide.
+Changer le masque ou les couleurs exige une nouvelle version de cache et d'URL.
+La rétention OSM reste d'au moins sept jours ; un cache plein refuse les nouvelles
+entrées au lieu d'effacer trop tôt les anciennes.
 
-Le timer `nowave-build-cache.timer` borne chaque jour le cache BuildKit récupérable à 4 Go
-(avec un plancher de conservation de 2 Go), sous le verrou de déploiement.
-`ci-deploy.sh` applique aussi cette rétention après une livraison réussie.
-Le cache de build est partagé avec LabelScan et entièrement régénérable ; les
-images de retour arrière, conteneurs, volumes et sauvegardes sont conservés.
-Les couches partagées avec les images conservées restent comptées dans
-`docker system df` : le total affiché peut dépasser le plafond du cache récupérable.
+Le fond [GEBCO](marine/README.md) est servi directement par Nginx, avec un budget
+séparé et un an de cache. EMODnet fournit le détail régional dans son emprise.
+Pour reproduire les limites localement, utiliser
+`backend/tools/probe_marine_rate_limits.py` : il contacte uniquement le loopback
+avec un fournisseur de test.
 
-Le service `photo-cleanup` partage le code de l'API et tourne toutes les cinq
-minutes ; ses logs indiquent les suppressions et les pannes sans exposer les
-secrets ni les URL signées. Il ne supprime que les objets NoWave non référencés
-âgés d'au moins une heure. La configuration Nginx accepte 512 000 octets sur la
-route d'upload uniquement, enveloppe multipart comprise.
+## Recette après livraison
 
-Recette avant validation de l'intégration réelle : envoyer un JPEG depuis Flutter,
-répéter après réponse perdue, ouvrir son URL, vérifier son refus après cinq
-minutes, masquer la photo et vérifier qu'aucune nouvelle URL n'est émise. Simuler
-une panne de stockage puis confirmer que le même report_id peut être réessayé.
-Vérifier les logs et la disparition d'un objet orphelin après le délai de nettoyage.
-Utiliser un compte de recette ; aucune réussite de cette recette n'est implicite.
+`hostinger/verify-public.sh` vérifie notamment trois tuiles près de Toulon :
+`seamarks/12/2115/1503.pbf`, `soundings/12/2115/1503.pbf` et
+`bathymetry/12/2115/1503.png`. Une erreur HTTP ou un délai dépassé bloque la
+promotion et déclenche le rollback. Ce contrôle ne valide pas le rendu mobile.
 
-## Convention Git de déploiement - [FIX T15 (NW-168)](https://linear.app/blueway/issue/NW-168) (19/10/2026)
+Avec un compte et des données de recette :
 
-La branche `dev` est à la fois la **branche d'intégration** et, après les cinq contrôles CI ainsi que les audits requis, la source du **déploiement automatique actuel** sur le VPS. Le déploiement utilise le SHA précis du push validé. L'environnement GitHub portant le nom `production` ne constitue pas la preuve d'un deuxième serveur ou d'un environnement staging séparé.
+1. Contrôler la carte sur téléphone, les déplacements et les couches marines.
+2. Publier un signalement et vérifier une alerte sur un second appareil.
+3. Envoyer un JPEG, répéter le même upload et ouvrir sa photo.
+4. Vérifier l'expiration de l'URL après cinq minutes, puis masquer la photo et
+   confirmer qu'aucune nouvelle URL n'est émise.
+5. Tester une panne de stockage et la reprise sur le même signalement ; vérifier
+   le nettoyage d'un objet orphelin après le délai prévu.
 
-La branche `main` est la **référence des releases stables**, promues par Pull Request depuis `dev` après QA. Dans les workflows en vigueur, un push sur `main` ne déclenche **pas** de déploiement autonome ; une PR vers `main` exécute uniquement la validation. Il faut donc distinguer :
-
-- **code présent dans `dev`** : dernière intégration partagée ;
-- **version réellement déployée** : SHA confirmé par `GET /version` et le workflow de livraison ;
-- **release stable validée** : révision promue sur `main` après recette ;
-- **réception mobile et FCM** : recette spécifique, non prouvée par un conteneur démarré.
-
-Pour chaque livraison ou soutenance, noter la date, le SHA `dev`, le SHA annoncé par `/version`, le résultat du workflow GitHub Actions, la PR éventuelle `dev` vers `main` et les vérifications fonctionnelles réellement réalisées. Références : [documentation Stage 4](https://docs.google.com/document/d/1Gez2BmfkdjTLyE9jkyf-U_QzJkUWQ9mu/edit), [correspondance des fonctionnalités et tests](../docs/TESTING.md#correspondance-fonctionnelle-code-et-tests), [CONTRIBUTING](../docs/CONTRIBUTING.md). Responsable : Brice (NW-57, NW-84).
-
-### Livraison contrôlée des correctifs cartographiques
-
-Le workflow `.github/workflows/production.yml` de la branche `dev`
-ne contient actuellement **aucun** verrou
-`NOWAVE_PRODUCTION_DEPLOY_ENABLED`. Le job de déploiement requiert
-un événement `push` sur `dev` après réussite des contrôles et audits.
-La protection de l'environnement GitHub `production`, ses approbateurs
-et les accès SSH doivent être vérifiés directement sur GitHub avant livraison.
-Ne pas présenter une ancienne variable documentaire comme un blocage effectif.
-
-La vérification publique `deploy/hostinger/verify-public.sh` sonde une fois
-par tentative trois tuiles marines représentatives près de Toulon :
-`seamarks/12/2115/1503.pbf`,
-`soundings/12/2115/1503.pbf` et
-`bathymetry/12/2115/1503.png`. Les réponses HTTP 429/503, autres erreurs
-non-2xx et délais dépassés empêchent la validation et déclenchent le rollback
-prévu par `deploy.sh`. Cette vérification à faible débit ne prouve pas la
-couverture complète des sept familles ni leur rendu Android ; conserver la
-recette cartographique sur téléphone après livraison. Les erreurs de fournisseur
-peuvent également bloquer la promotion, volontairement.
+Les [commandes de test](../docs/TESTING.md) complètent cette recette.

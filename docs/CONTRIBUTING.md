@@ -1,117 +1,36 @@
-# Contribution Guidelines — NoWave
+# Contribuer à NoWave
 
-## Branch organization
+Les changements passent par une branche de travail, une PR vers `dev`, puis une revue par un autre membre de l’équipe. `main` contient les releases stables.
 
-The project uses two main branches:
+## Créer une branche
 
-- `main`: stable version of the project, used in particular for the MVP presentation.
-- `dev`: integration branch containing validated features before they move to `main`.
+Depuis un dossier de travail propre :
 
-Development must be done in working branches created from `dev`.
-
-## Workflow
-
-The project workflow is:
-
-`feat/*` → `dev` → `main`
-
-A feature must never be developed directly on `main` or `dev`.
-
-## `main` branch
-
-`main` represents the stable version of the project.
-
-Rules:
-
-- No direct development on `main`.
-- No direct push to `main`.
-- Changes reach `main` only through a Pull Request.
-- A Pull Request to `main` should normally come from `dev`.
-- `main` must remain in a working and presentable state.
-
-## `dev` branch
-
-`dev` is the shared integration branch.
-
-Rules:
-
-- No direct development on `dev`.
-- No direct push to `dev`.
-- Each feature or fix has its own branch.
-- Changes are integrated into `dev` through a Pull Request.
-- A Pull Request must be reviewed by at least one other team member before being merged.
-
-## Working branches
-
-Working branches are created from `dev`.
-
-Naming convention:
-
-- `feat/...`: new feature
-- `fix/...`: bug fix
-- `docs/...`: documentation
-- `refactor/...`: code restructuring without functional change
-- `test/...`: adding or modifying tests
-- `chore/...`: maintenance, configuration or tooling
-
-Examples:
-
-`feat/maritime-map`
-
-`feat/user-authentication`
-
-`fix/map-loading`
-
-`docs/api-documentation`
-
-## Before starting a task
-
-Update `dev`:
-
-```bash
+```sh
 git switch dev
-git pull origin dev
+git pull --ff-only origin dev
+git switch -c docs/installation
 ```
 
-Then create a branch:
+Utilise un nom court qui décrit le travail. Préfixes usuels : `feat/`, `fix/`, `docs/`, `refactor/`, `test/`, `chore/`.
 
-```bash
-git switch -c chore/BLU-50/configurer-tests-controles-automatiques-pr
+## Ouvrir une PR
+
+1. Fais des commits ciblés et lance les [contrôles utiles](TESTING.md).
+2. Pousse ta branche.
+3. Ouvre une PR vers `dev` avec le problème, le changement et les résultats des tests.
+4. Fais relire par un autre membre, puis résous les remarques bloquantes avant la fusion.
+
+```sh
+git add <fichiers-modifies>
+git commit -m "docs: simplifier le guide d’installation"
+git push -u origin docs/installation
 ```
 
-## Once the work is done
+Les secrets restent hors Git. La documentation décrit le comportement du code présent ; une fonction prévue doit être indiquée comme telle.
 
-Create the commits, then push the branch to GitHub:
+## Livrer
 
-```bash
-git add <fichiers-de-la-tache>
-git commit -m "feat: feature description"
-git push -u origin chore/BLU-50/configurer-tests-controles-automatiques-pr
-```
+Un push sur `dev` lance la CI. Le déploiement VPS démarre après réussite des contrôles et audits. Pour une release stable, termine la recette puis ouvre une PR de `dev` vers `main`.
 
-Then open a Pull Request:
-
-`feat/...` → `dev`
-
-The Pull Request must be reviewed by at least one other team member before being merged.
-
-## Promoting to a stable version
-
-When the version in `dev` is considered stable:
-
-`dev` → Pull Request → `main`
-
-No `feat/*` branch may be merged directly into `main`.
-
-## General rule
-
-All three team members — Jonathan, Vadim and Brice — follow the same workflow.
-
-Nobody develops directly on `main` or `dev`, including the repository owner.
-
-## Contrôles automatiques
-
-Consulter [TESTING.md](TESTING.md) pour reproduire les contrôles Python, Flutter,
-PostGIS et web, les audits de production, retrouver les rapports et configurer
-les contrôles obligatoires. Le workflow **NoWave CI** regroupe ces vérifications
-et conditionne le déploiement automatique depuis `dev` à leur réussite.
+Les règles sont les mêmes pour toute l’équipe : aucun développement ni push direct sur `dev` ou `main`.
