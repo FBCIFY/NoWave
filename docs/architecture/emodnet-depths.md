@@ -1,8 +1,10 @@
 # Profondeurs modélisées EMODnet 2024 — contrat MVP
 
-Implémentation locale du 18 octobre 2026. Ce document actualise uniquement le
-flux des chiffres de profondeur décrit dans `hydrography.md` ; les courbes et
-dangers conservent leurs fournisseurs et leur fonctionnement.
+Implémentation locale du 18 octobre 2026, avec correction de l'annulation HTTP
+le 31 octobre 2026 ([PR #142](https://github.com/FBCIFY/NoWave/pull/142)).
+Ce document actualise uniquement le flux des chiffres de profondeur décrit dans
+`hydrography.md` ; les courbes et dangers conservent leurs fournisseurs et leur
+fonctionnement.
 
 ## Flux et sélection
 
@@ -140,7 +142,8 @@ globale ; elles sont dédupliquées par identité d'indice et ordonnées avant M
 ## Réseau, erreurs et RAM
 
 - Client `httpx.AsyncClient` dédié ; aucune utilisation de `MarineHTTP.get` ni
-  de son SQLite. Pas de dépendance ajoutée, aucun corps écrit sur disque.
+  de son SQLite, aucun corps écrit sur disque. L'adaptateur `cancellation_safe`
+  utilise AnyIO, désormais déclaré explicitement dans `backend/requirements.txt`.
 - 2 téléchargements simultanés maximum, départs espacés d'au moins 250 ms
   (4/s par processus), pas de retry par tuile.
 - Timeout HTTP 6 s, connexion/pool 2 s ; délai total fournisseur 10 s incluant
@@ -153,7 +156,9 @@ globale ; elles sont dédupliquées par identité d'indice et ordonnées avant M
   Aucun second cache de données/CSV. Les pannes ne sont pas mises en cache.
   Les locks existants réunissent les chargements réussis d'une même tuile.
 - La route surveille la déconnexion ASGI toutes les 100 ms et annule le travail,
-  y compris l'attente d'un lock. Les ressources réseau et sémaphores sont libérées.
+  y compris l'attente d'un lock. L'adaptateur `cancellation_safe` attend la fermeture
+  HTTP et la libération du sémaphore avant de propager l'annulation, même lorsqu'elle
+  provient de l'échéance fournisseur.
   Une demande annulée n'alimente pas le cache ; les autres demandeurs peuvent
   reprendre un téléchargement. Le travail déjà fini peut rester en RAM.
 - Les logs contiennent indices XYZ, nombre de cellules/points, octets, temps

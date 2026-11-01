@@ -88,10 +88,12 @@ ces cas lors d'une recette de zooms répétés. Comparer aussi la révision de
 `/version` avec la révision livrée avant d'attribuer un incident à ce réglage.
 Les sept familles XYZ marines ont un budget distinct de **120 requêtes/s/IP**,
 avec une rafale bornée à 256 et mise en attente au-delà de 64. La limite générale
-reste à 10/s pour profil, publication et métadonnées ; les MVT de signalements
-restent à 30/s. Les flux marins ont un plafond séparé de **256 requêtes
-simultanées/IP** : un écran de neuf tuiles sur sept sources ne doit pas saturer
-le plafond de 30 connexions/IP des autres routes. Le cache
+reste à 10/s pour profil, publication et métadonnées. Les MVT de signalements
+ont un budget dédié de **60 requêtes/s/IP**, une rafale bornée à 128 avec mise
+en attente au-delà de 15, et un plafond de **128 requêtes simultanées/IP**.
+Les flux marins ont un plafond séparé de **256 requêtes simultanées/IP** : un écran
+de neuf tuiles sur sept sources ne doit pas saturer le plafond de 30 connexions/IP
+des autres routes. Le cache
 marin persistant réduit les appels fournisseurs mais ne réduit pas le nombre
 de requêtes reçues par Nginx : ces protections sont complémentaires.
 

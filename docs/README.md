@@ -1,6 +1,8 @@
 # Documentation NoWave
 
-Cet index distingue la [documentation technique Stage 4](https://docs.google.com/document/d/1Gez2BmfkdjTLyE9jkyf-U_QzJkUWQ9mu/edit), source fonctionnelle de référence, de son [PDF conservé dans le dépôt](NoWave_Documentation_Technique.pdf), des annexes spécialisées et des preuves. La version Stage 4 du 30/10/2026 décrit le code `dev` au commit [`ad54ffdb`](https://github.com/FBCIFY/NoWave/commit/ad54ffdb2cf359c36cf22b947494195bddcf87fb) (28/10/2026) ; elle ne prouve pas une recette ou un déploiement. La stricte identité du PDF du dépôt et du document du Drive n'a pas été établie.
+Cet index distingue la [documentation technique Stage 4](https://docs.google.com/document/d/1Gez2BmfkdjTLyE9jkyf-U_QzJkUWQ9mu/edit), source fonctionnelle de référence, de son [PDF conservé dans le dépôt](NoWave_Documentation_Technique.pdf), des annexes spécialisées et des preuves. La version Stage 4 référencée lors de la consolidation du 30/10/2026 décrit le code `dev` au commit [`ad54ffdb`](https://github.com/FBCIFY/NoWave/commit/ad54ffdb2cf359c36cf22b947494195bddcf87fb) (28/10/2026) ; elle ne prouve pas une recette ou un déploiement. La stricte identité du PDF du dépôt et du document du Drive n'a pas été établie.
+
+**Évolution technique du 31/10/2026 :** la [PR #142](https://github.com/FBCIFY/NoWave/pull/142) a été intégrée dans `dev` au commit [`4d55f87`](https://github.com/FBCIFY/NoWave/commit/4d55f8722d467d98fdf57d15b67f79f4078c507d). Elle sécurise les annulations HTTP marines, ajuste les limites Nginx des tuiles de signalements, déclare AnyIO explicitement et met à jour `pyasn1` en 0.6.5. Ces évolutions sont décrites dans les [sources marines](architecture/marine-sources.md), le [contrat EMODnet](architecture/emodnet-depths.md) et le [guide de déploiement](../deploy/README.md). Les PDF conservés restent des références datées ; ils n'ont pas été régénérés pour cette révision.
 
 ## Démarrer et contribuer
 
