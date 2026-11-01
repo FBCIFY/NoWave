@@ -132,10 +132,10 @@ valeurs >=1m; Z14 : toutes. Ces seuils **sélectionnent** les objets : ils ne cr
 aucune ligne. Cela conserve à Z12 les contours NOAA réels de 3.6m et 5.4m issus
 notamment d'anciennes graduations en pieds, sans les arrondir à 5m.
 
-Les deux couches ont `minZoom=12` strict; largeur major .95/minor .55, opacité
+Les couches hydrographiques visibles utilisent désormais `minZoom=13` selon `MarineZoom.depths`; largeur major .95/minor .55, opacité
 .72/.48, bleu-gris #507F99. Étiquettes natives le long des contours, répétées tous les 160px, taille
 interpolée 10.5/11.5/12.5/13.5px aux zooms 12/14/16/18, halo fin .6px. Sondes
-à partir de 14, même taille adaptative, sans pastille, collisions activées. Grilles
+à partir de 13, même taille adaptative, sans pastille, collisions activées. Grilles
 Mercator mondiales imbriquées (tailles détaillées ci-dessous) : choisir la sonde la moins
 profonde de chaque cellule, puis précision publiée et ID stable. Les datums connus
 incompatibles restent dans des groupes séparés. Les vainqueurs peu profonds restent

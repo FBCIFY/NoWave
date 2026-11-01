@@ -1,3 +1,0 @@
-{"features":100,"bytes":53803,"sync_us":[1176,669,515],"isolate_total_us":[1405,1066,975],"scope":"host Dart VM; includes isolate transfer; no device frame measurement"}
-{"features":1000,"bytes":538084,"sync_us":[4228,4799,2597],"isolate_total_us":[7773,14425,8440],"scope":"host Dart VM; includes isolate transfer; no device frame measurement"}
-{"features":5000,"bytes":2700484,"sync_us":[29771,21863,19007],"isolate_total_us":[36317,43860,44697],"scope":"host Dart VM; includes isolate transfer; no device frame measurement"}
