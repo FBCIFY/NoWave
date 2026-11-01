@@ -6,21 +6,39 @@ NoWave est une app de signalements maritimes : obstacles, animaux marins et poll
 
 Le responsable du projet attribue le rôle `admin` au compte de l’utilisateur désigné à sa création, pour accéder à l’[administration](https://no-wave.fr/admin).
 
-## Lancer le projet
+## Prérequis
 
-Installer Docker avec Compose. Toutes les commandes ci-dessous partent de la racine du dépôt.
+- Docker avec Compose.
+- Un compte de service Firebase et les clés renseignées dans `.env`.
+
+## Lancer
+
+Depuis la racine du dépôt :
 
 ```sh
 test -f .env || cp .env.example .env
 ```
 
-Compléter `.env` avant de lancer : mot de passe PostgreSQL, clé web Firebase, `MAPBOX_PUBLIC_TOKEN` pour la carte web et accès au stockage photo Scaleway. `FIREBASE_SERVICE_ACCOUNT_FILE` doit pointer vers un vrai fichier de compte de service Firebase sur le poste. Remplacer les valeurs d’exemple et garder les secrets hors Git.
+Dans `.env`, remplacer les valeurs d’exemple :
+
+- `NOWAVE_DB_PASSWORD` : mot de passe de la base.
+- `FIREBASE_SERVICE_ACCOUNT_FILE` : chemin du fichier Firebase local.
+- `FIREBASE_WEB_API_KEY` et `MAPBOX_PUBLIC_TOKEN` : connexion admin et carte web.
+- `PHOTO_STORAGE_BUCKET`, `PHOTO_STORAGE_REGION`, `SCW_ACCESS_KEY`, `SCW_SECRET_KEY` : stockage photo.
+
+Garder ce fichier et les clés privées hors Git.
 
 ```sh
 docker compose up --build -d --wait
 ```
 
-Avec les ports par défaut, le site est sur `https://localhost:8443` : accepter le certificat local. L’admin est sous `/admin`, l’API sur `http://127.0.0.1:8000`. Les migrations sont automatiques ; les ports se règlent dans `.env`.
+Adresses par défaut :
+
+- Site : `https://localhost:8443`.
+- Admin : `https://localhost:8443/admin`.
+- API : `http://127.0.0.1:8000`.
+
+Accepter le certificat HTTPS local. Les migrations sont automatiques ; les ports se règlent dans `.env`.
 
 Pour les alertes et le nettoyage des photos :
 
@@ -29,25 +47,6 @@ docker compose --profile alerts --profile photos up -d notifications photo-clean
 ```
 
 `docker compose down` arrête les services en conservant les données.
-
-## Lancer le mobile depuis les sources
-
-Installer Flutter 3.47.5 et configurer un émulateur ou un téléphone.
-
-```sh
-test -f mobile/.env.json || cp mobile/.env.example.json mobile/.env.json
-```
-
-Dans `mobile/.env.json`, renseigner `MAPBOX_ACCESS_TOKEN` avec un jeton public Mapbox et `API_BASE_URL` avec l’adresse du backend. Laisser `MARINE_API_BASE_URL` vide pour utiliser le même backend.
-
-Pour l’API locale sur le port 8000 : `http://10.0.2.2:8000/` sur émulateur Android, `http://127.0.0.1:8000/` sur simulateur iOS. Sur téléphone, utiliser l’API distante ou, en USB Android, lancer `adb reverse tcp:8000 tcp:8000` et utiliser `http://127.0.0.1:8000/`.
-
-```sh
-(cd mobile && flutter pub get --enforce-lockfile)
-(cd mobile && flutter run --dart-define-from-file=.env.json)
-```
-
-Après un changement de configuration, reconstruire et relancer l’app. Garder `mobile/.env.json` hors Git.
 
 ## Utiliser l’API
 
@@ -65,6 +64,15 @@ curl --fail -H "Authorization: Bearer $FIREBASE_ID_TOKEN" \
 ```
 
 Cette lecture renvoie 404 si le profil n’a pas encore été créé. Les routes, champs, réponses et erreurs sont dans les [contrats API](docs/contrats-api.md).
+
+## Par composant
+
+Chaque README donne le lancement et les tests courants :
+
+- [Backend](backend/README.md) : API Python et base locale.
+- [Mobile](mobile/README.md) : app Flutter sur émulateur ou téléphone.
+- [Web](web/README.md) : site en développement avec Vite.
+- [Déploiement](deploy/README.md) : configuration du VPS et vérifications après livraison.
 
 Les [crédits et licences](docs/licences.md) couvrent les données et les icônes. NoWave ne remplace pas les cartes nautiques officielles.
 
