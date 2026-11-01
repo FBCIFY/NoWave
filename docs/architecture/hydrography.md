@@ -1,5 +1,13 @@
 # Courbes, sondes et dangers sous-marins
 
+> **Annexe historique — travaux du 17 octobre 2026.** Ce document conserve les
+> sources consultées, leur provenance et les décisions d'implémentation de cette
+> étape. Les paramètres du pipeline MVT, les seuils et les règles de rendu décrits
+> ci-dessous ne définissent pas le fonctionnement actuel. Pour le chargement
+> GeoJSON, la persistance et l'affichage actuels, consulter le
+> [contrat NW-220](marine-zoom-persistence.md). Les limites HTTP actuelles sont
+> précisées dans [Sources marines — cache et réseau](marine-sources.md#cache-réseau-et-limites-opérationnelles).
+
 ## Sources réellement consultées le 17 octobre 2026
 
 | Source | Endpoint / couche | Données / référence / licence |
@@ -117,7 +125,7 @@ Troncature et échecs sont déclarés dégradés; panne totale sélectionnée = 
 pas de faux vide mis en cache. Hors couverture intégrée = vide, sans exhaustivité.
 Les erreurs nationales ne bloquent pas la carte Flutter.
 
-Transport/cache HTTP commun existant : 8 requêtes simultanées, 4s HTTP, single
+Transport/cache HTTP du pipeline historique : 8 requêtes simultanées, 4s HTTP, single
 flight, SQLite persistant, plafond 512MiB, corps limité à 8MiB, TTL 6h national,
 cooldown 429/503. Budget provider global 14s. Cache MVT commun : 512 entrées/32MiB,
 300s ou 15s dégradé. Compteurs HTTP `network_requests` / `cache_hits` pour mesurer
@@ -132,10 +140,10 @@ valeurs >=1m; Z14 : toutes. Ces seuils **sélectionnent** les objets : ils ne cr
 aucune ligne. Cela conserve à Z12 les contours NOAA réels de 3.6m et 5.4m issus
 notamment d'anciennes graduations en pieds, sans les arrondir à 5m.
 
-Les deux couches ont `minZoom=12` strict; largeur major .95/minor .55, opacité
+Les couches hydrographiques visibles utilisent désormais `minZoom=13` selon `MarineZoom.depths`; largeur major .95/minor .55, opacité
 .72/.48, bleu-gris #507F99. Étiquettes natives le long des contours, répétées tous les 160px, taille
 interpolée 10.5/11.5/12.5/13.5px aux zooms 12/14/16/18, halo fin .6px. Sondes
-à partir de 14, même taille adaptative, sans pastille, collisions activées. Grilles
+à partir de 13, même taille adaptative, sans pastille, collisions activées. Grilles
 Mercator mondiales imbriquées (tailles détaillées ci-dessous) : choisir la sonde la moins
 profonde de chaque cellule, puis précision publiée et ID stable. Les datums connus
 incompatibles restent dans des groupes séparés. Les vainqueurs peu profonds restent
@@ -161,10 +169,10 @@ Les contours et les sondes portent `depth_label`, issu de `value_m` sans arrondi
 au décimètre. Le contrat mobile hydrographique `?v=3` évite la réutilisation de
 tuiles natives antérieures dépourvues de ce champ. Les courbes et leur texte ont
 le même filtre d'éligibilité (Z12, valeur publiée, seuil de sélection).
-Les contours EMODnet 2022 au 1:500000 sont normaux à Z12–13, atténués à Z14
-(opacité majeure .32, mineure .22) et exclus dès Z15, texte compris. Les ENC NOAA
-restent éligibles aux zooms locaux. Aucune source française plus précise ne
-remplace les lignes EMODnet dans cette livraison.
+Dans ce rendu historique, les contours EMODnet 2022 au 1:500000 étaient normaux
+à Z12–13, atténués à Z14 (opacité majeure .32, mineure .22) et exclus dès Z15,
+texte compris. Les ENC NOAA restaient éligibles aux zooms locaux. Aucune source
+française plus précise ne remplaçait les lignes EMODnet dans cette livraison.
 
 Les levés XYZ Shom sont désormais une **source distincte** des épaves Shom :
 `shom-surveys`, Licence Ouverte 2.0, profondeur publiée en mètres / LAT explicite.
@@ -174,7 +182,6 @@ archive et checksum, identifiant levé + numéro de ligne, dates d'acquisition e
 révision. Les attributs bruts de chaque sonde contiennent sa ligne XYZ. La
 précision individuelle reste inconnue. Catalogue initial limité à Toulon, avec des mesures dans les grands bassins
 et les approches ; aucun remplissage des bassins ou autre port sans mesure.
-Voir `backend/app/infrastructure/marine/data/shom-surveys/README.md`.
 
 La sélection des sondes utilise des grilles Mercator mondiales emboîtées. Les
 cartes NOAA `harbour`/`berthing` et les levés côtiers intégrés utilisent des
@@ -205,11 +212,12 @@ avec checksum de l'archive, contrôle de l'en-tête m/LAT, licence dans le XML,
 comptage et borne de 100 000 cellules. Le serveur utilise un index spatial du
 petit catalogue résultant ; il ne télécharge ni ne parcourt le nuage complet.
 
-Une ligne n'est rendue que si son ID a un label réellement placé par Mapbox dans
-la vue. Les chiffres sont placés par `symbolPlacement=line`, spacing 160px,
-collisions natives ; une interrogation après changement de placement ou à
-l'arrêt de la carte active `feature-state.label_visible` pour ces lignes seules.
-Les mouvements invalident l'ancien placement, les requêtes périmées sont écartées,
-les échecs restent masqués, et un reload recrée sources/images/layers sans doublon.
-Une ligne trop courte ou dont tous les chiffres entrent en collision est omise ;
-aucun chiffre n'est forcé au-dessus des aides à la navigation.
+Dans l'ancien couplage entre lignes et étiquettes, une ligne n'était rendue que
+si son ID avait un label réellement placé par Mapbox dans la vue. Les chiffres
+étaient placés par `symbolPlacement=line`, spacing 160px, collisions natives ;
+une interrogation après changement de placement ou à l'arrêt de la carte activait
+`feature-state.label_visible` pour ces lignes seules. Les mouvements invalidaient
+l'ancien placement, les requêtes périmées étaient écartées, les échecs restaient
+masqués, et un reload recréait sources/images/layers sans doublon. Une ligne trop
+courte ou dont tous les chiffres entraient en collision était omise ; aucun chiffre
+n'était forcé au-dessus des aides à la navigation.

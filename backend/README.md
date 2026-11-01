@@ -315,8 +315,12 @@ la cible a été supprimé reste listée avec un identifiant `null`.
 ### Administration web
 
 Les pages d'administration sont rendues par FastAPI avec Jinja, sur le même
-domaine que le site : `https://no-wave.fr/admin`. Elles n'utilisent pas de
-JavaScript, la CSP du site reste donc inchangée.
+domaine que le site : `https://no-wave.fr/admin`. Les scripts JavaScript gèrent
+la navigation et les interactions ; Mapbox GL JS rend le globe de connexion et
+la carte de surveillance. La CSP définie dans
+[`deploy/web/nginx.conf`](../deploy/web/nginx.conf) autorise les scripts locaux,
+les workers `blob:`, les connexions Mapbox et les domaines régionaux de stockage
+photo prévus par cette configuration.
 
 | Route | Rôle |
 |---|---|
@@ -389,6 +393,7 @@ générale.
 Depuis la racine, avec l’environnement virtuel activé :
 
 ```bash
+python -m pip install -r backend/requirements-test.txt
 PYTHONPATH=backend python -m pytest backend/tests/api backend/tests/unit
 ```
 
