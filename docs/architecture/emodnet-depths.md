@@ -2,16 +2,24 @@
 
 Implémentation locale du 18 octobre 2026, avec correction de l'annulation HTTP
 le 31 octobre 2026 ([PR #142](https://github.com/FBCIFY/NoWave/pull/142)).
-Ce document actualise uniquement le flux des chiffres de profondeur décrit dans
-`hydrography.md` ; les courbes et dangers conservent leurs fournisseurs et leur
-fonctionnement.
+Cette annexe précise le fournisseur des chiffres de profondeur et le contrat
+backend MVT conservé. Depuis NW-220, le mobile charge des snapshots GeoJSON et
+alimente des sources Mapbox GeoJSON. Les anciens paramètres de source vectorielle
+sont identifiés comme historiques ci-dessous ; les règles actuelles de chargement,
+de zoom et de conservation sont décrites dans
+[Seuils et conservation maritimes](marine-zoom-persistence.md).
 
 ## Flux et sélection
 
+### Route MVT conservée
+
+Le backend expose toujours ce contrat pour les clients, outils et tests MVT.
+La source Flutter vectorielle du schéma correspond au client initial du 18 octobre.
+
 ```text
-Flutter HydrographyLayer / Mapbox VectorSource (Z12, max source Z16)
+Ancien client Flutter / Mapbox VectorSource (Z12, max source Z16)
   → GET /api/v1/map/soundings/{z}/{x}/{y}.pbf
-  → MarineTileService (cache MVT RAM existant, requêtes identiques sérialisées)
+  → MarineTileService (cache final RAM partagé, requêtes identiques sérialisées)
   → EmodnetDepthProvider (client HTTP dédié sans cache disque)
   → ERDDAP griddap bathymetry_dtm_2024.csv, sélection bornée par indices
   → vérification stricte du CSV, cellules marines normalisées en mémoire
@@ -19,10 +27,34 @@ Flutter HydrographyLayer / Mapbox VectorSource (Z12, max source Z16)
   → labels numériques depth_label
 ```
 
+### Pipeline mobile actuel NW-220
+
+[`MarineViewport`](../../mobile/lib/features/map/data/marine_viewport.dart)
+demande explicitement
+`GET /api/v1/map/marine-features/soundings/{z}/{x}/{y}.geojson`.
+Cette [route](../../backend/app/api/routes/map_tiles.py) réutilise
+`MarineTileService` avec `geojson=True`, la même sélection de fournisseurs et le
+même adaptateur ERDDAP. L'[encodeur de snapshots](../../backend/app/infrastructure/marine/viewport_encoding.py)
+renvoie une `FeatureCollection` WGS84 avec les propriétés et labels de profondeur,
+sans passer par la quantification MVT.
+
+Le mobile conserve les snapshots et publie leur contenu dans la source
+`nowave-soundings` de
+[`HydrographyLayer`](../../mobile/lib/features/map/data/hydrography_layer.dart),
+désormais une `GeoJsonSource` avec `tolerance=0` et `maxzoom=18`.
+Les sondes sont préparées dès Z12 et affichées dès Z13. Leur résolution demandée
+est plafonnée à Z16 et peut être réduite selon le budget de la vue ; le
+`maxzoom=18` du découpage interne GeoJSON ne crée pas de données fournisseur plus
+fines. Les règles de relève, de réponses partielles et de réinstallation du style
+sont détaillées dans [NW-220](marine-zoom-persistence.md#courbes-et-sondes).
+
 `MarineTileService.select` réserve les chiffres européens à `emodnet-dtm-2024`.
 Depuis la correction du 18 octobre et le choix utilisateur, les sondes ENC NOAA
-sont rétablies dans leur couverture, hors EMODnet, à partir de Z14. Cette
-sélection est géographique : aucun repli NOAA lors d'une panne EMODnet, et aucun
+sont rétablies dans leur couverture, hors EMODnet. Le
+[`NoaaSoundingProvider` actuel](../../backend/app/infrastructure/marine/hydro_providers.py)
+permet leur préparation dès Z12 ; l'encodeur GeoJSON utilise une grille de
+sélection d'au moins Z14, distincte du seuil de chargement. Cette sélection est
+géographique : aucun repli NOAA lors d'une panne EMODnet, et aucun
 mélange avec SHOM, Seascape ou DCDB. Le runtime remplace seulement l'instance du
 fournisseur de sondes SHOM par EMODnet. Le code, les levés et les tests SHOM sont
 conservés. NOAA reste disponible pour les courbes/dangers ; SHOM pour les dangers
@@ -86,7 +118,7 @@ d'une origine relative à la tuile. Les strides sont imbriqués :
 | 14 | 4 | densité accrue |
 | 15 | 2 | densité accrue |
 | 16 | 1 | centres disponibles de la grille native |
-| >16 dans Mapbox | réutilisation de Z16 | aucun nouveau point créé |
+| >16 côté affichage | données déjà récupérées, requêtes plafonnées à Z16 | aucun nouvel échantillon au-delà de la grille native |
 
 Plafond dur : 64 cellules demandées et 64 cellules modélisées encodées par tuile.
 Les dimensions actuelles donnent au plus 36 centres sélectionnés dans une tuile
@@ -123,12 +155,16 @@ les valeurs manquantes ne deviennent jamais zéro. Les métadonnées manquantes
 restent absentes des propriétés MVT. Une valeur numérique malformée ou un flag
 hors contrat fait échouer la réponse entière.
 
-Contrat conservé : couche `sounding`, propriétés `value_m` et `depth_label`.
+Contrat MVT conservé : couche `sounding`, propriétés `value_m` et `depth_label`.
 Ajouts : `source=EMODnet`, `year=2024`, `dataset=bathymetry_dtm_2024`,
 `vertical_datum=LAT`, `sounding_datum=LAT`, `nature=modeled_grid_cell`,
 `derivation=modeled_grid_cell`, indices globaux et indicateurs disponibles.
 `value_original` conserve l'élévation signée, `unit_original=m`, `provenance`
 contient le DOI du produit. Aucune date d'observation ni incertitude n'est inventée.
+
+Le flux GeoJSON actuel réutilise ces propriétés dans chaque `Feature` de sa
+`FeatureCollection` ; la notion de couche MVT `sounding` concerne uniquement
+l'encodage `.pbf` conservé.
 
 Les labels seuls sont arrondis au mètre, demi-unités vers le haut : 12.4 → « 12 »,
 12.5 → « 13 ». Une profondeur comprise entre 0 et 1 m affiche « <1 », sans faux
@@ -152,10 +188,14 @@ globale ; elles sont dédupliquées par identité d'indice et ordonnées avant M
   après timeout/transport : pause de 5 s. Pour une date HTTP, pause par défaut 30 s.
 - Réponse décompressée limitée à 256 Kio, lecture par blocs de 4096 octets,
   contrôle précoce de `Content-Length` et contrôle pendant la lecture.
-- Cache **MVT RAM existant** : 512 tuiles, 32 Mio, TTL 300 s pour les succès.
-  Aucun second cache de données/CSV. Les pannes ne sont pas mises en cache.
-  Les locks existants réunissent les chargements réussis d'une même tuile.
-- La route surveille la déconnexion ASGI toutes les 100 ms et annule le travail,
+- Cache final **RAM partagé entre MVT et GeoJSON** : 512 entrées, 32 Mio au total,
+  TTL 300 s pour les succès complets. La clé distingue la tuile, la famille et le
+  format. Les réponses dégradées ont un TTL de 15 s ; les échecs sans données
+  répondent 503 et ne sont pas mis en cache. Aucun cache de corps CSV n'est ajouté.
+  Les locks réunissent les chargements réussis d'une même clé. Le cache client
+  de snapshots est distinct et décrit dans [NW-220](marine-zoom-persistence.md#récupération-et-budgets).
+- Les routes de sondes MVT et de snapshots GeoJSON surveillent la déconnexion ASGI
+  toutes les 100 ms et annulent le travail,
   y compris l'attente d'un lock. L'adaptateur `cancellation_safe` attend la fermeture
   HTTP et la libération du sémaphore avant de propager l'annulation, même lorsqu'elle
   provient de l'échéance fournisseur.
@@ -163,6 +203,8 @@ globale ; elles sont dédupliquées par identité d'indice et ordonnées avant M
   reprendre un téléchargement. Le travail déjà fini peut rester en RAM.
 - Les logs contiennent indices XYZ, nombre de cellules/points, octets, temps
   et raisons d'erreur ; aucun corps CSV/MVT n'est journalisé.
+
+### Réponses de la route MVT conservée
 
 | Cas | HTTP | `X-NoWave-Marine-Status` |
 |---|---|---|
@@ -176,25 +218,36 @@ globale ; elles sont dédupliquées par identité d'indice et ordonnées avant M
 
 Les raisons `http-xxx`, `timeout`, `transport`, `malformed-csv`, `body-limit`,
 `cell-limit`, `cooldown` restent distinctes dans le fournisseur et les logs.
-Toutes les réponses valides et les 503 de cet endpoint portent
-`Cache-Control: no-store`. Les en-têtes des autres familles sont conservés.
+Toutes les réponses valides et les 503 des sondes, en MVT comme en GeoJSON,
+portent `Cache-Control: no-store`. Le tableau ci-dessus décrit les corps MVT ;
+la route mobile actuelle renvoie du GeoJSON pour ses succès. Les en-têtes des
+autres familles sont conservés.
 
 Les limites sont par processus ; multiplier les workers multiplierait le débit
 total. Le lancement Uvicorn local/déploiement du dépôt utilise un processus.
 
 ## Flutter, attribution et limites de validation
 
-La source de chiffres conserve son identifiant, passe à `minzoom=12`, reste à
-`maxzoom=16`, et utilise désormais `?v=depths-4` pour distinguer les anciennes tuiles.
-Elle seule reçoit `volatile=true`. Préchargement désactivé, délai réseau 250 ms.
+### Paramètres historiques du client MVT
+
+La source vectorielle initiale conservait son identifiant, utilisait
+`minzoom=12`, `maxzoom=16` et `?v=depths-4` pour distinguer les anciennes tuiles.
+Elle seule recevait `volatile=true`, avec préchargement désactivé et délai réseau
+de 250 ms. Ces paramètres décrivent l'ancienne `VectorSource` ; ils ne constituent
+pas la configuration des sources GeoJSON alimentées par `MarineViewport`.
+
+### Rendu actuel et attribution
+
 Le label accepte `nature=modeled_grid_cell` ou `nature=point_sounding` ; la
 sélection géographique des fournisseurs se fait exclusivement dans le backend.
 NOAA conserve ses valeurs ponctuelles et décimales publiées, son datum lorsqu'il
 est réellement renseigné, et son absence de datum sinon. Les levés SHOM archivés
 ne sont pas remis dans le flux MVP.
 
-Le style NoWave est conservé : slot MIDDLE, tailles 10.5 à Z12 puis 11.5/12.5 à
-Z14/Z16, halo clair, `textAllowOverlap=false`, `textIgnorePlacement=false`.
+Le style NoWave utilise le slot MIDDLE et affiche les labels à partir de Z13.
+L'expression de taille interpole 10.5, 11.5, 12.5 et 13.5 aux paliers Z12, Z14,
+Z16 et Z18. Le halo est sombre, avec `textAllowOverlap=false` et
+`textIgnorePlacement=false`.
 Les dangers/aides/bouées restent au slot TOP ; les signalements et le GPS ne
 sont pas modifiés. L'espacement natif des symboles décide des labels visibles.
 
@@ -209,10 +262,18 @@ ni marge sous quille, ni tirant d'eau admissible, ni remplacement des cartes
 officielles. Une cellule sous LAT peut être inadéquate à un littoral récent ou
 à un bassin portuaire fin ; le modèle n'est pas un masque côtier actuel.
 
-La configuration `volatile`, les en-têtes et l'absence de persistance Python
-sont vérifiés par tests/lecture du code. La correction marine finale ajoute
-des captures et interrogations natives sur le LGN LX1 : collisions, overzoom,
-rechargement du style et URL locales sont vérifiés dans les vues documentées.
+### Portée des validations
+
+Les contrôles de `volatile`, des URL de tuiles et de l'overzoom de la source
+vectorielle appartiennent à la validation du client MVT initial. Les captures
+et interrogations natives sur le LGN LX1 citées dans ces comptes rendus restent
+des preuves datées des vues examinées. Le contrat de sources GeoJSON et de
+couches actuel est décrit par les
+[tests Flutter correspondants](../../mobile/test/features/map/data/hydrography_layer_test.dart) ;
+la recette de conservation et de rechargement du style relève de
+[NW-220](marine-zoom-persistence.md#vérification).
+Les règles du fournisseur ERDDAP sans persistance de corps CSV et les en-têtes
+des sondes restent celles décrites dans la section réseau.
 L'effet de tous les caches natifs Mapbox/Android ou d'un éventuel proxy distant
 n'est pas audité. Aucun cache existant n'a été effacé ; aucune absence totale
 de stockage natif durable n'est affirmée.
