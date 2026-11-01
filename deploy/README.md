@@ -1,38 +1,42 @@
-# Déploiement
+# Livraison sur le VPS
 
-Le VPS exécute le site, l’API, PostgreSQL/PostGIS et les workers dans Docker, derrière le tunnel Cloudflare.
+Le site, l’API, PostgreSQL/PostGIS et les workers tournent dans Docker. Cloudflare Tunnel publie `no-wave.fr` et `api.no-wave.fr` ; PostgreSQL reste sur le réseau privé.
 
-## Prérequis
+Seul un push sur `dev` peut déclencher une livraison, après réussite de la CI et des audits. Le VPS reçoit le commit testé. Les PR et les lancements manuels valident le code sans déployer ; `main` reçoit les releases stables après recette.
 
-- VPS Linux avec Docker Compose et accès SSH `root` configuré pour la CI.
-- `/opt/nowave/config/photo-storage.env` : `PHOTO_STORAGE_BUCKET` et `PHOTO_STORAGE_REGION` (`fr-par`, `nl-ams` ou `pl-waw`).
-- `/opt/nowave/secrets/` : `tunnel_token`, `firebase_service_account.json`, `firebase_web_api_key`, `scaleway_access_key`, `scaleway_secret_key`.
-- Compte de service Firebase du projet `blueway-dev`, avec les accès nécessaires à FCM.
-- Bucket Scaleway privé, sans versioning ; clés autorisées à lire, écrire, supprimer et lister `reports/`.
-- `MAPBOX_PUBLIC_TOKEN`, jeton public `pk.*` autorisé pour les domaines utilisés, à injecter dans l’API : le Compose de production ne le transmet pas par défaut.
-- Volumes de base et `marine-cache` persistants ; garder les secrets hors Git.
+L’environnement GitHub `production` doit contenir `NOWAVE_DEPLOY_HOST`, `NOWAVE_DEPLOY_SSH_KEY` et `NOWAVE_DEPLOY_KNOWN_HOSTS`. Le premier est une variable ; les deux autres sont des secrets. La CI se connecte en SSH avec le compte `root`.
 
-Les fichiers attendus sont déclarés dans `compose.yaml` et `tunnel.yaml`. Le script de démarrage prépare les identifiants SQL ; il conserve les valeurs déjà présentes.
+## Ce qui doit être présent sur le serveur
 
-## Déployer
+Le VPS demande Linux, Docker Compose et Python 3 pour les scripts de livraison. Garder les secrets dans `/opt/nowave/secrets`, les paramètres dans `/opt/nowave/config`, hors du dépôt.
 
-Dans l’environnement GitHub `production`, configurer :
+- `tunnel_token` : jeton du tunnel Cloudflare dédié.
+- `firebase_service_account.json` : compte de service du projet `blueway-dev`, autorisé à envoyer les notifications FCM.
+- `firebase_web_api_key` : clé web Firebase pour la connexion admin.
+- `scaleway_access_key` et `scaleway_secret_key` : accès au bucket photo privé, sans versioning. Autoriser lecture, écriture, suppression et listing de `reports/`.
+- `photo-storage.env`, dans le dossier de configuration : `PHOTO_STORAGE_BUCKET` et `PHOTO_STORAGE_REGION`, parmi `fr-par`, `nl-ams`, `pl-waw`.
 
-- la variable `NOWAVE_DEPLOY_HOST` ;
-- les secrets `NOWAVE_DEPLOY_SSH_KEY` et `NOWAVE_DEPLOY_KNOWN_HOSTS`.
+Injecter aussi `MAPBOX_PUBLIC_TOKEN` dans l’API pour la carte web : jeton public `pk.*` limité aux domaines utilisés. Le Compose de production ne le transmet pas par défaut.
+Les fichiers attendus sont déclarés dans `compose.yaml` et `tunnel.yaml`. Le déploiement prépare les identifiants SQL et conserve les valeurs existantes. Les volumes de base et `marine-cache` restent persistants.
 
-Fusionner une PR dans `dev` lance la CI, les audits, puis le déploiement du même commit. Les PR et les lancements manuels ne déploient pas. `main` reçoit les releases stables après recette.
+## Pendant la livraison
 
-`hostinger/ci-deploy.sh` reconstruit et audite sur le VPS. `hostinger/deploy.sh` sauvegarde l’installation existante, applique les migrations et contrôle les services avant promotion. Les livraisons sont sérialisées.
+`hostinger/ci-deploy.sh` reconstruit et audite les images sur le VPS. `hostinger/deploy.sh` sauvegarde l’installation existante, applique les migrations, démarre les services, puis contrôle l’origine et les accès publics. Les livraisons sont sérialisées.
 
-En cas d’échec, le script remet l’application et le tunnel précédents ; sans version précédente, il arrête les nouveaux services. Les données SQL ne sont pas restaurées automatiquement. Les volumes et sauvegardes sont conservés ; une sauvegarde quotidienne est aussi prévue.
+Si une étape échoue, le script remet l’application et le tunnel précédents. Sans version précédente, il arrête les nouveaux services. Il conserve volumes et sauvegardes ; les données SQL ne sont pas restaurées automatiquement. Une sauvegarde quotidienne complète celle faite avant livraison.
 
-## Tests
+## Vérifier le résultat
+
+Depuis le poste :
 
 ```sh
 curl --fail https://api.no-wave.fr/version
 ```
 
-- Comparer `version` au commit livré et au workflow GitHub.
-- Vérifier les logs des services `api`, `notifications` et `photo-cleanup`, puis les contrôles publics du déploiement.
-- Sur téléphone, tester la carte, une publication avec photo et une alerte reçue sur un second appareil.
+Comparer `version` au commit livré et au résultat du workflow. Pour lire les logs sur le VPS, dans `/opt/nowave/config` :
+
+```sh
+docker compose --env-file release.env -f compose.yaml --profile api logs --tail=100 api notifications photo-cleanup
+```
+
+Vérifier ensuite sur téléphone la carte, une publication avec photo et une alerte sur un second appareil.

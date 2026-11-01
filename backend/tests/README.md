@@ -1,15 +1,8 @@
-# Tests PostGIS
+# Tester sur PostGIS
 
-La suite vérifie les migrations et les repositories sur une base temporaire.
+Ces tests appliquent les migrations et exercent les repositories sur PostgreSQL/PostGIS. La base de développement reste à part.
 
-## Prérequis
-
-- Environnement Python des [tests backend](../README.md#tests) activé.
-- Docker Compose démarré et port 55433 libre.
-
-## Lancer
-
-Depuis la racine du dépôt :
+Activer l’environnement Python préparé dans les [tests backend](../README.md#tests), démarrer Docker et libérer le port 55433. Lancer ce bloc depuis la racine du dépôt :
 
 ```sh
 (
@@ -23,4 +16,6 @@ Depuis la racine du dépôt :
 )
 ```
 
-Le conteneur est supprimé à la fin, même si un test échoue. La base de développement n’est pas utilisée.
+Les fixtures créent leur base temporaire et la suppriment après les tests. Le bloc arrête et nettoie le conteneur, même si un test échoue.
+
+La CI lance cette suite en plus des tests API et unitaires.

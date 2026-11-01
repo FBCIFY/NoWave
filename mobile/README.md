@@ -1,30 +1,24 @@
-# Mobile
+# App mobile
 
-Client Flutter Android/iOS pour la carte, les signalements et les alertes.
+Flutter 3.47.5, avec un émulateur ou un téléphone configuré. Les commandes se lancent dans `mobile/`.
 
-## Prérequis
-
-- Flutter 3.47.5.
-- Un émulateur ou un téléphone configuré, et un backend NoWave accessible.
-
-## Lancer
-
-Depuis `mobile/`, créer la configuration locale :
+Commencer par le fichier de configuration local :
 
 ```sh
 test -f .env.json || cp .env.example.json .env.json
 ```
 
-Compléter `.env.json` :
+Dans `.env.json`, mettre le jeton public Mapbox dans `MAPBOX_ACCESS_TOKEN` et l’adresse du backend dans `API_BASE_URL`, par exemple `https://api.no-wave.fr/`.
+Laisser `MARINE_API_BASE_URL` vide pour charger aussi les données marines depuis ce backend.
 
-- `MAPBOX_ACCESS_TOKEN` : jeton public Mapbox.
-- `API_BASE_URL` : backend, par exemple `https://api.no-wave.fr/`.
-- `MARINE_API_BASE_URL` : backend marin facultatif ; vide, reprend l’API principale.
+Pour joindre l’API locale sur le port 8000, utiliser `http://10.0.2.2:8000/` sur l’émulateur Android, `http://127.0.0.1:8000/` sur le simulateur iOS.
+Sur téléphone, utiliser l’API distante. En USB Android, cette commande permet de garder l’API locale :
 
-API locale sur le port 8000 : `http://10.0.2.2:8000/` sur émulateur Android,
-`http://127.0.0.1:8000/` sur simulateur iOS.
-Sur téléphone, utiliser l’API distante ou, en USB Android, lancer
-`adb reverse tcp:8000 tcp:8000` et utiliser `http://127.0.0.1:8000/`.
+```sh
+adb reverse tcp:8000 tcp:8000
+```
+
+Renseigner alors `http://127.0.0.1:8000/` dans `API_BASE_URL`.
 
 ```sh
 flutter pub get --enforce-lockfile
@@ -32,12 +26,9 @@ flutter devices
 flutter run --dart-define-from-file=.env.json
 ```
 
-Flutter propose le choix de l’appareil si plusieurs sont disponibles. Garder `.env.json` hors Git ;
-reconstruire et relancer l’app après un changement de configuration.
+Flutter propose le choix de l’appareil si plusieurs sont disponibles. Garder `.env.json` hors Git et reconstruire l’app après un changement de configuration.
 
-## Tests
-
-Depuis `mobile/`, après `flutter pub get` :
+Pour lancer les tests, toujours dans `mobile/` :
 
 ```sh
 flutter test --no-pub
