@@ -18,6 +18,7 @@ import httpx
 import mapbox_vector_tile
 from google.protobuf.message import DecodeError
 from app.domain.marine import ProviderUnavailable
+from app.infrastructure.marine.cancellation import cancellation_safe
 
 
 class MarineHTTP:
@@ -36,10 +37,13 @@ class MarineHTTP:
             transport=transport,
             follow_redirects=True,
             timeout=httpx.Timeout(4, connect=2, pool=2),
-            limits=httpx.Limits(max_connections=12, max_keepalive_connections=8),
+            limits=httpx.Limits(
+                max_connections=24 if persistent_cache else 12,
+                max_keepalive_connections=12 if persistent_cache else 8,
+            ),
             headers={"User-Agent": "NoWave/1.0 marine display (https://no-wave.fr)"},
         )
-        self._semaphore = asyncio.Semaphore(8 if persistent_cache else 4)
+        self._semaphore = asyncio.Semaphore(12 if persistent_cache else 4)
         self._flights = [asyncio.Lock() for _ in range(64)]
         self._database = None
         self._disk_gate = asyncio.Lock()
@@ -129,57 +133,9 @@ class MarineHTTP:
                     used = await self._disk(self._cache_used, now)
                     if used + self.MAX_BODY > self.MAX_CACHE:
                         raise ProviderUnavailable("Marine HTTP cache is full")
-                async with self._semaphore:
-                    if host == "data.geopf.fr":
-                        # Below the published 30 requests/s/IP. This process
-                        # contributes at most 10/s; size worker counts accordingly.
-                        async with self._ign_gate:
-                            delay = self._ign_next_request - time.monotonic()
-                            if delay > 0:
-                                await asyncio.sleep(delay)
-                            self._ign_next_request = time.monotonic() + 0.1
-                    async with self._client.stream(
-                        "GET", url, params=params
-                    ) as response:
-                        self.metrics["network_requests"] += 1
-                        if response.status_code in (429, 503):
-                            # No retries per tile; avoid multiplying pressure on failure.
-                            retry_after = response.headers.get("retry-after", "")
-                            try:
-                                delay = float(retry_after)
-                            except ValueError:
-                                try:
-                                    delay = (
-                                        parsedate_to_datetime(retry_after).timestamp()
-                                        - now
-                                    )
-                                except (ValueError, TypeError, OverflowError):
-                                    delay = 30
-                            self._backoff[host] = now + max(30, delay)
-                        if response.status_code in (204, 404) and (osm or vector_tile):
-                            content = b""  # Valid absent tile, also cache it.
-                        else:
-                            response.raise_for_status()
-                            body = bytearray()
-                            async for chunk in response.aiter_bytes():
-                                body.extend(chunk)
-                                if len(body) > self.MAX_BODY:
-                                    raise ProviderUnavailable(
-                                        "Upstream response exceeds limit"
-                                    )
-                            content = bytes(body)
-                        if osm:
-                            # Honour longer max-age as well as the 7-day minimum.
-                            for item in response.headers.get("cache-control", "").split(
-                                ","
-                            ):
-                                if item.strip().startswith("max-age="):
-                                    try:
-                                        ttl = max(
-                                            ttl, int(item.strip().split("=", 1)[1])
-                                        )
-                                    except ValueError:
-                                        pass
+                content, ttl = await cancellation_safe(
+                    lambda: self._fetch(url, params, host, now, ttl, osm, vector_tile)
+                )
                 # Validate vector-service error payloads before caching them.
                 if vector_tile and content:
                     mapbox_vector_tile.decode(content)
@@ -209,3 +165,46 @@ class MarineHTTP:
                 if isinstance(exc, httpx.TransportError):
                     self._backoff[request.url.host] = time.time() + 5
                 raise ProviderUnavailable(type(exc).__name__) from exc
+
+    async def _fetch(self, url, params, host, now, ttl, osm, vector_tile):
+        async with self._semaphore:
+            if host == "data.geopf.fr":
+                # Below the published 30 requests/s/IP. This process
+                # contributes at most 10/s; size worker counts accordingly.
+                async with self._ign_gate:
+                    delay = self._ign_next_request - time.monotonic()
+                    if delay > 0:
+                        await asyncio.sleep(delay)
+                    self._ign_next_request = time.monotonic() + 0.1
+            async with self._client.stream("GET", url, params=params) as response:
+                self.metrics["network_requests"] += 1
+                if response.status_code in (429, 503):
+                    # No retries per tile; avoid multiplying pressure on failure.
+                    retry_after = response.headers.get("retry-after", "")
+                    try:
+                        delay = float(retry_after)
+                    except ValueError:
+                        try:
+                            delay = parsedate_to_datetime(retry_after).timestamp() - now
+                        except (ValueError, TypeError, OverflowError):
+                            delay = 30
+                    self._backoff[host] = now + max(30, delay)
+                if response.status_code in (204, 404) and (osm or vector_tile):
+                    content = b""  # Valid absent tile, also cache it.
+                else:
+                    response.raise_for_status()
+                    body = bytearray()
+                    async for chunk in response.aiter_bytes():
+                        body.extend(chunk)
+                        if len(body) > self.MAX_BODY:
+                            raise ProviderUnavailable("Upstream response exceeds limit")
+                    content = bytes(body)
+                if osm:
+                    # Honour longer max-age as well as the 7-day minimum.
+                    for item in response.headers.get("cache-control", "").split(","):
+                        if item.strip().startswith("max-age="):
+                            try:
+                                ttl = max(ttl, int(item.strip().split("=", 1)[1]))
+                            except ValueError:
+                                pass
+        return content, ttl

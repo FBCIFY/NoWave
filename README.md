@@ -1,87 +1,71 @@
-# NoWave — Signalements maritimes géolocalisés
+# NoWave
 
-NoWave est un MVP de signalements participatifs pour la navigation de plaisance : **obstacles**, **animaux marins** et **pollution**. L'application mobile permet de publier une observation localisée, de consulter les signalements actifs sur une carte et de recevoir des alertes de proximité selon les préférences et la position du téléphone.
+NoWave permet de signaler un obstacle, un animal marin ou une pollution sur une carte, puis d’alerter les utilisateurs à proximité. L’app tourne sur Flutter, avec une API FastAPI et une base PostgreSQL/PostGIS.
 
-> **État documentaire :** le présent README décrit le contrat applicatif de `dev` au commit de référence [`ad54ffdb`](https://github.com/FBCIFY/NoWave/commit/ad54ffdb2cf359c36cf22b947494195bddcf87fb), vérifié sur la documentation Stage 4 du 30/10/2026. Il ne constitue pas une preuve de recette sur appareil ni de disponibilité des services externes. Un signalement NoWave ne remplace pas les informations nautiques officielles.
+[Télécharger l’app mobile](https://no-wave.fr/downloads/mobile/).
 
-## Architecture
+## Lancer en local
 
-| Composant | Implémentation | Rôle |
-| --- | --- | --- |
-| Application mobile | Flutter / Dart, Mapbox SDK, Firebase Auth/FCM | Écrans, capteurs, carte, signalements et alertes |
-| API | Python / FastAPI, architecture ports/adaptateurs | Contrats HTTP, règles métier, authentification et orchestration |
-| Base de données | PostgreSQL 17 / PostGIS | Signalements, géométrie, positions et historique d'alertes |
-| Photos | Scaleway Object Storage privé | JPEG validés, lecture via URL temporaire |
-| Administration | FastAPI / Jinja, sessions et CSRF | Modération et suivi administratif |
-| Site public | `web/` (Node.js à la compilation, Nginx au service) | Parcours maritime, observations et accès aux pages admin du backend |
-| Livraison | GitHub Actions, Docker, VPS Hostinger et Cloudflare | Tests, audits et déploiement après push validé sur `dev` |
-
-Les tuiles cartographiques **MVT** sont produites par le backend à partir de PostGIS, séparément du fond de carte rendu par Mapbox. Elles ne sont pas une base mondiale stockée sur le téléphone.
-
-## Répertoires
-
-```text
-backend/          API FastAPI, domaine, infrastructure et tests
-mobile/           Application Flutter et tests widget/unitaires
-web/              Site public et carte des observations
-deploy/           Docker, scripts VPS et documentation de déploiement
-docs/             Index documentaire, parcours, tests et traçabilité
-.github/workflows/  CI et validation de livraison
-compose.yaml      Services de développement
-compose.test.yaml Base PostGIS isolée pour les tests
-```
-
-## Démarrer en développement
-
-**Prérequis :** Docker + Compose, Python 3.12 pour les tests, Flutter 3.47.5 pour le mobile ; Node.js 24 pour les contrôles web. Les clés Firebase/Scaleway et les paramètres cartographiques nécessaires sont à fournir séparément. Ne jamais committer `.env`, `.env.json` ni des clés privées.
-
-Depuis la racine :
+Avec Docker Compose installé, préparer le `.env` depuis la racine du dépôt :
 
 ```sh
-cp .env.example .env
-# Renseigner les variables et secrets nécessaires dans .env et les fichiers référencés.
+test -f .env || cp .env.example .env
+```
+
+Renseigner les accès dans ce fichier :
+
+- `NOWAVE_DB_PASSWORD` : mot de passe de la base.
+- `FIREBASE_SERVICE_ACCOUNT_FILE` : chemin du fichier Firebase local.
+- `FIREBASE_WEB_API_KEY` et `MAPBOX_PUBLIC_TOKEN` : connexion à l’admin et carte web.
+- `PHOTO_STORAGE_BUCKET`, `PHOTO_STORAGE_REGION`, `SCW_ACCESS_KEY`, `SCW_SECRET_KEY` : stockage photo.
+
+Le fichier Firebase doit être présent sur le poste. Garder les secrets hors Git, puis démarrer la stack :
+
+```sh
 docker compose up --build -d --wait
+```
+
+- Site : `https://localhost:8443`.
+- Admin : `https://localhost:8443/admin`.
+- API : `http://127.0.0.1:8000`.
+
+Accepter le certificat HTTPS local. La base est migrée au démarrage ; les ports se règlent dans `.env`.
+
+À la création du compte désigné, le responsable du projet lui attribue le rôle `admin` pour accéder à l’[administration](https://no-wave.fr/admin).
+
+Pour les alertes et le nettoyage des photos :
+
+```sh
+docker compose --profile alerts --profile photos up -d notifications photo-cleanup
+```
+
+`docker compose down` arrête les services en conservant les données.
+
+## Appeler l’API
+
+Vérifier que le backend répond :
+
+```sh
 curl --fail http://127.0.0.1:8000/health
 ```
 
-Le site est accessible sur **https://localhost:8443** et l’administration sur
-**https://localhost:8443/admin**. Le certificat local est créé automatiquement :
-accepter ce certificat à la première ouverture. L’adresse HTTP
-`http://localhost:8080` redirige vers HTTPS pour conserver les cookies admin
-`Secure` et `__Host-`, y compris dans Safari.
+Pour les routes privées, placer l’ID token du compte connecté dans `FIREBASE_ID_TOKEN`. Ce token s’obtient après connexion Firebase ; la clé web Firebase ne sert pas à authentifier ces requêtes.
 
-Le Compose utilise les mêmes Dockerfiles web/API que le déploiement, avec un
-proxy et un certificat propres au local. Les migrations sont automatiques.
-Les secrets restent dans `.env` et le fichier Firebase local monté en lecture seule.
-Le volume existant `nowave-database` est conservé ; aucune donnée fictive ni
-compte de démonstration n’est créé. Utiliser un compte Firebase vérifié dont
-le profil possède le rôle `admin` dans cette base locale. Les observations
-affichées sont celles de cette base.
+```sh
+curl --fail -H "Authorization: Bearer $FIREBASE_ID_TOKEN" \
+  http://127.0.0.1:8000/api/v1/users/me
+```
 
-Pour arrêter les services sans supprimer les données : `docker compose down`.
-Les ports sont configurables dans `.env` via `NOWAVE_WEB_PORT`,
-`NOWAVE_WEB_HTTPS_PORT`, `NOWAVE_API_PORT` et `NOWAVE_DB_PORT`.
-Le jeton `MAPBOX_PUBLIC_TOKEN` doit être public (`pk.*`) et autoriser localhost.
-Le Compose et les scripts de production restent séparés dans `deploy/`.
+Sans profil NoWave, cette lecture renvoie 404. Le [contrat API](docs/contrats-api.md) décrit la création du profil, les payloads et les réponses de chaque route.
 
-Pour le mobile, suivre [mobile/README.md](mobile/README.md) : créer `mobile/.env.json` depuis l'exemple, puis `flutter run -d <device-id> --dart-define-from-file=.env.json`. Le site web peut aussi être lancé seul via [web/README.md](web/README.md).
+## Travailler sur le projet
 
-## Routes et périmètre MVP
+- [Backend](backend/README.md), [mobile](mobile/README.md), [web](web/README.md) : lancer un composant et ses tests.
+- [Déploiement](deploy/README.md) : configuration du VPS et livraison.
+- [Architecture](docs/architecture.md) : rôle des services et organisation des données.
+- [Couche marine](docs/couche-marine.md) : sources, niveaux de zoom et chargement de la carte.
+- [Signalements et alertes](docs/signalements-et-alertes.md) : publication, photos et notifications.
 
-Les routes métier FastAPI se trouvent sous `/api/v1` ; `/health`, `/health/ready` et `/version` sont à la racine. La référence de `dev` comporte **39 opérations HTTP déclarées**, hors pages HTML d'administration. Voir le chapitre « Index des routes API » de la [documentation technique](https://docs.google.com/document/d/1Gez2BmfkdjTLyE9jkyf-U_QzJkUWQ9mu/edit).
+Les [crédits et licences](docs/licences.md) couvrent les données et les icônes. NoWave ne remplace pas les cartes nautiques officielles.
 
-Les opérations `PATCH /api/v1/reports/{report_id}`, `DELETE /api/v1/reports/{report_id}` par l'auteur et `GET /api/v1/users/me/reports` **ne sont pas implémentées** dans cette référence et ne doivent pas être considérées comme disponibles. Le suivi de ces demandes reste dans Linear (NW-73 et NW-74). L'historique des **alertes reçues**, lui, est exposé par `GET /api/v1/users/me/alerts`.
-
-La validité des signalements est de 24 h côté serveur. Les MVT ont un cache HTTP privé de 15 s ; la disparition à l'écran dépend également du rafraîchissement du mobile. Voir [documentation cartographique et contrats NW-220](docs/architecture/marine-zoom-persistence.md) ([FIX T13 (NW-166)](https://linear.app/blueway/issue/NW-166)).
-
-## Tests et documentation
-
-- [Index documentaire et annexes](docs/README.md)
-- [Correspondance fonctionnalités, code et tests](docs/TESTING.md#correspondance-fonctionnelle-code-et-tests)
-- [Commandes de test, CI et limites de validation](docs/TESTING.md)
-- [Règles de contribution et branches](docs/CONTRIBUTING.md)
-- [Exploitation VPS et déploiement](deploy/README.md)
-
-Les tests automatisés de l'interface ne prouvent pas à eux seuls la réception des notifications sur appareil, les capteurs physiques, la connexion aux services externes ou une recette complète du VPS. La matrice sépare ces niveaux de vérification.
-
-**Gestion des branches :** PR depuis une branche de travail vers `dev` après revue ; une validation réussie du push sur `dev` déclenche le déploiement actuel sur VPS. `main` reste la référence de release stable après QA et PR `dev` → `main` ; aucun déploiement autonome depuis `main` n'est décrit dans le workflow actuel ([FIX T15 (NW-168)](https://linear.app/blueway/issue/NW-168)).
+Documents de référence : [dossier Drive](https://drive.google.com/drive/folders/1tuDBQVBQNH7H6cWgftj46g7fPGZSxPQ2).

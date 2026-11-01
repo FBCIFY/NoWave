@@ -2,6 +2,7 @@
 fastapi
 uvicorn[standard]
 httpx
+anyio==4.15.1
 firebase-admin
 boto3
 Pillow
