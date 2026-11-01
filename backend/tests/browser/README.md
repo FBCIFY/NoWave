@@ -1,61 +1,34 @@
-# Tests navigateur de l'administration
+# Tests navigateur admin
 
-## Aperçu sans base de données
+Prérequis : Python 3.12 avec `backend/requirements-test.txt`, Node.js 24 et Docker.
+Depuis la racine, dans un shell dédié ; le port 55433 doit être libre :
 
-Depuis la racine, avec Python 3.12 et les dépendances du backend :
-
-```bash
-PYTHONPATH=backend python backend/tests/browser/preview.py --port 8000
-```
-
-Dans un second terminal :
-
-```bash
-npm ci --prefix web
-npm run dev --prefix web
-```
-
-Ouvrir `http://127.0.0.1:5173/admin/login`, puis utiliser
-`admin@nowave.test` / `preview-only`. Les données sont en mémoire, les mutations
-sont désactivées et Firebase n'est pas appelé. Le serveur écoute seulement en
-local et refuse `NOWAVE_ENV=production`.
-
-Pour afficher Mapbox, définir `MAPBOX_PUBLIC_TOKEN` ou `NOWAVE_MAPBOX_CONFIG`
-(chemin d'un JSON contenant `MAPBOX_ACCESS_TOKEN` public). Les tuiles GEBCO sont
-extraites temporairement puis supprimées à l'arrêt.
-
-## Tests avec PostGIS
-
-Prérequis : Python 3.12, `backend/requirements-test.txt`, Node.js 24 et Docker.
-Depuis la racine :
-
-```bash
-COMPOSE_PROJECT_NAME=nowave-admin-test docker compose -f compose.test.yaml up -d --build --wait database
+```sh
+export COMPOSE_FILE=compose.test.yaml
+export COMPOSE_PROJECT_NAME=nowave-admin-test
+export NOWAVE_TEST_ADMIN_URL=postgresql://nowave_ci:ci-test-only@127.0.0.1:55433/nowave_ci
+trap 'docker compose down --volumes --remove-orphans' EXIT
+docker compose up -d --build --wait database
 npm ci --prefix web
 npm run build --prefix web
 npm ci --prefix backend/tests/browser --ignore-scripts
 (cd backend/tests/browser && npx playwright install --with-deps chromium)
-PYTHON=python3.12 \
-NOWAVE_TEST_ADMIN_URL=postgresql://nowave_ci:ci-test-only@127.0.0.1:55433/nowave_ci \
-npm test --prefix backend/tests/browser
-COMPOSE_PROJECT_NAME=nowave-admin-test docker compose -f compose.test.yaml down --volumes
+PYTHON=python3.12 npm test --prefix backend/tests/browser
 ```
 
-Le serveur HTTPS écoute sur `127.0.0.1:8765`. Il crée une base aléatoire puis
-la supprime ; utiliser uniquement PostgreSQL/PostGIS local. Les mots de passe
-sont des fixtures sans compte Firebase réel. `CHROMIUM_EXECUTABLE` permet
-d'utiliser un Chromium déjà installé.
+Le serveur de test écoute sur `https://127.0.0.1:8765`. Il crée et supprime sa
+base aléatoire dans le PostgreSQL local ; ne pas lui fournir de base distante.
+Les tests couvrent 1440×1000 et 390×844 tactile.
 
-| Suite | Périmètre |
-| --- | --- |
-| `admin.spec.cjs` | FastAPI, Jinja, session HTTPS, CSRF, rôles, lectures et modération PostGIS ; Firebase, stockage et Mapbox simulés |
-| `mapbox.spec.cjs` | Mapbox et ses API réels, GEBCO local et API admin sur la base de test ; identité et stockage simulés |
+- `admin.spec.cjs` : FastAPI, sessions HTTPS, CSRF, rôles et modération PostGIS ;
+  Firebase, stockage et Mapbox simulés. Exécuté par la CI PostGIS.
+- `mapbox.spec.cjs` : Mapbox réel et GEBCO local ; identité et stockage simulés.
+  Définir `NOWAVE_MAPBOX_CONFIG` vers un JSON contenant `MAPBOX_ACCESS_TOKEN`
+  public, sinon cette suite est ignorée.
 
-Les tests Mapbox exigent `NOWAVE_MAPBOX_CONFIG`, sinon ils sont ignorés.
-Le scénario de catégorie inconnue remplace seulement la réponse cartographique.
-Les résolutions sont 1440×1000 et 390×844 tactile. Captures, traces et rapport JSON
-sont dans `backend/tests/browser/test-results/`, ignoré par Git. La CI PostGIS
-exécute `admin.spec.cjs`.
+`CHROMIUM_EXECUTABLE` sélectionne un Chromium installé. Les rapports, traces
+et captures vont dans `backend/tests/browser/test-results/`, ignoré par Git.
+Firebase et Scaleway réels demandent une recette avec des services de test dédiés.
 
-Ces suites ne valident ni Firebase réel ni le bucket Scaleway. Tester ces accès
-avec des comptes et des données de recette dédiés.
+
+Aperçu en mémoire : [guide web](../../../web/README.md#aperçu-sans-base).

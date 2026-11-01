@@ -1,53 +1,33 @@
-# Fond marin mondial GEBCO
+# Fond marin GEBCO
 
-`gebco-2026-v2.tar.gz` contient 5 461 tuiles WebP de 256 px, de Z0 à Z6,
-et leur manifeste de provenance. Le build vérifie leur checksum puis les extrait
-dans l'image web. Nginx les sert directement sous
-`/api/v1/map/seafloor/gebco-2026-v2/{z}/{x}/{y}.webp`, avec un an de cache.
-Le rendu ne dépend pas de l'API ni d'un fournisseur externe au démarrage.
+`gebco-2026-v2.tar.gz` contient 5 461 tuiles WebP de 256 px, Z0–6, et leur
+manifeste. Le build vérifie le checksum puis les extrait dans l'image web ;
+Nginx les sert avec un an de cache, sans appel fournisseur au démarrage.
 
-Le mobile charge d'abord une tuile parente, conserve les tuiles sur disque et
-superpose le détail EMODnet à partir de Z5, après 600 ms d'attente. Hors de
-l'emprise EMODnet, seul GEBCO est demandé. Les zones transparentes régionales
-laissent voir le fond mondial.
-
-## Source et précision
-
-GEBCO Bathymetric Compilation Group 2026, *The GEBCO_2026 Grid* :
-[jeu de données](https://doi.org/10.5285/4f68d5c7-45eb-f999-e063-7086abc036fa).
-Domaine public, avec attribution et respect des
+Source : GEBCO Bathymetric Compilation Group 2026, *The GEBCO_2026 Grid*,
+[DOI](https://doi.org/10.5285/4f68d5c7-45eb-f999-e063-7086abc036fa).
+Domaine public, avec crédit et respect des
 [conditions GEBCO](https://www.gebco.net/data-products/gridded-bathymetry/terms-of-use).
+NoWave échantillonne une cellule sur huit, soit deux minutes d'arc, et recolore
+le fond. Terres et pixels côtiers incertains restent transparents. Cet aperçu
+mêle mesures et interpolations et ne sert pas à la navigation.
 
-Le fond échantillonne une cellule sur huit de la grille native de 15 secondes
-d'arc : deux minutes d'arc, environ 3,7 km nord–sud. Il donne une vue d'ensemble,
-sans détail portuaire, sonde ni courbe dérivée. L'agrandissement n'ajoute aucune
-donnée. GEBCO mêle mesures et interpolations : l'espacement de la grille ne
-garantit pas une précision uniforme. Ces données ne servent pas à la navigation
-ni à la sécurité en mer.
+## Régénérer
 
-Les altitudes positives et les terres identifiées par TID restent transparentes,
-y compris les terres sèches sous le niveau marin. Le masque exclut les pixels
-côtiers incertains et utilise un halo d'un pixel pour raccorder les tuiles.
-Le trait de côte peut différer du fond Mapbox.
-
-## Régénérer les tuiles
-
-Utiliser l'environnement Python de `backend/requirements.lock`. Depuis la racine :
+Depuis la racine, avec les dépendances de `backend/requirements.lock` :
 
 ```sh
 python backend/tools/prepare_gebco_background.py \
   /tmp/gebco-2026-stride8.dods /tmp/gebco-2026-tid-stride8.dods \
   deploy/marine/gebco-2026-v2.tar.gz --download
-cd deploy/marine
-sha256sum gebco-2026-v2.tar.gz > gebco-2026-v2.tar.gz.sha256
+(cd deploy/marine && shasum -a 256 gebco-2026-v2.tar.gz > gebco-2026-v2.tar.gz.sha256)
 ```
 
-L'outil vérifie le SHA-256 des sous-ensembles téléchargés, environ 223 Mio
-pour les altitudes et 56 Mio pour la classification. Ces fichiers temporaires
-restent hors de Git. Une autre version de Pillow/libwebp peut modifier les octets
-compressés : contrôler le rendu avant de mettre à jour le checksum.
+L'outil vérifie les sous-ensembles téléchargés, environ 279 Mio au total.
+Contrôler le rendu et `backend/tests/unit/test_gebco_background.py` avant de
+valider l'archive et son checksum. Une autre version de Pillow/libwebp peut
+modifier les octets compressés.
 
-Une modification de source ou de palette exige une nouvelle version d'URL pour
-renouveler les caches. Vérifier `backend/tests/unit/test_gebco_background.py`
-et les tests du contrôleur mobile. Conserver l'archive v1 et ses URL immuables
-pour les anciens clients.
+Une modification de source ou palette exige une nouvelle version d'URL.
+Conserver les anciennes archives et URL immuables pour les clients installés.
+Les [contrats API](../../docs/API.md) décrivent les URL servies.

@@ -1,17 +1,9 @@
 # Icônes d’aides fixes
 
-La palette NoWave comprend 19 balises, cinq phares et cinq feux isolés.
-Les PNG sont transparents, au format 72 × 72 px. Le ratio Mapbox vaut 3 pour
-les balises et phares, 6 pour les feux isolés. Une balise non qualifiée reprend
-le symbole neutre des bouées avec un ratio de 18.
+PNG NoWave transparents de 72 × 72 px : 19 balises, cinq phares et cinq feux
+isolés. Ratio Mapbox : 3 pour balises/phares, 6 pour feux, 18 pour le symbole
+neutre repris des bouées. La classification suit les règles IALA A/B.
 
-`FixedAidLayer` applique les règles IALA A/B et conserve les couleurs et voyants
-publiés. Le gris reste distinct du blanc. Une couleur de feu absente ou multiple
-sélectionne l’icône par défaut ; le dessin ne définit aucun secteur lumineux.
-
-`MarineIconImage` transmet les PNG encodés aux ponts natifs Mapbox 2.30.1.
-Les images sont mises en cache par instance et restaurées après rechargement
-du style. Un chargement en échec peut être relancé.
-
-[LICENSE-CC0.md](LICENSE-CC0.md) couvre les anciens dessins géométriques NoWave.
-`mobile/tool/make_fixed_aid_icons.py` recrée ces dessins, pas la palette actuelle.
+La [licence CC0](LICENSE-CC0.md) couvre les anciens dessins géométriques.
+`mobile/tool/make_fixed_aid_icons.py` régénère ces dessins ; les PNG actuels
+sont des assets fournis séparément.
