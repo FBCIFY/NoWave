@@ -2,7 +2,7 @@
 
 NoWave est un MVP de signalements participatifs pour la navigation de plaisance : **obstacles**, **animaux marins** et **pollution**. L'application mobile permet de publier une observation localisée, de consulter les signalements actifs sur une carte et de recevoir des alertes de proximité selon les préférences et la position du téléphone.
 
-> **État documentaire :** le présent README décrit le contrat applicatif de `dev` au commit de référence [`ad54ffdb`](https://github.com/FBCIFY/NoWave/commit/ad54ffdb2cf359c36cf22b947494195bddcf87fb), vérifié sur la documentation Stage 4 du 30/10/2026. Il ne constitue pas une preuve de recette sur appareil ni de disponibilité des services externes. Un signalement NoWave ne remplace pas les informations nautiques officielles.
+> **État documentaire :** le présent README décrit le contrat applicatif de `dev` au commit de référence [`4d55f872`](https://github.com/FBCIFY/NoWave/commit/4d55f8722d467d98fdf57d15b67f79f4078c507d), vérifié sur la documentation Stage 4 du 01/11/2026. Il ne constitue pas une preuve de recette sur appareil ni de disponibilité des services externes. Un signalement NoWave ne remplace pas les informations nautiques officielles.
 
 ## Architecture
 
@@ -25,7 +25,7 @@ backend/          API FastAPI, domaine, infrastructure et tests
 mobile/           Application Flutter et tests widget/unitaires
 web/              Site public et carte des observations
 deploy/           Docker, scripts VPS et documentation de déploiement
-docs/             Index documentaire, parcours, tests et traçabilité
+docs/             Index documentaire, PDF Stage 4, annexes et tests
 .github/workflows/  CI et validation de livraison
 compose.yaml      Services de développement
 compose.test.yaml Base PostGIS isolée pour les tests
@@ -68,7 +68,7 @@ Pour le mobile, suivre [mobile/README.md](mobile/README.md) : créer `mobile/.en
 
 ## Routes et périmètre MVP
 
-Les routes métier FastAPI se trouvent sous `/api/v1` ; `/health`, `/health/ready` et `/version` sont à la racine. La référence de `dev` comporte **39 opérations HTTP déclarées**, hors pages HTML d'administration. Voir le chapitre « Index des routes API » de la [documentation technique](https://docs.google.com/document/d/1Gez2BmfkdjTLyE9jkyf-U_QzJkUWQ9mu/edit).
+Les routes métier FastAPI se trouvent sous `/api/v1` ; `/health`, `/health/ready` et `/version` sont à la racine. Ce périmètre comporte **39 opérations HTTP déclarées**, hors routes de l'administration web sous `/admin`. Voir le chapitre « Index des routes API » de la [documentation technique](https://docs.google.com/document/d/1Gez2BmfkdjTLyE9jkyf-U_QzJkUWQ9mu/edit).
 
 Les opérations `PATCH /api/v1/reports/{report_id}`, `DELETE /api/v1/reports/{report_id}` par l'auteur et `GET /api/v1/users/me/reports` **ne sont pas implémentées** dans cette référence et ne doivent pas être considérées comme disponibles. Le suivi de ces demandes reste dans Linear (NW-73 et NW-74). L'historique des **alertes reçues**, lui, est exposé par `GET /api/v1/users/me/alerts`.
 
@@ -82,6 +82,6 @@ La validité des signalements est de 24 h côté serveur. Les MVT ont un cache H
 - [Règles de contribution et branches](docs/CONTRIBUTING.md)
 - [Exploitation VPS et déploiement](deploy/README.md)
 
-Les tests automatisés de l'interface ne prouvent pas à eux seuls la réception des notifications sur appareil, les capteurs physiques, la connexion aux services externes ou une recette complète du VPS. La matrice sépare ces niveaux de vérification.
+Les tests automatisés de l'interface ne prouvent pas à eux seuls la réception des notifications sur appareil, les capteurs physiques, la connexion aux services externes ou une recette complète du VPS. Le guide de tests distingue ces niveaux de vérification.
 
 **Gestion des branches :** PR depuis une branche de travail vers `dev` après revue ; une validation réussie du push sur `dev` déclenche le déploiement actuel sur VPS. `main` reste la référence de release stable après QA et PR `dev` → `main` ; aucun déploiement autonome depuis `main` n'est décrit dans le workflow actuel ([FIX T15 (NW-168)](https://linear.app/blueway/issue/NW-168)).

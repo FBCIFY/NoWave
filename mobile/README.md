@@ -153,14 +153,6 @@ AuthGate          (session Firebase)
 `AuthGate` et `ProfileGate` choisissent l’écran à afficher. Les écrans eux-mêmes
 ne naviguent presque pas : ils déclenchent une action et l’aiguillage suit.
 
-Fichiers présents mais non utilisés par l’application :
-
-- `features/demo/` : compteur du modèle Flutter ;
-- `features/reports/presentation/reports_screen.dart` et
-  `data/demo_reports_service.dart` : liste de démonstration, utilisée
-  seulement dans les tests ;
-- `app/router.dart` : fichier vide.
-
 ## Authentification et profil — NW-51
 
 L’application utilise Firebase Authentication avec le fournisseur
@@ -310,9 +302,11 @@ envoyé au backend avec l’enregistrement du téléphone (voir NW-116).
   passage par les réglages fonctionne ;
 - la ligne « Notifications » des réglages iOS n’apparaît qu’après une première
   demande ;
-- les comptes créés avant NW-117 ne voient pas l’écran d’alertes ;
-- `ProfileGate` n’a pas de test automatisé : le parcours a été vérifié à la
-  main sur iPhone.
+- les comptes créés avant NW-117 ne voient pas l’écran d’alertes.
+
+Des tests de widgets de `ProfileGate` couvrent l’onboarding, la déconnexion et
+la suppression du compte dans `test/features/profile/presentation/`. Leur
+présence ne remplace pas la recette sur téléphone.
 
 ## Historique et navigation des alertes — NW-125, NW-163
 
@@ -395,14 +389,14 @@ Les signalements actifs sont affichés par-dessus le fond Mapbox, dans une
 couche à part (`ReportTiles`). Les tuiles MVT viennent du backend,
 `GET /api/v1/map/tiles/{z}/{x}/{y}.mvt`, avec le token Firebase.
 
-- **De loin (zoom < 9)** : le backend regroupe les signalements proches. La
-  carte montre une zone colorée qui bat doucement, du jaune au rouge selon le
-  nombre de signalements, avec ce nombre écrit dessus. Toucher le nombre
-  rapproche la carte de deux niveaux. Le battement s'arrête en arrière-plan et
-  quand l'option « Réduire les animations » du téléphone est active.
+- **De loin (zoom < 9)** : le backend regroupe les signalements proches. Une
+  carte de chaleur représente leur densité, du violet au rouge, sans
+  pulsation ni compteur. Toucher une zone rapproche la carte de
+  deux niveaux. La carte de chaleur s’efface entre les zooms 8,5 et 9.
 - **De près (zoom ≥ 9)** : un badge par signalement, à l'icône et à la couleur
-  de sa catégorie. Les badges ne se masquent jamais entre eux. Entre 8,5 et
-  9,5, la zone s'efface pendant que les badges apparaissent.
+  de sa catégorie. Les badges ne se masquent jamais entre eux. Ils sont
+  visibles dès le zoom 9 et grandissent jusqu’à leur taille normale au zoom
+  9,5, une fois la carte de chaleur masquée.
 
 Toucher un badge ouvre la fiche du signalement (`ReportDetailSheet`),
 chargée par `GET /api/v1/reports/{id}` : catégorie, date d'observation,
@@ -467,16 +461,17 @@ rester visibles sans être à jour.
 
 ### Limite de débit du serveur
 
-nginx limite les tuiles à 30 requêtes/s par IP (rafale de 50, avec attente
-au-delà de 15 requêtes en pointe), séparément des autres routes API qui
-restent à 10 requêtes/s (rafale de 30). La limite de 30 connexions par IP
-s'applique toujours à tout le serveur. Pour garder de la marge, la source
-demande le moins de tuiles possible : aucune au-delà du zoom 12 (Mapbox
+La configuration Nginx de `deploy/web/nginx.conf` limite les tuiles de
+signalements à 60 requêtes/s par IP (`burst=128`, `delay=15`), avec une limite
+dédiée de 128 connexions par IP dans la zone `report_tile_connections`.
+La limite générale des routes API reste à 10 requêtes/s (rafale de 30) ; les
+routes marines disposent de leurs propres limites. Pour garder de la marge,
+la source demande le moins de tuiles possible : aucune au-delà du zoom 12 (Mapbox
 agrandit celles du zoom 12, qui placent déjà un badge à 2 m près), pas de
 préchargement des zooms inférieurs, et un délai réseau pendant les gestes et
 animations. Une tuile refusée en 429 n'affiche pas le
-bandeau : Mapbox la redemande lui-même quelques secondes plus tard. nginx
-répond maintenant 429 aussi lorsque la limite de 30 connexions est atteinte.
+bandeau : Mapbox la redemande lui-même quelques secondes plus tard. Nginx
+répond aussi 429 lorsque la limite dédiée de 128 connexions est atteinte.
 Un 503 affiche le bandeau, car il indique une panne du backend ou d'une de ses
 dépendances, et Mapbox ne transmet que le code HTTP. Le backend réutilise ses
 connexions PostgreSQL pour réduire le temps de traitement des tuiles ; les 429
@@ -484,10 +479,11 @@ restent possibles pendant une forte rafale.
 
 ### Position de l'utilisateur
 
-Un chevron bleu marine indique la position et suit le même cap que la
-boussole. Un mât planté à son pied porte le pavillon du bateau (voir
-« Curseur de position »). Sans cap disponible, un disque marine remplace le
-chevron.
+Une flèche 3D orange indique la position et suit le cap de l’appareil.
+Le mode alternatif, activé en désactivant `MapConfig.nativeArrowPuck`, utilise
+un chevron bleu marine et un mât portant le pavillon du bateau (voir
+« Curseur de position »). Dans ce mode, un disque marine remplace le chevron
+si aucun cap n’est disponible.
 
 ### Limites connues
 
@@ -500,8 +496,6 @@ chevron.
   refusée en 401 : après le renvoi du token, le bandeau ne part qu'au
   prochain chargement de tuile (déplacement de la carte, ou expiration des
   tuiles visibles) ;
-- l'état de la photo reste « Envoi en cours » tant que la route d'envoi de
-  NW-112 n'est pas déployée ;
 - la limite propre aux tuiles doit être validée sur appareil après
   déploiement : compter les 429/503 et le délai d'apparition des badges
   pendant des zooms répétés ;
@@ -581,8 +575,9 @@ au nord vrai :
 
 ### Curseur de position
 
-`LocationMarker` dessine deux couches, à partir des images de
-`LocationMast`, dessinées en Dart à la densité de l’écran :
+Lorsque `MapConfig.nativeArrowPuck` est désactivé, `LocationMarker` dessine
+deux couches, à partir des images de `LocationMast`, dessinées en Dart à la
+densité de l’écran :
 
 - un chevron bleu marine couché sur la carte, dans une couche native
   `LocationIndicatorLayer`. Il suit le cap de
@@ -592,10 +587,6 @@ au nord vrai :
 - un mât debout face à l’écran, dans une couche de symboles. Il porte le
   pavillon du bateau (`flag_country` du profil), plié par le vent.
   Sans pavillon, ou avec un code inconnu, le pavillon est bleu uni.
-
-Les deux couches sont dans l’emplacement `top`. Les pastilles des
-signalements, ajoutées sans emplacement, passent donc devant le pied du mât ;
-seul le pavillon dépasse au-dessus.
 
 Les pavillons viennent de `assets/flags/` : un PNG de 80 pixels de large par
 code ISO à deux lettres (250 pays et territoires, flagcdn.com, drapeaux du
@@ -624,9 +615,6 @@ flèche native, ajoutée sans emplacement, passe donc devant elles.
 
 ### Limites connues
 
-- l’envoi de la photo suit le contrat de la doc technique mais n’a pas encore
-  été testé sur le serveur : la route de NW-112 n’est pas déployée et répond
-  404 (« envoi indisponible sur ce serveur ») ;
 - l’azimut dépend des perturbations magnétiques et de la calibration ;
 - l’inclinaison n’a pas été vérifiée avec un support d’angle étalonné ;
 - les conventions des capteurs doivent encore être validées sur Android réel,
